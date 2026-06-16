@@ -48,12 +48,17 @@ docs/               this, TECH_STACK.md, DECISIONS.md, the design spec
 
 ## Docs
 
+- **[HANDOFF.md](docs/HANDOFF.md)** — START HERE in a new session. What the project
+  is, how to run, current state, and what to do next. Written to pick up cold.
 - **[TECH_STACK.md](docs/TECH_STACK.md)** — what we use, the modularity rules,
   the C#/Rust/GPU-compute policy. Read this to understand the shape.
 - **[DECISIONS.md](docs/DECISIONS.md)** — running log of choices made, so we
   don't re-litigate. One entry per decision.
 - **[2026-06-15-wg16-base-field-design.md](docs/2026-06-15-wg16-base-field-design.md)**
   — the design that started this project.
+
+Scenes: `lab.tscn` (base-field lab) · `terrain_lab.tscn` (the look lab, active) ·
+`material_board.tscn` (material judging loop) · `lab_experiment.tscn` (sandbox).
 
 ## Posture (the "low plans" rule)
 
