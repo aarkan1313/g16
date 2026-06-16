@@ -7,50 +7,72 @@ using WG16.Field;
 
 namespace WG16.Lab;
 
-/// On-screen panel for the terrain look lab: per-zone material dropdowns, a mask-
-/// mode selector, a blend/shader-mode selector, and preset save/load. Builds the
-/// base field once, then drives TerrainLab live from the controls.
+/// On-screen panel for the terrain look lab — DATA-DRIVEN: every control is
+/// defined in data/lab_controls.json and built from a registry. Tabs + per-tab
+/// scroll keep it on-screen; each control has a lock; a Randomizer rolls all
+/// unlocked controls. Drives TerrainLab live. Presets persist values + locks.
 public partial class TerrainLabUI : Control
 {
-    private static readonly string[] ZoneNames =
-        { "valley", "valley→slope", "slope", "slope→cliff", "cliff", "high", "peak/snow" };
-    private static readonly string[] MaskModes =
-        { "height bands", "height+slope", "noise-broken", "curvature-aware", "steep=cliff", "noise biomes" };
-    private static readonly string[] BlendModes =
-        { "flat albedo", "full PBR", "PBR+anti-tile", "+macro tint", "full stack" };
-    private static readonly string[] TileModes =
-        { "none (sharp)", "IQ 2-tap", "hex-tiling" };
-
     private const string PresetsPath = "user://terrain_presets.json";
+    private const string RegistryPath = "res://data/lab_controls.json";
 
     private FieldCompute _fc = null!;
     private FieldParams _params = null!;
     private TerrainLab _terrain = null!;
     private readonly List<string> _materials = new();
-    private readonly OptionButton[] _zonePick = new OptionButton[7];
-    private OptionButton _maskPick = null!, _blendPick = null!, _presetPick = null!, _tilePick = null!;
+
+    private string[] _zoneNames = Array.Empty<string>();
+    private readonly List<LabControl> _controls = new();           // flat registry (zone/companion expanded)
+    private readonly Dictionary<string, LabControl> _byId = new(); // id (or id#z) -> control
+    private OptionButton _presetPick = null!;
     private LineEdit _presetName = null!;
     private Dictionary<string, Variant> _presets = new();
+    private System.Random _rng = new();
+    private bool _ready;   // suppress callbacks while building/applying
 
-    // Optional headless A/B capture (CLI verification): --auto-shot=<path> fires a
-    // screenshot from the scene's default camera after a warmup, then quits.
-    // --blend=N / --mask=N override the defaults so each mode can be captured.
+    // Headless A/B capture + overrides (CLI verification), unchanged contract.
     private string? _autoShotPath;
     private double _autoShotT = -1.0;
     private int _overrideBlend = -1, _overrideMask = -1, _overrideTile = -1, _overrideMacro = -1, _overrideContact = -1;
     private int _overrideSplat = -1, _overrideSplatDebug = -1;
-    private string? _camArg;   // "x,y,z,pitchDeg,yawDeg" — place capture camera near ground
-    private float _texScale = -1f;   // override tex_scale_m for isolation runs
+    private string? _camArg;
+    private float _texScale = -1f;
+
+    /// One control: parsed registry fields + runtime state.
+    private sealed class LabControl
+    {
+        public string Id = "", Label = "", Tab = "", Type = "";
+        public string? Param, Setter, Field;     // shader uniform / mode-setter name / TerrainLab field
+        public float Min, Max, Default;
+        public bool DefBool;
+        public string[] Options = Array.Empty<string>();
+        public bool Rand = true, Rebake;
+        public int Zone = -1;                     // for material/companion (0..6), else -1
+        public Variant Value;                     // current value
+        public bool Locked;
+        public CheckBox? LockBox;
+        public Control? Widget;                   // the editing control (slider/checkbox/dropdown)
+        public Label? ValLabel;
+    }
 
     public override void _Ready()
     {
         _fc = new FieldCompute();
         _params = FieldParams.Load();
-        // UI lives under UILayer/UI, so reach up to the scene root and across to
-        // the TerrainLab node (was "../TerrainLab", which resolved one level short).
         _terrain = GetNode<TerrainLab>("/root/TerrainLabRoot/TerrainLab");
         _terrain.Build(_fc, _params);
 
+        ParseCli();
+        LoadLibrary();
+        LoadRegistry();
+        BuildPanel();
+        ApplyAll();              // push all defaults to the shader (also fixes the .Value-doesn't-fire issue)
+        ApplyCliOverrides();
+        _ready = true;
+    }
+
+    private void ParseCli()
+    {
         foreach (string a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--auto-shot=")) { _autoShotPath = a.Substring("--auto-shot=".Length); _autoShotT = 0.0; }
@@ -64,10 +86,6 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
         }
-
-        LoadLibrary();
-        BuildPanel();
-        ApplyDefaults();
     }
 
     private void LoadLibrary()
@@ -84,106 +102,202 @@ public partial class TerrainLabUI : Control
         _materials.Sort();
     }
 
+    private void LoadRegistry()
+    {
+        string abs = ProjectSettings.GlobalizePath(RegistryPath);
+        using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(abs));
+        JsonElement root = doc.RootElement;
+        _zoneNames = root.GetProperty("zone_names").EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
+
+        foreach (JsonElement c in root.GetProperty("controls").EnumerateArray())
+        {
+            string type = c.GetProperty("type").GetString() ?? "";
+            if (type == "material" || type == "companion")
+            {
+                int[] defs = c.TryGetProperty("default", out var dArr)
+                    ? dArr.EnumerateArray().Select(e => e.GetInt32()).ToArray() : null;
+                for (int z = 0; z < _zoneNames.Length; z++)
+                {
+                    var lc = BaseControl(c, type);
+                    lc.Zone = z;
+                    lc.Label = _zoneNames[z];
+                    if (type == "companion") { lc.Default = defs != null ? defs[z] : Math.Max(0, z - 1); }
+                    Register(lc, $"{lc.Id}#{z}");
+                }
+            }
+            else
+            {
+                var lc = BaseControl(c, type);
+                Register(lc, lc.Id);
+            }
+        }
+    }
+
+    private LabControl BaseControl(JsonElement c, string type)
+    {
+        var lc = new LabControl
+        {
+            Id = c.GetProperty("id").GetString() ?? "",
+            Label = c.TryGetProperty("label", out var l) ? l.GetString() ?? "" : "",
+            Tab = c.GetProperty("tab").GetString() ?? "",
+            Type = type,
+            Param = c.TryGetProperty("param", out var p) ? p.GetString() : null,
+            Setter = c.TryGetProperty("setter", out var s) ? s.GetString() : null,
+            Field = c.TryGetProperty("field", out var f) ? f.GetString() : null,
+            Rand = !c.TryGetProperty("rand", out var r) || r.GetBoolean(),
+            Rebake = c.TryGetProperty("rebake", out var rb) && rb.GetBoolean(),
+        };
+        if (c.TryGetProperty("min", out var mn)) { lc.Min = mn.GetSingle(); }
+        if (c.TryGetProperty("max", out var mx)) { lc.Max = mx.GetSingle(); }
+        if (c.TryGetProperty("options", out var op)) { lc.Options = op.EnumerateArray().Select(e => e.GetString() ?? "").ToArray(); }
+        if (c.TryGetProperty("default", out var d) && d.ValueKind != JsonValueKind.Array)
+        {
+            if (type == "toggle") { lc.DefBool = d.GetBoolean(); }
+            else { lc.Default = d.GetSingle(); }
+        }
+        return lc;
+    }
+
+    private void Register(LabControl lc, string key)
+    {
+        _controls.Add(lc);
+        _byId[key] = lc;
+    }
+
+    // ---- panel ----------------------------------------------------------------
+
     private void BuildPanel()
     {
-        var panel = new PanelContainer
-        {
-            Position = new Vector2(8, 8),
-            CustomMinimumSize = new Vector2(360, 0),
-        };
+        var panel = new PanelContainer { Position = new Vector2(8, 8) };
+        panel.SetAnchorsPreset(LayoutPreset.TopLeft);
+        panel.CustomMinimumSize = new Vector2(380, 0);
+        // cap height so the TabContainer scrolls instead of running off-screen
+        panel.SetAnchorAndOffset(Side.Bottom, 0, 0);
+        panel.OffsetTop = 8; panel.OffsetBottom = -8; panel.OffsetLeft = 8;
         AddChild(panel);
-        var vb = new VBoxContainer();
-        panel.AddChild(vb);
 
-        vb.AddChild(new Label { Text = "TERRAIN LOOK LAB" });
+        var outer = new VBoxContainer();
+        panel.AddChild(outer);
+        outer.AddChild(new Label { Text = "TERRAIN LOOK LAB" });
 
-        // Per-zone material dropdowns.
-        for (int z = 0; z < 7; z++)
+        // top bar: Randomize + lock all/none
+        var bar = new HBoxContainer();
+        var rnd = new Button { Text = "🎲 Randomize" };
+        rnd.Pressed += Randomize;
+        bar.AddChild(rnd);
+        var lockAll = new Button { Text = "Lock all" };
+        lockAll.Pressed += () => SetAllLocks(true);
+        bar.AddChild(lockAll);
+        var lockNone = new Button { Text = "Unlock all" };
+        lockNone.Pressed += () => SetAllLocks(false);
+        bar.AddChild(lockNone);
+        outer.AddChild(bar);
+
+        var tabs = new TabContainer { CustomMinimumSize = new Vector2(360, 560) };
+        tabs.SizeFlagsVertical = SizeFlags.ExpandFill;
+        outer.AddChild(tabs);
+
+        foreach (string tabName in TabOrder())
         {
-            var row = new HBoxContainer();
-            row.AddChild(new Label { Text = ZoneNames[z], CustomMinimumSize = new Vector2(96, 0) });
-            var ob = new OptionButton { CustomMinimumSize = new Vector2(240, 0) };
-            for (int i = 0; i < _materials.Count; i++) { ob.AddItem(_materials[i], i); }
-            int zone = z;
-            ob.ItemSelected += idx => _terrain.SetZoneMaterial(zone, _materials[(int)idx]);
-            _zonePick[z] = ob;
-            row.AddChild(ob);
-            vb.AddChild(row);
+            var scroll = new ScrollContainer { Name = tabName, CustomMinimumSize = new Vector2(360, 0) };
+            scroll.SizeFlagsVertical = SizeFlags.ExpandFill;
+            scroll.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
+            tabs.AddChild(scroll);
+            var col = new VBoxContainer();
+            col.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            scroll.AddChild(col);
+            foreach (LabControl c in _controls.Where(c => c.Tab == tabName)) { BuildRow(col, c); }
         }
 
-        vb.AddChild(new HSeparator());
+        BuildPresetsTab(tabs);
+    }
 
-        _maskPick = AddSelector(vb, "mask mode", MaskModes, i => _terrain.SetMaskMode(i));
-        _blendPick = AddSelector(vb, "blend mode", BlendModes, i => _terrain.SetBlendMode(i));
+    private IEnumerable<string> TabOrder()
+        => _controls.Select(c => c.Tab).Distinct();
 
-        vb.AddChild(new HSeparator());
+    private void BuildRow(VBoxContainer col, LabControl c)
+    {
+        var row = new HBoxContainer();
+        // per-control lock
+        var lockBox = new CheckBox { TooltipText = "lock (skip on randomize)", CustomMinimumSize = new Vector2(28, 0) };
+        lockBox.Toggled += on => c.Locked = on;
+        c.LockBox = lockBox;
+        row.AddChild(lockBox);
+        row.AddChild(new Label { Text = c.Label, CustomMinimumSize = new Vector2(90, 0) });
 
-        // Anti-tiling / sharpness controls.
-        _tilePick = AddSelector(vb, "tile mode", TileModes, i => _terrain.SetInt("tile_mode", i));
-        AddSlider(vb, "tex scale m", 4f, 80f, 28f, v => _terrain.SetFloat("tex_scale_m", v));   // 28=crisp (9 was mush)
-        AddSlider(vb, "tri sharp", 1f, 32f, 8f, v => _terrain.SetFloat("tri_sharpness", v));
-        AddSlider(vb, "hex rot", 0f, 1f, 0.7f, v => _terrain.SetFloat("hex_rot_strength", v));
-        AddSlider(vb, "hex contrast", 0.3f, 1f, 0.7f, v => _terrain.SetFloat("hex_contrast", v));
+        switch (c.Type)
+        {
+            case "slider":
+            {
+                var sl = new HSlider { MinValue = c.Min, MaxValue = c.Max, Value = c.Default,
+                    Step = (c.Max - c.Min) / 200.0, CustomMinimumSize = new Vector2(160, 0) };
+                sl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                var vlbl = new Label { Text = c.Default.ToString("0.00"), CustomMinimumSize = new Vector2(44, 0) };
+                sl.ValueChanged += v => { c.Value = (float)v; vlbl.Text = ((float)v).ToString("0.00"); if (_ready) ApplyControl(c, true); };
+                c.Value = c.Default; c.Widget = sl; c.ValLabel = vlbl;
+                row.AddChild(sl); row.AddChild(vlbl);
+                break;
+            }
+            case "toggle":
+            {
+                var cb = new CheckBox { ButtonPressed = c.DefBool };
+                cb.Toggled += on => { c.Value = on; if (_ready) ApplyControl(c, true); };
+                c.Value = c.DefBool; c.Widget = cb;
+                row.AddChild(cb);
+                break;
+            }
+            case "enum":
+            {
+                var ob = new OptionButton { CustomMinimumSize = new Vector2(200, 0) };
+                ob.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                for (int i = 0; i < c.Options.Length; i++) { ob.AddItem(c.Options[i], i); }
+                ob.Select((int)c.Default);
+                ob.ItemSelected += idx => { c.Value = (int)idx; if (_ready) ApplyControl(c, true); };
+                c.Value = (int)c.Default; c.Widget = ob;
+                row.AddChild(ob);
+                break;
+            }
+            case "material":
+            {
+                var ob = new OptionButton { CustomMinimumSize = new Vector2(220, 0) };
+                ob.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                for (int i = 0; i < _materials.Count; i++) { ob.AddItem(_materials[i], i); }
+                int start = ZoneDefaultMaterialIndex(c.Zone);
+                ob.Select(start);
+                ob.ItemSelected += idx => { c.Value = (int)idx; if (_ready) ApplyControl(c, true); };
+                c.Value = start; c.Widget = ob;
+                row.AddChild(ob);
+                break;
+            }
+            case "companion":
+            {
+                var ob = new OptionButton { CustomMinimumSize = new Vector2(220, 0) };
+                ob.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                for (int i = 0; i < _zoneNames.Length; i++) { ob.AddItem(_zoneNames[i], i); }
+                ob.Select((int)c.Default);
+                ob.ItemSelected += idx => { c.Value = (int)idx; if (_ready) ApplyControl(c, true); };
+                c.Value = (int)c.Default; c.Widget = ob;
+                row.AddChild(ob);
+                break;
+            }
+        }
+        col.AddChild(row);
+    }
 
-        vb.AddChild(new HSeparator());
+    private void BuildPresetsTab(TabContainer tabs)
+    {
+        var scroll = new ScrollContainer { Name = "Presets" };
+        scroll.SizeFlagsVertical = SizeFlags.ExpandFill;
+        tabs.AddChild(scroll);
+        var vb = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        scroll.AddChild(vb);
 
-        // Lever 2: macro color variation.
-        AddToggle(vb, "macro color", true, on => _terrain.SetBool("macro_on", on));
-        AddSlider(vb, "macro val", 0f, 0.6f, 0.22f, v => _terrain.SetFloat("macro_val_amp", v));
-        AddSlider(vb, "macro hue", 0f, 0.2f, 0.05f, v => _terrain.SetFloat("macro_hue_amp", v));
-        AddSlider(vb, "macro sat", 0f, 0.6f, 0.18f, v => _terrain.SetFloat("macro_sat_amp", v));
-        AddSlider(vb, "macro scl2", 60f, 400f, 170f, v => _terrain.SetFloat("macro_scale2", v));
-
-        vb.AddChild(new HSeparator());
-
-        // Lever 4: contact & wear shading.
-        AddToggle(vb, "contact shade", true, on => _terrain.SetBool("contact_on", on));
-        AddSlider(vb, "crevice", 0f, 1f, 0.45f, v => _terrain.SetFloat("crevice_amp", v));
-        AddSlider(vb, "crev range", 0.5f, 8f, 2.5f, v => _terrain.SetFloat("crevice_range", v));
-        AddSlider(vb, "slope wear", 0f, 1f, 0.35f, v => _terrain.SetFloat("slope_wear_amp", v));
-        AddSlider(vb, "snow dust", 0f, 1f, 0f, v => _terrain.SetFloat("snow_dust_amp", v));
-
-        vb.AddChild(new HSeparator());
-
-        // Lever 1: GPU-baked splat material mixing.
-        AddToggle(vb, "splat mix", false, on => _terrain.SetBool("splat_on", on));
-        AddSlider(vb, "mix strength", 0f, 1f, 0.6f, v => _terrain.SetFloat("mix_strength", v)); // live
-        // These change the BAKED mask → adjust the field, then Rebake.
-        AddSlider(vb, "mix scale m", 8f, 120f, 26f, v => _terrain.MixScaleM = v);
-        AddSlider(vb, "mix bias", 0.1f, 0.9f, 0.5f, v => _terrain.MixBias = v);
         var rebakeBtn = new Button { Text = "Rebake splat" };
         rebakeBtn.Pressed += () => _terrain.RebakeSplat();
         vb.AddChild(rebakeBtn);
-        AddSelector(vb, "splat debug", new[] { "off", "zones", "mix amt" }, i => _terrain.SetInt("splat_debug", i));
 
-        // Height-blended (relief-aware) transitions + band width — the AAA seam fix.
-        AddToggle(vb, "height blend", true, on => _terrain.SetBool("heightblend_on", on));
-        AddSlider(vb, "hb sharp", 0.02f, 0.5f, 0.15f, v => _terrain.SetFloat("heightblend_sharp", v));
-        AddSlider(vb, "band soft", 0.3f, 3f, 1.4f, v => _terrain.SetFloat("band_soft_mult", v));
-
-        vb.AddChild(new HSeparator());
-
-        // Per-zone companion (secondary) material — which zone's textures blend into each.
-        vb.AddChild(new Label { Text = "companion per zone" });
-        int[] secDefault = { 1, 2, 1, 4, 5, 4, 5 };
-        for (int z = 0; z < 7; z++)
-        {
-            int zone = z;
-            var row = new HBoxContainer();
-            row.AddChild(new Label { Text = ZoneNames[z], CustomMinimumSize = new Vector2(96, 0) });
-            var ob = new OptionButton { CustomMinimumSize = new Vector2(240, 0) };
-            for (int i = 0; i < ZoneNames.Length; i++) { ob.AddItem(ZoneNames[i], i); }
-            ob.Select(secDefault[z]);
-            ob.ItemSelected += idx => _terrain.SetSecondaryZone(zone, (int)idx);
-            row.AddChild(ob);
-            vb.AddChild(row);
-        }
-
-        vb.AddChild(new HSeparator());
-
-        // Preset save/load.
         var prow = new HBoxContainer();
-        _presetName = new LineEdit { PlaceholderText = "preset name", CustomMinimumSize = new Vector2(140, 0) };
+        _presetName = new LineEdit { PlaceholderText = "preset name", CustomMinimumSize = new Vector2(160, 0) };
         prow.AddChild(_presetName);
         var saveBtn = new Button { Text = "Save" };
         saveBtn.Pressed += SavePreset;
@@ -191,7 +305,7 @@ public partial class TerrainLabUI : Control
         vb.AddChild(prow);
 
         var lrow = new HBoxContainer();
-        _presetPick = new OptionButton { CustomMinimumSize = new Vector2(180, 0) };
+        _presetPick = new OptionButton { CustomMinimumSize = new Vector2(200, 0) };
         lrow.AddChild(_presetPick);
         var loadBtn = new Button { Text = "Load" };
         loadBtn.Pressed += LoadSelectedPreset;
@@ -199,127 +313,135 @@ public partial class TerrainLabUI : Control
         vb.AddChild(lrow);
 
         vb.AddChild(new Label { Text = "RMB/LMB+WASD fly · wheel speed" });
-
         LoadPresetsFromDisk();
     }
 
-    private OptionButton AddSelector(VBoxContainer vb, string label, string[] items, Action<int> onPick)
+    private int ZoneDefaultMaterialIndex(int zone)
     {
-        var row = new HBoxContainer();
-        row.AddChild(new Label { Text = label, CustomMinimumSize = new Vector2(96, 0) });
-        var ob = new OptionButton { CustomMinimumSize = new Vector2(240, 0) };
-        for (int i = 0; i < items.Length; i++) { ob.AddItem(items[i], i); }
-        ob.ItemSelected += idx => onPick((int)idx);
-        row.AddChild(ob);
-        vb.AddChild(row);
-        return ob;
+        string[] wanted = { "m8_grass_calm", "12_dry_lichen_carpet", "14_scree_with_lichen",
+                            "13_dry_loose_scree", "01_dark_slate", "wgv3_alpine_scree", "01_fresh_powder" };
+        int idx = (zone >= 0 && zone < wanted.Length) ? _materials.IndexOf(wanted[zone]) : -1;
+        if (idx < 0) { idx = Math.Min(Math.Max(zone, 0), _materials.Count - 1); }
+        return Math.Max(idx, 0);
     }
 
-    private HSlider AddSlider(VBoxContainer vb, string label, float min, float max, float val, Action<float> onChange)
+    // ---- apply ----------------------------------------------------------------
+
+    private void ApplyAll()
     {
-        var row = new HBoxContainer();
-        row.AddChild(new Label { Text = label, CustomMinimumSize = new Vector2(96, 0) });
-        var sl = new HSlider { MinValue = min, MaxValue = max, Value = val, Step = (max - min) / 200.0,
-                               CustomMinimumSize = new Vector2(180, 0) };
-        var valLbl = new Label { Text = val.ToString("0.0"), CustomMinimumSize = new Vector2(48, 0) };
-        sl.ValueChanged += v => { onChange((float)v); valLbl.Text = ((float)v).ToString("0.0"); };
-        row.AddChild(sl);
-        row.AddChild(valLbl);
-        vb.AddChild(row);
-        // Push the initial value to the shader NOW — setting .Value in code does not
-        // reliably fire ValueChanged, so without this the shader keeps its own (wrong)
-        // uniform default while the slider DISPLAYS the intended value. (This was the
-        // bug: lab opened at tex_scale_m=9 mush despite the slider showing otherwise.)
-        onChange(val);
-        return sl;
+        foreach (LabControl c in _controls) { ApplyControl(c, false); }
+        _terrain.PushSecondaryZones();
+        _terrain.RebakeSplat();
     }
 
-    private CheckBox AddToggle(VBoxContainer vb, string label, bool val, Action<bool> onChange)
+    /// Push one control's current value to the shader/terrain. rebakeIfNeeded: when
+    /// a 'rebake' control (mask structure) changes interactively, re-run the bake.
+    private void ApplyControl(LabControl c, bool rebakeIfNeeded)
     {
-        var cb = new CheckBox { Text = label, ButtonPressed = val };
-        cb.Toggled += on => onChange(on);
-        vb.AddChild(cb);
-        onChange(val);   // push initial state (same reason as AddSlider)
-        return cb;
-    }
-
-    /// Sensible alpine starting assignment (uses materials if present, else index 0).
-    private void ApplyDefaults()
-    {
-        string[] wanted =
+        switch (c.Type)
         {
-            "m8_grass_calm",            // valley
-            "12_dry_lichen_carpet",     // valley->slope
-            "14_scree_with_lichen",     // slope
-            "13_dry_loose_scree",       // slope->cliff
-            "01_dark_slate",            // cliff
-            "wgv3_alpine_scree",        // high
-            "01_fresh_powder",          // peak/snow
-        };
-        for (int z = 0; z < 7; z++)
-        {
-            int idx = _materials.IndexOf(wanted[z]);
-            if (idx < 0) { idx = Math.Min(z, _materials.Count - 1); }
-            if (idx >= 0)
-            {
-                _zonePick[z].Select(idx);
-                _terrain.SetZoneMaterial(z, _materials[idx]);
-            }
+            case "slider":
+                if (c.Field != null) { SetTerrainField(c.Field, c.Value.AsSingle()); }
+                else if (c.Param != null) { _terrain.SetFloat(c.Param, c.Value.AsSingle()); }
+                break;
+            case "toggle":
+                if (c.Param != null) { _terrain.SetBool(c.Param, c.Value.AsBool()); }
+                break;
+            case "enum":
+                int iv = c.Value.AsInt32();
+                if (c.Setter == "mask") { _terrain.SetMaskMode(iv); }
+                else if (c.Setter == "blend") { _terrain.SetBlendMode(iv); }
+                else if (c.Param != null) { _terrain.SetInt(c.Param, iv); }
+                break;
+            case "material":
+                _terrain.SetZoneMaterial(c.Zone, _materials[Math.Clamp(c.Value.AsInt32(), 0, _materials.Count - 1)]);
+                break;
+            case "companion":
+                _terrain.SetSecondaryZone(c.Zone, c.Value.AsInt32());
+                break;
         }
-        _maskPick.Select(2); _terrain.SetMaskMode(2);     // noise-broken
-        _blendPick.Select(3); _terrain.SetBlendMode(3);   // +macro tint
-        _tilePick.Select(2); _terrain.SetInt("tile_mode", 2);   // hex-tiling (the fix)
-
-        // CLI overrides for headless A/B capture.
-        if (_overrideMask >= 0) { _maskPick.Select(_overrideMask); _terrain.SetMaskMode(_overrideMask); }
-        if (_overrideBlend >= 0) { _blendPick.Select(_overrideBlend); _terrain.SetBlendMode(_overrideBlend); }
-        if (_overrideTile >= 0) { _tilePick.Select(_overrideTile); _terrain.SetInt("tile_mode", _overrideTile); }
-        if (_overrideMacro >= 0) { _terrain.SetBool("macro_on", _overrideMacro == 1); }
-        if (_overrideContact >= 0) { _terrain.SetBool("contact_on", _overrideContact == 1); }
-        if (_overrideSplat >= 0) { _terrain.SetBool("splat_on", _overrideSplat == 1); }
-        if (_overrideSplatDebug >= 0) { _terrain.SetInt("splat_debug", _overrideSplatDebug); }
-        if (_texScale > 0f) { _terrain.SetFloat("tex_scale_m", _texScale); }
-        if (_camArg != null)
-        {
-            string[] p = _camArg.Split(',');
-            if (p.Length >= 5)
-            {
-                var cam = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
-                cam.Position = new Vector3(float.Parse(p[0]), float.Parse(p[1]), float.Parse(p[2]));
-                cam.RotationDegrees = new Vector3(float.Parse(p[3]), float.Parse(p[4]), 0f);
-            }
-        }
+        if (rebakeIfNeeded && c.Rebake) { _terrain.RebakeSplat(); }
     }
 
-    public override void _Process(double delta)
+    private void SetTerrainField(string field, float v)
     {
-        if (_autoShotT >= 0.0 && _autoShotPath != null)
-        {
-            _autoShotT += delta;
-            if (_autoShotT > 1.5)
-            {
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_autoShotPath)!);
-                GetViewport().GetTexture().GetImage().SavePng(_autoShotPath);
-                GD.Print($"TerrainLab: auto-shot -> {_autoShotPath}");
-                _autoShotT = -1.0;
-                GetTree().Quit();
-            }
-        }
+        if (field == "MixScaleM") { _terrain.MixScaleM = v; }
+        else if (field == "MixBias") { _terrain.MixBias = v; }
     }
+
+    // ---- randomize / lock -----------------------------------------------------
+
+    private void Randomize()
+    {
+        bool needRebake = false;
+        foreach (LabControl c in _controls)
+        {
+            if (c.Locked || !c.Rand) { continue; }
+            switch (c.Type)
+            {
+                case "slider":
+                {
+                    float v = c.Min + (float)_rng.NextDouble() * (c.Max - c.Min);
+                    SetWidgetValue(c, v);
+                    break;
+                }
+                case "toggle":
+                {
+                    // bias toggles to stay ON (~75%) so a roll doesn't flatten everything
+                    bool on = _rng.NextDouble() < 0.75;
+                    SetWidgetValue(c, on);
+                    break;
+                }
+                case "enum":
+                    SetWidgetValue(c, _rng.Next(c.Options.Length));
+                    break;
+                case "material":
+                    SetWidgetValue(c, _rng.Next(_materials.Count));
+                    break;
+                case "companion":
+                    SetWidgetValue(c, _rng.Next(_zoneNames.Length));
+                    break;
+            }
+            if (c.Rebake) { needRebake = true; }
+        }
+        if (needRebake) { _terrain.RebakeSplat(); }
+        GD.Print("TerrainLab: randomized (unlocked controls)");
+    }
+
+    /// Set a widget's value (updates UI + applies). Suppresses per-control rebake;
+    /// the caller batches one rebake at the end.
+    private void SetWidgetValue(LabControl c, Variant v)
+    {
+        bool wasReady = _ready; _ready = false;   // avoid double-apply via signal
+        switch (c.Widget)
+        {
+            case HSlider sl: sl.Value = v.AsSingle(); if (c.ValLabel != null) { c.ValLabel.Text = v.AsSingle().ToString("0.00"); } break;
+            case CheckBox cb: cb.ButtonPressed = v.AsBool(); break;
+            case OptionButton ob: ob.Select(v.AsInt32()); break;
+        }
+        c.Value = v;
+        _ready = wasReady;
+        ApplyControl(c, false);
+    }
+
+    private void SetAllLocks(bool locked)
+    {
+        foreach (LabControl c in _controls) { c.Locked = locked; if (c.LockBox != null) { c.LockBox.ButtonPressed = locked; } }
+    }
+
+    // ---- presets (registry-based) --------------------------------------------
 
     private void SavePreset()
     {
         string name = string.IsNullOrWhiteSpace(_presetName.Text) ? $"preset{_presets.Count + 1}" : _presetName.Text;
-        var zones = new Godot.Collections.Array<string>();
-        for (int z = 0; z < 7; z++) { zones.Add(_materials[_zonePick[z].Selected]); }
-        var entry = new Godot.Collections.Dictionary
+        var vals = new Godot.Collections.Dictionary();
+        var locks = new Godot.Collections.Dictionary();
+        foreach (var kv in _byId)
         {
-            { "zones", zones },
-            { "mask", _maskPick.Selected },
-            { "blend", _blendPick.Selected },
-            { "tile", _tilePick.Selected },
-        };
-        _presets[name] = entry;
+            vals[kv.Key] = kv.Value.Value;
+            if (kv.Value.Locked) { locks[kv.Key] = true; }
+        }
+        _presets[name] = new Godot.Collections.Dictionary { { "v", vals }, { "lock", locks } };
         WritePresets();
         RefreshPresetList();
         GD.Print($"TerrainLab: saved preset '{name}'");
@@ -331,16 +453,23 @@ public partial class TerrainLabUI : Control
         string name = _presetPick.GetItemText(_presetPick.Selected);
         if (!_presets.TryGetValue(name, out Variant ev)) { return; }
         var entry = ev.AsGodotDictionary();
-        var zones = entry["zones"].AsGodotArray<string>();
-        for (int z = 0; z < 7 && z < zones.Count; z++)
+        if (!entry.ContainsKey("v")) { return; }
+        var vals = entry["v"].AsGodotDictionary();
+        var locks = entry.ContainsKey("lock") ? entry["lock"].AsGodotDictionary() : new Godot.Collections.Dictionary();
+
+        bool wasReady = _ready; _ready = false;
+        foreach (var kv in vals)
         {
-            int idx = _materials.IndexOf(zones[z]);
-            if (idx >= 0) { _zonePick[z].Select(idx); _terrain.SetZoneMaterial(z, zones[z]); }
+            if (_byId.TryGetValue(kv.Key.AsString(), out LabControl c)) { SetWidgetValue(c, kv.Value); }
         }
-        int mask = entry["mask"].AsInt32(), blend = entry["blend"].AsInt32();
-        _maskPick.Select(mask); _terrain.SetMaskMode(mask);
-        _blendPick.Select(blend); _terrain.SetBlendMode(blend);
-        if (entry.ContainsKey("tile")) { int tile = entry["tile"].AsInt32(); _tilePick.Select(tile); _terrain.SetInt("tile_mode", tile); }
+        foreach (var kv in _byId)
+        {
+            bool lk = locks.ContainsKey(kv.Key);
+            kv.Value.Locked = lk;
+            if (kv.Value.LockBox != null) { kv.Value.LockBox.ButtonPressed = lk; }
+        }
+        _ready = wasReady;
+        _terrain.RebakeSplat();
         GD.Print($"TerrainLab: loaded preset '{name}'");
     }
 
@@ -366,6 +495,38 @@ public partial class TerrainLabUI : Control
             foreach (var kv in parsed.AsGodotDictionary()) { _presets[kv.Key.AsString()] = kv.Value; }
         }
         RefreshPresetList();
+    }
+
+    // ---- CLI overrides + auto-shot (unchanged contract) -----------------------
+
+    private void ApplyCliOverrides()
+    {
+        if (_overrideMask >= 0) { OverrideEnum("mask_mode", _overrideMask); }
+        if (_overrideBlend >= 0) { OverrideEnum("blend_mode", _overrideBlend); }
+        if (_overrideTile >= 0) { OverrideEnum("tile_mode", _overrideTile); }
+        if (_overrideSplatDebug >= 0) { OverrideEnum("splat_debug", _overrideSplatDebug); }
+        if (_overrideMacro >= 0) { OverrideToggle("macro_on", _overrideMacro == 1); }
+        if (_overrideContact >= 0) { OverrideToggle("contact_on", _overrideContact == 1); }
+        if (_overrideSplat >= 0) { OverrideToggle("splat_on", _overrideSplat == 1); }
+        if (_texScale > 0f && _byId.TryGetValue("tex_scale_m", out LabControl ts)) { SetWidgetValue(ts, _texScale); }
+    }
+    private void OverrideEnum(string id, int v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
+    private void OverrideToggle(string id, bool v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
+
+    public override void _Process(double delta)
+    {
+        if (_autoShotT >= 0.0 && _autoShotPath != null)
+        {
+            _autoShotT += delta;
+            if (_autoShotT > 1.5)
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_autoShotPath)!);
+                GetViewport().GetTexture().GetImage().SavePng(_autoShotPath);
+                GD.Print($"TerrainLab: auto-shot -> {_autoShotPath}");
+                _autoShotT = -1.0;
+                GetTree().Quit();
+            }
+        }
     }
 
     public override void _ExitTree() => _fc?.Dispose();
