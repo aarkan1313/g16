@@ -62,6 +62,7 @@ public partial class TerrainLab : MeshInstance3D
     public void SetMaskMode(int mode) => _mat.SetShaderParameter("mask_mode", mode);
     public void SetBlendMode(int mode) => _mat.SetShaderParameter("blend_mode", mode);
     public void SetFloat(string param, float v) => _mat.SetShaderParameter(param, v);
+    public void SetInt(string param, int v) => _mat.SetShaderParameter(param, v);
 
     private Texture2D? LoadOr(string baseDir, string map)
     {

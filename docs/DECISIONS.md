@@ -6,6 +6,21 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-16 — Look lab: added hex-tiling anti-tiling + sharpness controls; FUZZINESS
+not fully resolved (NOTED, deferred).** Root-caused the "fuzzy everywhere" as (a) the
+old 50/50 `mix(base,big,0.5)` anti-tile HALVING texture contrast (variance loss — see
+Heitz-Neyret) and (b) over-minification at `tex_scale_m=9`. Built fragment-shader-local
+fixes behind live toggles: a `tile_mode` selector (none / IQ-2tap / hex-tiling, default
+hex), and sliders for tex_scale (default now 28, was secretly 9), tri_sharpness (4→8),
+hex_rot, hex_contrast. Also fixed a real UI bug: sliders set `.Value` in code but that
+doesn't fire `ValueChanged`, so the shader silently kept its own defaults (incl. the
+mush scale-9) while the panel DISPLAYED other values — `AddSlider` now pushes on init.
+**Status: user flew it, fuzziness improved but not gone to his eye — DEFERRED, will
+revisit.** Likely the same root issue as "make textures not look repeated/boring"
+(active next). Headless A/B verified the techniques render correctly; the remaining
+gap is a look-quality judgment, not a compile/wiring error. Surface-only, base field
+untouched, git is the undo.
+
 **2026-06-16 — Terrain LOOK LAB built (terrain_lab.tscn) — the texturing tool.**
 After the splat/ground-texture attempts kept missing, switched to a tool-first
 approach: a lab on the same base field with an on-screen panel to swap, live: 7

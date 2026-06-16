@@ -18,6 +18,8 @@ public partial class TerrainLabUI : Control
         { "height bands", "height+slope", "noise-broken", "curvature-aware", "steep=cliff", "noise biomes" };
     private static readonly string[] BlendModes =
         { "flat albedo", "full PBR", "PBR+anti-tile", "+macro tint", "full stack" };
+    private static readonly string[] TileModes =
+        { "none (sharp)", "IQ 2-tap", "hex-tiling" };
 
     private const string PresetsPath = "user://terrain_presets.json";
 
@@ -26,16 +28,37 @@ public partial class TerrainLabUI : Control
     private TerrainLab _terrain = null!;
     private readonly List<string> _materials = new();
     private readonly OptionButton[] _zonePick = new OptionButton[7];
-    private OptionButton _maskPick = null!, _blendPick = null!, _presetPick = null!;
+    private OptionButton _maskPick = null!, _blendPick = null!, _presetPick = null!, _tilePick = null!;
     private LineEdit _presetName = null!;
     private Dictionary<string, Variant> _presets = new();
+
+    // Optional headless A/B capture (CLI verification): --auto-shot=<path> fires a
+    // screenshot from the scene's default camera after a warmup, then quits.
+    // --blend=N / --mask=N override the defaults so each mode can be captured.
+    private string? _autoShotPath;
+    private double _autoShotT = -1.0;
+    private int _overrideBlend = -1, _overrideMask = -1, _overrideTile = -1;
+    private string? _camArg;   // "x,y,z,pitchDeg,yawDeg" — place capture camera near ground
+    private float _texScale = -1f;   // override tex_scale_m for isolation runs
 
     public override void _Ready()
     {
         _fc = new FieldCompute();
         _params = FieldParams.Load();
-        _terrain = GetNode<TerrainLab>("../TerrainLab");
+        // UI lives under UILayer/UI, so reach up to the scene root and across to
+        // the TerrainLab node (was "../TerrainLab", which resolved one level short).
+        _terrain = GetNode<TerrainLab>("/root/TerrainLabRoot/TerrainLab");
         _terrain.Build(_fc, _params);
+
+        foreach (string a in OS.GetCmdlineUserArgs())
+        {
+            if (a.StartsWith("--auto-shot=")) { _autoShotPath = a.Substring("--auto-shot=".Length); _autoShotT = 0.0; }
+            else if (a.StartsWith("--blend=")) { int.TryParse(a.Substring("--blend=".Length), out _overrideBlend); }
+            else if (a.StartsWith("--mask=")) { int.TryParse(a.Substring("--mask=".Length), out _overrideMask); }
+            else if (a.StartsWith("--tile=")) { int.TryParse(a.Substring("--tile=".Length), out _overrideTile); }
+            else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
+            else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
+        }
 
         LoadLibrary();
         BuildPanel();
@@ -90,6 +113,15 @@ public partial class TerrainLabUI : Control
 
         vb.AddChild(new HSeparator());
 
+        // Anti-tiling / sharpness controls.
+        _tilePick = AddSelector(vb, "tile mode", TileModes, i => _terrain.SetInt("tile_mode", i));
+        AddSlider(vb, "tex scale m", 4f, 80f, 28f, v => _terrain.SetFloat("tex_scale_m", v));   // 28=crisp (9 was mush)
+        AddSlider(vb, "tri sharp", 1f, 32f, 8f, v => _terrain.SetFloat("tri_sharpness", v));
+        AddSlider(vb, "hex rot", 0f, 1f, 0.7f, v => _terrain.SetFloat("hex_rot_strength", v));
+        AddSlider(vb, "hex contrast", 0.3f, 1f, 0.7f, v => _terrain.SetFloat("hex_contrast", v));
+
+        vb.AddChild(new HSeparator());
+
         // Preset save/load.
         var prow = new HBoxContainer();
         _presetName = new LineEdit { PlaceholderText = "preset name", CustomMinimumSize = new Vector2(140, 0) };
@@ -124,6 +156,25 @@ public partial class TerrainLabUI : Control
         return ob;
     }
 
+    private HSlider AddSlider(VBoxContainer vb, string label, float min, float max, float val, Action<float> onChange)
+    {
+        var row = new HBoxContainer();
+        row.AddChild(new Label { Text = label, CustomMinimumSize = new Vector2(96, 0) });
+        var sl = new HSlider { MinValue = min, MaxValue = max, Value = val, Step = (max - min) / 200.0,
+                               CustomMinimumSize = new Vector2(180, 0) };
+        var valLbl = new Label { Text = val.ToString("0.0"), CustomMinimumSize = new Vector2(48, 0) };
+        sl.ValueChanged += v => { onChange((float)v); valLbl.Text = ((float)v).ToString("0.0"); };
+        row.AddChild(sl);
+        row.AddChild(valLbl);
+        vb.AddChild(row);
+        // Push the initial value to the shader NOW — setting .Value in code does not
+        // reliably fire ValueChanged, so without this the shader keeps its own (wrong)
+        // uniform default while the slider DISPLAYS the intended value. (This was the
+        // bug: lab opened at tex_scale_m=9 mush despite the slider showing otherwise.)
+        onChange(val);
+        return sl;
+    }
+
     /// Sensible alpine starting assignment (uses materials if present, else index 0).
     private void ApplyDefaults()
     {
@@ -149,6 +200,39 @@ public partial class TerrainLabUI : Control
         }
         _maskPick.Select(2); _terrain.SetMaskMode(2);     // noise-broken
         _blendPick.Select(3); _terrain.SetBlendMode(3);   // +macro tint
+        _tilePick.Select(2); _terrain.SetInt("tile_mode", 2);   // hex-tiling (the fix)
+
+        // CLI overrides for headless A/B capture.
+        if (_overrideMask >= 0) { _maskPick.Select(_overrideMask); _terrain.SetMaskMode(_overrideMask); }
+        if (_overrideBlend >= 0) { _blendPick.Select(_overrideBlend); _terrain.SetBlendMode(_overrideBlend); }
+        if (_overrideTile >= 0) { _tilePick.Select(_overrideTile); _terrain.SetInt("tile_mode", _overrideTile); }
+        if (_texScale > 0f) { _terrain.SetFloat("tex_scale_m", _texScale); }
+        if (_camArg != null)
+        {
+            string[] p = _camArg.Split(',');
+            if (p.Length >= 5)
+            {
+                var cam = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+                cam.Position = new Vector3(float.Parse(p[0]), float.Parse(p[1]), float.Parse(p[2]));
+                cam.RotationDegrees = new Vector3(float.Parse(p[3]), float.Parse(p[4]), 0f);
+            }
+        }
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_autoShotT >= 0.0 && _autoShotPath != null)
+        {
+            _autoShotT += delta;
+            if (_autoShotT > 1.5)
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_autoShotPath)!);
+                GetViewport().GetTexture().GetImage().SavePng(_autoShotPath);
+                GD.Print($"TerrainLab: auto-shot -> {_autoShotPath}");
+                _autoShotT = -1.0;
+                GetTree().Quit();
+            }
+        }
     }
 
     private void SavePreset()
@@ -161,6 +245,7 @@ public partial class TerrainLabUI : Control
             { "zones", zones },
             { "mask", _maskPick.Selected },
             { "blend", _blendPick.Selected },
+            { "tile", _tilePick.Selected },
         };
         _presets[name] = entry;
         WritePresets();
@@ -183,6 +268,7 @@ public partial class TerrainLabUI : Control
         int mask = entry["mask"].AsInt32(), blend = entry["blend"].AsInt32();
         _maskPick.Select(mask); _terrain.SetMaskMode(mask);
         _blendPick.Select(blend); _terrain.SetBlendMode(blend);
+        if (entry.ContainsKey("tile")) { int tile = entry["tile"].AsInt32(); _tilePick.Select(tile); _terrain.SetInt("tile_mode", tile); }
         GD.Print($"TerrainLab: loaded preset '{name}'");
     }
 

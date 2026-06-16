@@ -57,6 +57,18 @@ uniform float macro_m = 480.0;
 uniform float macro_amp = 0.14;
 uniform float antitile_mult = 5.3;
 
+// --- Anti-tiling (sharpness-preserving) -------------------------------------
+// tile_mode chooses HOW each texture lookup breaks up its repetition without
+// the contrast loss of the old 50/50 blend:
+//   0 = none (single sample, sharpest; legacy blend_mode>=2 50/50 still applies)
+//   1 = IQ 2-tap hash-tiling (cheap, contrast-boosted)         iquilezles.org
+//   2 = hex-tiling (Mikkelsen: 3-tap, per-tile rotation,       JCGT 2022
+//       variance-preserving + contrast restore, textureGrad mip-correct)
+uniform int tile_mode = 2;
+uniform float tri_sharpness : hint_range(1.0, 32.0) = 8.0;  // triplanar blend exponent
+uniform float hex_rot_strength : hint_range(0.0, 1.0) = 0.7; // per-tile rotation amount
+uniform float hex_contrast : hint_range(0.3, 1.0) = 0.7;     // contrast-restore (lower=sharper)
+
 varying vec2 v_uv;
 varying vec3 v_world;
 varying vec3 v_normal;
@@ -69,24 +81,99 @@ float hash2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float vnoise(vec2 w,float wl){ vec2 p=w/wl; vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     return mix(mix(hash2(i),hash2(i+vec2(1,0)),f.x),mix(hash2(i+vec2(0,1)),hash2(i+vec2(1,1)),f.x),f.y); }
 
+// ============================================================================
+// TILING LAYER — break texture repetition while PRESERVING contrast.
+// Each function wraps a single 2D lookup; the triplanar layer below calls the
+// dispatcher `tiled()` once per projection plane. Tiling technique is isolated
+// from triplanar blending and from zone compositing (one job each, swappable).
+// ============================================================================
+
+vec2 hash2v(vec2 p){
+    mat2 m = mat2(vec2(127.1, 269.5), vec2(311.7, 183.3));
+    return fract(sin(m * p) * 43758.5453);
+}
+
+// --- (1) IQ 2-tap hash-tiling. textureGrad with ORIGINAL-uv derivatives keeps
+//         mips sharp; contrast-boosted blend hides the seam. iquilezles.org ---
+vec4 iq_sample(sampler2D tex, vec2 uv, vec2 dx, vec2 dy){
+    vec2 cell = floor(uv);
+    vec2 off1 = sin(vec2(3.0,7.0)*hash2v(cell));        // per-cell virtual pattern A
+    vec2 off2 = sin(vec2(5.0,11.0)*hash2v(cell+11.5));  // pattern B
+    vec4 a = textureGrad(tex, uv + off1, dx, dy);
+    vec4 b = textureGrad(tex, uv + off2, dx, dy);
+    float f = 0.5 + 0.5*sin(6.2831*hash2v(cell).x);
+    // boost contrast of the blend band by the inter-sample difference (IQ trick)
+    vec4 d = a - b;
+    return mix(a, b, smoothstep(0.2, 0.8, f - 0.1*(d.x+d.y+d.z)));
+}
+
+// --- (2) Mikkelsen hex-tiling: 3 nearest simplex vertices, per-tile rotation,
+//         variance-preserving weighted blend + contrast restore. JCGT 2022. ---
+void tri_grid(vec2 st, out float w1, out float w2, out float w3,
+              out vec2 v1, out vec2 v2, out vec2 v3){
+    const mat2 skew = mat2(vec2(1.0, 0.0), vec2(-0.57735027, 1.15470054));
+    const mat2 unsk = mat2(vec2(1.0, 0.0), vec2(0.5, 0.86602540));
+    vec2 p = skew * st;
+    vec2 i = floor(p); vec2 f = fract(p);
+    float tmp = f.x + f.y;
+    if (tmp < 1.0){ v1 = i; w1 = 1.0 - tmp; v2 = i+vec2(1,0); w2 = f.x; v3 = i+vec2(0,1); w3 = f.y; }
+    else          { v1 = i+vec2(1,1); w1 = tmp-1.0; v2 = i+vec2(1,0); w2 = 1.0-f.y; v3 = i+vec2(0,1); w3 = 1.0-f.x; }
+    v1 = unsk*v1; v2 = unsk*v2; v3 = unsk*v3;
+}
+mat2 load_rot(vec2 idx){
+    float a = hash2v(idx).x * 6.2831853 * hex_rot_strength;
+    float c = cos(a), s = sin(a);
+    return mat2(vec2(c,s), vec2(-s,c));
+}
+vec4 hex_sample(sampler2D tex, vec2 uv, vec2 dx, vec2 dy){
+    float w1,w2,w3; vec2 v1,v2,v3;
+    tri_grid(uv, w1,w2,w3, v1,v2,v3);
+    mat2 r1 = load_rot(v1), r2 = load_rot(v2), r3 = load_rot(v3);
+    // rotate each tile's lookup about its own center; jitter origin by a hash
+    vec2 c1 = r1*(uv - v1) + v1 + hash2v(v1);
+    vec2 c2 = r2*(uv - v2) + v2 + hash2v(v2);
+    vec2 c3 = r3*(uv - v3) + v3 + hash2v(v3);
+    vec4 t1 = textureGrad(tex, c1, r1*dx, r1*dy);
+    vec4 t2 = textureGrad(tex, c2, r2*dx, r2*dy);
+    vec4 t3 = textureGrad(tex, c3, r3*dx, r3*dy);
+    // variance-preserving weights: normalize, blend, then divide by sqrt(Sum w^2)
+    vec3 w = vec3(w1,w2,w3); w = w*w*w; w /= (w.x+w.y+w.z);     // sharpen weights
+    vec4 m = t1*w.x + t2*w.y + t3*w.z;                          // weighted mean
+    vec4 mean = (t1+t2+t3)/3.0;
+    float vc = inversesqrt(dot(w,w));                           // 1/sqrt(Sum w^2)
+    return mix(mean, mean + (m-mean)*vc, hex_contrast);         // restore contrast
+}
+
+// Dispatcher: pick the tiling technique. dx/dy are screen-space uv derivatives
+// (computed once per plane) so every variant stays mip-correct.
+vec4 tiled(sampler2D tex, vec2 uv){
+    vec2 dx = dFdx(uv), dy = dFdy(uv);
+    if (tile_mode == 1) return iq_sample(tex, uv, dx, dy);
+    if (tile_mode == 2) return hex_sample(tex, uv, dx, dy);
+    return textureGrad(tex, uv, dx, dy);   // tile_mode 0: plain sample
+}
+
+vec3 tri_w(vec3 nr){ vec3 bw=pow(abs(nr),vec3(tri_sharpness)); return bw/(bw.x+bw.y+bw.z); }
+
 vec3 s_alb(sampler2D t, vec3 wp, vec3 nr){
-    // triplanar anti-tiled albedo
-    vec3 bw=pow(abs(nr),vec3(4.0)); bw/=(bw.x+bw.y+bw.z);
+    vec3 bw=tri_w(nr);
     vec2 ux=wp.zy/tex_scale_m, uy=wp.xz/tex_scale_m, uz=wp.xy/tex_scale_m;
-    vec3 base = texture(t,ux).rgb*bw.x + texture(t,uy).rgb*bw.y + texture(t,uz).rgb*bw.z;
-    if (blend_mode >= 2) {
+    vec3 base = tiled(t,ux).rgb*bw.x + tiled(t,uy).rgb*bw.y + tiled(t,uz).rgb*bw.z;
+    // Legacy 50/50 anti-tile kept ONLY for A/B (tile_mode 0). It halves contrast
+    // (the documented muddiness) — superseded by tile_mode 1/2.
+    if (tile_mode == 0 && blend_mode >= 2) {
         vec3 big = texture(t,ux/antitile_mult).rgb*bw.x + texture(t,uy/antitile_mult).rgb*bw.y + texture(t,uz/antitile_mult).rgb*bw.z;
         base = mix(base, big, 0.5);
     }
     return base;
 }
 vec3 s_nrm(sampler2D t, vec3 wp, vec3 nr){
-    vec3 bw=pow(abs(nr),vec3(4.0)); bw/=(bw.x+bw.y+bw.z);
-    return texture(t,wp.zy/tex_scale_m).rgb*bw.x + texture(t,wp.xz/tex_scale_m).rgb*bw.y + texture(t,wp.xy/tex_scale_m).rgb*bw.z;
+    vec3 bw=tri_w(nr);
+    return tiled(t,wp.zy/tex_scale_m).rgb*bw.x + tiled(t,wp.xz/tex_scale_m).rgb*bw.y + tiled(t,wp.xy/tex_scale_m).rgb*bw.z;
 }
 float s_rgh(sampler2D t, vec3 wp, vec3 nr){
-    vec3 bw=pow(abs(nr),vec3(4.0)); bw/=(bw.x+bw.y+bw.z);
-    return texture(t,wp.zy/tex_scale_m).r*bw.x + texture(t,wp.xz/tex_scale_m).r*bw.y + texture(t,wp.xy/tex_scale_m).r*bw.z;
+    vec3 bw=tri_w(nr);
+    return tiled(t,wp.zy/tex_scale_m).r*bw.x + tiled(t,wp.xz/tex_scale_m).r*bw.y + tiled(t,wp.xy/tex_scale_m).r*bw.z;
 }
 
 void vertex(){
