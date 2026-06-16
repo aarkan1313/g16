@@ -69,6 +69,17 @@ uniform float tri_sharpness : hint_range(1.0, 32.0) = 8.0;  // triplanar blend e
 uniform float hex_rot_strength : hint_range(0.0, 1.0) = 0.7; // per-tile rotation amount
 uniform float hex_contrast : hint_range(0.3, 1.0) = 0.7;     // contrast-restore (lower=sharper)
 
+// --- Lever 2: macro color variation -----------------------------------------
+// Low-frequency, multi-octave color drift (the big "doesn't look tiled" trick,
+// Far Cry 5 style). Drives brightness + gentle hue/saturation, neutral-centered
+// so it both lightens and darkens. macro_amp above feeds the legacy value-only
+// path; these drive the richer one.
+uniform bool macro_on = true;
+uniform float macro_val_amp : hint_range(0.0, 0.6) = 0.22;   // brightness drift
+uniform float macro_hue_amp : hint_range(0.0, 0.2) = 0.05;   // hue drift (radians-ish)
+uniform float macro_sat_amp : hint_range(0.0, 0.6) = 0.18;   // saturation drift
+uniform float macro_scale2 : hint_range(60.0, 400.0) = 170.0; // 2nd (medium) octave wavelength
+
 varying vec2 v_uv;
 varying vec3 v_world;
 varying vec3 v_normal;
@@ -240,6 +251,34 @@ void zone_weights(out float w[7], float h, float slope, float curv, vec3 wp){
     if(sum>1e-4) for(int i=0;i<7;i++) w[i]/=sum;
 }
 
+// --- HSV helpers (for Lever 2 hue/sat drift) ---
+vec3 rgb2hsv(vec3 c){
+    vec4 K=vec4(0.0,-1.0/3.0,2.0/3.0,-1.0);
+    vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));
+    vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));
+    float d=q.x-min(q.w,q.y); float e=1.0e-10;
+    return vec3(abs(q.z+(q.w-q.y)/(6.0*d+e)), d/(q.x+e), q.x);
+}
+vec3 hsv2rgb(vec3 c){
+    vec4 K=vec4(1.0,2.0/3.0,1.0/3.0,3.0);
+    vec3 p=abs(fract(c.xxx+K.xyz)*6.0-K.www);
+    return c.z*mix(K.xxx,clamp(p-K.xxx,0.0,1.0),c.y);
+}
+// Multi-octave low-frequency color drift. Neutral-centered (mean 0) so it both
+// lightens and darkens; perturbs value, saturation, and hue independently.
+vec3 macro_color(vec3 alb, vec3 wp){
+    if(!macro_on) return alb;
+    float n1 = vnoise(wp.xz, macro_m) - 0.5;            // big octave
+    float n2 = vnoise(wp.xz + vec2(57.0,131.0), macro_scale2) - 0.5; // medium octave
+    float drift = n1 + 0.5*n2;                          // combined, ~[-0.75,0.75]
+    vec3 hsv = rgb2hsv(alb);
+    hsv.x = fract(hsv.x + drift * macro_hue_amp);       // hue
+    hsv.y = clamp(hsv.y * (1.0 + drift * macro_sat_amp), 0.0, 1.0); // saturation
+    vec3 rgb = hsv2rgb(hsv);
+    rgb *= (1.0 + drift * macro_val_amp);               // brightness
+    return max(rgb, vec3(0.0));
+}
+
 void fragment(){
     vec3 wp=v_world; vec3 nr=v_normal;
     float w[7]; zone_weights(w, v_h, v_slope, v_curv, wp);
@@ -255,8 +294,9 @@ void fragment(){
     ZONE(5,z5_alb,z5_nrm,z5_rgh)
     ZONE(6,z6_alb,z6_nrm,z6_rgh)
 
-    // macro tint (broad value drift).
-    if (blend_mode>=3){ float m=vnoise(wp.xz,macro_m); alb*=(1.0+(m-0.5)*2.0*macro_amp); }
+    // Lever 2: macro color variation (multi-octave LF value/hue/sat drift).
+    // Own toggle (macro_on), independent of blend_mode so it isolates cleanly.
+    alb = macro_color(alb, wp);
 
     ALBEDO=alb;
     ROUGHNESS=clamp(rgh,0.04,1.0);
