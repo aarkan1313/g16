@@ -62,9 +62,28 @@ Three units, ~910 lines. No bake stage.
 - `scenes/lab.tscn` — the scene wiring the three together.
 - **Depends on:** Field + Presenter.
 
+### Lab — texturing/material exploration (C# + a big shader)
+- `scripts/lab/TerrainLab.cs` — presenter for the look lab: same base field,
+  displaced plane, applies 7 zone materials + mask/blend mode.
+- `scripts/lab/TerrainLabUI.cs` — on-screen panel: per-zone material dropdowns,
+  mask selector, blend selector, preset save/load.
+- `shaders/terrain_lab.gdshader` — 7-zone PBR terrain shader; swappable mask
+  modes (6) and blend modes (5); triplanar + anti-tiling + macro-tint.
+- `scenes/terrain_lab.tscn` — the look lab.
+- `scripts/board/MaterialBoard.cs` + `shaders/material_board.gdshader` +
+  `scenes/material_board.tscn` — the material JUDGING loop (1=pass/3=fail,
+  full-stack PBR, persists verdicts). Used to cull 738 → 108.
+
 ### Data (hot-reloadable, never literals in code)
 - `data/field_params.json` — field knobs.
 - `data/presentation_params.json` — sun/fog/walk knobs.
+- `data/material_verdicts.json` — pass/fail/dropped verdict per judged material.
+- `data/material_library.json` — the 108 accepted materials (derived from verdicts).
+
+### Material texture library (gitignored — 2.5 GB)
+- `assets/materials/<name>/{albedo,normal,roughness,ao}.png` — 738 distinct PBR
+  materials copied from `D:\assets`. NOT in git (re-derivable). The accepted 108
+  are recorded in the JSON above. See HANDOFF for the regenerate command.
 
 ## Data flow
 

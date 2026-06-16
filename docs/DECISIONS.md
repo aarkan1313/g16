@@ -6,6 +6,37 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-16 — Terrain LOOK LAB built (terrain_lab.tscn) — the texturing tool.**
+After the splat/ground-texture attempts kept missing, switched to a tool-first
+approach: a lab on the same base field with an on-screen panel to swap, live: 7
+zone materials (valley→peak), 6 mask modes (height / height+slope / noise-broken /
+curvature / steep-cliff / noise-biome), 5 blend modes (flat → full-stack PBR), and
+preset save/load. Presets = the embryo of the biome system. Built but NOT yet
+flown — user explores combos next. Compiles clean. Room to add more masks/shaders
+(each is one case in the swapper).
+
+**2026-06-16 — Material library judged down from 738 → 108 accepted, then deduped.**
+Discovered the real texture library is huge (~1,015 PBR material folders system-wide
+under D:\assets, 738 distinct after collapsing seed/variant copies — a biome-organized
+`world 4/candidates` tree + `world3/textures/wgv3` + AmbientCG packs). Built a
+**material judging loop** (board scene): one material at a time, full-stack PBR,
+**1=pass / 3=fail**, verdicts persisted to data/material_verdicts.json (resumes
+across sittings). User judged all 738 → **113 pass**. Conservative dedupe dropped 5
+(1 pixel-dupe rock035=rock_dark + 4 non-materials) → **108 clean accepted**, heavily
+alpine/volcanic/tundra/rock (fits the mountainous terrain). Verdicts + the derived
+material_library.json are committed; the 2.5 GB of texture files are gitignored
+(re-derivable from D:\assets). **Lesson:** most of the library is AI-generated with
+stamped flora (leaves/ferns) that tiles badly — surface-only materials are the keepers;
+flora is a future procedural-decoration pass, never baked into ground textures.
+
+**2026-06-15 — Texturing arc: ported WG15 splat → many problems → reverted.**
+The WG15 4-texture splat was tuned for altitude; at eye level it showed blocky
+border-jitter (raw floor-hash) and screen-space grain. Tried smooth-noise jitter,
+lower detail-bump, disabling FXAA/SSAO; user still rejected → reverted to the M1
+ramp. Key process lesson that led to the lab + judging approach: don't port a
+tuned-for-one-distance shader; build fresh, judge at eye level, give every layer a
+live toggle, and make iteration cheap (git + sandbox scenes). Added MSAA (kept).
+
 **2026-06-15 — M3 splat REVERTED; back to the M1 minimal height/slope ramp.**
 The ported splat showed an artifact up close that the user judged bad: a
 grain/pattern that "appears when you stop, fine when moving." We chased the likely

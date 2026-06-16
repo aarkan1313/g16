@@ -49,6 +49,10 @@ public partial class LabTerrain : MeshInstance3D
             };
             _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/lab_terrain.gdshader") };
             MaterialOverride = _mat;
+            _mat.SetShaderParameter("grass_tex", GD.Load<Texture2D>("res://assets/textures/grass.png"));
+            _mat.SetShaderParameter("dirt_tex", GD.Load<Texture2D>("res://assets/textures/dirt.png"));
+            _mat.SetShaderParameter("scree_tex", GD.Load<Texture2D>("res://assets/textures/scree.png"));
+            _mat.SetShaderParameter("rock_tex", GD.Load<Texture2D>("res://assets/textures/rock.png"));
         }
 
         _mat!.SetShaderParameter("heightmap", tex);
@@ -84,6 +88,12 @@ public partial class LabTerrain : MeshInstance3D
     {
         _mat?.SetShaderParameter("polish", on ? 1.0f : 0.0f);
     }
+
+    /// Independent material-group toggles (each falls back to a flat tone).
+    public void SetRock(bool on)  { _mat?.SetShaderParameter("rock_on", on ? 1.0f : 0.0f); }
+    public void SetGrass(bool on) { _mat?.SetShaderParameter("grass_on", on ? 1.0f : 0.0f); }
+    public void SetScree(bool on) { _mat?.SetShaderParameter("scree_on", on ? 1.0f : 0.0f); }
+    public void SetDirt(bool on)  { _mat?.SetShaderParameter("dirt_on", on ? 1.0f : 0.0f); }
 
     /// CPU mirror of the shader's height read: bilinear base. Powers walk mode.
     public float SampleHeight(float worldX, float worldZ)

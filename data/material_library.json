@@ -1,0 +1,652 @@
+{
+  "materials": [
+    {
+      "name": "01_columnar_basalt_face",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_dark_slate",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_dwarf_willow_low",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_fine_sand",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_fresh_basalt_ash",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_fresh_powder",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_frost_shattered_tundra",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_s01_msc",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_weathered_grey_bedrock",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_weathered_sandstone",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "01_wet_dark_boulder",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "02_aa_lava_crust",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "02_basalt_with_lichen",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "02_berry_shrubs",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "02_coarse_talus",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "02_glacial_erratic",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "02_rippled_dunes",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "02_s02_msc",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "02_shattered_granite",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "03_firn_dense",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "03_s03_msc",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "03_s03_rfs",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_arctic_rock_with_orange_lichen",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_bog_with_pitcher_plants",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_desert_varnish",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_lava_bomb",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_permafrost_polygon",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_pioneer_plants_lava",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_s04_firn",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_s04_msc",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "04_scoria_field",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "05_cracked_with_lichen",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "05_cracked_with_minerals",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "05_granite_desert",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "05_lichen_streaked",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "06_frost_shattered",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "06_frost_shattered_alpine",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "06_s06_rfs",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "06_shale_with_water",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "06_tephra_mixed",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "07_black_volcanic_sand",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "07_limestone_eroded",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "07_warm_ground_steam",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "09_mica_schist",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "09_mossy_arctic_rock",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "10_granular_glacier",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "10_s10_msc",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "10_s10_rfs",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "10_schist_flakes",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "10_shallow_puddle_floor",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "10_waterfall_rock",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "12_cooled_flow_edge",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "12_cracked_bedrock",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "12_dry_lichen_carpet",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "12_dry_riverbed",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "12_s12_rfs",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "12_wet_pebbles",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "13_dry_loose_scree",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "13_meltwater_rock",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "13_permafrost_polygon",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "13_pumice_field",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "13_rhyolite_banded",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "13_sun_baked_clay",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "14_ash_with_crystals",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "14_bog_with_stones",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "14_dark_basalt_wet",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "14_post_eruption_recovery",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "14_s14_msc",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "14_s14_rfs",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "14_scree_with_lichen",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "15_alder_seedlings",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "16_glacial_till",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "16_post_avalanche",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "16_pyroclastic_debris",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "16_s16_lor",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "16_volcanic_with_rust",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "17_s17_lor",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "17_spatter_cone_debris",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "17_tundra_dwarf",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "17_yardang_base",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "18_ash_layered",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "18_s18_firn",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "18_s18_rfs",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "20_krummholz_base",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "21_arctic_rosette_plants",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "21_deciduous_decay",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "biome_lava_field",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "biome_rocky_ground",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "biome_rocky_mid",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "biome_wetland_ground",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "candidates_volcanic_20_hot_spring_edge",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "clay_s15",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "desert_dark_rock",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "dirt",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "fantasy_lava_field_controlled",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "m14_tundra_lichen",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "m14_tundra_moss",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "m8_grass_calm",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "peat_s01",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "rock035_derived",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "rock_dark",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "rock_dark_detail",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "rock_light",
+      "has_normal": true,
+      "has_rough": false,
+      "has_ao": true
+    },
+    {
+      "name": "scrub_dense",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "v0_local_dark_slate",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "wgv3_alpine_scree",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "wgv3_desert_canyon_rock",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    },
+    {
+      "name": "wgv3_tf_bark_rock",
+      "has_normal": true,
+      "has_rough": true,
+      "has_ao": true
+    }
+  ]
+}

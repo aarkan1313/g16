@@ -7,8 +7,13 @@ namespace WG16.Workbench;
 /// ground traversal is data-tuned, fly stays wheel-tuned.
 public partial class FlyCamera : Camera3D
 {
+    /// Initial fly speed (m/s). Set in the editor or before _Ready for small
+    /// scenes like the material board where 200 m/s is absurdly fast.
+    [Export] public float InitialSpeed = 200f;
     private float _speed = 200f;
     private Vector2 _look;
+
+    public override void _Ready() { _speed = InitialSpeed; }
 
     public bool Walk;
     public float WalkSpeed = 2.2f;      // overwritten from presentation params

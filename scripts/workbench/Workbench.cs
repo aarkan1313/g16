@@ -25,6 +25,10 @@ public partial class Workbench : Node3D
     private bool _walk;
     private ulong _genMs;
     private bool _polish = true;   // P toggles the polished color treatment
+    private bool _rock = true;     // T toggles rock
+    private bool _grass = true;    // Y toggles grass
+    private bool _scree = true;    // U toggles scree
+    private bool _dirt = true;     // I toggles dirt
     // Optional one-shot startup screenshot (CLI verification): set via
     // --auto-shot=<path> in the user args; fires once after a warmup delay.
     private string? _autoShotPath;
@@ -47,6 +51,10 @@ public partial class Workbench : Node3D
         Rebuild();
         ApplyPresentation();
         _terrain.SetPolish(_polish);
+        _terrain.SetRock(_rock);
+        _terrain.SetGrass(_grass);
+        _terrain.SetScree(_scree);
+        _terrain.SetDirt(_dirt);
 
         foreach (string a in OS.GetCmdlineUserArgs())
         {
@@ -153,6 +161,38 @@ public partial class Workbench : Node3D
             _hud.Text = HudText();
         }
 
+        if (k.Keycode == Key.T)
+        {
+            _rock = !_rock;
+            _terrain.SetRock(_rock);
+            GD.Print($"Workbench: rock textures {(_rock ? "ON" : "off")}");
+            _hud.Text = HudText();
+        }
+
+        if (k.Keycode == Key.Y)
+        {
+            _grass = !_grass;
+            _terrain.SetGrass(_grass);
+            GD.Print($"Workbench: grass textures {(_grass ? "ON" : "off")}");
+            _hud.Text = HudText();
+        }
+
+        if (k.Keycode == Key.U)
+        {
+            _scree = !_scree;
+            _terrain.SetScree(_scree);
+            GD.Print($"Workbench: scree texture {(_scree ? "ON" : "off")}");
+            _hud.Text = HudText();
+        }
+
+        if (k.Keycode == Key.I)
+        {
+            _dirt = !_dirt;
+            _terrain.SetDirt(_dirt);
+            GD.Print($"Workbench: dirt texture {(_dirt ? "ON" : "off")}");
+            _hud.Text = HudText();
+        }
+
         if (k.Keycode == Key.Bracketleft || k.Keycode == Key.Bracketright)
         {
             float step = k.Keycode == Key.Bracketright ? 3f : -3f;
@@ -191,7 +231,7 @@ public partial class Workbench : Node3D
         return $"seed {p.Seed}  view {ModeNames[(int)_fieldMode]}  amp {p.AmplitudeM}m  ridge {p.RidgeAmp}m  " +
                $"res {p.HeightmapRes} ({p.Spacing}m/texel)\n" +
                $"gen {_genMs} ms (~{nsPerSample:F1} ns/sample incl. readback)\n" +
-               $"0-5 view | R reseed | G walk {(_walk ? "ON" : "off")} | P polish {(_polish ? "ON" : "off")} | [/] sun | F12 shot | LMB/RMB+WASD fly";
+               $"R reseed | G walk {(_walk ? "ON" : "off")} | P polish {(_polish ? "ON" : "off")} | T rock {(_rock ? "ON" : "off")} | Y grass {(_grass ? "ON" : "off")} | U scree {(_scree ? "ON" : "off")} | I dirt {(_dirt ? "ON" : "off")} | [/] sun";
     }
 
     public override void _ExitTree()
