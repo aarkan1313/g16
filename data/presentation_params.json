@@ -1,0 +1,9 @@
+{
+  "sun_elevation_deg": 35.0,
+  "sun_azimuth_deg": 40.0,
+  "sun_energy": 1.2,
+  "fog_density": 0.00012,
+  "eye_height_m": 1.7,
+  "walk_speed_ms": 2.2,
+  "walk_run_mult": 3.0
+}
