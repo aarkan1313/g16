@@ -38,6 +38,7 @@ public partial class TerrainLabUI : Control
     private string? _autoShotPath;
     private double _autoShotT = -1.0;
     private int _overrideBlend = -1, _overrideMask = -1, _overrideTile = -1, _overrideMacro = -1, _overrideContact = -1;
+    private int _overrideSplat = -1, _overrideSplatDebug = -1;
     private string? _camArg;   // "x,y,z,pitchDeg,yawDeg" — place capture camera near ground
     private float _texScale = -1f;   // override tex_scale_m for isolation runs
 
@@ -58,6 +59,8 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--tile=")) { int.TryParse(a.Substring("--tile=".Length), out _overrideTile); }
             else if (a.StartsWith("--macro=")) { _overrideMacro = a.Substring("--macro=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--contact=")) { _overrideContact = a.Substring("--contact=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--splat=")) { _overrideSplat = a.Substring("--splat=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--splatdebug=")) { int.TryParse(a.Substring("--splatdebug=".Length), out _overrideSplatDebug); }
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
         }
@@ -139,6 +142,19 @@ public partial class TerrainLabUI : Control
         AddSlider(vb, "crev range", 0.5f, 8f, 2.5f, v => _terrain.SetFloat("crevice_range", v));
         AddSlider(vb, "slope wear", 0f, 1f, 0.35f, v => _terrain.SetFloat("slope_wear_amp", v));
         AddSlider(vb, "snow dust", 0f, 1f, 0f, v => _terrain.SetFloat("snow_dust_amp", v));
+
+        vb.AddChild(new HSeparator());
+
+        // Lever 1: GPU-baked splat material mixing.
+        AddToggle(vb, "splat mix", false, on => _terrain.SetBool("splat_on", on));
+        AddSlider(vb, "mix strength", 0f, 1f, 0.6f, v => _terrain.SetFloat("mix_strength", v)); // live
+        // These change the BAKED mask → adjust the field, then Rebake.
+        AddSlider(vb, "mix scale m", 8f, 120f, 26f, v => _terrain.MixScaleM = v);
+        AddSlider(vb, "mix bias", 0.1f, 0.9f, 0.5f, v => _terrain.MixBias = v);
+        var rebakeBtn = new Button { Text = "Rebake splat" };
+        rebakeBtn.Pressed += () => _terrain.RebakeSplat();
+        vb.AddChild(rebakeBtn);
+        AddSelector(vb, "splat debug", new[] { "off", "zones", "mix amt" }, i => _terrain.SetInt("splat_debug", i));
 
         vb.AddChild(new HSeparator());
 
@@ -237,6 +253,8 @@ public partial class TerrainLabUI : Control
         if (_overrideTile >= 0) { _tilePick.Select(_overrideTile); _terrain.SetInt("tile_mode", _overrideTile); }
         if (_overrideMacro >= 0) { _terrain.SetBool("macro_on", _overrideMacro == 1); }
         if (_overrideContact >= 0) { _terrain.SetBool("contact_on", _overrideContact == 1); }
+        if (_overrideSplat >= 0) { _terrain.SetBool("splat_on", _overrideSplat == 1); }
+        if (_overrideSplatDebug >= 0) { _terrain.SetInt("splat_debug", _overrideSplatDebug); }
         if (_texScale > 0f) { _terrain.SetFloat("tex_scale_m", _texScale); }
         if (_camArg != null)
         {

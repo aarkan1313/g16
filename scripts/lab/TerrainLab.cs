@@ -12,8 +12,14 @@ public partial class TerrainLab : MeshInstance3D
     private float[]? _heights;
     private int _res;
     private float _regionSize;
+    private float _spacing;
     private float _minBase, _maxBase;
     private const float AabbMarginM = 8f;
+
+    private SplatCompute? _splat;
+    // Splat bake params the UI can tweak before a rebake (Lever 1).
+    public float MixScaleM = 26f, MixBias = 0.5f, EdgeNoiseM = 80f, EdgeNoiseAmp = 0.30f, MacroM = 480f;
+    public int SplatMaskMode = 2;
 
     public void Build(FieldCompute fc, FieldParams p)
     {
@@ -21,6 +27,7 @@ public partial class TerrainLab : MeshInstance3D
         _heights = heights;
         _res = p.HeightmapRes;
         _regionSize = p.RegionSizeM;
+        _spacing = p.Spacing;
 
         var bytes = new byte[heights.Length * sizeof(float)];
         System.Buffer.BlockCopy(heights, 0, bytes, 0, bytes.Length);
@@ -48,6 +55,30 @@ public partial class TerrainLab : MeshInstance3D
             new Vector3(-_regionSize * 0.5f, _minBase - AabbMarginM, -_regionSize * 0.5f),
             new Vector3(_regionSize, (_maxBase - _minBase) + 2f * AabbMarginM, _regionSize));
         GD.Print($"TerrainLab: built {p.HeightmapRes}x{p.HeightmapRes} (h {_minBase:F0}..{_maxBase:F0} m)");
+
+        RebakeSplat();   // Lever 1: bake the initial splat mask
+    }
+
+    /// (Re)bake the GPU splat mask from the current heights + splat params, and
+    /// bind it to the material. Called on build and on demand from the UI.
+    public void RebakeSplat()
+    {
+        if (_heights == null) { return; }
+        _splat ??= new SplatCompute();
+        var sp = new SplatCompute.Params
+        {
+            Res = (uint)_res,
+            TexelWorld = _spacing,
+            RegionSize = _regionSize,
+            HValley = 100f, HSlope = 350f, HHigh = 700f, HPeak = 950f,
+            SlopeCliffLo = 0.30f, SlopeCliffHi = 0.55f, BandSoftnessM = 120f,
+            MixScaleM = MixScaleM, MixBias = MixBias,
+            MaskMode = (uint)SplatMaskMode,
+            EdgeNoiseM = EdgeNoiseM, EdgeNoiseAmp = EdgeNoiseAmp, MacroM = MacroM,
+        };
+        var tex = _splat.Bake(_heights, _res, sp);
+        _mat.SetShaderParameter("splat_tex", tex);
+        GD.Print($"TerrainLab: splat baked (mixScale {MixScaleM:F0}, bias {MixBias:F2}, mask {SplatMaskMode})");
     }
 
     /// Assign a material (by folder name under res://assets/materials/) to a zone 0..6.
@@ -73,4 +104,6 @@ public partial class TerrainLab : MeshInstance3D
         string alb = $"{baseDir}/albedo.png";
         return ResourceLoader.Exists(alb) ? GD.Load<Texture2D>(alb) : null;
     }
+
+    public override void _ExitTree() => _splat?.Dispose();
 }

@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bghm0xn3vwli3"
+path="res://.godot/imported/splat_weights.glsl-120fa412dbbf961da15c5b5d4e5031b2.res"
+
+[deps]
+
+source_file="res://shaders/splat_weights.glsl"
+dest_files=["res://.godot/imported/splat_weights.glsl-120fa412dbbf961da15c5b5d4e5031b2.res"]
+
+[params]
+

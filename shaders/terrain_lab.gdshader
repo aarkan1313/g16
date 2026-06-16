@@ -90,6 +90,17 @@ uniform float slope_wear_amp : hint_range(0.0, 1.0) = 0.35;  // extra roughness 
 uniform float snow_dust_amp : hint_range(0.0, 1.0) = 0.0;    // dusting on upward faces near snow line
 uniform float snow_dust_h : hint_range(0.0, 900.0) = 560.0;  // height where dusting begins
 
+// --- Lever 1: GPU-baked splat mask (dominant+secondary material mixing) ------
+// splat_tex (from SplatCompute): R=dominant zone, G=secondary zone, B=intra-zone
+// mix amount, A=boundary blend. When splat_on, the fragment blends just those two
+// materials (per-spot variety) instead of the soft 7-way accumulate.
+// filter_nearest: the R/G channels are integer zone indices — linear filtering
+// would interpolate them into wrong fractional indices at boundaries.
+uniform sampler2D splat_tex : filter_nearest, repeat_disable, hint_default_black;
+uniform bool splat_on = false;
+uniform float mix_strength : hint_range(0.0, 1.0) = 0.6;   // live: how strongly secondary shows
+uniform int splat_debug = 0;   // 0 off | 1 show dominant zone as color | 2 show mix amount
+
 varying vec2 v_uv;
 varying vec3 v_world;
 varying vec3 v_normal;
@@ -289,20 +300,63 @@ vec3 macro_color(vec3 alb, vec3 wp){
     return max(rgb, vec3(0.0));
 }
 
+// Pick a zone's PBR by index (samplers can't be dynamically indexed in GLSL).
+vec3 alb_by(int z, vec3 wp, vec3 nr){
+    if(z==0) return s_alb(z0_alb,wp,nr); if(z==1) return s_alb(z1_alb,wp,nr);
+    if(z==2) return s_alb(z2_alb,wp,nr); if(z==3) return s_alb(z3_alb,wp,nr);
+    if(z==4) return s_alb(z4_alb,wp,nr); if(z==5) return s_alb(z5_alb,wp,nr);
+    return s_alb(z6_alb,wp,nr);
+}
+vec3 nrm_by(int z, vec3 wp, vec3 nr){
+    if(z==0) return s_nrm(z0_nrm,wp,nr); if(z==1) return s_nrm(z1_nrm,wp,nr);
+    if(z==2) return s_nrm(z2_nrm,wp,nr); if(z==3) return s_nrm(z3_nrm,wp,nr);
+    if(z==4) return s_nrm(z4_nrm,wp,nr); if(z==5) return s_nrm(z5_nrm,wp,nr);
+    return s_nrm(z6_nrm,wp,nr);
+}
+float rgh_by(int z, vec3 wp, vec3 nr){
+    if(z==0) return s_rgh(z0_rgh,wp,nr); if(z==1) return s_rgh(z1_rgh,wp,nr);
+    if(z==2) return s_rgh(z2_rgh,wp,nr); if(z==3) return s_rgh(z3_rgh,wp,nr);
+    if(z==4) return s_rgh(z4_rgh,wp,nr); if(z==5) return s_rgh(z5_rgh,wp,nr);
+    return s_rgh(z6_rgh,wp,nr);
+}
+// Debug palette for visualizing the splat mask's zone assignment.
+vec3 zone_color(int z){
+    vec3 c[7]=vec3[7](vec3(0.2,0.7,0.2),vec3(0.5,0.6,0.2),vec3(0.6,0.5,0.3),
+                      vec3(0.6,0.4,0.3),vec3(0.5,0.5,0.55),vec3(0.7,0.7,0.7),vec3(0.95,0.97,1.0));
+    return c[clamp(z,0,6)];
+}
+
 void fragment(){
     vec3 wp=v_world; vec3 nr=v_normal;
     float w[7]; zone_weights(w, v_h, v_slope, v_curv, wp);
 
     vec3 alb=vec3(0.0); vec3 nrm=vec3(0.0,0.0,1.0); float rgh=0.0;
-    // accumulate weighted PBR across zones
-    #define ZONE(i,A,N,R) alb+=w[i]*s_alb(A,wp,nr); if(blend_mode>=1){ nrm+=w[i]*(s_nrm(N,wp,nr)*2.0-1.0); rgh+=w[i]*s_rgh(R,wp,nr);} else rgh+=w[i]*0.9;
-    ZONE(0,z0_alb,z0_nrm,z0_rgh)
-    ZONE(1,z1_alb,z1_nrm,z1_rgh)
-    ZONE(2,z2_alb,z2_nrm,z2_rgh)
-    ZONE(3,z3_alb,z3_nrm,z3_rgh)
-    ZONE(4,z4_alb,z4_nrm,z4_rgh)
-    ZONE(5,z5_alb,z5_nrm,z5_rgh)
-    ZONE(6,z6_alb,z6_nrm,z6_rgh)
+
+    int dbg = 0;            // set when a splat debug view should override final output
+    vec3 dbg_col = vec3(0.0);
+    if (splat_on){
+        // Lever 1: GPU-baked dominant+secondary mixing — 2 materials per spot.
+        vec4 sp = texture(splat_tex, v_uv);
+        int dom = int(sp.r + 0.5), sec = int(sp.g + 0.5);
+        float m = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);  // intra-zone + boundary
+        if (splat_debug == 1){ dbg = 1; dbg_col = mix(zone_color(dom),zone_color(sec),m); }
+        else if (splat_debug == 2){ dbg = 1; dbg_col = vec3(m); }
+        alb = mix(alb_by(dom,wp,nr), alb_by(sec,wp,nr), m);
+        if (blend_mode>=1){
+            nrm = mix(nrm_by(dom,wp,nr), nrm_by(sec,wp,nr), m)*2.0-1.0;
+            rgh = mix(rgh_by(dom,wp,nr), rgh_by(sec,wp,nr), m);
+        } else { rgh = 0.9; }
+    } else {
+        // accumulate weighted PBR across all 7 zones (soft masks)
+        #define ZONE(i,A,N,R) alb+=w[i]*s_alb(A,wp,nr); if(blend_mode>=1){ nrm+=w[i]*(s_nrm(N,wp,nr)*2.0-1.0); rgh+=w[i]*s_rgh(R,wp,nr);} else rgh+=w[i]*0.9;
+        ZONE(0,z0_alb,z0_nrm,z0_rgh)
+        ZONE(1,z1_alb,z1_nrm,z1_rgh)
+        ZONE(2,z2_alb,z2_nrm,z2_rgh)
+        ZONE(3,z3_alb,z3_nrm,z3_rgh)
+        ZONE(4,z4_alb,z4_nrm,z4_rgh)
+        ZONE(5,z5_alb,z5_nrm,z5_rgh)
+        ZONE(6,z6_alb,z6_nrm,z6_rgh)
+    }
 
     // Lever 2: macro color variation (multi-octave LF value/hue/sat drift).
     // Own toggle (macro_on), independent of blend_mode so it isolates cleanly.
@@ -320,7 +374,8 @@ void fragment(){
         rgh = mix(rgh, 0.6, dust);
     }
 
-    ALBEDO=alb;
+    // splat debug view overrides the lit output (no early return — gdshader bans it).
+    ALBEDO = (dbg==1) ? dbg_col : alb;
     ROUGHNESS=clamp(rgh,0.04,1.0);
     if (blend_mode>=1){
         // blend tangent-space normals back to world-ish via the geometric normal.
