@@ -61,3 +61,4 @@ No plans → thrash. Lots of plans → process overhead outran results (the WG15
 failure mode). **Low plans:** a short spec when a feature is genuinely new, a
 one-line DECISIONS entry otherwise, and the user's eye as the gate. Spike a look
 cheap and judge it early — never build a full system to first-judgment.
+# g16
