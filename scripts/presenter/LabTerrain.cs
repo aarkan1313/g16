@@ -79,6 +79,12 @@ public partial class LabTerrain : MeshInstance3D
             new Vector3(_regionSize, (maxH - minH) + 2f * AabbMarginM, _regionSize));
     }
 
+    /// Toggle the shader's polished-vs-plain color treatment (experiment A/B).
+    public void SetPolish(bool on)
+    {
+        _mat?.SetShaderParameter("polish", on ? 1.0f : 0.0f);
+    }
+
     /// CPU mirror of the shader's height read: bilinear base. Powers walk mode.
     public float SampleHeight(float worldX, float worldZ)
     {
