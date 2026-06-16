@@ -37,7 +37,7 @@ public partial class TerrainLabUI : Control
     // --blend=N / --mask=N override the defaults so each mode can be captured.
     private string? _autoShotPath;
     private double _autoShotT = -1.0;
-    private int _overrideBlend = -1, _overrideMask = -1, _overrideTile = -1, _overrideMacro = -1;
+    private int _overrideBlend = -1, _overrideMask = -1, _overrideTile = -1, _overrideMacro = -1, _overrideContact = -1;
     private string? _camArg;   // "x,y,z,pitchDeg,yawDeg" — place capture camera near ground
     private float _texScale = -1f;   // override tex_scale_m for isolation runs
 
@@ -57,6 +57,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--mask=")) { int.TryParse(a.Substring("--mask=".Length), out _overrideMask); }
             else if (a.StartsWith("--tile=")) { int.TryParse(a.Substring("--tile=".Length), out _overrideTile); }
             else if (a.StartsWith("--macro=")) { _overrideMacro = a.Substring("--macro=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--contact=")) { _overrideContact = a.Substring("--contact=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
         }
@@ -129,6 +130,15 @@ public partial class TerrainLabUI : Control
         AddSlider(vb, "macro hue", 0f, 0.2f, 0.05f, v => _terrain.SetFloat("macro_hue_amp", v));
         AddSlider(vb, "macro sat", 0f, 0.6f, 0.18f, v => _terrain.SetFloat("macro_sat_amp", v));
         AddSlider(vb, "macro scl2", 60f, 400f, 170f, v => _terrain.SetFloat("macro_scale2", v));
+
+        vb.AddChild(new HSeparator());
+
+        // Lever 4: contact & wear shading.
+        AddToggle(vb, "contact shade", true, on => _terrain.SetBool("contact_on", on));
+        AddSlider(vb, "crevice", 0f, 1f, 0.45f, v => _terrain.SetFloat("crevice_amp", v));
+        AddSlider(vb, "crev range", 0.5f, 8f, 2.5f, v => _terrain.SetFloat("crevice_range", v));
+        AddSlider(vb, "slope wear", 0f, 1f, 0.35f, v => _terrain.SetFloat("slope_wear_amp", v));
+        AddSlider(vb, "snow dust", 0f, 1f, 0f, v => _terrain.SetFloat("snow_dust_amp", v));
 
         vb.AddChild(new HSeparator());
 
@@ -226,6 +236,7 @@ public partial class TerrainLabUI : Control
         if (_overrideBlend >= 0) { _blendPick.Select(_overrideBlend); _terrain.SetBlendMode(_overrideBlend); }
         if (_overrideTile >= 0) { _tilePick.Select(_overrideTile); _terrain.SetInt("tile_mode", _overrideTile); }
         if (_overrideMacro >= 0) { _terrain.SetBool("macro_on", _overrideMacro == 1); }
+        if (_overrideContact >= 0) { _terrain.SetBool("contact_on", _overrideContact == 1); }
         if (_texScale > 0f) { _terrain.SetFloat("tex_scale_m", _texScale); }
         if (_camArg != null)
         {

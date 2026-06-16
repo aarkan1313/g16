@@ -80,6 +80,16 @@ uniform float macro_hue_amp : hint_range(0.0, 0.2) = 0.05;   // hue drift (radia
 uniform float macro_sat_amp : hint_range(0.0, 0.6) = 0.18;   // saturation drift
 uniform float macro_scale2 : hint_range(60.0, 400.0) = 170.0; // 2nd (medium) octave wavelength
 
+// --- Lever 4: contact & wear shading ----------------------------------------
+// Uses already-computed curvature (v_curv) + slope to add depth: darken concave
+// folds (cheap AO), roughen/expose steep faces, optional snow dusting up high.
+uniform bool contact_on = true;
+uniform float crevice_amp : hint_range(0.0, 1.0) = 0.45;     // darkening in concave folds
+uniform float crevice_range : hint_range(0.5, 8.0) = 2.5;    // curvature span that counts as a fold
+uniform float slope_wear_amp : hint_range(0.0, 1.0) = 0.35;  // extra roughness on steep faces
+uniform float snow_dust_amp : hint_range(0.0, 1.0) = 0.0;    // dusting on upward faces near snow line
+uniform float snow_dust_h : hint_range(0.0, 900.0) = 560.0;  // height where dusting begins
+
 varying vec2 v_uv;
 varying vec3 v_world;
 varying vec3 v_normal;
@@ -297,6 +307,18 @@ void fragment(){
     // Lever 2: macro color variation (multi-octave LF value/hue/sat drift).
     // Own toggle (macro_on), independent of blend_mode so it isolates cleanly.
     alb = macro_color(alb, wp);
+
+    // Lever 4: contact & wear shading. v_curv>0 = concave (fold/crease).
+    if (contact_on){
+        float fold = smoothstep(0.3, crevice_range, v_curv);   // how deep a fold
+        alb *= (1.0 - fold * crevice_amp);                     // darken crevices
+        rgh = mix(rgh, 1.0, smoothstep(slope_cliff_lo, slope_cliff_hi, v_slope) * slope_wear_amp); // steep=rougher
+        // snow dusting on near-flat upward faces above a height.
+        float dust = snow_dust_amp * smoothstep(snow_dust_h, snow_dust_h+120.0, v_h)
+                                   * (1.0 - smoothstep(0.18, 0.42, v_slope));
+        alb = mix(alb, vec3(0.92,0.94,0.97), dust);
+        rgh = mix(rgh, 0.6, dust);
+    }
 
     ALBEDO=alb;
     ROUGHNESS=clamp(rgh,0.04,1.0);
