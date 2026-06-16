@@ -56,6 +56,7 @@ public partial class TerrainLab : MeshInstance3D
             new Vector3(_regionSize, (_maxBase - _minBase) + 2f * AabbMarginM, _regionSize));
         GD.Print($"TerrainLab: built {p.HeightmapRes}x{p.HeightmapRes} (h {_minBase:F0}..{_maxBase:F0} m)");
 
+        PushSecondaryZones();   // initialize per-zone companion table
         RebakeSplat();   // Lever 1: bake the initial splat mask
     }
 
@@ -95,6 +96,15 @@ public partial class TerrainLab : MeshInstance3D
     public void SetFloat(string param, float v) => _mat.SetShaderParameter(param, v);
     public void SetInt(string param, int v) => _mat.SetShaderParameter(param, v);
     public void SetBool(string param, bool v) => _mat.SetShaderParameter(param, v);
+
+    private readonly int[] _secZone = { 1, 2, 1, 4, 5, 4, 5 }; // default companion per zone
+    /// Set which zone's textures act as the companion blended into zone `zone`.
+    public void SetSecondaryZone(int zone, int companion)
+    {
+        _secZone[zone] = Mathf.Clamp(companion, 0, 6);
+        _mat.SetShaderParameter("sec_zone", _secZone);
+    }
+    public void PushSecondaryZones() => _mat.SetShaderParameter("sec_zone", _secZone);
 
     private Texture2D? LoadOr(string baseDir, string map)
     {

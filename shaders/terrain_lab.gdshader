@@ -101,6 +101,22 @@ uniform bool splat_on = false;
 uniform float mix_strength : hint_range(0.0, 1.0) = 0.6;   // live: how strongly secondary shows
 uniform int splat_debug = 0;   // 0 off | 1 show dominant zone as color | 2 show mix amount
 
+// --- Height-blended transitions (AAA seamless multi-texture) -----------------
+// Blend two materials by their RELIEF instead of a flat crossfade: the one whose
+// surface is "higher" at this texel wins, so rock pokes through gravel, gravel
+// settles into grass crevices. No dedicated displacement maps in this library, so
+// roughness (inverted) is used as a height proxy (rough=protruding grit). The
+// boundary becomes irregular + relief-driven, which removes the "line between
+// textures" look. heightblend_sharp controls transition width.
+uniform bool heightblend_on = true;
+uniform float heightblend_sharp : hint_range(0.02, 0.5) = 0.15;
+// Per-zone companion material: sec_zone[d] = which zone's textures to blend INTO
+// zone d (live, no rebake). Defaults set from C# to the adjacent zone.
+uniform int sec_zone[7];
+// Zone-band transition width (was the fixed band_softness_m=120). Wider = more
+// gradual material boundaries. Live.
+uniform float band_soft_mult : hint_range(0.3, 3.0) = 1.4;
+
 varying vec2 v_uv;
 varying vec3 v_world;
 varying vec3 v_normal;
@@ -226,7 +242,7 @@ void zone_weights(out float w[7], float h, float slope, float curv, vec3 wp){
     float en = (mask_mode==2 || mask_mode==3) ? (vnoise(wp.xz,edge_noise_m)-0.5)*2.0*edge_noise_amp : 0.0;
     float hj = h + en*250.0;
     float sj = slope + en*0.12;
-    float soft = band_softness_m;
+    float soft = band_softness_m * band_soft_mult;   // wider = more gradual material boundaries
 
     if (mask_mode==5){
         // world-noise biome patches: large blobs pick a dominant zone, still
@@ -300,6 +316,18 @@ vec3 macro_color(vec3 alb, vec3 wp){
     return max(rgb, vec3(0.0));
 }
 
+// Height-blend weight: given two relief proxies and a linear blend t (0=A,1=B),
+// return the relief-aware weight of B. Standard UE/Unity heightlerp. Larger
+// `sharp` = wider/softer transition. h1,h2 in [0,1].
+float heightblend_w(float h1, float h2, float t, float sharp){
+    float a = h1 + (1.0 - t);
+    float b = h2 + t;
+    float ma = max(a, b) - sharp;
+    float w1 = max(a - ma, 0.0);
+    float w2 = max(b - ma, 0.0);
+    return w2 / max(w1 + w2, 1e-5);
+}
+
 // Pick a zone's PBR by index (samplers can't be dynamically indexed in GLSL).
 vec3 alb_by(int z, vec3 wp, vec3 nr){
     if(z==0) return s_alb(z0_alb,wp,nr); if(z==1) return s_alb(z1_alb,wp,nr);
@@ -337,14 +365,22 @@ void fragment(){
     if (splat_on){
         // Lever 1: GPU-baked dominant+secondary mixing — 2 materials per spot.
         vec4 sp = texture(splat_tex, v_uv);
-        int dom = int(sp.r + 0.5), sec = int(sp.g + 0.5);
-        float m = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);  // intra-zone + boundary
+        int dom = int(sp.r + 0.5);
+        int sec = clamp(sec_zone[dom], 0, 6);   // per-zone companion (UI-controlled, live)
+        float t = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);  // intra-zone + boundary
+
+        // sample both materials once
+        vec3 aD=alb_by(dom,wp,nr), aS=alb_by(sec,wp,nr);
+        float rD=rgh_by(dom,wp,nr), rS=rgh_by(sec,wp,nr);
+        // height-blend by relief (roughness as proxy: rough = grit that protrudes).
+        float m = heightblend_on ? heightblend_w(rD, rS, t, heightblend_sharp) : t;
+
         if (splat_debug == 1){ dbg = 1; dbg_col = mix(zone_color(dom),zone_color(sec),m); }
         else if (splat_debug == 2){ dbg = 1; dbg_col = vec3(m); }
-        alb = mix(alb_by(dom,wp,nr), alb_by(sec,wp,nr), m);
+        alb = mix(aD, aS, m);
         if (blend_mode>=1){
             nrm = mix(nrm_by(dom,wp,nr), nrm_by(sec,wp,nr), m)*2.0-1.0;
-            rgh = mix(rgh_by(dom,wp,nr), rgh_by(sec,wp,nr), m);
+            rgh = mix(rD, rS, m);
         } else { rgh = 0.9; }
     } else {
         // accumulate weighted PBR across all 7 zones (soft masks)

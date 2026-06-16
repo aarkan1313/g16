@@ -156,6 +156,29 @@ public partial class TerrainLabUI : Control
         vb.AddChild(rebakeBtn);
         AddSelector(vb, "splat debug", new[] { "off", "zones", "mix amt" }, i => _terrain.SetInt("splat_debug", i));
 
+        // Height-blended (relief-aware) transitions + band width — the AAA seam fix.
+        AddToggle(vb, "height blend", true, on => _terrain.SetBool("heightblend_on", on));
+        AddSlider(vb, "hb sharp", 0.02f, 0.5f, 0.15f, v => _terrain.SetFloat("heightblend_sharp", v));
+        AddSlider(vb, "band soft", 0.3f, 3f, 1.4f, v => _terrain.SetFloat("band_soft_mult", v));
+
+        vb.AddChild(new HSeparator());
+
+        // Per-zone companion (secondary) material — which zone's textures blend into each.
+        vb.AddChild(new Label { Text = "companion per zone" });
+        int[] secDefault = { 1, 2, 1, 4, 5, 4, 5 };
+        for (int z = 0; z < 7; z++)
+        {
+            int zone = z;
+            var row = new HBoxContainer();
+            row.AddChild(new Label { Text = ZoneNames[z], CustomMinimumSize = new Vector2(96, 0) });
+            var ob = new OptionButton { CustomMinimumSize = new Vector2(240, 0) };
+            for (int i = 0; i < ZoneNames.Length; i++) { ob.AddItem(ZoneNames[i], i); }
+            ob.Select(secDefault[z]);
+            ob.ItemSelected += idx => _terrain.SetSecondaryZone(zone, (int)idx);
+            row.AddChild(ob);
+            vb.AddChild(row);
+        }
+
         vb.AddChild(new HSeparator());
 
         // Preset save/load.
