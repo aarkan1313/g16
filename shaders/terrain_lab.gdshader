@@ -131,11 +131,11 @@ uniform int sec_zone[7];
 // FBM so it needs no texture asset. Darkens albedo (cheap; reads like a cloud
 // passing) rather than a full light() rewrite.
 uniform bool cloud_shadow_on = true;
-uniform float cloud_scale_m : hint_range(200.0, 4000.0) = 1400.0;  // size of cloud patches
-uniform float cloud_strength : hint_range(0.0, 1.0) = 0.3;         // how dark the shadows get
+uniform float cloud_scale_m : hint_range(200.0, 4000.0) = 1100.0;  // size of cloud patches
+uniform float cloud_strength : hint_range(0.0, 1.0) = 0.45;        // how dark the shadows get
 uniform float cloud_cover : hint_range(0.1, 0.9) = 0.5;            // fraction in shadow (threshold)
 uniform float cloud_softness : hint_range(0.02, 0.5) = 0.22;       // edge softness
-uniform vec2 cloud_speed = vec2(8.0, 3.0);                         // drift m/s (world)
+uniform float cloud_speed : hint_range(0.0, 120.0) = 40.0;         // drift speed m/s (world)
 // Zone-band transition width (was the fixed band_softness_m=120). Wider = more
 // gradual material boundaries. Live.
 uniform float band_soft_mult : hint_range(0.3, 3.0) = 1.4;
@@ -156,7 +156,7 @@ float vnoise(vec2 w,float wl){ vec2 p=w/wl; vec2 i=floor(p); vec2 f=fract(p); f=
 // 3-octave FBM in world XZ, scrolled by TIME; thresholded by cover with soft edges.
 float cloud_shadow(vec3 wp){
     if(!cloud_shadow_on) return 1.0;
-    vec2 p = wp.xz + cloud_speed * TIME;
+    vec2 p = wp.xz + vec2(0.92, 0.39) * (cloud_speed * TIME);   // drift dir × speed
     float n = vnoise(p, cloud_scale_m) * 0.55
             + vnoise(p + vec2(91.0,17.0), cloud_scale_m*0.45) * 0.30
             + vnoise(p + vec2(-50.0,80.0), cloud_scale_m*0.2) * 0.15;

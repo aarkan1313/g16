@@ -492,7 +492,8 @@ public partial class TerrainLabUI : Control
         switch (target)
         {
             case "sun_energy":      sun.LightEnergy = v; break;
-            case "sun_soft":        sun.ShadowBlur = v; break;   // disc size stays fixed (decoupled)
+            case "sun_soft":        sun.ShadowBlur = v; break;   // shadow softness (separate from disc)
+            case "sun_disc":        sun.LightAngularDistance = v; break;   // visible sun size (PCSS penumbra too)
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
             case "sun_azimuth":     _sunAzimuth = v; OrientSun(sun); break;
             case "ambient":         env.AmbientLightEnergy = v; break;
@@ -548,7 +549,7 @@ public partial class TerrainLabUI : Control
         // keep it tiny and let blur do the softening — decoupled.
         float soft = F(m, "shadow_soft", 1.0f);
         sun.ShadowBlur = soft;
-        sun.LightAngularDistance = 0.5f;   // real-sun disc size, fixed
+        sun.LightAngularDistance = F(m, "sun_disc", 0.6f);   // mood baseline; live slider can override
 
         env.AmbientLightEnergy = F(m, "ambient", 0.4f);
         env.AmbientLightSkyContribution = F(m, "ambient_sky", 1.0f);
@@ -603,7 +604,7 @@ public partial class TerrainLabUI : Control
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
         void Set(string id, float v) { if (_byId.TryGetValue(id, out var c)) { SetWidgetValueSilent(c, v); } }
         Set("sun_energy", sun.LightEnergy); Set("sun_angle", _sunAngle); Set("sun_azimuth", _sunAzimuth);
-        Set("sun_soft", sun.ShadowBlur); Set("ambient_e", env.AmbientLightEnergy);
+        Set("sun_soft", sun.ShadowBlur); Set("sun_disc", sun.LightAngularDistance); Set("ambient_e", env.AmbientLightEnergy);
         Set("ssao_i", env.SsaoIntensity); Set("ssao_r", env.SsaoRadius);
         Set("fog_d", env.FogDensity); Set("fog_aerial", env.FogAerialPerspective);
         Set("fog_heightd", env.FogHeightDensity); Set("exposure", env.TonemapExposure);
