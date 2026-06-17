@@ -55,9 +55,9 @@ public partial class TerrainLab : MeshInstance3D
             new Vector3(-_regionSize * 0.5f, _minBase - AabbMarginM, -_regionSize * 0.5f),
             new Vector3(_regionSize, (_maxBase - _minBase) + 2f * AabbMarginM, _regionSize));
         GD.Print($"TerrainLab: built {p.HeightmapRes}x{p.HeightmapRes} (h {_minBase:F0}..{_maxBase:F0} m)");
-
-        PushSecondaryZones();   // initialize per-zone companion table
-        RebakeSplat();   // Lever 1: bake the initial splat mask
+        // Splat bake + sec-zone push are driven by the UI's ApplyAll() right after
+        // Build(), once the final registry params are set — so we don't bake here
+        // (that was a redundant double-bake on startup).
     }
 
     /// (Re)bake the GPU splat mask from the current heights + splat params, and

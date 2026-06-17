@@ -234,25 +234,6 @@ float s_rgh(sampler2D t, vec3 wp, vec3 nr){
     return tiled(t,wp.zy/tex_scale_m).r*bw.x + tiled(t,wp.xz/tex_scale_m).r*bw.y + tiled(t,wp.xy/tex_scale_m).r*bw.z;
 }
 
-// --- CHEAP samplers for the baked/splat path (the lag fix) -------------------
-// The full triplanar path samples 3 projection planes × the tiling taps = up to
-// 9 fetches/map. For the baked ground we sample only the DOMINANT plane (top for
-// near-flat, side for steep) with a 2-tap IQ break-up → ~2 fetches/map. That cuts
-// ~54 samples/pixel to ~6 with no visible loss on near-flat ground (most of it),
-// and NO hex (hex caused the squares). cheap_uv returns the dominant plane's uv +
-// derivatives; cheap_* never call hex.
-void cheap_plane(vec3 wp, vec3 nr, out vec2 uv, out vec2 dx, out vec2 dy, out bool topPlane){
-    // top plane (xz) when facing up enough; else the larger of the side planes.
-    if (abs(nr.y) >= abs(nr.x) && abs(nr.y) >= abs(nr.z)) { uv = wp.xz/tex_scale_m; topPlane = true; }
-    else if (abs(nr.x) >= abs(nr.z)) { uv = wp.zy/tex_scale_m; topPlane = false; }
-    else { uv = wp.xy/tex_scale_m; topPlane = false; }
-    dx = dFdx(uv); dy = dFdy(uv);
-}
-vec4 cheap_tap(sampler2D t, vec2 uv, vec2 dx, vec2 dy){
-    // plain when tile_mode==0, else IQ 2-tap. Never hex.
-    return (tile_mode == 0) ? textureGrad(t, uv, dx, dy) : iq_sample(t, uv, dx, dy);
-}
-
 void vertex(){
     v_uv=(VERTEX.xz+vec2(region_size*0.5))/region_size;
     VERTEX.y=height_at(v_uv);
@@ -378,27 +359,6 @@ float rgh_by(int z, vec3 wp, vec3 nr){
     if(z==2) return s_rgh(z2_rgh,wp,nr); if(z==3) return s_rgh(z3_rgh,wp,nr);
     if(z==4) return s_rgh(z4_rgh,wp,nr); if(z==5) return s_rgh(z5_rgh,wp,nr);
     return s_rgh(z6_rgh,wp,nr);
-}
-
-// CHEAP per-zone fetch: one dominant-plane IQ/plain tap for alb+nrm+rgh together.
-// Returns albedo in .rgb; nrm packed via out; rgh via out. ~2 fetches/map vs 9.
-vec3 cheap_alb_by(int z, vec2 uv, vec2 dx, vec2 dy){
-    if(z==0) return cheap_tap(z0_alb,uv,dx,dy).rgb; if(z==1) return cheap_tap(z1_alb,uv,dx,dy).rgb;
-    if(z==2) return cheap_tap(z2_alb,uv,dx,dy).rgb; if(z==3) return cheap_tap(z3_alb,uv,dx,dy).rgb;
-    if(z==4) return cheap_tap(z4_alb,uv,dx,dy).rgb; if(z==5) return cheap_tap(z5_alb,uv,dx,dy).rgb;
-    return cheap_tap(z6_alb,uv,dx,dy).rgb;
-}
-vec3 cheap_nrm_by(int z, vec2 uv, vec2 dx, vec2 dy){
-    if(z==0) return cheap_tap(z0_nrm,uv,dx,dy).rgb; if(z==1) return cheap_tap(z1_nrm,uv,dx,dy).rgb;
-    if(z==2) return cheap_tap(z2_nrm,uv,dx,dy).rgb; if(z==3) return cheap_tap(z3_nrm,uv,dx,dy).rgb;
-    if(z==4) return cheap_tap(z4_nrm,uv,dx,dy).rgb; if(z==5) return cheap_tap(z5_nrm,uv,dx,dy).rgb;
-    return cheap_tap(z6_nrm,uv,dx,dy).rgb;
-}
-float cheap_rgh_by(int z, vec2 uv, vec2 dx, vec2 dy){
-    if(z==0) return cheap_tap(z0_rgh,uv,dx,dy).r; if(z==1) return cheap_tap(z1_rgh,uv,dx,dy).r;
-    if(z==2) return cheap_tap(z2_rgh,uv,dx,dy).r; if(z==3) return cheap_tap(z3_rgh,uv,dx,dy).r;
-    if(z==4) return cheap_tap(z4_rgh,uv,dx,dy).r; if(z==5) return cheap_tap(z5_rgh,uv,dx,dy).r;
-    return cheap_tap(z6_rgh,uv,dx,dy).r;
 }
 
 // Smooth PLAIN triplanar (3 planes, direct textureGrad — no tiling hash). Used by
