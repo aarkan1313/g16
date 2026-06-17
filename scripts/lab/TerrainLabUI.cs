@@ -105,7 +105,9 @@ public partial class TerrainLabUI : Control
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
         if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
+        if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
     }
+    private float _covOverride = -1f;
 
     private const int DefaultMoodIdx = 5;   // "Clear Alpine" — clean neutral good-day look
     private void ApplyDefaultMood()
@@ -138,6 +140,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--clouddbg=")) { int.TryParse(a.Substring("--clouddbg=".Length), out _cloudDbg); }
             else if (a.StartsWith("--cloudsteps=")) { int.TryParse(a.Substring("--cloudsteps=".Length), out _cloudSteps); }
             else if (a.StartsWith("--clouds=")) { _cloudsOn = a.Substring("--clouds=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--coverage=")) { float.TryParse(a.Substring("--coverage=".Length), out _covOverride); }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
@@ -561,7 +564,7 @@ public partial class TerrainLabUI : Control
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
         switch (target)
         {
-            case "sun_energy":      sun.LightEnergy = v; PushSunToCloud(sun); break;
+            case "sun_energy":      sun.LightEnergy = v; _baseSunEnergy = v; PushSunToCloud(sun); break;
             case "sun_soft":        sun.ShadowBlur = v; break;   // shadow softness (separate from disc)
             case "sun_disc":        sun.LightAngularDistance = v; break;   // visible sun size (PCSS penumbra too)
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
@@ -692,6 +695,10 @@ public partial class TerrainLabUI : Control
 
         env.AmbientLightEnergy = F(m, "ambient", 0.4f);
         env.AmbientLightSkyContribution = F(m, "ambient_sky", 1.0f);
+        // remember the mood's BASE lighting so overcast dimming scales from it (not
+        // compounding frame-to-frame). Sun energy base captured after it's set below.
+        _baseAmbient = env.AmbientLightEnergy;
+        _baseSunEnergy = F(m, "sun_energy", 1.3f);
         if (env.Sky?.SkyMaterial is ProceduralSkyMaterial sky)
         {
             if (m.ContainsKey("sky_top")) { sky.SkyTopColor = Col(m["sky_top"]); }
@@ -998,9 +1005,27 @@ public partial class TerrainLabUI : Control
     private Label? _fpsLabel;
     private double _fpsAccum;
     private int _fpsFrames;
+    // overcast → GI/sun dimming (driven by cloud coverage; scales from the mood base)
+    private float _baseAmbient = 0.4f, _baseSunEnergy = 1.3f;
+    private bool _overcastDim = true;
+    private float _overcastAmt = 0.7f;   // how strongly full overcast dims (0..1)
+
+    private void UpdateOvercast()
+    {
+        if (_cloud == null) { return; }
+        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
+        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        float oc = _overcastDim ? _cloud.Overcast() : 0f;
+        // full overcast pulls ambient + sun toward (1-amt) of their clear-sky values.
+        float k = 1f - oc * _overcastAmt;
+        env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 1.15f, oc);   // sky fill slightly UP (diffuse dome)
+        sun.LightEnergy = _baseSunEnergy * k;                                // direct sun DOWN under cloud
+    }
 
     public override void _Process(double delta)
     {
+        if (_ready) { UpdateOvercast(); }
+
         // FPS / frame-time HUD (top-right). Cheap; updated ~4×/sec. The perf gate
         // needs a number, not a feeling — this is it.
         if (_fpsLabel != null)

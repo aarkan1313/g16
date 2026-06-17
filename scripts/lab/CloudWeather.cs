@@ -13,6 +13,18 @@ public static class CloudWeather
 {
     public const int Res = 256;
 
+    /// Mean of the coverage (R) channel of a raw weather buffer — used as a CPU
+    /// proxy for "how much of the sky the weather field clouds" (drives overcast
+    /// dimming + aerial tint without a GPU readback).
+    public static float Mean(byte[] raw)
+    {
+        if (raw.Length == 0) { return 0.5f; }
+        int cells = raw.Length / (4 * sizeof(float));
+        double sum = 0;
+        for (int i = 0; i < cells; i++) { sum += System.BitConverter.ToSingle(raw, i * 16); }
+        return (float)(sum / cells);
+    }
+
     /// Raw RGBAF bytes (R=coverage, G=type). Used to upload to a main-RD texture.
     public static byte[] BakeRaw(float seed = 5.0f)
     {

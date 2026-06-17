@@ -64,12 +64,25 @@ public partial class CloudVolume : Node
         // _Process installs the sky on the first frame AFTER the RID is ready.
     }
 
+    private float _weatherMean = 0.5f;
+
     public void BakeResources()
     {
         _noise ??= new CloudNoiseCompute();
         (_shapeBytes, _shapeRes, _detailBytes, _detailRes) = _noise.BakeRaw();
         _weatherBytes = CloudWeather.BakeRaw();
-        GD.Print("CloudVolume: resources baked (shape/detail volumes + weather field)");
+        _weatherMean = CloudWeather.Mean(_weatherBytes);
+        GD.Print($"CloudVolume: resources baked (weather mean {_weatherMean:F2})");
+    }
+
+    /// 0 = clear sky, 1 = fully overcast. CPU proxy from the live coverage knob + the
+    /// weather field mean (matches the shader's coverage remap, averaged) — drives
+    /// overcast ambient/sun dimming + aerial tint, no GPU readback. Disabled → 0.
+    public float Overcast()
+    {
+        if (!_enabled) { return 0f; }
+        float covered = Mathf.Clamp(_p.Coverage + (_weatherMean - 0.5f) * 0.6f, 0f, 1f);
+        return Mathf.SmoothStep(0.25f, 0.9f, covered);
     }
 
     private void BuildSkyMaterial()
