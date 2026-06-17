@@ -26,7 +26,17 @@ uniform float cloud_hg : hint_range(0.0, 0.95) = 0.6;        // HG forward scatt
 uniform float cloud_powder : hint_range(0.0, 2.0) = 1.0;
 uniform float cloud_sun_absorb : hint_range(0.1, 2.0) = 0.75;
 uniform int cloud_steps : hint_range(16, 160) = 96;
-// debug: 0 normal | 1 marched-shell = magenta | 2 raw max density (grayscale)
+
+// --- shape / size / opacity knobs -------------------------------------------
+uniform float cloud_size : hint_range(0.3, 4.0) = 1.0;       // overall feature size (×)
+uniform float cloud_detail : hint_range(0.0, 1.0) = 0.4;     // high-freq edge erosion amount
+uniform float cloud_detail_size : hint_range(0.3, 4.0) = 1.0;// size of the wispy detail (×)
+uniform float cloud_edge : hint_range(0.0, 1.0) = 0.5;       // shape hardness (0 soft↔1 crisp)
+uniform float cloud_opacity : hint_range(0.2, 4.0) = 1.0;    // extinction (translucent↔solid)
+uniform float cloud_brightness : hint_range(0.2, 3.0) = 1.0; // overall cloud lightness
+uniform float cloud_ambient : hint_range(0.0, 2.0) = 0.7;    // sky-fill on shadowed sides
+
+// debug: 0 normal | 1 shell magenta | 2 density | 3 raw shape.r | 4 weather.r
 uniform int cloud_debug = 0;
 
 uniform vec3 cloud_tint : source_color = vec3(1.0, 1.0, 1.0);
@@ -85,23 +95,29 @@ float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
     float type = clamp(cloud_type + (w.g - 0.5) * 0.4, 0.0, 1.0);
 
     // base shape: sh.r is already Perlin-Worley; lightly erode with the Worley FBM.
-    vec3 suv = lp * shape_scale + vec3(windOff.x, h, windOff.y) * shape_scale;
+    // cloud_size scales features (bigger size = lower sample frequency).
+    float sScale = shape_scale / cloud_size;
+    vec3 suv = lp * sScale + vec3(windOff.x, h, windOff.y) * sScale;
     vec4 sh = texture(shape_tex, suv);
     float fbm = sh.g * 0.625 + sh.b * 0.25 + sh.a * 0.125;
     float base = remap(sh.r, fbm * 0.3, 1.0, 0.0, 1.0);     // gentle erosion, keeps body
 
-    // coverage carves how much sky is clouded. coverage=1 → everything, 0 → nothing.
-    base = remap(base, 1.0 - coverage, 1.0, 0.0, 1.0);
+    // coverage carves how much sky is clouded. cloud_edge sets the transition
+    // hardness: soft (wide remap band) ↔ crisp (narrow band near the threshold).
+    float band = mix(0.5, 0.02, cloud_edge);
+    float lo = clamp(1.0 - coverage, 0.0, 1.0);
+    base = remap(base, lo, min(lo + band, 1.0), 0.0, 1.0);
     base = clamp(base, 0.0, 1.0);
 
     // vertical cloud-type gradient (soft, so the shell middle has body)
     base *= type_gradient(h, type);
 
-    // erode edges with high-freq detail (subtle)
-    if (base > 0.0){
-        vec3 duv = lp * detail_scale + vec3(windOff.x, h, windOff.y) * detail_scale;
+    // erode edges with high-freq detail (amount + size are knobs)
+    if (base > 0.0 && cloud_detail > 0.0){
+        float dScale = detail_scale / cloud_detail_size;
+        vec3 duv = lp * dScale + vec3(windOff.x, h, windOff.y) * dScale;
         float det = texture(detail_tex, duv).r;
-        base = remap(base, det * 0.25, 1.0, 0.0, 1.0);
+        base = remap(base, det * 0.6 * cloud_detail, 1.0, 0.0, 1.0);
         base = clamp(base, 0.0, 1.0);
     }
 
@@ -183,13 +199,13 @@ void sky(){
                 float lightT = light_march(p, L, baseR, topR, windOff);
                 // powder darkens edges but mustn't kill the body — keep a floor.
                 float powder = mix(1.0, 1.0 - exp(-dens * 2.0 * cloud_powder), 0.5);
-                // extinction in 1/m: dense cloud (~dens 1) goes opaque over ~tens of m
-                float sigma = dens * 0.02;
+                // extinction in 1/m (cloud_opacity = translucent↔solid)
+                float sigma = dens * 0.02 * cloud_opacity;
                 float beer = exp(-sigma * dt);
                 // direct sun (phase-shaped) + a multiple-scatter floor so shadowed
-                // sides read as bright cloud, not black. ambient fills the rest.
+                // sides read as bright cloud, not black; cloud_ambient fills the rest.
                 float sun = lightT * (phase + 0.4);
-                vec3 lum = sunCol * sun + ambient * 0.7;
+                vec3 lum = (sunCol * sun + ambient * cloud_ambient) * cloud_brightness;
                 lum *= powder;
                 // energy-conserving integration of in-scattering over the step
                 scattered += T * lum * (1.0 - beer);

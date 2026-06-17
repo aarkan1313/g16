@@ -10,6 +10,13 @@
   "hg_aniso": 0.6,
   "powder": 1.0,
   "sun_absorption": 0.75,
+  "size": 1.0,
+  "detail": 0.4,
+  "detail_size": 1.0,
+  "edge": 0.5,
+  "opacity": 1.0,
+  "brightness": 1.0,
+  "ambient": 0.7,
   "raymarch_steps": 96,
   "update_res_scale": 1.0,
   "temporal_frames": 1

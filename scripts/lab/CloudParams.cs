@@ -23,6 +23,14 @@ public record CloudParams(
     float HgAniso,         // Henyey-Greenstein forward-scatter (silver lining)
     float Powder,          // powder/dark-edge term strength
     float SunAbsorption,   // Beer absorption toward the sun
+    // shape / size / opacity
+    float Size,            // overall feature size (×)
+    float Detail,          // high-freq edge erosion amount
+    float DetailSize,      // size of the wispy detail (×)
+    float Edge,            // shape hardness (0 soft ↔ 1 crisp)
+    float Opacity,         // extinction (translucent ↔ solid)
+    float Brightness,      // overall cloud lightness
+    float Ambient,         // sky-fill on shadowed sides
     // perf (read by CloudVolume)
     int RaymarchSteps,     // view-ray steps through the cloud shell
     float UpdateResScale,  // raymarch target res as a fraction of viewport (0..1)
@@ -41,6 +49,13 @@ public record CloudParams(
         HgAniso: 0.6f,
         Powder: 1.0f,
         SunAbsorption: 0.75f,
+        Size: 1.0f,
+        Detail: 0.4f,
+        DetailSize: 1.0f,
+        Edge: 0.5f,
+        Opacity: 1.0f,
+        Brightness: 1.0f,
+        Ambient: 0.7f,
         RaymarchSteps: 96,
         UpdateResScale: 1.0f,   // Stage 3 is full-res; Stage 4 lowers this
         TemporalFrames: 1);     // Stage 3 updates every frame; Stage 4 raises this
@@ -59,6 +74,8 @@ public record CloudParams(
             F("altitude_m", d.AltitudeM), F("thickness_m", d.ThicknessM),
             F("drift_speed", d.DriftSpeed), F("drift_dir_deg", d.DriftDirDeg),
             F("hg_aniso", d.HgAniso), F("powder", d.Powder), F("sun_absorption", d.SunAbsorption),
+            F("size", d.Size), F("detail", d.Detail), F("detail_size", d.DetailSize),
+            F("edge", d.Edge), F("opacity", d.Opacity), F("brightness", d.Brightness), F("ambient", d.Ambient),
             I("raymarch_steps", d.RaymarchSteps), F("update_res_scale", d.UpdateResScale),
             I("temporal_frames", d.TemporalFrames));
     }

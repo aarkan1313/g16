@@ -73,6 +73,13 @@ public partial class CloudVolume : Node
         _skyMat.SetShaderParameter("cloud_hg", _p.HgAniso);
         _skyMat.SetShaderParameter("cloud_powder", _p.Powder);
         _skyMat.SetShaderParameter("cloud_sun_absorb", _p.SunAbsorption);
+        _skyMat.SetShaderParameter("cloud_size", _p.Size);
+        _skyMat.SetShaderParameter("cloud_detail", _p.Detail);
+        _skyMat.SetShaderParameter("cloud_detail_size", _p.DetailSize);
+        _skyMat.SetShaderParameter("cloud_edge", _p.Edge);
+        _skyMat.SetShaderParameter("cloud_opacity", _p.Opacity);
+        _skyMat.SetShaderParameter("cloud_brightness", _p.Brightness);
+        _skyMat.SetShaderParameter("cloud_ambient", _p.Ambient);
         _skyMat.SetShaderParameter("cloud_steps", _p.RaymarchSteps);
         _skyMat.SetShaderParameter("cloud_debug", _debug);
     }
@@ -124,6 +131,13 @@ public partial class CloudVolume : Node
             case "hg_aniso":        _p = _p with { HgAniso = v };        PushSky("cloud_hg", v); break;
             case "powder":          _p = _p with { Powder = v };         PushSky("cloud_powder", v); break;
             case "sun_absorption":  _p = _p with { SunAbsorption = v };  PushSky("cloud_sun_absorb", v); break;
+            case "size":            _p = _p with { Size = v };           PushSky("cloud_size", v); break;
+            case "detail":          _p = _p with { Detail = v };         PushSky("cloud_detail", v); break;
+            case "detail_size":     _p = _p with { DetailSize = v };     PushSky("cloud_detail_size", v); break;
+            case "edge":            _p = _p with { Edge = v };           PushSky("cloud_edge", v); break;
+            case "opacity":         _p = _p with { Opacity = v };        PushSky("cloud_opacity", v); break;
+            case "brightness":      _p = _p with { Brightness = v };     PushSky("cloud_brightness", v); break;
+            case "ambient":         _p = _p with { Ambient = v };        PushSky("cloud_ambient", v); break;
             case "update_res_scale": _p = _p with { UpdateResScale = v }; break;   // perf; read by dispatch
             case "shadow_strength": PushSky("cloud_shadow_strength", v); break;    // wired to terrain in Stage 5
         }
