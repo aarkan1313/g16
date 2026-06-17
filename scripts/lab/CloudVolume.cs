@@ -296,6 +296,7 @@ public partial class CloudVolume : Node
 
     public CloudParams Params => _p;
     public bool Enabled => _enabled;
+    public Color SkyHorizonColor => _skyHorizon;   // for aerial-perspective tinting
 
     // ---- public knob interface (UI → here only). Knobs mutate _p; RenderProcess
     //      reads _p each frame on the render thread. -------------------------------

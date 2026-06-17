@@ -720,6 +720,7 @@ public partial class TerrainLabUI : Control
         // Terrain must read clearly first; atmosphere is seasoning.
         env.FogEnabled = true;
         if (m.ContainsKey("fog_color")) { env.FogLightColor = Col(m["fog_color"]); }
+        _baseFogColor = env.FogLightColor;   // for cloud/overcast aerial tinting
         env.FogDensity = F(m, "fog_density", 0.0006f) * 0.25f;
         env.FogAerialPerspective = Mathf.Min(F(m, "fog_aerial", 0.85f), 0.5f);
         env.FogHeight = F(m, "fog_height", -200f);
@@ -1005,10 +1006,10 @@ public partial class TerrainLabUI : Control
     private Label? _fpsLabel;
     private double _fpsAccum;
     private int _fpsFrames;
-    // overcast → GI/sun dimming (driven by cloud coverage; scales from the mood base)
+    // overcast → GI/sun dimming + aerial-perspective tint (driven by cloud coverage)
     private float _baseAmbient = 0.4f, _baseSunEnergy = 1.3f;
+    private Color _baseFogColor = new Color(0.71f, 0.78f, 0.86f);
     private bool _overcastDim = true;
-    private float _overcastAmt = 0.7f;   // how strongly full overcast dims (0..1)
 
     private void UpdateOvercast()
     {
@@ -1016,10 +1017,14 @@ public partial class TerrainLabUI : Control
         var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
         float oc = _overcastDim ? _cloud.Overcast() : 0f;
-        // full overcast pulls ambient + sun toward (1-amt) of their clear-sky values.
-        float k = 1f - oc * _overcastAmt;
+        const float OvercastAmt = 0.7f;   // how strongly full overcast dims (0..1)
+        float k = 1f - oc * OvercastAmt;
         env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 1.15f, oc);   // sky fill slightly UP (diffuse dome)
         sun.LightEnergy = _baseSunEnergy * k;                                // direct sun DOWN under cloud
+        // Aerial perspective: tint distance haze toward the cloud sky color so the
+        // atmosphere reads coherent with the cover (stronger as overcast rises).
+        Color sky = _cloud.SkyHorizonColor;
+        env.FogLightColor = _baseFogColor.Lerp(sky, 0.35f + 0.45f * oc);
     }
 
     public override void _Process(double delta)
