@@ -1,7 +1,7 @@
 {
   "_comment": "Control registry for the terrain look lab. The UI, randomizer, and lock system are all built from this. type: slider|toggle|enum|material|companion. param = shader uniform (for slider/toggle/enum that map straight through). rand=false excludes from the randomizer. zone-indexed controls (material/companion) expand to 7 rows. Edit this to add/tune a control with no C# change.",
   "zone_names": ["valley", "valley→slope", "slope", "slope→cliff", "cliff", "high", "peak/snow"],
-  "tabs": ["Zones", "Surface", "Color", "Detail", "Splat", "Light", "Debug"],
+  "tabs": ["Zones", "Surface", "Color", "Detail", "Splat", "Light", "Clouds", "Debug"],
   "controls": [
     { "id": "zone_mat", "label": "zone", "tab": "Zones", "type": "material", "rand": true },
     { "id": "companion", "label": "companion", "tab": "Zones", "type": "companion", "rand": true,
@@ -79,6 +79,22 @@
     { "id": "volfog_on", "label": "volumetric fog", "tab": "Light", "type": "scene", "scene": "volfog", "default": true, "rand": false },
     { "id": "volfog_dens", "label": "vol fog amt", "tab": "Light", "type": "scenef", "scene": "volfog_d", "min": 0.0, "max": 0.06, "default": 0.012, "rand": false },
     { "id": "godray_e", "label": "godray power", "tab": "Light", "type": "scenef", "scene": "godray", "min": 0.0, "max": 8.0, "default": 1.5, "rand": false },
+
+    { "id": "cloud_enabled", "label": "clouds", "tab": "Clouds", "type": "cloud", "cloud": "enabled", "default": true, "rand": false },
+    { "id": "cloud_coverage", "label": "coverage (sparse↔overcast)", "tab": "Clouds", "type": "cloudf", "cloud": "coverage", "min": 0.0, "max": 1.0, "default": 0.35, "rand": false },
+    { "id": "cloud_density", "label": "density", "tab": "Clouds", "type": "cloudf", "cloud": "density", "min": 0.0, "max": 3.0, "default": 1.0, "rand": false },
+    { "id": "cloud_type", "label": "type (flat↔towering)", "tab": "Clouds", "type": "cloudf", "cloud": "cloud_type", "min": 0.0, "max": 1.0, "default": 0.6, "rand": false },
+    { "id": "cloud_altitude", "label": "altitude m", "tab": "Clouds", "type": "cloudf", "cloud": "altitude_m", "min": 600.0, "max": 4000.0, "default": 1800.0, "rand": false },
+    { "id": "cloud_thickness", "label": "thickness m", "tab": "Clouds", "type": "cloudf", "cloud": "thickness_m", "min": 300.0, "max": 3000.0, "default": 1400.0, "rand": false },
+    { "id": "cloud_drift_speed", "label": "drift speed m/s", "tab": "Clouds", "type": "cloudf", "cloud": "drift_speed", "min": 0.0, "max": 60.0, "default": 12.0, "rand": false },
+    { "id": "cloud_drift_dir", "label": "drift dir", "tab": "Clouds", "type": "cloudf", "cloud": "drift_dir_deg", "min": 0.0, "max": 360.0, "default": 45.0, "rand": false },
+    { "id": "cloud_hg", "label": "silver lining (HG)", "tab": "Clouds", "type": "cloudf", "cloud": "hg_aniso", "min": 0.0, "max": 0.95, "default": 0.6, "rand": false },
+    { "id": "cloud_powder", "label": "powder edges", "tab": "Clouds", "type": "cloudf", "cloud": "powder", "min": 0.0, "max": 2.0, "default": 1.0, "rand": false },
+    { "id": "cloud_sun_absorb", "label": "sun absorption", "tab": "Clouds", "type": "cloudf", "cloud": "sun_absorption", "min": 0.1, "max": 2.0, "default": 0.75, "rand": false },
+    { "id": "cloud_shadow_strength", "label": "ground shadow", "tab": "Clouds", "type": "cloudf", "cloud": "shadow_strength", "min": 0.0, "max": 1.0, "default": 0.7, "rand": false },
+    { "id": "cloud_steps", "label": "raymarch steps (perf)", "tab": "Clouds", "type": "cloudi", "cloud": "raymarch_steps", "min": 16, "max": 160, "default": 96, "rand": false },
+    { "id": "cloud_update_res", "label": "update res (perf)", "tab": "Clouds", "type": "cloudf", "cloud": "update_res_scale", "min": 0.25, "max": 1.0, "default": 1.0, "rand": false },
+    { "id": "cloud_temporal", "label": "temporal frames (perf)", "tab": "Clouds", "type": "cloudi", "cloud": "temporal_frames", "min": 1, "max": 64, "default": 1, "rand": false },
 
     { "id": "dbg_normalmap", "label": "normal maps", "tab": "Debug", "type": "toggle",
       "param": "dbg_use_normalmap", "default": true, "rand": false },

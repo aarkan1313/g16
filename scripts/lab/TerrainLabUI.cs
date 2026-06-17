@@ -45,7 +45,7 @@ public partial class TerrainLabUI : Control
     private sealed class LabControl
     {
         public string Id = "", Label = "", Tab = "", Type = "";
-        public string? Param, Setter, Field, Scene;  // shader uniform / mode-setter / TerrainLab field / scene-node target
+        public string? Param, Setter, Field, Scene, Cloud;  // shader uniform / mode-setter / TerrainLab field / scene-node target / CloudVolume knob
         public float Min, Max, Default;
         public bool DefBool;
         public string[] Options = Array.Empty<string>();
@@ -168,6 +168,7 @@ public partial class TerrainLabUI : Control
             Setter = c.TryGetProperty("setter", out var s) ? s.GetString() : null,
             Field = c.TryGetProperty("field", out var f) ? f.GetString() : null,
             Scene = c.TryGetProperty("scene", out var sc) ? sc.GetString() : null,
+            Cloud = c.TryGetProperty("cloud", out var cl) ? cl.GetString() : null,
             Rand = !c.TryGetProperty("rand", out var r) || r.GetBoolean(),
             Rebake = c.TryGetProperty("rebake", out var rb) && rb.GetBoolean(),
         };
@@ -176,7 +177,7 @@ public partial class TerrainLabUI : Control
         if (c.TryGetProperty("options", out var op)) { lc.Options = op.EnumerateArray().Select(e => e.GetString() ?? "").ToArray(); }
         if (c.TryGetProperty("default", out var d) && d.ValueKind != JsonValueKind.Array)
         {
-            if (type == "toggle" || type == "scene") { lc.DefBool = d.GetBoolean(); }
+            if (type == "toggle" || type == "scene" || type == "cloud") { lc.DefBool = d.GetBoolean(); }
             else { lc.Default = d.GetSingle(); }
         }
         return lc;
@@ -271,9 +272,11 @@ public partial class TerrainLabUI : Control
         {
             case "slider":
             case "scenef":
+            case "cloudf":
+            case "cloudi":
             {
                 // fine format for tiny ranges (e.g. fog density 0.0006)
-                string fmt = (c.Max - c.Min) < 0.05f ? "0.0000" : "0.00";
+                string fmt = (c.Type == "cloudi") ? "0" : ((c.Max - c.Min) < 0.05f ? "0.0000" : "0.00");
                 var sl = new HSlider { MinValue = c.Min, MaxValue = c.Max, Value = c.Default,
                     Step = (c.Max - c.Min) / 400.0, CustomMinimumSize = new Vector2(160, 0) };
                 sl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -285,6 +288,7 @@ public partial class TerrainLabUI : Control
             }
             case "toggle":
             case "scene":
+            case "cloud":
             {
                 var cb = new CheckBox { ButtonPressed = c.DefBool };
                 cb.Toggled += on => { c.Value = on; if (_ready) ApplyControl(c, true); };
@@ -440,6 +444,15 @@ public partial class TerrainLabUI : Control
                 if (c.Field != null) { SetTerrainField(c.Field, c.Value.AsSingle()); }
                 else if (c.Param != null) { _terrain.SetFloat(c.Param, c.Value.AsSingle()); }
                 break;
+            case "cloudf":
+                if (c.Cloud != null) { ApplyCloudFloat(c.Cloud, c.Value.AsSingle()); }
+                break;
+            case "cloudi":
+                if (c.Cloud != null) { ApplyCloudInt(c.Cloud, Mathf.RoundToInt(c.Value.AsSingle())); }
+                break;
+            case "cloud":
+                if (c.Cloud != null) { ApplyCloudBool(c.Cloud, c.Value.AsBool()); }
+                break;
             case "toggle":
                 if (c.Param != null) { _terrain.SetBool(c.Param, c.Value.AsBool()); }
                 break;
@@ -512,6 +525,14 @@ public partial class TerrainLabUI : Control
         // elevation from horizon + compass azimuth → a downward-pointing sun.
         sun.RotationDegrees = new Vector3(-_sunAngle, _sunAzimuth, 0f);
     }
+
+    // ---- cloud knobs → CloudVolume (separation: UI never touches cloud internals,
+    //      only the public knob setters). _cloud is wired in Stage 3; null = no-op,
+    //      so the Clouds tab is inert (but present + tunable in state) until then. --
+    private CloudVolume? _cloud;
+    private void ApplyCloudFloat(string knob, float v) => _cloud?.SetKnob(knob, v);
+    private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
+    private void ApplyCloudBool(string knob, bool on) => _cloud?.SetKnobBool(knob, on);
 
     // ---- lighting MOODS (curated, coordinated looks) --------------------------
 
