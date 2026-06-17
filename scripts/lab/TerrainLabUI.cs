@@ -427,7 +427,7 @@ public partial class TerrainLabUI : Control
         switch (target)
         {
             case "sun_energy":      sun.LightEnergy = v; break;
-            case "sun_soft":        sun.ShadowBlur = v; sun.LightAngularDistance = Mathf.Max(v, 0.1f); break;
+            case "sun_soft":        sun.ShadowBlur = v; break;   // disc size stays fixed (decoupled)
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
             case "sun_azimuth":     _sunAzimuth = v; OrientSun(sun); break;
             case "ambient":         env.AmbientLightEnergy = v; break;
@@ -476,8 +476,12 @@ public partial class TerrainLabUI : Control
         _sunAngle = F(m, "sun_angle", 35f); _sunAzimuth = F(m, "sun_az", 40f); OrientSun(sun);
         sun.LightEnergy = F(m, "sun_energy", 1.3f);
         if (m.ContainsKey("sun_color")) { sun.LightColor = Col(m["sun_color"]); }
+        // Soft shadows via ShadowBlur ONLY. LightAngularDistance also enlarges the
+        // sky sun DISC + spreads its energy (that was the "too big & bright" sun), so
+        // keep it tiny and let blur do the softening — decoupled.
         float soft = F(m, "shadow_soft", 1.0f);
-        sun.ShadowBlur = soft; sun.LightAngularDistance = Mathf.Max(soft, 0.1f);
+        sun.ShadowBlur = soft;
+        sun.LightAngularDistance = 0.5f;   // real-sun disc size, fixed
 
         env.AmbientLightEnergy = F(m, "ambient", 0.4f);
         env.AmbientLightSkyContribution = F(m, "ambient_sky", 1.0f);
@@ -499,7 +503,7 @@ public partial class TerrainLabUI : Control
         env.TonemapExposure = F(m, "exposure", 1.0f);
         env.TonemapWhite = F(m, "white", 6.0f);
         env.GlowEnabled = true;
-        env.GlowIntensity = F(m, "glow", 0.3f);
+        env.GlowIntensity = F(m, "glow", 0.3f) * 0.5f;   // tame bloom (was over-blooming the bright sky)
 
         SyncLightControlsToScene();   // make the Light-tab sliders reflect the mood
         GD.Print($"TerrainLab: mood -> {_moodNames[idx]}");
