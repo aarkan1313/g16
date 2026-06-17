@@ -124,6 +124,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--hb=")) { _probeHb = a.Substring("--hb=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--mood=")) { int.TryParse(a.Substring("--mood=".Length), out _probeMood); }
             else if (a.StartsWith("--clouddbg=")) { int.TryParse(a.Substring("--clouddbg=".Length), out _cloudDbg); }
+            else if (a.StartsWith("--cloudsteps=")) { int.TryParse(a.Substring("--cloudsteps=".Length), out _cloudSteps); }
         }
     }
 
@@ -287,6 +288,13 @@ public partial class TerrainLabUI : Control
         }
 
         BuildPresetsTab(tabs);
+
+        // Frame-time HUD, top-right (independent of the panel).
+        _fpsLabel = new Label { Text = "— fps", Position = new Vector2(0, 8) };
+        _fpsLabel.SetAnchorsPreset(LayoutPreset.TopRight);
+        _fpsLabel.OffsetLeft = -150; _fpsLabel.OffsetRight = -8; _fpsLabel.OffsetTop = 8;
+        _fpsLabel.HorizontalAlignment = HorizontalAlignment.Right;
+        AddChild(_fpsLabel);
     }
 
     private IEnumerable<string> TabOrder()
@@ -941,13 +949,32 @@ public partial class TerrainLabUI : Control
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
         if (_cloudDbg >= 0) { _cloud?.SetDebug(_cloudDbg); }
+        if (_cloudSteps > 0) { _cloud?.SetKnobInt("raymarch_steps", _cloudSteps); }
     }
     private int _cloudDbg = -1;
+    private int _cloudSteps = -1;
     private void OverrideEnum(string id, int v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
     private void OverrideToggle(string id, bool v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
 
+    private Label? _fpsLabel;
+    private double _fpsAccum;
+    private int _fpsFrames;
+
     public override void _Process(double delta)
     {
+        // FPS / frame-time HUD (top-right). Cheap; updated ~4×/sec. The perf gate
+        // needs a number, not a feeling — this is it.
+        if (_fpsLabel != null)
+        {
+            _fpsAccum += delta; _fpsFrames++;
+            if (_fpsAccum >= 0.25)
+            {
+                double avg = _fpsAccum / _fpsFrames;
+                _fpsLabel.Text = $"{1.0 / avg,5:0} fps   {avg * 1000.0,5:0.0} ms";
+                _fpsAccum = 0; _fpsFrames = 0;
+            }
+        }
+
         if (_autoShotT >= 0.0 && _autoShotPath != null)
         {
             _autoShotT += delta;
@@ -955,7 +982,8 @@ public partial class TerrainLabUI : Control
             {
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_autoShotPath)!);
                 GetViewport().GetTexture().GetImage().SavePng(_autoShotPath);
-                GD.Print($"TerrainLab: auto-shot -> {_autoShotPath}");
+                // print steady-state frame-time for the perf gate (averaged over warm-up)
+                GD.Print($"TerrainLab: auto-shot -> {_autoShotPath}  (frame ~{Engine.GetFramesPerSecond():0} fps)");
                 _autoShotT = -1.0;
                 GetTree().Quit();
             }
