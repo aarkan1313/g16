@@ -545,15 +545,19 @@ public partial class TerrainLabUI : Control
             if (m.ContainsKey("sky_ground")) { sky.GroundBottomColor = Col(m["sky_ground"]); }
         }
 
+        // Fog: the mood JSON values were authored too thick (washed the terrain into
+        // haze). Scale WAY down — fog should be a light distance cue, not a blanket.
+        // Terrain must read clearly first; atmosphere is seasoning.
         env.FogEnabled = true;
         if (m.ContainsKey("fog_color")) { env.FogLightColor = Col(m["fog_color"]); }
-        env.FogDensity = F(m, "fog_density", 0.0006f);
-        env.FogAerialPerspective = F(m, "fog_aerial", 0.85f);
+        env.FogDensity = F(m, "fog_density", 0.0006f) * 0.25f;
+        env.FogAerialPerspective = Mathf.Min(F(m, "fog_aerial", 0.85f), 0.5f);
         env.FogHeight = F(m, "fog_height", -200f);
-        env.FogHeightDensity = F(m, "fog_heightd", 0.04f);
-        // sun_scatter makes fog glow toward the sun; high values add to the bright
-        // wash around an in-frame sun, so keep it gentle.
-        env.FogSunScatter = F(m, "fog_sun_scatter", 0.2f) * 0.4f;
+        env.FogHeightDensity = F(m, "fog_heightd", 0.04f) * 0.3f;
+        env.FogSunScatter = F(m, "fog_sun_scatter", 0.2f) * 0.25f;
+        // Volumetric fog OFF by default (it was the main 'can't see anything' culprit).
+        // Available as an opt-in toggle in the Light tab for those who want godrays.
+        env.VolumetricFogEnabled = false;
 
         env.TonemapExposure = F(m, "exposure", 1.0f);
         env.TonemapWhite = F(m, "white", 6.0f);

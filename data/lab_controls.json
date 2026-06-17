@@ -77,7 +77,7 @@
     { "id": "sdfgi_on", "label": "GI (SDFGI)", "tab": "Light", "type": "scene", "scene": "sdfgi", "default": true, "rand": false },
     { "id": "cloud_on", "label": "cloud shadows", "tab": "Light", "type": "toggle", "param": "cloud_shadow_on", "default": true, "rand": false },
     { "id": "cloud_scale", "label": "cloud size m", "tab": "Light", "type": "slider", "param": "cloud_scale_m", "min": 200, "max": 4000, "default": 1400, "rand": false },
-    { "id": "cloud_str", "label": "cloud dark", "tab": "Light", "type": "slider", "param": "cloud_strength", "min": 0, "max": 1, "default": 0.5, "rand": false },
+    { "id": "cloud_str", "label": "cloud dark", "tab": "Light", "type": "slider", "param": "cloud_strength", "min": 0, "max": 1, "default": 0.3, "rand": false },
     { "id": "cloud_cov", "label": "cloud cover", "tab": "Light", "type": "slider", "param": "cloud_cover", "min": 0.1, "max": 0.9, "default": 0.5, "rand": false },
     { "id": "cloud_soft", "label": "cloud soft", "tab": "Light", "type": "slider", "param": "cloud_softness", "min": 0.02, "max": 0.5, "default": 0.22, "rand": false },
     { "id": "volfog_on", "label": "volumetric fog", "tab": "Light", "type": "scene", "scene": "volfog", "default": true, "rand": false },

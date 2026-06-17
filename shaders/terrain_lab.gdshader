@@ -132,7 +132,7 @@ uniform int sec_zone[7];
 // passing) rather than a full light() rewrite.
 uniform bool cloud_shadow_on = true;
 uniform float cloud_scale_m : hint_range(200.0, 4000.0) = 1400.0;  // size of cloud patches
-uniform float cloud_strength : hint_range(0.0, 1.0) = 0.5;         // how dark the shadows get
+uniform float cloud_strength : hint_range(0.0, 1.0) = 0.3;         // how dark the shadows get
 uniform float cloud_cover : hint_range(0.1, 0.9) = 0.5;            // fraction in shadow (threshold)
 uniform float cloud_softness : hint_range(0.02, 0.5) = 0.22;       // edge softness
 uniform vec2 cloud_speed = vec2(8.0, 3.0);                         // drift m/s (world)
