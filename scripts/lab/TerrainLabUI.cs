@@ -38,7 +38,7 @@ public partial class TerrainLabUI : Control
     private int _overrideSplat = -1, _overrideSplatDebug = -1;
     private string? _camArg;
     private float _texScale = -1f;
-    private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
+    private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1, _probeMood = -1, _probeClouds = -1;   // lighting/splat isolation
     private float _probeRoughFloor = -1f, _probeMixStr = -1f;
 
     /// One control: parsed registry fields + runtime state.
@@ -108,6 +108,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--mixstr=")) { if (float.TryParse(a.Substring("--mixstr=".Length), out float ms)) _probeMixStr = ms; }
             else if (a.StartsWith("--hb=")) { _probeHb = a.Substring("--hb=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--mood=")) { int.TryParse(a.Substring("--mood=".Length), out _probeMood); }
+            else if (a.StartsWith("--clouds=")) { _probeClouds = a.Substring("--clouds=".Length) == "1" ? 1 : 0; }
         }
     }
 
@@ -806,6 +807,7 @@ public partial class TerrainLabUI : Control
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
+        if (_probeClouds >= 0) { _terrain.SetBool("cloud_shadow_on", _probeClouds == 1); }
     }
     private void OverrideEnum(string id, int v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
     private void OverrideToggle(string id, bool v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
