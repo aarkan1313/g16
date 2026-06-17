@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://b2w1widoulmuk"
+path="res://.godot/imported/cloud_noise_3d.glsl-63eaf643d93f6f0ae9b217344610948e.res"
+
+[deps]
+
+source_file="res://shaders/cloud_noise_3d.glsl"
+dest_files=["res://.godot/imported/cloud_noise_3d.glsl-63eaf643d93f6f0ae9b217344610948e.res"]
+
+[params]
+
