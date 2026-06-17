@@ -1,6 +1,6 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-17 (volumetric clouds + matched ground shadows built). **Refresh the Current State block at the end of each session.**
+Last updated: 2026-06-17 (volumetric clouds + matched shadows + cloud-presence suite built; not yet flown live). **Refresh the Current State block at the end of each session.**
 
 This doc is written so a fresh chat with zero context can get productive immediately.
 
@@ -75,11 +75,13 @@ Run a scene (always `--rendering-driver vulkan`):
 ## 6. Current State — REFRESH EVERY SESSION
 
 > ### ⮕ START HERE (2026-06-17)
-> **Status:** base field proven (no bake); texturing + lighting "really good"; and now
-> **VOLUMETRIC CLOUDS + matched ground shadows are built and working** (the big new arc
-> this session). Clouds render in the sky and cast their own matching shadows on the
-> terrain. Perf ~2 ms/frame for the whole cloud+shadow system. User has NOT yet flown the
-> final shadows live (asked me to profile + proceed) — a live look is the outstanding gate.
+> **Status:** base field proven (no bake); texturing + lighting "really good"; and this
+> session built **VOLUMETRIC CLOUDS + matched ground shadows + a cloud-PRESENCE suite**
+> (mood-tinted cloud color, overcast dimming, aerial perspective, reflections/GI, and
+> god rays [default-OFF, needs tuning]). Whole cloud+shadow system ~2 ms/frame; presence
+> suite added ~0 cost. **⚠ The user has NOT flown ANY of this session's work live** — it's
+> all mechanically verified (build + headless A/B captures + profiling) but the look/motion
+> judgment is the outstanding gate. Everything is committed; `git log` for the arc.
 >
 > **The cloud system (new — see DECISIONS 2026-06-17 + spec/plan in docs/superpowers):**
 > - `shaders/cloud_noise_3d.glsl` + `CloudNoiseCompute.cs` — GPU-bake tileable Perlin-Worley
