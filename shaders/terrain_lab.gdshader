@@ -65,6 +65,14 @@ uniform float antitile_mult = 5.3;
 //   2 = hex-tiling (Mikkelsen: 3-tap, per-tile rotation,       JCGT 2022
 //       variance-preserving + contrast restore, textureGrad mip-correct)
 uniform int tile_mode = 1;   // IQ 2-tap default (hex caused tile-seam squares)
+uniform float rough_floor : hint_range(0.04, 1.0) = 0.5;  // ground is matte; low floor = specular sparkle (fuzz)
+
+// --- FUZZ-HUNT master switches: isolate each contributor. dbg_use_normalmap off =
+//     flat geometric normal (kills normal-map specular shimmer). dbg_fullrough on =
+//     force roughness 1.0 (kills ALL specular). All default to the normal look;
+//     the Debug tab flips them so the user can bisect the speckle live. -----------
+uniform bool dbg_use_normalmap = true;
+uniform bool dbg_fullrough = false;   // true => ROUGHNESS forced 1.0 (matte, no spec)
 uniform float tri_sharpness : hint_range(1.0, 32.0) = 8.0;  // triplanar blend exponent
 uniform float hex_rot_strength : hint_range(0.0, 1.0) = 0.7; // per-tile rotation amount
 uniform float hex_contrast : hint_range(0.3, 1.0) = 0.7;     // contrast-restore (lower=sharper)
@@ -109,7 +117,9 @@ uniform int splat_debug = 0;   // 0 off | 1 show dominant zone as color | 2 show
 // boundary becomes irregular + relief-driven, which removes the "line between
 // textures" look. heightblend_sharp controls transition width.
 uniform bool heightblend_on = true;
-uniform float heightblend_sharp : hint_range(0.02, 0.5) = 0.15;
+// NOTE: small sharp + high-freq roughness proxy => near-binary per-pixel switching
+// = SPECKLE GRAIN. Default WIDE (soft) to avoid it; smoothstep below also softens.
+uniform float heightblend_sharp : hint_range(0.1, 0.9) = 0.6;
 // Per-zone companion material: sec_zone[d] = which zone's textures to blend INTO
 // zone d (live, no rebake). Defaults set from C# to the adjacent zone.
 uniform int sec_zone[7];
@@ -344,7 +354,10 @@ float heightblend_w(float h1, float h2, float t, float sharp){
     float ma = max(a, b) - sharp;
     float w1 = max(a - ma, 0.0);
     float w2 = max(b - ma, 0.0);
-    return w2 / max(w1 + w2, 1e-5);
+    float w = w2 / max(w1 + w2, 1e-5);
+    // soften: blend the relief-aware result back toward the smooth linear t, so
+    // high-freq roughness can't drive a hard per-pixel switch (the speckle grain).
+    return mix(t, w, 0.5);
 }
 
 // Pick a zone's PBR by index (samplers can't be dynamically indexed in GLSL).
@@ -388,6 +401,41 @@ float cheap_rgh_by(int z, vec2 uv, vec2 dx, vec2 dy){
     return cheap_tap(z6_rgh,uv,dx,dy).r;
 }
 
+// Smooth PLAIN triplanar (3 planes, direct textureGrad — no tiling hash). Used by
+// the splat path: smooth (no per-pixel plane-pick grain) and cheap (no hex/IQ).
+vec3 tp_alb(sampler2D t, vec3 wp, vec3 nr){
+    vec3 bw=tri_w(nr);
+    vec2 ux=wp.zy/tex_scale_m, uy=wp.xz/tex_scale_m, uz=wp.xy/tex_scale_m;
+    return textureGrad(t,ux,dFdx(ux),dFdy(ux)).rgb*bw.x
+         + textureGrad(t,uy,dFdx(uy),dFdy(uy)).rgb*bw.y
+         + textureGrad(t,uz,dFdx(uz),dFdy(uz)).rgb*bw.z;
+}
+float tp_rgh(sampler2D t, vec3 wp, vec3 nr){
+    vec3 bw=tri_w(nr);
+    vec2 ux=wp.zy/tex_scale_m, uy=wp.xz/tex_scale_m, uz=wp.xy/tex_scale_m;
+    return textureGrad(t,ux,dFdx(ux),dFdy(ux)).r*bw.x
+         + textureGrad(t,uy,dFdx(uy),dFdy(uy)).r*bw.y
+         + textureGrad(t,uz,dFdx(uz),dFdy(uz)).r*bw.z;
+}
+vec3 trip_alb_by(int z, vec3 wp, vec3 nr){
+    if(z==0) return tp_alb(z0_alb,wp,nr); if(z==1) return tp_alb(z1_alb,wp,nr);
+    if(z==2) return tp_alb(z2_alb,wp,nr); if(z==3) return tp_alb(z3_alb,wp,nr);
+    if(z==4) return tp_alb(z4_alb,wp,nr); if(z==5) return tp_alb(z5_alb,wp,nr);
+    return tp_alb(z6_alb,wp,nr);
+}
+vec3 trip_nrm_by(int z, vec3 wp, vec3 nr){
+    if(z==0) return tp_alb(z0_nrm,wp,nr); if(z==1) return tp_alb(z1_nrm,wp,nr);
+    if(z==2) return tp_alb(z2_nrm,wp,nr); if(z==3) return tp_alb(z3_nrm,wp,nr);
+    if(z==4) return tp_alb(z4_nrm,wp,nr); if(z==5) return tp_alb(z5_nrm,wp,nr);
+    return tp_alb(z6_nrm,wp,nr);
+}
+float trip_rgh_by(int z, vec3 wp, vec3 nr){
+    if(z==0) return tp_rgh(z0_rgh,wp,nr); if(z==1) return tp_rgh(z1_rgh,wp,nr);
+    if(z==2) return tp_rgh(z2_rgh,wp,nr); if(z==3) return tp_rgh(z3_rgh,wp,nr);
+    if(z==4) return tp_rgh(z4_rgh,wp,nr); if(z==5) return tp_rgh(z5_rgh,wp,nr);
+    return tp_rgh(z6_rgh,wp,nr);
+}
+
 // Debug palette for visualizing the splat mask's zone assignment.
 vec3 zone_color(int z){
     vec3 c[7]=vec3[7](vec3(0.2,0.7,0.2),vec3(0.5,0.6,0.2),vec3(0.6,0.5,0.3),
@@ -413,23 +461,21 @@ void fragment(){
         int sec = clamp(sec_zone[dom], 0, 6);   // per-zone companion (UI-controlled, live)
         float t = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);
 
-        // one dominant projection plane, derivatives once
-        vec2 uv, dx, dy; bool topPlane;
-        cheap_plane(wp, nr, uv, dx, dy, topPlane);
-
-        float rD = cheap_rgh_by(dom, uv, dx, dy);
-        float rS = cheap_rgh_by(sec, uv, dx, dy);
-        // height-blend by relief (roughness proxy: rough = grit that protrudes).
+        // SMOOTH triplanar (3 blended planes, plain sampling — no hex, no per-pixel
+        // plane-pick). The earlier single-plane "cheap" path hard-picked one
+        // projection per pixel, which dithered across the bumpy normal into GRAIN
+        // (the fuzz). 3-plane blend is smooth; without hex it's ~18 samples (3× under
+        // the old ~54), the right speed/quality point.
+        float rD = trip_rgh_by(dom, wp, nr);
+        float rS = trip_rgh_by(sec, wp, nr);
         float m = heightblend_on ? heightblend_w(rD, rS, t, heightblend_sharp) : t;
 
         if (splat_debug == 1){ dbg = 1; dbg_col = mix(zone_color(dom),zone_color(sec),m); }
         else if (splat_debug == 2){ dbg = 1; dbg_col = vec3(m); }
 
-        alb = mix(cheap_alb_by(dom,uv,dx,dy), cheap_alb_by(sec,uv,dx,dy), m);
+        alb = mix(trip_alb_by(dom,wp,nr), trip_alb_by(sec,wp,nr), m);
         if (blend_mode>=1){
-            nrm = mix(cheap_nrm_by(dom,uv,dx,dy), cheap_nrm_by(sec,uv,dx,dy), m)*2.0-1.0;
-            // on near-flat top-plane the tangent normal maps straight; on side planes
-            // we keep it simple (geometric normal dominates the look there).
+            nrm = mix(trip_nrm_by(dom,wp,nr), trip_nrm_by(sec,wp,nr), m)*2.0-1.0;
             rgh = mix(rD, rS, m);
         } else { rgh = 0.9; }
     } else {
@@ -462,9 +508,10 @@ void fragment(){
 
     // splat debug view overrides the lit output (no early return — gdshader bans it).
     ALBEDO = (dbg==1) ? dbg_col : alb;
-    ROUGHNESS=clamp(rgh,0.04,1.0);
-    if (blend_mode>=1){
-        // blend tangent-space normals back to world-ish via the geometric normal.
+    ROUGHNESS = dbg_fullrough ? 1.0 : clamp(rgh, rough_floor, 1.0);
+    // Normal: detailed normal-map (specular-shimmer suspect) only when enabled AND
+    // blend_mode supports it. Otherwise the flat geometric normal.
+    if (blend_mode>=1 && dbg_use_normalmap){
         vec3 wn=normalize(nr + vec3(nrm.x,0.0,nrm.y)*0.8);
         NORMAL=normalize((VIEW_MATRIX*vec4(wn,0.0)).xyz);
     } else {

@@ -1,7 +1,7 @@
 {
   "_comment": "Control registry for the terrain look lab. The UI, randomizer, and lock system are all built from this. type: slider|toggle|enum|material|companion. param = shader uniform (for slider/toggle/enum that map straight through). rand=false excludes from the randomizer. zone-indexed controls (material/companion) expand to 7 rows. Edit this to add/tune a control with no C# change.",
   "zone_names": ["valley", "valley→slope", "slope", "slope→cliff", "cliff", "high", "peak/snow"],
-  "tabs": ["Zones", "Surface", "Color", "Detail", "Splat"],
+  "tabs": ["Zones", "Surface", "Color", "Detail", "Splat", "Debug"],
   "controls": [
     { "id": "zone_mat", "label": "zone", "tab": "Zones", "type": "material", "rand": true },
     { "id": "companion", "label": "companion", "tab": "Zones", "type": "companion", "rand": true,
@@ -53,7 +53,7 @@
     { "id": "heightblend_on", "label": "height blend", "tab": "Splat", "type": "toggle",
       "param": "heightblend_on", "default": true, "rand": true },
     { "id": "heightblend_sharp", "label": "hb sharp", "tab": "Splat", "type": "slider",
-      "param": "heightblend_sharp", "min": 0.02, "max": 0.5, "default": 0.15, "rand": true },
+      "param": "heightblend_sharp", "min": 0.1, "max": 0.9, "default": 0.6, "rand": false },
     { "id": "band_soft_mult", "label": "band soft", "tab": "Splat", "type": "slider",
       "param": "band_soft_mult", "min": 0.3, "max": 3, "default": 1.4, "rand": true },
     { "id": "mix_scale_m", "label": "mix scale m", "tab": "Splat", "type": "slider",
@@ -61,6 +61,21 @@
     { "id": "mix_bias", "label": "mix bias", "tab": "Splat", "type": "slider",
       "field": "MixBias", "min": 0.1, "max": 0.9, "default": 0.5, "rand": true, "rebake": true },
     { "id": "splat_debug", "label": "splat debug", "tab": "Splat", "type": "enum", "param": "splat_debug",
-      "options": ["off", "zones", "mix amt"], "default": 0, "rand": false }
+      "options": ["off", "zones", "mix amt"], "default": 0, "rand": false },
+
+    { "id": "dbg_normalmap", "label": "normal maps", "tab": "Debug", "type": "toggle",
+      "param": "dbg_use_normalmap", "default": true, "rand": false },
+    { "id": "dbg_fullrough", "label": "force matte (no spec)", "tab": "Debug", "type": "toggle",
+      "param": "dbg_fullrough", "default": false, "rand": false },
+    { "id": "dbg_macro", "label": "macro color", "tab": "Debug", "type": "toggle",
+      "param": "macro_on", "default": true, "rand": false },
+    { "id": "dbg_contact", "label": "contact shade", "tab": "Debug", "type": "toggle",
+      "param": "contact_on", "default": true, "rand": false },
+    { "id": "dbg_splat", "label": "splat mix", "tab": "Debug", "type": "toggle",
+      "param": "splat_on", "default": true, "rand": false },
+    { "id": "dbg_ssao", "label": "SSAO", "tab": "Debug", "type": "scene", "scene": "ssao", "default": true, "rand": false },
+    { "id": "dbg_shadow", "label": "sun shadows", "tab": "Debug", "type": "scene", "scene": "shadow", "default": true, "rand": false },
+    { "id": "dbg_fog", "label": "fog", "tab": "Debug", "type": "scene", "scene": "fog", "default": true, "rand": false },
+    { "id": "dbg_sun", "label": "sun (vs flat ambient)", "tab": "Debug", "type": "scene", "scene": "sun", "default": true, "rand": false }
   ]
 }

@@ -37,12 +37,14 @@ public partial class TerrainLabUI : Control
     private int _overrideSplat = -1, _overrideSplatDebug = -1;
     private string? _camArg;
     private float _texScale = -1f;
+    private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1;   // lighting/splat isolation
+    private float _probeRoughFloor = -1f, _probeMixStr = -1f;
 
     /// One control: parsed registry fields + runtime state.
     private sealed class LabControl
     {
         public string Id = "", Label = "", Tab = "", Type = "";
-        public string? Param, Setter, Field;     // shader uniform / mode-setter name / TerrainLab field
+        public string? Param, Setter, Field, Scene;  // shader uniform / mode-setter / TerrainLab field / scene-node target
         public float Min, Max, Default;
         public bool DefBool;
         public string[] Options = Array.Empty<string>();
@@ -85,6 +87,11 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--splatdebug=")) { int.TryParse(a.Substring("--splatdebug=".Length), out _overrideSplatDebug); }
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
+            else if (a.StartsWith("--ssao=")) { _probeSsao = a.Substring("--ssao=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--shadow=")) { _probeShadow = a.Substring("--shadow=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--roughfloor=")) { if (float.TryParse(a.Substring("--roughfloor=".Length), out float rf)) _probeRoughFloor = rf; }
+            else if (a.StartsWith("--mixstr=")) { if (float.TryParse(a.Substring("--mixstr=".Length), out float ms)) _probeMixStr = ms; }
+            else if (a.StartsWith("--hb=")) { _probeHb = a.Substring("--hb=".Length) == "1" ? 1 : 0; }
         }
     }
 
@@ -144,6 +151,7 @@ public partial class TerrainLabUI : Control
             Param = c.TryGetProperty("param", out var p) ? p.GetString() : null,
             Setter = c.TryGetProperty("setter", out var s) ? s.GetString() : null,
             Field = c.TryGetProperty("field", out var f) ? f.GetString() : null,
+            Scene = c.TryGetProperty("scene", out var sc) ? sc.GetString() : null,
             Rand = !c.TryGetProperty("rand", out var r) || r.GetBoolean(),
             Rebake = c.TryGetProperty("rebake", out var rb) && rb.GetBoolean(),
         };
@@ -152,7 +160,7 @@ public partial class TerrainLabUI : Control
         if (c.TryGetProperty("options", out var op)) { lc.Options = op.EnumerateArray().Select(e => e.GetString() ?? "").ToArray(); }
         if (c.TryGetProperty("default", out var d) && d.ValueKind != JsonValueKind.Array)
         {
-            if (type == "toggle") { lc.DefBool = d.GetBoolean(); }
+            if (type == "toggle" || type == "scene") { lc.DefBool = d.GetBoolean(); }
             else { lc.Default = d.GetSingle(); }
         }
         return lc;
@@ -192,6 +200,12 @@ public partial class TerrainLabUI : Control
         lockNone.Pressed += () => SetAllLocks(false);
         bar.AddChild(lockNone);
         outer.AddChild(bar);
+
+        var bar2 = new HBoxContainer();
+        var flat = new Button { Text = "⬛ FLAT BASELINE (fuzz hunt)" };
+        flat.Pressed += FlatBaseline;
+        bar2.AddChild(flat);
+        outer.AddChild(bar2);
 
         var tabs = new TabContainer { CustomMinimumSize = new Vector2(360, 560) };
         tabs.SizeFlagsVertical = SizeFlags.ExpandFill;
@@ -239,6 +253,7 @@ public partial class TerrainLabUI : Control
                 break;
             }
             case "toggle":
+            case "scene":
             {
                 var cb = new CheckBox { ButtonPressed = c.DefBool };
                 cb.Toggled += on => { c.Value = on; if (_ready) ApplyControl(c, true); };
@@ -359,6 +374,9 @@ public partial class TerrainLabUI : Control
             case "companion":
                 _terrain.SetSecondaryZone(c.Zone, c.Value.AsInt32());
                 break;
+            case "scene":
+                ApplyScene(c.Scene, c.Value.AsBool());
+                break;
         }
         if (rebakeIfNeeded && c.Rebake) { _terrain.RebakeSplat(); }
     }
@@ -367,6 +385,38 @@ public partial class TerrainLabUI : Control
     {
         if (field == "MixScaleM") { _terrain.MixScaleM = v; }
         else if (field == "MixBias") { _terrain.MixBias = v; }
+    }
+
+    private void ApplyScene(string? target, bool on)
+    {
+        switch (target)
+        {
+            case "ssao":   GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SsaoEnabled = on; break;
+            case "fog":    GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.FogEnabled = on; break;
+            case "shadow": GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").ShadowEnabled = on; break;
+            case "sun":    GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").Visible = on; break;
+        }
+    }
+
+    /// Flat baseline: turn EVERY visual contributor off so the user can add them
+    /// back one at a time and find what causes the speckle. The plainest possible
+    /// render: albedo only, no normal maps, no specular, no macro/contact/splat,
+    /// no SSAO/shadow/fog/sun-shading effects.
+    private void FlatBaseline()
+    {
+        foreach (LabControl c in _controls)
+        {
+            if (c.Type == "toggle" || c.Type == "scene")
+            {
+                // turn OFF everything except 'sun' (keep some light so it's visible)
+                bool target = c.Scene == "sun";
+                SetWidgetValue(c, target);
+            }
+        }
+        // force matte (no specular) + no normal maps explicitly
+        if (_byId.TryGetValue("dbg_fullrough", out var fr)) { SetWidgetValue(fr, true); }
+        if (_byId.TryGetValue("dbg_normalmap", out var nm)) { SetWidgetValue(nm, false); }
+        GD.Print("TerrainLab: FLAT BASELINE — add contributors back one by one in Debug tab");
     }
 
     // ---- randomize / lock -----------------------------------------------------
@@ -519,6 +569,20 @@ public partial class TerrainLabUI : Control
                 cam.RotationDegrees = new Vector3(float.Parse(p[3]), float.Parse(p[4]), 0f);
             }
         }
+        // Lighting isolation probes (fuzz hunt).
+        if (_probeSsao >= 0)
+        {
+            var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
+            env.Environment.SsaoEnabled = _probeSsao == 1;
+        }
+        if (_probeShadow >= 0)
+        {
+            var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+            sun.ShadowEnabled = _probeShadow == 1;
+        }
+        if (_probeRoughFloor >= 0f) { _terrain.SetFloat("rough_floor", _probeRoughFloor); }
+        if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
+        if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
     }
     private void OverrideEnum(string id, int v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
     private void OverrideToggle(string id, bool v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
