@@ -124,18 +124,9 @@ uniform float heightblend_sharp : hint_range(0.1, 0.9) = 0.6;
 // zone d (live, no rebake). Defaults set from C# to the adjacent zone.
 uniform int sec_zone[7];
 
-// --- Cloud shadows (the "alive" multiplier) ---------------------------------
-// World-space FBM noise, scrolled with TIME, modulating the surface — drifting
-// cloud-shadow patches across the terrain. The single biggest low-cost "this is a
-// real place with weather" cue (Total War / HZD use the same idea). Procedural
-// FBM so it needs no texture asset. Darkens albedo (cheap; reads like a cloud
-// passing) rather than a full light() rewrite.
-uniform bool cloud_shadow_on = true;
-uniform float cloud_scale_m : hint_range(100.0, 2000.0) = 450.0;   // size of cloud patches (smaller = more patches in view)
-uniform float cloud_strength : hint_range(0.0, 1.0) = 0.5;        // how dark the shadows get
-uniform float cloud_cover : hint_range(0.1, 0.9) = 0.5;            // fraction in shadow (threshold)
-uniform float cloud_softness : hint_range(0.02, 0.5) = 0.22;       // edge softness
-uniform float cloud_speed : hint_range(0.0, 120.0) = 40.0;         // drift speed m/s (world)
+// (Cloud shadows were removed 2026-06-16 — kept reading as square artifacts across
+// 3 fix attempts; to be rebuilt fresh. Full impl on branch backup/clouds-system-2026-06-16.)
+
 // Zone-band transition width (was the fixed band_softness_m=120). Wider = more
 // gradual material boundaries. Live.
 uniform float band_soft_mult : hint_range(0.3, 3.0) = 1.4;
@@ -151,22 +142,6 @@ float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 float hash2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float vnoise(vec2 w,float wl){ vec2 p=w/wl; vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     return mix(mix(hash2(i),hash2(i+vec2(1,0)),f.x),mix(hash2(i+vec2(0,1)),hash2(i+vec2(1,1)),f.x),f.y); }
-
-// Cloud-shadow light factor at a world position (1 = full sun, <1 = in shadow).
-// 3-octave FBM in world XZ, scrolled by TIME; thresholded by cover with soft edges.
-float cloud_shadow(vec3 wp){
-    if(!cloud_shadow_on) return 1.0;
-    vec2 p = wp.xz + vec2(0.92, 0.39) * (cloud_speed * TIME);   // drift dir × speed
-    // 2-octave FBM, then EXPAND contrast: value noise clusters near 0.5, so without
-    // this the patches are too faint (the bug: factor stayed ~1 everywhere).
-    float n = vnoise(p, cloud_scale_m) * 0.65
-            + vnoise(p + vec2(91.0,17.0), cloud_scale_m*0.4) * 0.35;
-    n = clamp((n - 0.5) * 2.6 + 0.5, 0.0, 1.0);   // expand around mid → real contrast
-    // cloud_cover: higher = MORE ground in shadow. softness = edge width.
-    float shadow = smoothstep(1.0 - cloud_cover - cloud_softness,
-                              1.0 - cloud_cover + cloud_softness, n);
-    return 1.0 - shadow * cloud_strength;
-}
 
 // ============================================================================
 // TILING LAYER — break texture repetition while PRESERVING contrast.
@@ -497,9 +472,6 @@ void fragment(){
     // why max strength was barely visible). Ambient still fills, so shadows read
     // natural rather than black.
 
-    // Cloud-factor debug: splat_debug==3 shows the shadow factor as grayscale.
-    if (splat_debug == 3){ dbg = 1; dbg_col = vec3(cloud_shadow(wp)); }
-
     // splat debug view overrides the lit output (no early return — gdshader bans it).
     ALBEDO = (dbg==1) ? dbg_col : alb;
     ROUGHNESS = dbg_fullrough ? 1.0 : clamp(rgh, rough_floor, 1.0);
@@ -512,21 +484,5 @@ void fragment(){
         NORMAL=normalize((VIEW_MATRIX*vec4(nr,0.0)).xyz);
     }
 }
-
-// Custom lighting so cloud shadows attenuate the DIRECT (sun) light — the correct
-// place for them. ATTENUATION already carries the sun's shadow map; we multiply in
-// the drifting cloud factor. Ambient/GI is untouched (handled by the engine), so
-// shadowed ground stays naturally lit, not black. Standard Lambert diffuse +
-// simple energy-conserving specular so we don't lose the PBR look.
-void light() {
-    float cloud = cloud_shadow(v_world);   // v_world set in vertex(); varyings are valid in light()
-    float ndotl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
-    DIFFUSE_LIGHT += ndotl * ATTENUATION * cloud * LIGHT_COLOR * ALBEDO;
-    // cheap GGX-ish specular, also cloud- and shadow-attenuated
-    vec3 H = normalize(VIEW + LIGHT);
-    float ndoth = clamp(dot(NORMAL, H), 0.0, 1.0);
-    float rough = max(ROUGHNESS, 0.04);
-    float a = rough * rough;
-    float spec = pow(ndoth, max(2.0 / (a * a) - 2.0, 1.0)) * (1.0 - rough);
-    SPECULAR_LIGHT += spec * ndotl * ATTENUATION * cloud * LIGHT_COLOR * 0.25;
-}
+// (No custom light() — Godot's default PBR lighting handles the surface. A custom
+// light() existed only for cloud shadows, removed 2026-06-16.)
