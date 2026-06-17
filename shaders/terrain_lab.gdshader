@@ -124,8 +124,21 @@ uniform float heightblend_sharp : hint_range(0.1, 0.9) = 0.6;
 // zone d (live, no rebake). Defaults set from C# to the adjacent zone.
 uniform int sec_zone[7];
 
-// (Cloud shadows were removed 2026-06-16 — kept reading as square artifacts across
-// 3 fix attempts; to be rebuilt fresh. Full impl on branch backup/clouds-system-2026-06-16.)
+// --- Cloud shadows (fresh 2026-06-17) ----------------------------------------
+// A GPU-baked seamless cloud-coverage texture (CloudCompute), sampled in light()
+// in WORLD space, drifting via TIME, domain-warped to break the tile lattice. It
+// attenuates ONLY the direct sun term (diffuse+specular) — ambient/GI stay full,
+// so shadows read lit-but-sunless and GI can't wash them out (the old failure).
+// When cloud_enabled is false, light() reproduces the prior approved lighting.
+uniform sampler2D cloud_tex : filter_linear_mipmap, repeat_enable, hint_default_white;
+uniform bool cloud_enabled = true;
+uniform float cloud_strength : hint_range(0.0, 1.0) = 0.6;   // how dark the shadow
+uniform float cloud_coverage : hint_range(0.0, 1.0) = 0.5;   // how much sky is clouded
+uniform float cloud_softness : hint_range(0.01, 0.5) = 0.15; // shadow edge width
+uniform float cloud_scale_m : hint_range(200.0, 4000.0) = 1200.0; // patch size (m)
+uniform float cloud_drift_speed : hint_range(0.0, 0.02) = 0.004;
+uniform float cloud_drift_dir : hint_range(0.0, 360.0) = 45.0;    // degrees
+uniform float cloud_warp : hint_range(0.0, 1.0) = 0.4;       // domain-warp amount
 
 // Zone-band transition width (was the fixed band_softness_m=120). Wider = more
 // gradual material boundaries. Live.
@@ -467,10 +480,8 @@ void fragment(){
         rgh = mix(rgh, 0.6, dust);
     }
 
-    // Cloud shadows are applied in light() below (they must attenuate the SUN/direct
-    // light, not albedo — albedo-darkening gets washed out by ambient+SDFGI, which is
-    // why max strength was barely visible). Ambient still fills, so shadows read
-    // natural rather than black.
+    // Cloud shadows attenuate the SUN in light() below (not albedo — albedo-darken
+    // gets washed out by ambient+SDFGI). See the cloud uniforms above.
 
     // splat debug view overrides the lit output (no early return — gdshader bans it).
     ALBEDO = (dbg==1) ? dbg_col : alb;
@@ -484,5 +495,37 @@ void fragment(){
         NORMAL=normalize((VIEW_MATRIX*vec4(nr,0.0)).xyz);
     }
 }
-// (No custom light() — Godot's default PBR lighting handles the surface. A custom
-// light() existed only for cloud shadows, removed 2026-06-16.)
+// Cloud factor in [0,1]: 1 = full sun, 0 = fully shadowed. World-space so shadows
+// sit on the ground; TIME drift; domain warp breaks the tile lattice; mipmapped
+// sample avoids motion crawl. coverage slides clouded fraction, softness the edge.
+float cloud_sun_mul(vec3 wp){
+    if (!cloud_enabled) return 1.0;
+    float ang = radians(cloud_drift_dir);
+    vec2 dir = vec2(cos(ang), sin(ang));
+    vec2 uv = wp.xz / cloud_scale_m + TIME * cloud_drift_speed * dir;
+    // domain warp: large-scale coverage read offsets the lookup
+    float wsamp = texture(cloud_tex, uv * 0.35).r;
+    uv += cloud_warp * (wsamp - 0.5);
+    float c = texture(cloud_tex, uv).r;
+    float shadow = smoothstep(cloud_coverage - cloud_softness,
+                              cloud_coverage + cloud_softness, c);
+    return 1.0 - cloud_strength * (1.0 - shadow);
+}
+
+// Custom light(): the SAME lighting body that was part of the user-approved
+// "really good" look on backup/clouds-system-2026-06-16 (Lambert diffuse + GGX-ish
+// spec, ATTENUATION carries the sun shadow map). ONLY the cloud factor source is
+// fresh — the square came from the old noise, not from this lighting. With clouds
+// off, cloud_sun_mul()==1.0, so the term reduces to that approved lighting exactly.
+void light() {
+    float cloud = cloud_sun_mul(v_world);   // v_world from vertex(); varyings valid in light()
+    float ndotl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+    DIFFUSE_LIGHT += ndotl * ATTENUATION * cloud * LIGHT_COLOR * ALBEDO;
+    // cheap GGX-ish specular, also cloud- and shadow-attenuated
+    vec3 H = normalize(VIEW + LIGHT);
+    float ndoth = clamp(dot(NORMAL, H), 0.0, 1.0);
+    float rough = max(ROUGHNESS, 0.04);
+    float a = rough * rough;
+    float spec = pow(ndoth, max(2.0 / (a * a) - 2.0, 1.0)) * (1.0 - rough);
+    SPECULAR_LIGHT += spec * ndotl * ATTENUATION * cloud * LIGHT_COLOR * 0.25;
+}
