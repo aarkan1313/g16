@@ -17,8 +17,6 @@ public partial class TerrainLab : MeshInstance3D
     private const float AabbMarginM = 8f;
 
     private SplatCompute? _splat;
-    private CloudCompute? _cloud;
-    private const int CloudRes = 512;   // low-freq tiled texture; field-res is overkill
     // Splat bake params the UI can tweak before a rebake (Lever 1).
     public float MixScaleM = 26f, MixBias = 0.5f, EdgeNoiseM = 80f, EdgeNoiseAmp = 0.30f, MacroM = 480f;
     public int SplatMaskMode = 2;
@@ -50,7 +48,6 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter("heightmap", tex);
         _mat.SetShaderParameter("region_size", p.RegionSizeM);
         _mat.SetShaderParameter("texel_world", p.Spacing);
-        BakeClouds();
 
         _minBase = float.MaxValue; _maxBase = float.MinValue;
         for (int i = 0; i < heights.Length; i++) { _minBase = Mathf.Min(_minBase, heights[i]); _maxBase = Mathf.Max(_maxBase, heights[i]); }
@@ -83,17 +80,6 @@ public partial class TerrainLab : MeshInstance3D
         var tex = _splat.Bake(_heights, _res, sp);
         _mat.SetShaderParameter("splat_tex", tex);
         GD.Print($"TerrainLab: splat baked (mixScale {MixScaleM:F0}, bias {MixBias:F2}, mask {SplatMaskMode})");
-    }
-
-    /// Bake the seamless cloud-coverage texture once and bind it. Cheap (512²),
-    /// called on build; re-derivable, seeded for variety.
-    public void BakeClouds()
-    {
-        _cloud ??= new CloudCompute();
-        var cp = new CloudCompute.Params { Seed = 11.0f, Contrast = 0.28f, Gain = 0.55f };
-        var tex = _cloud.Bake(CloudRes, cp);
-        _mat.SetShaderParameter("cloud_tex", tex);
-        GD.Print("TerrainLab: cloud-coverage baked (512², seamless)");
     }
 
     /// Assign a material (by folder name under res://assets/materials/) to a zone 0..6.
@@ -129,5 +115,5 @@ public partial class TerrainLab : MeshInstance3D
         return ResourceLoader.Exists(alb) ? GD.Load<Texture2D>(alb) : null;
     }
 
-    public override void _ExitTree() { _splat?.Dispose(); _cloud?.Dispose(); }
+    public override void _ExitTree() => _splat?.Dispose();
 }

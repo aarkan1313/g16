@@ -1,7 +1,7 @@
 {
   "_comment": "Control registry for the terrain look lab. The UI, randomizer, and lock system are all built from this. type: slider|toggle|enum|material|companion. param = shader uniform (for slider/toggle/enum that map straight through). rand=false excludes from the randomizer. zone-indexed controls (material/companion) expand to 7 rows. Edit this to add/tune a control with no C# change.",
   "zone_names": ["valley", "valley→slope", "slope", "slope→cliff", "cliff", "high", "peak/snow"],
-  "tabs": ["Zones", "Surface", "Color", "Detail", "Splat", "Light", "Clouds", "Debug"],
+  "tabs": ["Zones", "Surface", "Color", "Detail", "Splat", "Light", "Debug"],
   "controls": [
     { "id": "zone_mat", "label": "zone", "tab": "Zones", "type": "material", "rand": true },
     { "id": "companion", "label": "companion", "tab": "Zones", "type": "companion", "rand": true,
@@ -79,23 +79,6 @@
     { "id": "volfog_on", "label": "volumetric fog", "tab": "Light", "type": "scene", "scene": "volfog", "default": true, "rand": false },
     { "id": "volfog_dens", "label": "vol fog amt", "tab": "Light", "type": "scenef", "scene": "volfog_d", "min": 0.0, "max": 0.06, "default": 0.012, "rand": false },
     { "id": "godray_e", "label": "godray power", "tab": "Light", "type": "scenef", "scene": "godray", "min": 0.0, "max": 8.0, "default": 1.5, "rand": false },
-
-    { "id": "cloud_enabled", "label": "clouds", "tab": "Clouds", "type": "toggle",
-      "param": "cloud_enabled", "default": true, "rand": false },
-    { "id": "cloud_strength", "label": "strength", "tab": "Clouds", "type": "slider",
-      "param": "cloud_strength", "min": 0, "max": 1, "default": 0.6, "rand": false },
-    { "id": "cloud_coverage", "label": "coverage", "tab": "Clouds", "type": "slider",
-      "param": "cloud_coverage", "min": 0, "max": 1, "default": 0.5, "rand": false },
-    { "id": "cloud_softness", "label": "softness", "tab": "Clouds", "type": "slider",
-      "param": "cloud_softness", "min": 0.01, "max": 0.5, "default": 0.15, "rand": false },
-    { "id": "cloud_scale_m", "label": "scale m", "tab": "Clouds", "type": "slider",
-      "param": "cloud_scale_m", "min": 200, "max": 4000, "default": 1200, "rand": false },
-    { "id": "cloud_drift_speed", "label": "drift speed", "tab": "Clouds", "type": "slider",
-      "param": "cloud_drift_speed", "min": 0, "max": 0.02, "default": 0.004, "rand": false },
-    { "id": "cloud_drift_dir", "label": "drift dir", "tab": "Clouds", "type": "slider",
-      "param": "cloud_drift_dir", "min": 0, "max": 360, "default": 45, "rand": false },
-    { "id": "cloud_warp", "label": "warp", "tab": "Clouds", "type": "slider",
-      "param": "cloud_warp", "min": 0, "max": 1, "default": 0.4, "rand": false },
 
     { "id": "dbg_normalmap", "label": "normal maps", "tab": "Debug", "type": "toggle",
       "param": "dbg_use_normalmap", "default": true, "rand": false },
