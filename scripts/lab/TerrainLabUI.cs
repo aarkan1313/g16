@@ -65,6 +65,12 @@ public partial class TerrainLabUI : Control
         _terrain = GetNode<TerrainLab>("/root/TerrainLabRoot/TerrainLab");
         _terrain.Build(_fc, _params);
 
+        // Cloud subsystem: create the node + add/attach DEFERRED — the tree is mid
+        // setup during _Ready ("parent busy setting up children"), so both the
+        // AddChild and the Attach must run after the current frame's setup.
+        _cloud = new CloudVolume { Name = "CloudVolume" };
+        CallDeferred(nameof(AttachClouds));
+
         ParseCli();
         LoadLibrary();
         LoadMoods();
@@ -78,6 +84,15 @@ public partial class TerrainLabUI : Control
         if (_probeMood < 0 && _moods.Count > 0) { ApplyDefaultMood(); }
         ApplyCliOverrides();
         _ready = true;
+    }
+
+    /// Deferred cloud wiring (see _Ready). Adds the CloudVolume node to the scene
+    /// root and attaches it to the Environment, now that tree setup has finished.
+    private void AttachClouds()
+    {
+        if (_cloud == null) { return; }
+        GetNode("/root/TerrainLabRoot").AddChild(_cloud);
+        _cloud.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment);
     }
 
     private const int DefaultMoodIdx = 5;   // "Clear Alpine" — clean neutral good-day look
@@ -108,6 +123,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--mixstr=")) { if (float.TryParse(a.Substring("--mixstr=".Length), out float ms)) _probeMixStr = ms; }
             else if (a.StartsWith("--hb=")) { _probeHb = a.Substring("--hb=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--mood=")) { int.TryParse(a.Substring("--mood=".Length), out _probeMood); }
+            else if (a.StartsWith("--clouddbg=")) { int.TryParse(a.Substring("--clouddbg=".Length), out _cloudDbg); }
         }
     }
 
@@ -827,7 +843,9 @@ public partial class TerrainLabUI : Control
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
+        if (_cloudDbg >= 0) { _cloud?.SetDebug(_cloudDbg); }
     }
+    private int _cloudDbg = -1;
     private void OverrideEnum(string id, int v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
     private void OverrideToggle(string id, bool v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
 
