@@ -6,6 +6,25 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-16 — FUZZINESS ROOT-CAUSED & FIXED: material textures imported WITHOUT
+mipmaps.** The long-running "fuzziness/speckle/grain" was NOT shader, lighting, splat,
+hex-tiling, height-blend, or specular — it was all 738 material textures (2,930 files
+incl. normal/rough/ao) imported with `mipmaps/generate=false`. No mips → minification
+aliasing → high-freq texture detail CRAWLS in motion (invisible in a still frame).
+This is why: it survived flat-baseline (raw texture read), survived splat on/off (both
+sample the same textures), was immune to every shader fix, and never showed in
+screenshots (it's a TEMPORAL artifact — needs motion). **Process lesson (again, the
+hard way): do not debug a motion artifact from stills.** Several wrong fixes were tried
+chasing a "splat off = smooth" conclusion drawn from stationary screenshots; the user
+flying it ("still there at flat baseline") forced the diagnosis to texture import,
+where `grep mipmaps/generate=false */*.import` found it instantly. Fix: flipped all
+import files to `mipmaps/generate=true` + re-imported (44s); user confirmed gone in
+motion. Made durable: `tools/copy_materials.py` now writes `.import` sidecars with
+mipmaps on (the texture lib is gitignored, so the fix lives in re-derivable import
+files — the tool is the source of truth). Also built a **Debug tab + FLAT BASELINE
+button** in the look lab (every visual contributor as an independent toggle) — the
+bisection harness that cracked this; keep it.
+
 **2026-06-16 — Look lab: added hex-tiling anti-tiling + sharpness controls; FUZZINESS
 not fully resolved (NOTED, deferred).** Root-caused the "fuzzy everywhere" as (a) the
 old 50/50 `mix(base,big,0.5)` anti-tile HALVING texture contrast (variance loss — see

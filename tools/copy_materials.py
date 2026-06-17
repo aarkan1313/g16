@@ -30,6 +30,30 @@ def find_map(folder, keys):
             return os.path.join(folder, f)
     return None
 
+def write_import(png_path):
+    """Write a .import sidecar with mipmaps ON. Godot otherwise auto-generates
+    these with mipmaps/generate=false, which makes terrain textures ALIAS under
+    minification -> crawling speckle/shimmer in motion (the 'fuzziness' bug). The
+    .ctex uid is filled in by Godot on --import; we only need to pin mipmaps on."""
+    imp = png_path + ".import"
+    if os.path.exists(imp):
+        # already exists (e.g. prior import): just ensure mipmaps on
+        with open(imp, "r", encoding="utf-8") as fh:
+            txt = fh.read()
+        if "mipmaps/generate=false" in txt:
+            txt = txt.replace("mipmaps/generate=false", "mipmaps/generate=true")
+            with open(imp, "w", encoding="utf-8") as fh:
+                fh.write(txt)
+        return
+    with open(imp, "w", encoding="utf-8") as fh:
+        fh.write(
+            '[remap]\n\n'
+            'importer="texture"\n'
+            'type="CompressedTexture2D"\n\n'
+            '[params]\n\n'
+            'mipmaps/generate=true\n'
+        )
+
 def dedup_key(name):
     n = name.lower()
     n = re.sub(r'_(seed|v|flux|h)\d.*', '', n)
@@ -58,12 +82,15 @@ def main():
             seen.add(key)
             out = os.path.join(DEST, key)
             os.makedirs(out, exist_ok=True)
-            shutil.copy(alb, os.path.join(out, "albedo.png"))
-            shutil.copy(nrm, os.path.join(out, "normal.png"))
+            alb_out = os.path.join(out, "albedo.png")
+            nrm_out = os.path.join(out, "normal.png")
+            shutil.copy(alb, alb_out); write_import(alb_out)
+            shutil.copy(nrm, nrm_out); write_import(nrm_out)
             for m in ("roughness", "ao"):
                 p = find_map(dirpath, MAPS[m])
                 if p:
-                    shutil.copy(p, os.path.join(out, m + ".png"))
+                    m_out = os.path.join(out, m + ".png")
+                    shutil.copy(p, m_out); write_import(m_out)
             count += 1
     print(f"copied {count} distinct materials to {os.path.abspath(DEST)}")
 
