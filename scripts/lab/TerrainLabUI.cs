@@ -242,12 +242,15 @@ public partial class TerrainLabUI : Control
         switch (c.Type)
         {
             case "slider":
+            case "scenef":
             {
+                // fine format for tiny ranges (e.g. fog density 0.0006)
+                string fmt = (c.Max - c.Min) < 0.05f ? "0.0000" : "0.00";
                 var sl = new HSlider { MinValue = c.Min, MaxValue = c.Max, Value = c.Default,
-                    Step = (c.Max - c.Min) / 200.0, CustomMinimumSize = new Vector2(160, 0) };
+                    Step = (c.Max - c.Min) / 400.0, CustomMinimumSize = new Vector2(160, 0) };
                 sl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-                var vlbl = new Label { Text = c.Default.ToString("0.00"), CustomMinimumSize = new Vector2(44, 0) };
-                sl.ValueChanged += v => { c.Value = (float)v; vlbl.Text = ((float)v).ToString("0.00"); if (_ready) ApplyControl(c, true); };
+                var vlbl = new Label { Text = c.Default.ToString(fmt), CustomMinimumSize = new Vector2(52, 0) };
+                sl.ValueChanged += v => { c.Value = (float)v; vlbl.Text = ((float)v).ToString(fmt); if (_ready) ApplyControl(c, true); };
                 c.Value = c.Default; c.Widget = sl; c.ValLabel = vlbl;
                 row.AddChild(sl); row.AddChild(vlbl);
                 break;
@@ -377,6 +380,9 @@ public partial class TerrainLabUI : Control
             case "scene":
                 ApplyScene(c.Scene, c.Value.AsBool());
                 break;
+            case "scenef":
+                ApplySceneFloat(c.Scene, c.Value.AsSingle());
+                break;
         }
         if (rebakeIfNeeded && c.Rebake) { _terrain.RebakeSplat(); }
     }
@@ -395,7 +401,34 @@ public partial class TerrainLabUI : Control
             case "fog":    GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.FogEnabled = on; break;
             case "shadow": GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").ShadowEnabled = on; break;
             case "sun":    GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").Visible = on; break;
+            case "sdfgi":  GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SdfgiEnabled = on; break;
         }
+    }
+
+    private float _sunAngle = 35f, _sunAzimuth = 40f;
+    private void ApplySceneFloat(string? target, float v)
+    {
+        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
+        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        switch (target)
+        {
+            case "sun_energy":      sun.LightEnergy = v; break;
+            case "sun_soft":        sun.ShadowBlur = v; sun.LightAngularDistance = Mathf.Max(v, 0.1f); break;
+            case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
+            case "sun_azimuth":     _sunAzimuth = v; OrientSun(sun); break;
+            case "ambient":         env.AmbientLightEnergy = v; break;
+            case "ssao_intensity":  env.SsaoIntensity = v; break;
+            case "ssao_radius":     env.SsaoRadius = v; break;
+            case "fog_density":     env.FogDensity = v; break;
+            case "fog_aerial":      env.FogAerialPerspective = v; break;
+            case "fog_heightd":     env.FogHeightDensity = v; break;
+            case "exposure":        env.TonemapExposure = v; break;
+        }
+    }
+    private void OrientSun(DirectionalLight3D sun)
+    {
+        // elevation from horizon + compass azimuth → a downward-pointing sun.
+        sun.RotationDegrees = new Vector3(-_sunAngle, _sunAzimuth, 0f);
     }
 
     /// Flat baseline: turn EVERY visual contributor off so the user can add them

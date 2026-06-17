@@ -1,7 +1,7 @@
 {
   "_comment": "Control registry for the terrain look lab. The UI, randomizer, and lock system are all built from this. type: slider|toggle|enum|material|companion. param = shader uniform (for slider/toggle/enum that map straight through). rand=false excludes from the randomizer. zone-indexed controls (material/companion) expand to 7 rows. Edit this to add/tune a control with no C# change.",
   "zone_names": ["valley", "valley→slope", "slope", "slope→cliff", "cliff", "high", "peak/snow"],
-  "tabs": ["Zones", "Surface", "Color", "Detail", "Splat", "Debug"],
+  "tabs": ["Zones", "Surface", "Color", "Detail", "Splat", "Light", "Debug"],
   "controls": [
     { "id": "zone_mat", "label": "zone", "tab": "Zones", "type": "material", "rand": true },
     { "id": "companion", "label": "companion", "tab": "Zones", "type": "companion", "rand": true,
@@ -62,6 +62,19 @@
       "field": "MixBias", "min": 0.1, "max": 0.9, "default": 0.5, "rand": true, "rebake": true },
     { "id": "splat_debug", "label": "splat debug", "tab": "Splat", "type": "enum", "param": "splat_debug",
       "options": ["off", "zones", "mix amt"], "default": 0, "rand": false },
+
+    { "id": "sun_energy", "label": "sun energy", "tab": "Light", "type": "scenef", "scene": "sun_energy", "min": 0.0, "max": 3.0, "default": 1.3, "rand": false },
+    { "id": "sun_angle", "label": "sun height", "tab": "Light", "type": "scenef", "scene": "sun_angle", "min": 2.0, "max": 80.0, "default": 35.0, "rand": false },
+    { "id": "sun_azimuth", "label": "sun dir", "tab": "Light", "type": "scenef", "scene": "sun_azimuth", "min": 0.0, "max": 360.0, "default": 40.0, "rand": false },
+    { "id": "sun_soft", "label": "shadow soft", "tab": "Light", "type": "scenef", "scene": "sun_soft", "min": 0.0, "max": 5.0, "default": 1.0, "rand": false },
+    { "id": "ambient_e", "label": "sky ambient", "tab": "Light", "type": "scenef", "scene": "ambient", "min": 0.0, "max": 1.5, "default": 0.4, "rand": false },
+    { "id": "ssao_i", "label": "AO strength", "tab": "Light", "type": "scenef", "scene": "ssao_intensity", "min": 0.0, "max": 4.0, "default": 2.0, "rand": false },
+    { "id": "ssao_r", "label": "AO radius m", "tab": "Light", "type": "scenef", "scene": "ssao_radius", "min": 0.5, "max": 30.0, "default": 8.0, "rand": false },
+    { "id": "fog_d", "label": "fog density", "tab": "Light", "type": "scenef", "scene": "fog_density", "min": 0.0, "max": 0.003, "default": 0.0006, "rand": false },
+    { "id": "fog_aerial", "label": "aerial persp", "tab": "Light", "type": "scenef", "scene": "fog_aerial", "min": 0.0, "max": 1.0, "default": 0.85, "rand": false },
+    { "id": "fog_heightd", "label": "valley fog", "tab": "Light", "type": "scenef", "scene": "fog_heightd", "min": 0.0, "max": 0.2, "default": 0.04, "rand": false },
+    { "id": "exposure", "label": "exposure", "tab": "Light", "type": "scenef", "scene": "exposure", "min": 0.3, "max": 2.5, "default": 1.0, "rand": false },
+    { "id": "sdfgi_on", "label": "GI (SDFGI)", "tab": "Light", "type": "scene", "scene": "sdfgi", "default": true, "rand": false },
 
     { "id": "dbg_normalmap", "label": "normal maps", "tab": "Debug", "type": "toggle",
       "param": "dbg_use_normalmap", "default": true, "rand": false },
