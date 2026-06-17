@@ -498,12 +498,21 @@ public partial class TerrainLabUI : Control
         env.FogAerialPerspective = F(m, "fog_aerial", 0.85f);
         env.FogHeight = F(m, "fog_height", -200f);
         env.FogHeightDensity = F(m, "fog_heightd", 0.04f);
-        env.FogSunScatter = F(m, "fog_sun_scatter", 0.2f);
+        // sun_scatter makes fog glow toward the sun; high values add to the bright
+        // wash around an in-frame sun, so keep it gentle.
+        env.FogSunScatter = F(m, "fog_sun_scatter", 0.2f) * 0.4f;
 
         env.TonemapExposure = F(m, "exposure", 1.0f);
         env.TonemapWhite = F(m, "white", 6.0f);
+        // Glow: keep it a subtle highlight sheen, NOT a sky-wide wash. The over-
+        // bright halo around the sun was bloom catching the whole HDR sky — raise the
+        // HDR threshold so ONLY the sun disc (very bright) blooms, kill constant bloom.
         env.GlowEnabled = true;
-        env.GlowIntensity = F(m, "glow", 0.3f) * 0.5f;   // tame bloom (was over-blooming the bright sky)
+        env.GlowNormalized = true;
+        env.GlowHdrThreshold = 1.6f;
+        env.GlowBloom = 0.0f;
+        env.GlowIntensity = F(m, "glow", 0.3f) * 0.35f;
+        env.SetGlowLevel(4, 0.0f); env.SetGlowLevel(5, 0.0f); env.SetGlowLevel(6, 0.0f); // no huge-radius spread
 
         SyncLightControlsToScene();   // make the Light-tab sliders reflect the mood
         GD.Print($"TerrainLab: mood -> {_moodNames[idx]}");
