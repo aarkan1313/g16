@@ -146,7 +146,10 @@ void main(){
         float cosA = dot(rd, L);
         float phase = mix(hg(cosA, P.hg_aniso), hg(cosA, -0.2), 0.3);
         vec3 sunCol = P.sun_color.rgb * P.sun_dir.w;
-        vec3 ambient = mix(vec3(0.4, 0.45, 0.55), vec3(0.9, 0.93, 1.0), 0.5);
+        // Ambient/sky fill from the MOOD sky colors (passed in): top-of-sky tint blends
+        // toward the warmer horizon near the bottom of the cloud. So golden-hour gives
+        // warm fill, overcast grey, blue-dawn cool — clouds track the mood automatically.
+        vec3 skyAmbient = mix(P.sky_horizon.rgb, P.sky_top.rgb, clamp(rd.y, 0.0, 1.0));
 
         float T = 1.0;
         vec3 scattered = vec3(0.0);
@@ -160,7 +163,7 @@ void main(){
                 float sigma = dens * 0.02 * P.opacity;
                 float beer = exp(-sigma * dt);
                 float sun = lightT * (phase + 0.4);
-                vec3 lum = (sunCol * sun + ambient * P.ambient) * P.brightness;
+                vec3 lum = (sunCol * sun + skyAmbient * P.ambient) * P.brightness;
                 lum *= powder;
                 scattered += T * lum * (1.0 - beer);
                 T *= beer;

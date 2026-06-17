@@ -32,6 +32,9 @@ public partial class CloudVolume : Node
     private Vector3 _sunDir = new Vector3(0.5f, 0.6f, 0.4f).Normalized();
     private Color _sunColor = new Color(1f, 0.95f, 0.85f);
     private float _sunEnergy = 1.3f;
+    // mood sky colors → cloud ambient/background (set by TerrainLabUI.ApplyMood)
+    private Color _skyTop = new Color(0.30f, 0.48f, 0.74f);
+    private Color _skyHorizon = new Color(0.68f, 0.74f, 0.80f);
 
     // render-thread compute resources (created in InitCompute on the render thread)
     private RenderingDevice _rd = null!;
@@ -252,8 +255,8 @@ public partial class CloudVolume : Node
         Vector3 sun = _sunDir; Color sc = _sunColor;
         F(sun.X); F(sun.Y); F(sun.Z); F(_sunEnergy);
         F(sc.R); F(sc.G); F(sc.B); F(0f);
-        F(0.30f); F(0.48f); F(0.74f); F(0f);
-        F(0.68f); F(0.74f); F(0.80f); F(0f);
+        F(_skyTop.R); F(_skyTop.G); F(_skyTop.B); F(0f);              // sky_top (mood)
+        F(_skyHorizon.R); F(_skyHorizon.G); F(_skyHorizon.B); F(0f);  // sky_horizon (mood)
         F(TexW); F(TexH);
         F(offset); F(stride);
         F(time);
@@ -267,6 +270,16 @@ public partial class CloudVolume : Node
     }
 
     public void SetSun(Vector3 dir, Color color, float energy) { _sunDir = dir.Normalized(); _sunColor = color; _sunEnergy = energy; }
+
+    /// Mood sky colors → cloud ambient/scatter (compute) + the sky-shader background
+    /// gradient, so clouds + the sky behind them track the chosen mood/time-of-day.
+    public void SetSkyColors(Color top, Color horizon, Color ground)
+    {
+        _skyTop = top; _skyHorizon = horizon;
+        _skyMat?.SetShaderParameter("sky_top", top);
+        _skyMat?.SetShaderParameter("sky_horizon", horizon);
+        _skyMat?.SetShaderParameter("ground_color", ground);
+    }
 
     public CloudParams Params => _p;
     public bool Enabled => _enabled;

@@ -698,6 +698,15 @@ public partial class TerrainLabUI : Control
             if (m.ContainsKey("sky_horizon")) { sky.SkyHorizonColor = Col(m["sky_horizon"]); sky.GroundHorizonColor = Col(m["sky_horizon"]); }
             if (m.ContainsKey("sky_ground")) { sky.GroundBottomColor = Col(m["sky_ground"]); }
         }
+        // Our cloud sky is a ShaderMaterial (not ProceduralSkyMaterial), so feed the
+        // mood sky colors to CloudVolume → clouds + their sky track the mood.
+        if (_cloud != null)
+        {
+            Color top = m.ContainsKey("sky_top") ? Col(m["sky_top"]) : new Color(0.30f, 0.48f, 0.74f);
+            Color hor = m.ContainsKey("sky_horizon") ? Col(m["sky_horizon"]) : new Color(0.68f, 0.74f, 0.80f);
+            Color grd = m.ContainsKey("sky_ground") ? Col(m["sky_ground"]) : new Color(0.22f, 0.26f, 0.22f);
+            _cloud.SetSkyColors(top, hor, grd);
+        }
 
         // Fog: the mood JSON values were authored too thick (washed the terrain into
         // haze). Scale WAY down — fog should be a light distance cue, not a blanket.
