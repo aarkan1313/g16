@@ -1,6 +1,6 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-16. **Refresh the Current State block at the end of each session.**
+Last updated: 2026-06-16 (late — lighting/moods done, clouds cut). **Refresh the Current State block at the end of each session.**
 
 This doc is written so a fresh chat with zero context can get productive immediately.
 
@@ -68,38 +68,58 @@ Run a scene (always `--rendering-driver vulkan`):
 | Scene | What it is | Key controls |
 |-------|-----------|--------------|
 | `scenes/lab.tscn` | The plain base-field lab (clean baseline look) | 0–5 layer views · R reseed · G walk · P polish · F12 shot |
-| `scenes/terrain_lab.tscn` | **The look lab (active work).** Same base field + on-screen panel | dropdowns: 7 zone materials · mask mode · blend mode · preset save/load · RMB+WASD fly |
+| `scenes/terrain_lab.tscn` | **The look lab (active work).** Base field + a big data-driven panel | Tabs: Zones · Surface · Color · Detail · Splat · **Light** · Debug + Presets. Randomize/Lock, FLAT BASELINE, MOOD presets, hero shots. RMB/LMB+WASD fly |
 | `scenes/material_board.tscn` | The material JUDGING loop (already used) | 1 = pass · 3 = fail · ← undo · RMB+WASD inspect |
 | `scenes/lab_experiment.tscn` | Sandbox copy of the base lab (scratch) | same as lab.tscn |
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-16)
-> **Status:** base field done (proven, no bake). Texturing is the active lane, via a
-> **look lab that is BUILT but NOT YET FLOWN by the user.**
+> ### ⮕ START HERE (2026-06-16, late)
+> **Status:** base field proven (no bake). The **look lab is built, flown, and the user
+> says the look is "really good."** Texturing + lighting are both substantially done.
+> The active question is pushing "really good → great" via the remaining levers.
 >
-> **The texturing story so far:**
-> - Porting WG15's splat shader failed at eye level (blocky border-jitter + screen-space
->   grain). Reverted to the clean height/slope color ramp. Kept MSAA.
-> - Found a huge PBR material library under `D:\assets` (~1,015 folders, **738 distinct**
->   after collapsing seed/variant copies). Built a **judging loop** and the user judged all
->   738: **108 accepted** (recorded in `data/material_verdicts.json` →
->   `data/material_library.json`). The keepers are heavily alpine/volcanic/tundra/rock,
->   which fits the mountainous terrain.
-> - **Lesson:** most library textures are AI-generated with stamped flora (leaves/ferns)
->   that tiles badly. Keep surface-only ground materials. **Flora is a FUTURE procedural
->   decoration pass — never bake it into ground textures.**
+> **What the look lab now is (`scenes/terrain_lab.tscn`):** a full **data-driven** art-
+> direction tool, not a slider farm. Every control is defined in `data/lab_controls.json`
+> and built into a **TabContainer** (Zones · Surface · Color · Detail · Splat · Light ·
+> Debug) + Presets. Has: **Randomize / Lock** (per-control), **FLAT BASELINE** (turns
+> every visual contributor off to bisect artifacts), **MOOD presets** (Light tab — pick a
+> vibe), **hero shots** (camera save/load), preset save/load.
 >
-> **Ready to fly:** `scenes/terrain_lab.tscn` — 7 zone materials (valley→peak), 6 mask
-> modes (height / height+slope / noise-broken / curvature / steep-cliff / noise-biome),
-> 5 blend modes (flat → full-stack PBR), preset save/load. Presets are the embryo of the
-> biome system. Compiles clean, imported.
+> **The surface (shaders/terrain_lab.gdshader):** 7 height/slope zones; a **GPU-baked
+> splat mask** (`SplatCompute.cs` + `splat_weights.glsl`) blending a dominant+secondary
+> material per spot; **per-zone companion** dropdowns; **height-blend** transitions;
+> macro color; contact/crevice shading; anti-tiling (IQ/hex — but **hex caused tile-seam
+> squares; default is IQ**). Mipmaps fixed (see below). Splat path uses smooth plain
+> triplanar (~18 samples) after a lag/fuzz fight.
 >
-> **NEXT ACTION:** launch the look lab with the user, explore material/mask/blend combos,
-> save good ones as presets (= biomes). If the user wants more variety, add mask/shader
-> modes — each is one `case` in `shaders/terrain_lab.gdshader` (`zone_weights` for masks,
-> the `blend_mode` branches for shading). The base field is settled; don't touch it unless
-> asked.
+> **The lighting (scene + `data/lighting_moods.json`):** soft sun shadows, SDFGI+SSIL GI,
+> large-radius SSAO, aerial-perspective + height fog, **AgX tonemap**, built-in color
+> grade. 6 curated **mood presets** (golden hour / overcast / midday / blue dawn / storm /
+> alpine), each a complete coordinated look. A **default mood is applied on spawn** so
+> startup == picking a preset. Sun disc size + shadow softness are decoupled + tunable.
+>
+> **Two big lessons banked this session (don't relearn the hard way):**
+> 1. **The long "fuzziness" was textures imported WITHOUT mipmaps** → minification
+>    aliasing that only shows in MOTION (invisible in stills). Fixed: all `.import` set
+>    `mipmaps/generate=true`; `tools/copy_materials.py` now writes them so it can't recur.
+>    **Never debug a motion artifact from a screenshot — fly it / get the user to judge.**
+> 2. **Cloud shadows were CUT** — kept reading as square artifacts across 3 fix attempts.
+>    Removed (reverted to Godot default lighting). Full impl preserved on tag
+>    `backup-before-cloud-removal-2026-06-16` / branch `backup/clouds-system-2026-06-16`.
+>    **To be rebuilt FRESH in a new session** (the user's call).
+>
+> **NEXT ACTIONS (pick with the user):**
+> - **Rebuild cloud shadows fresh** (the immediate ask). The square came from value-noise
+>   patches + GI washing out albedo-darkening; a fresh attempt should (a) use a real
+>   texture or better noise, (b) attenuate the sun not albedo, (c) be judged in MOTION
+>   early. Backup branch has the prior (flawed) version for reference, not reuse.
+> - **Save biome presets** — bundle a favorite mood + materials + tuning into named
+>   "biomes" (the original goal; preset save/load exists, may want to also snapshot mood).
+> - **The remaining "great" levers** (researched, not built): a climate/moisture field
+>   driving material+color+wetness together; erosion masks (flow/curvature/aspect);
+>   real silhouette geometry (Godot has NO tessellation — scatter rock meshes); more
+>   composition tooling. The base field is settled; don't touch its math unless asked.
 
 ## 7. The material library (gitignored — 2.5 GB)
 
@@ -119,4 +139,7 @@ python tools/copy_materials.py
 - Branches: `main` = clean M1 baseline · `experiment/presentation` = current work (HEAD here).
 - Remote: `https://github.com/aarkan1313/g16.git` (`main` pushed; push others if asked).
 - Gitignored: `assets/materials/` (2.5 GB), `.godot/`, build output.
-- Latest commit: `b9e4e20` — "Material judging pipeline + terrain look lab".
+- **Backup of the removed cloud system:** tag `backup-before-cloud-removal-2026-06-16`
+  and branch `backup/clouds-system-2026-06-16` (full working impl, for a fresh rebuild).
+- Latest commit at last handoff: `0c39c2d` — "Remove cloud-shadow system…". Many commits
+  this session (lighting/moods/AgX, mipmap fix, data-driven panel, cleanup) — `git log`.

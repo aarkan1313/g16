@@ -62,23 +62,36 @@ Three units, ~910 lines. No bake stage.
 - `scenes/lab.tscn` — the scene wiring the three together.
 - **Depends on:** Field + Presenter.
 
-### Lab — texturing/material exploration (C# + a big shader)
-- `scripts/lab/TerrainLab.cs` — presenter for the look lab: same base field,
-  displaced plane, applies 7 zone materials + mask/blend mode.
-- `scripts/lab/TerrainLabUI.cs` — on-screen panel: per-zone material dropdowns,
-  mask selector, blend selector, preset save/load.
-- `shaders/terrain_lab.gdshader` — 7-zone PBR terrain shader; swappable mask
-  modes (6) and blend modes (5); triplanar + anti-tiling + macro-tint.
-- `scenes/terrain_lab.tscn` — the look lab.
-- `scripts/board/MaterialBoard.cs` + `shaders/material_board.gdshader` +
-  `scenes/material_board.tscn` — the material JUDGING loop (1=pass/3=fail,
-  full-stack PBR, persists verdicts). Used to cull 738 → 108.
+### Lab — texturing/material/lighting exploration (C# + a big shader + a compute pass)
+The active workbench. A **data-driven** art-direction tool.
+- `scripts/lab/TerrainLab.cs` — presenter: base field on a displaced plane; applies
+  zone materials, per-zone companions, mask/blend, and owns the splat bake.
+- `scripts/lab/TerrainLabUI.cs` — the panel, built entirely from a registry:
+  TabContainer (Zones/Surface/Color/Detail/Splat/Light/Debug) + Presets; Randomize/
+  Lock per control; FLAT BASELINE (artifact bisection); MOOD presets; hero-shot
+  camera save/load. Also drives the scene Environment/Sun (lighting) live.
+- `scripts/lab/SplatCompute.cs` + `shaders/splat_weights.glsl` — **GPU-compute splat
+  bake**: per-texel mask (dominant/secondary zone + mix + boundary) from the
+  heightfield. Mirrors FieldCompute's local-RD + readback → ImageTexture pattern.
+- `shaders/terrain_lab.gdshader` — the terrain shader: 7 zones, splat dom+secondary
+  mixing, height-blend transitions, triplanar + anti-tiling (IQ default; hex caused
+  tile-seam squares), macro color, contact/crevice shading. Uses Godot default
+  lighting (a custom light() existed only for the now-removed cloud shadows).
+- `scenes/terrain_lab.tscn` — the look lab scene: WorldEnvironment (AgX tonemap,
+  SDFGI/SSIL, SSAO, aerial+height fog, color grade), soft-shadow Sun, fly camera.
+- `scripts/board/*` + `shaders/material_board.gdshader` + `scenes/material_board.tscn`
+  — the material JUDGING loop (1=pass/3=fail). Used to cull 738 → 108.
 
 ### Data (hot-reloadable, never literals in code)
 - `data/field_params.json` — field knobs.
-- `data/presentation_params.json` — sun/fog/walk knobs.
+- `data/presentation_params.json` — sun/fog/walk knobs (base lab).
 - `data/material_verdicts.json` — pass/fail/dropped verdict per judged material.
 - `data/material_library.json` — the 108 accepted materials (derived from verdicts).
+- `data/lab_controls.json` — **the look-lab control registry** (every UI control:
+  id/label/tab/type/range/default + shader param / mode-setter / scene target).
+  Add or retune a control by editing this — no C# change.
+- `data/lighting_moods.json` — the 6 curated lighting **mood presets** (each a full
+  coordinated sun+sky+fog+exposure+grade look).
 
 ### Material texture library (gitignored — 2.5 GB)
 - `assets/materials/<name>/{albedo,normal,roughness,ao}.png` — 738 distinct PBR

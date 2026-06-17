@@ -6,6 +6,38 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-16 — Cloud shadows CUT (to be rebuilt fresh).** Built a procedural cloud-
+shadow system (drifting world-space FBM attenuating the sun via a custom `light()`),
+but it persistently read as **square artifacts** to the user across 3 fix rounds
+(wavelength too large → uniform-not-patchy; value-noise low contrast; albedo-darken
+washed out by GI → moved to `light()`). Couldn't reproduce the square reliably in
+headless captures. Per "spike cheap, judge live; the eye is the gate" + the 3-failed-
+fixes rule, we removed the whole system rather than keep patching, and reverted to
+Godot's default lighting (no custom `light()`). **The full impl is preserved on tag
+`backup-before-cloud-removal-2026-06-16` and branch `backup/clouds-system-2026-06-16`**
+for a fresh rebuild later. Everything else from the lighting arc stays.
+
+**2026-06-16 — LIGHTING/ATMOSPHERE pass + curated MOOD presets = the big "good→great"
+lever.** After the user judged randomizing material/mask knobs never produced a
+standout ("30 randoms, nothing amazing"), deep research converged: greatness lives in
+LIGHTING/ATMOSPHERE + a structured climate field + erosion masks + COMPOSITION — not
+more material knobs; and curated rules beat raw randomization. Did the cheapest-highest-
+impact piece first (scene-only, zero shader risk): soft sun shadows, SDFGI+SSIL GI,
+large-radius SSAO, aerial-perspective + height fog, **AgX tonemap** (handles bright
+outdoor highlights gracefully, fixed the "too bright/blown-out sun" — better than
+Filmic/ACES), built-in color-grade adjustments. Then **6 curated lighting MOOD presets**
+(`data/lighting_moods.json` → golden hour / overcast / midday / blue dawn / storm /
+alpine), each a complete coordinated look (sun+sky+fog+exposure+grade) — user picks a
+*vibe*, not numbers. **User verdict: "really good."** Key fixes along the way: tamed an
+overbearing sun (shrink sky sun disc + decouple soft-shadow from disc size via pinned
+`light_angular_distance`, raise glow HDR threshold so only the sun blooms not the whole
+sky); over-applied atmosphere once ("can't see anything" — pulled volumetric fog OFF by
+default, fog density ~4× down); fixed "spawn ≠ preset" (apply a default mood on startup;
+startup was using raw .tscn env). New live **Light tab** + **Debug tab** (FLAT BASELINE
+bisection) + **hero-shot** camera save/load (composition lever). The look lab is now an
+art-direction tool, not a slider farm. NOT done yet (the remaining "great" levers):
+climate/moisture field, erosion masks, real silhouette geometry, composition tooling.
+
 **2026-06-16 — FUZZINESS ROOT-CAUSED & FIXED: material textures imported WITHOUT
 mipmaps.** The long-running "fuzziness/speckle/grain" was NOT shader, lighting, splat,
 hex-tiling, height-blend, or specular — it was all 738 material textures (2,930 files
