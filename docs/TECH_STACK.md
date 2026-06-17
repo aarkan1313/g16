@@ -90,6 +90,13 @@ The active workbench. A **data-driven** art-direction tool.
   - `shaders/cloud_shadow.glsl` — same density field, top-down sun-march → 2D shadow map.
   - `shaders/cloud_sky.gdshader` — sky shader, samples the cloud texture by EYEDIR.
   - `data/cloud_presets.json` — named sky looks (Clear…Stormy).
+  - **Cloud PRESENCE (clouds affect the scene, 2026-06-17):** `CloudWeather.Mean` +
+    `CloudVolume.Overcast()` = CPU coverage scalar (no readback) driving overcast
+    sun/ambient dimming + aerial-perspective fog tint (in `TerrainLabUI.UpdateOvercast`);
+    mood sky colors feed cloud scatter + sky gradient (`CloudVolume.SetSkyColors`); clouds
+    reach reflections/GI via the sky radiance cubemap (`roughness_layers=7`); god rays via
+    `shaders/cloud_godray_fog.gdshader` on a `FogVolume` gated by the cloud-shadow map
+    (default OFF, needs live tuning).
 - `scenes/terrain_lab.tscn` — the look lab scene: WorldEnvironment (AgX tonemap,
   SDFGI/SSIL, SSAO, aerial+height fog, color grade), soft-shadow Sun, fly camera.
   (Cloud sky + shadow are installed at runtime by CloudVolume, not baked into the .tscn.)

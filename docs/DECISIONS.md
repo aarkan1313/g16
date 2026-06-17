@@ -19,8 +19,14 @@ coverage rises, from the mood base → heavy cover reads as flat overcast (A/B v
 **(4) Aerial perspective:** `FogLightColor` blended toward the cloud horizon color, stronger
 under overcast. **(5) Reflections/GI:** the cloud Sky already feeds Godot's sky-radiance →
 ambient/SDFGI/reflections (that's why overcast works); set `roughness_layers=7`. **(6) God
-rays:** PENDING research (method choice drives cost). New CLI: `--coverage`, `--mood` (was
-there), `--profile`. Outstanding: user live-judge of the coordinated look + god rays.
+rays:** research chose the user-picked "gap-aligned" path — a `FogVolume`
+(`cloud_godray_fog.gdshader`) whose density is gated by the cloud-shadow map so sun
+scatters through cloud GAPS; coverage drives the sun's volumetric scatter energy (bell
+curve, peaks at broken cloud). **Built + wired but DEFAULT OFF** (Clouds-tab toggle + env
+volumetric fog only enabled when on): first-pass fog density/energy darkens the scene and
+volumetric-fog look can't be tuned from stills — needs live judgment, so it's gated rather
+than risk the approved look. New CLI: `--coverage`, `--godrays`, `--profile`. Outstanding:
+user live-judge of the coordinated look + enable/tune god rays.
 
 **2026-06-17 — VOLUMETRIC CLOUDS + matched ground shadows (the fresh rebuild).** After
 the ground-only cloud-shadow retry still read wrong ("a waste without a cloud up there"),

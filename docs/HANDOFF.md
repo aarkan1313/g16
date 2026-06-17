@@ -133,11 +133,21 @@ Run a scene (always `--rendering-driver vulkan`):
 > 4. The earlier cloud-cut / ground-only-shadow approaches are superseded by the
 >    volumetric system. Old impls: branch `backup/clouds-system-2026-06-16`.
 >
+> **CLOUD PRESENCE suite (2026-06-17, after the cloud build):** clouds now affect the whole
+> scene, all ~free (full suite 140 fps vs 139 clouds-only). Built + verified mechanically:
+> mood/time-of-day cloud color (warm golden / grey storm), CPU coverage scalar
+> (`CloudVolume.Overcast()`), overcast dims ambient+sun, aerial-perspective tinted to cloud
+> sky, clouds in reflections/GI (sky radiance + `roughness_layers=7`). **God rays** built
+> (gap-aligned FogVolume gated by the cloud-shadow map) but **DEFAULT OFF** — first-pass fog
+> darkens the scene; needs live tuning (toggle "god rays (live-tune)" in Clouds tab). See
+> memory `cloud-presence-research` + DECISIONS 2026-06-17.
+>
 > **NEXT ACTIONS (pick with the user):**
-> - **Fly the clouds + shadows live** — the outstanding gate. Confirm shadows align under
->   their clouds and read well in motion; tune coverage/density/look + ground-shadow knobs;
->   confirm perf on the real machine. If shadows look offset/wrong, the sun-march mapping
->   in `cloud_shadow.glsl` is where to look.
+> - **Fly EVERYTHING live** — the big outstanding gate (user couldn't review this session).
+>   Judge: shadow alignment under clouds; the coordinated mood look (warm clouds + overcast
+>   + aerial together); then **enable + tune god rays** (Clouds tab toggle; tune fog density/
+>   `LightVolumetricFogEnergy`/the gap bias in `cloud_godray_fog.gdshader` — currently
+>   darkens the scene, needs your eye). Shadow offset? → `cloud_shadow.glsl` sun-march map.
 > - **Snapshot clouds into mood presets** so each lighting mood gets a matching skyscape.
 > - **Save biome presets** (the original goal; preset save/load exists, may snapshot mood+
 >   clouds too).
