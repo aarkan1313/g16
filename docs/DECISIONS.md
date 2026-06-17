@@ -6,6 +6,26 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-17 — GROUND TEXTURING rebuild started (it's "functional but bad").** User
+verdict (live): the ground reads repetitive + flat + muddy-blended + drab at ALL ranges,
+and swapping/randomizing materials doesn't help → the **application/presentation layer was
+never built out or validated** (the materials are fine — usage is the problem). Root cause
+confirmed in code: the DEFAULT splat path (`tp_alb/tp_nrm/tp_rgh`) used plain `textureGrad`
+with **zero anti-tiling** (the IQ/hex `tiled()` only fed the off-by-default non-splat path).
+Decided (per pillars: everything an AAA terrain has, done right) to rebuild the whole
+ground-presentation layer as a **6-unit arc** with shared shader seams — spec:
+`docs/superpowers/specs/2026-06-17-ground-presentation-arc-design.md`. Units, build order
+by impact: **(1) anti-repetition** (stochastic texture bombing — BUILT, `ar_sample_wp`, the
+single material-fetch seam; awaiting live verify — it's the gate for 2-6) → **(2) distance
+detail** (near detail ⊕ far macro by `distanceWeight`) → **(3) surface depth** (parallax-
+occlusion, no tessellation in Godot; + bind AO, make normal/rough drive BRDF) → **(4)
+procedural breakup** (GPU-compute bake of slope/curv/cavity/aspect masks → vary material per
+context; the prime GPU-compute unit) → **(5) color/value** (replace washed macro tint, tuned
+to survive GI+AgX) → **(6) "and more"** (scatter hooks/wetness/snow-by-aspect/hi-Q triplanar,
+last). Units 2-6 are PLANNED (one plan each in docs/superpowers/plans/), not built. Shared
+seams locked: `ar_sample_wp` (fetch), `distanceWeight` (LOD), `groundData`/`breakup_tex`
+(baked masks, Unit 4). C# + GPU-compute focus throughout.
+
 **2026-06-17 — Cloud system AUDITED + fixed (read-only audit → 8 real findings fixed).**
 A skeptical read-only audit of the cloud + presence work found 8 valid issues (verified
 against code, not taken on faith). Fixed per pillars: **H1** the custom terrain `light()`
