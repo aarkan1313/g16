@@ -56,7 +56,7 @@ public record CloudParams(
         Opacity: 1.0f,
         Brightness: 1.0f,
         Ambient: 0.7f,
-        RaymarchSteps: 96,
+        RaymarchSteps: 128,
         UpdateResScale: 1.0f,   // Stage 3 is full-res; Stage 4 lowers this
         TemporalFrames: 1);     // Stage 3 updates every frame; Stage 4 raises this
 

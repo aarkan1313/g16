@@ -17,7 +17,8 @@
   "opacity": 1.0,
   "brightness": 1.0,
   "ambient": 0.7,
-  "raymarch_steps": 96,
+  "raymarch_steps": 128,
   "update_res_scale": 1.0,
   "temporal_frames": 1
+}
 }

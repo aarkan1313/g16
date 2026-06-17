@@ -94,6 +94,10 @@ public partial class TerrainLabUI : Control
         GetNode("/root/TerrainLabRoot").AddChild(_cloud);
         _cloud.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
                       GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
+        // cloud CLI overrides apply here (after attach, so _cloud is live)
+        if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
+        if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
+        if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
     }
 
     private const int DefaultMoodIdx = 5;   // "Clear Alpine" — clean neutral good-day look
@@ -126,6 +130,9 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--mood=")) { int.TryParse(a.Substring("--mood=".Length), out _probeMood); }
             else if (a.StartsWith("--clouddbg=")) { int.TryParse(a.Substring("--clouddbg=".Length), out _cloudDbg); }
             else if (a.StartsWith("--cloudsteps=")) { int.TryParse(a.Substring("--cloudsteps=".Length), out _cloudSteps); }
+            else if (a.StartsWith("--clouds=")) { _cloudsOn = a.Substring("--clouds=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
+                DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
     }
 
@@ -960,11 +967,10 @@ public partial class TerrainLabUI : Control
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
-        if (_cloudDbg >= 0) { _cloud?.SetDebug(_cloudDbg); }
-        if (_cloudSteps > 0) { _cloud?.SetKnobInt("raymarch_steps", _cloudSteps); }
     }
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
+    private int _cloudsOn = -1;
     private void OverrideEnum(string id, int v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
     private void OverrideToggle(string id, bool v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
 
@@ -1000,7 +1006,27 @@ public partial class TerrainLabUI : Control
                 GetTree().Quit();
             }
         }
+
+        // --profile=<secs>: warm up 1s, then average frame time, print fps + worst, quit
+        if (_profileT >= 0.0)
+        {
+            _profileT += delta;
+            if (_profileT > 1.0)
+            {
+                _profAccum += delta; _profFrames++;
+                _profWorst = Math.Max(_profWorst, delta);
+                if (_profileT > 1.0 + _profileDur)
+                {
+                    double avg = _profAccum / Math.Max(_profFrames, 1);
+                    GD.Print($"PROFILE: avg {1.0/avg:0} fps ({avg*1000:0.0} ms)  worst {1.0/_profWorst:0} fps ({_profWorst*1000:0.0} ms)  over {_profFrames} frames");
+                    _profileT = -1.0;
+                    GetTree().Quit();
+                }
+            }
+        }
     }
+    private double _profileT = -1.0, _profileDur = 3.0, _profAccum = 0, _profWorst = 0;
+    private int _profFrames = 0;
 
     public override void _ExitTree() => _fc?.Dispose();
 }
