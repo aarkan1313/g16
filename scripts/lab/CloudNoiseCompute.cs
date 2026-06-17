@@ -47,6 +47,52 @@ public sealed class CloudNoiseCompute : IDisposable
         return (shape, detail);
     }
 
+    /// Bake both volumes as RAW RGBAF bytes (one contiguous block, Z-major) + res.
+    /// Used by CloudVolume to create 3D textures directly on the MAIN RenderingDevice
+    /// (RenderingServer.TextureGetRdTexture does not yield a usable RID for a local-RD
+    /// ImageTexture3D, so the per-frame compute must own its own main-RD textures).
+    public (byte[] shape, int shapeRes, byte[] detail, int detailRes) BakeRaw(float seed = 3.0f)
+    {
+        byte[] shape = BakeVolumeRaw(ShapeRes, mode: 0u, seed);
+        byte[] detail = BakeVolumeRaw(DetailRes, mode: 1u, seed + 17.0f);
+        return (shape, ShapeRes, detail, DetailRes);
+    }
+
+    /// Dispatch one volume and return RGBAF bytes (4 floats/cell, R replicated for
+    /// the detail volume). Z-major: cell index = (z*res + y)*res + x.
+    private byte[] BakeVolumeRaw(int res, uint mode, float seed)
+    {
+        int cells = checked(res * res * res);
+        int floatsPerCell = (mode == 0u) ? 4 : 1;
+        Rid oBuf = _rd.StorageBufferCreate((uint)(cells * floatsPerCell * sizeof(float)));
+        var oU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 0 };
+        oU.AddId(oBuf);
+        byte[] pBytes = BuildParams((uint)res, mode, seed);
+        Rid pBuf = _rd.StorageBufferCreate((uint)pBytes.Length, pBytes);
+        var pU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 1 };
+        pU.AddId(pBuf);
+        Rid set = _rd.UniformSetCreate(new Array<RDUniform> { oU, pU }, _shader, 0);
+        long list = _rd.ComputeListBegin();
+        _rd.ComputeListBindComputePipeline(list, _pipeline);
+        _rd.ComputeListBindUniformSet(list, set, 0);
+        uint groups = (uint)((res + 3) / 4);
+        _rd.ComputeListDispatch(list, groups, groups, groups);
+        _rd.ComputeListEnd();
+        _rd.Submit(); _rd.Sync();
+        byte[] outBytes = _rd.BufferGetData(oBuf);
+        _rd.FreeRid(set); _rd.FreeRid(oBuf); _rd.FreeRid(pBuf);
+
+        // expand to RGBAF (4 floats/cell)
+        var floats = new float[cells * floatsPerCell];
+        System.Buffer.BlockCopy(outBytes, 0, floats, 0, Math.Min(outBytes.Length, floats.Length * sizeof(float)));
+        var rgba = new float[cells * 4];
+        if (mode == 0u) { System.Buffer.BlockCopy(floats, 0, rgba, 0, rgba.Length * sizeof(float)); }
+        else { for (int i = 0; i < cells; i++) { float r = floats[i]; int o = i * 4; rgba[o] = r; rgba[o+1] = r; rgba[o+2] = r; rgba[o+3] = r; } }
+        var bytes = new byte[rgba.Length * sizeof(float)];
+        System.Buffer.BlockCopy(rgba, 0, bytes, 0, bytes.Length);
+        return bytes;
+    }
+
     /// Dispatch the compute for one volume and pack the readback into an
     /// ImageTexture3D (one RGBAF Image per Z-slice). For detail (1 channel in the
     /// shader) we still allocate RGBA and replicate R so a single upload path works.

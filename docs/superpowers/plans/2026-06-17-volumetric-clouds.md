@@ -24,7 +24,15 @@
 - `data/lab_controls.json` Clouds tab + `TerrainLabUI` registry (slider/toggle→`SetFloat`/`SetBool`).
 - `scenes/terrain_lab.tscn` WorldEnvironment — the Sky resource gets our sky shader.
 
-> **NOTE on the per-frame compute path:** The one-time noise bake uses the proven local-RD readback pattern (Task 1). The PER-FRAME raymarch must instead render on the MAIN RenderingDevice and expose its output as a `Texture2Drd` to the sky shader (no per-frame GPU→CPU readback — that would stall). This is the one genuinely new infra piece (Task 3); it follows Godot's `TextureRD` compute-to-sky pattern. If `Texture2Drd` wiring proves fragile, the documented fallback is a `SubViewport` fragment-shader raymarch (slower, simpler) — flagged in Task 3.
+> **NOTE on the rendering path (revised at Stage 3 start):** Two viable paths were
+> considered: (A) compute raymarch on the MAIN RD → `Texture2Drd` → sky shader; (B)
+> raymarch DIRECTLY in a `shader_type sky` shader (EYEDIR available per sky-pixel; sample
+> the 3D noise + weather, march, composite). **We chose Path B** — it gets clouds visible
+> for the look gate with far less risk (no `Texture2Drd` wiring, no readback), and Godot's
+> `Sky.ProcessMode` (Incremental) + `RadianceSize` give frame-amortization/reduced-res for
+> free (covers Stage 4). The noise/weather/params units are unchanged either way, so if
+> perf later demands Path A, only the rendering swaps (modularity). Path A remains the
+> documented fallback if the sky shader can't hit the perf bar.
 
 ---
 

@@ -13,7 +13,8 @@ public static class CloudWeather
 {
     public const int Res = 256;
 
-    public static ImageTexture Bake(float seed = 5.0f)
+    /// Raw RGBAF bytes (R=coverage, G=type). Used to upload to a main-RD texture.
+    public static byte[] BakeRaw(float seed = 5.0f)
     {
         var bytes = new byte[Res * Res * 4 * sizeof(float)];
         int o = 0;
@@ -31,7 +32,12 @@ public static class CloudWeather
             WriteFloat(bytes, ref o, 0f);                  // B (rain — unused for now)
             WriteFloat(bytes, ref o, 1f);                  // A
         }
-        Image img = Image.CreateFromData(Res, Res, false, Image.Format.Rgbaf, bytes);
+        return bytes;
+    }
+
+    public static ImageTexture Bake(float seed = 5.0f)
+    {
+        Image img = Image.CreateFromData(Res, Res, false, Image.Format.Rgbaf, BakeRaw(seed));
         return ImageTexture.CreateFromImage(img);
     }
 

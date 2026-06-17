@@ -92,7 +92,8 @@ public partial class TerrainLabUI : Control
     {
         if (_cloud == null) { return; }
         GetNode("/root/TerrainLabRoot").AddChild(_cloud);
-        _cloud.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment);
+        _cloud.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
+                      GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
     }
 
     private const int DefaultMoodIdx = 5;   // "Clear Alpine" — clean neutral good-day look
@@ -546,7 +547,7 @@ public partial class TerrainLabUI : Control
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
         switch (target)
         {
-            case "sun_energy":      sun.LightEnergy = v; break;
+            case "sun_energy":      sun.LightEnergy = v; PushSunToCloud(sun); break;
             case "sun_soft":        sun.ShadowBlur = v; break;   // shadow softness (separate from disc)
             case "sun_disc":        sun.LightAngularDistance = v; break;   // visible sun size (PCSS penumbra too)
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
@@ -566,6 +567,16 @@ public partial class TerrainLabUI : Control
     {
         // elevation from horizon + compass azimuth → a downward-pointing sun.
         sun.RotationDegrees = new Vector3(-_sunAngle, _sunAzimuth, 0f);
+        PushSunToCloud(sun);
+    }
+
+    /// Feed the scene sun to the cloud compute (direction TOWARD the sun + color +
+    /// energy) so cloud lighting tracks the sun/mood. A DirectionalLight points along
+    /// -Z of its basis; the sun is in the opposite direction (-forward).
+    private void PushSunToCloud(DirectionalLight3D sun)
+    {
+        Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();   // -(-Z forward) = +Z
+        _cloud?.SetSun(toSun, sun.LightColor, sun.LightEnergy);
     }
 
     // ---- cloud knobs → CloudVolume (separation: UI never touches cloud internals,
@@ -717,6 +728,7 @@ public partial class TerrainLabUI : Control
         Set("ssao_i", env.SsaoIntensity); Set("ssao_r", env.SsaoRadius);
         Set("fog_d", env.FogDensity); Set("fog_aerial", env.FogAerialPerspective);
         Set("fog_heightd", env.FogHeightDensity); Set("exposure", env.TonemapExposure);
+        PushSunToCloud(sun);   // clouds track the mood's sun
     }
 
     /// Update a slider widget + value WITHOUT re-applying (avoids fighting the mood).
