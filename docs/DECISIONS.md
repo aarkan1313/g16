@@ -6,6 +6,22 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-17 — CLOUD PRESENCE suite (clouds affect the scene, not just the sky).** After
+the volumetric clouds shipped, added the AAA "presence" effects so clouds influence the
+whole render — all driven from the cloud field, all ~free (CPU scalars + existing-pipeline
+tweaks; full suite measured 140 fps vs 139 clouds-only). **(1) Mood/time-of-day cloud
+color:** mood `sky_top/horizon` colors feed the raymarch ambient + sky-shader background
+(the old `is ProceduralSkyMaterial` check skipped our cloud ShaderMaterial) → golden-hour
+warm clouds, storm grey, A/B verified. **(2) Coverage scalar:** `CloudVolume.Overcast()` =
+CPU proxy from the live coverage knob + `CloudWeather.Mean` (no GPU readback). **(3)
+Overcast dims ambient/sun:** `UpdateOvercast` scales sun energy down + sky-fill up as
+coverage rises, from the mood base → heavy cover reads as flat overcast (A/B verified).
+**(4) Aerial perspective:** `FogLightColor` blended toward the cloud horizon color, stronger
+under overcast. **(5) Reflections/GI:** the cloud Sky already feeds Godot's sky-radiance →
+ambient/SDFGI/reflections (that's why overcast works); set `roughness_layers=7`. **(6) God
+rays:** PENDING research (method choice drives cost). New CLI: `--coverage`, `--mood` (was
+there), `--profile`. Outstanding: user live-judge of the coordinated look + god rays.
+
 **2026-06-17 — VOLUMETRIC CLOUDS + matched ground shadows (the fresh rebuild).** After
 the ground-only cloud-shadow retry still read wrong ("a waste without a cloud up there"),
 rebuilt as real raymarched volumetric clouds in the sky that cast their own matching
