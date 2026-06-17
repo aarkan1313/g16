@@ -123,6 +123,19 @@ uniform float heightblend_sharp : hint_range(0.1, 0.9) = 0.6;
 // Per-zone companion material: sec_zone[d] = which zone's textures to blend INTO
 // zone d (live, no rebake). Defaults set from C# to the adjacent zone.
 uniform int sec_zone[7];
+
+// --- Cloud shadows (the "alive" multiplier) ---------------------------------
+// World-space FBM noise, scrolled with TIME, modulating the surface — drifting
+// cloud-shadow patches across the terrain. The single biggest low-cost "this is a
+// real place with weather" cue (Total War / HZD use the same idea). Procedural
+// FBM so it needs no texture asset. Darkens albedo (cheap; reads like a cloud
+// passing) rather than a full light() rewrite.
+uniform bool cloud_shadow_on = true;
+uniform float cloud_scale_m : hint_range(200.0, 4000.0) = 1400.0;  // size of cloud patches
+uniform float cloud_strength : hint_range(0.0, 1.0) = 0.5;         // how dark the shadows get
+uniform float cloud_cover : hint_range(0.1, 0.9) = 0.5;            // fraction in shadow (threshold)
+uniform float cloud_softness : hint_range(0.02, 0.5) = 0.22;       // edge softness
+uniform vec2 cloud_speed = vec2(8.0, 3.0);                         // drift m/s (world)
 // Zone-band transition width (was the fixed band_softness_m=120). Wider = more
 // gradual material boundaries. Live.
 uniform float band_soft_mult : hint_range(0.3, 3.0) = 1.4;
@@ -138,6 +151,19 @@ float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 float hash2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float vnoise(vec2 w,float wl){ vec2 p=w/wl; vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     return mix(mix(hash2(i),hash2(i+vec2(1,0)),f.x),mix(hash2(i+vec2(0,1)),hash2(i+vec2(1,1)),f.x),f.y); }
+
+// Cloud-shadow light factor at a world position (1 = full sun, <1 = in shadow).
+// 3-octave FBM in world XZ, scrolled by TIME; thresholded by cover with soft edges.
+float cloud_shadow(vec3 wp){
+    if(!cloud_shadow_on) return 1.0;
+    vec2 p = wp.xz + cloud_speed * TIME;
+    float n = vnoise(p, cloud_scale_m) * 0.55
+            + vnoise(p + vec2(91.0,17.0), cloud_scale_m*0.45) * 0.30
+            + vnoise(p + vec2(-50.0,80.0), cloud_scale_m*0.2) * 0.15;
+    // n ~0..1; cover sets where shadow begins, softness the gradient width.
+    float shadow = smoothstep(cloud_cover - cloud_softness, cloud_cover + cloud_softness, n);
+    return 1.0 - shadow * cloud_strength;   // shadowed patches darker
+}
 
 // ============================================================================
 // TILING LAYER — break texture repetition while PRESERVING contrast.
@@ -462,6 +488,10 @@ void fragment(){
         alb = mix(alb, vec3(0.92,0.94,0.97), dust);
         rgh = mix(rgh, 0.6, dust);
     }
+
+    // Cloud shadows: drifting world-space patches darken the surface (cheap stand-in
+    // for masking the sun; reads like a passing cloud). Skip for debug views.
+    if (dbg == 0) { alb *= cloud_shadow(wp); }
 
     // splat debug view overrides the lit output (no early return — gdshader bans it).
     ALBEDO = (dbg==1) ? dbg_col : alb;
