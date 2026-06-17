@@ -36,9 +36,16 @@ public partial class CloudVolume : Node
     // render-thread compute resources (created in InitCompute on the render thread)
     private RenderingDevice _rd = null!;
     private Rid _shader, _pipeline, _outTex, _shapeTex, _detailTex, _weatherTex, _sampler, _paramBuf;
+    // cloud-shadow map (Stage 5): a second compute writes a top-down sun-transmittance
+    // map over the terrain; the terrain light() samples it to attenuate the sun.
+    private Rid _shadowShader, _shadowPipeline, _shadowTex, _shadowParamBuf;
+    private Texture2Drd? _shadowRd;
+    private float _shadowStrength = 0.7f;
     private bool _computeReady;
     private int _frame;
     public const int TexW = 512, TexH = 128;
+    public const int ShadowRes = 512;
+    public const float RegionM = 8192f;   // matches terrain region_size
 
     public void Attach(Godot.Environment env, Camera3D cam)
     {
@@ -65,6 +72,7 @@ public partial class CloudVolume : Node
     private void BuildSkyMaterial()
     {
         _cloudTex = new Texture2Drd();   // empty RID now; filled on the render thread before any dispatch
+        _shadowRd = new Texture2Drd();   // shadow map, bound to the terrain material (Stage 5b)
         _skyMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/cloud_sky.gdshader") };
         _skyMat.SetShaderParameter("cloud_rd_tex", _cloudTex);
         _skyMat.SetShaderParameter("cloud_enabled", _enabled);
@@ -123,10 +131,29 @@ public partial class CloudVolume : Node
         _sampler = _rd.SamplerCreate(ss);
         _paramBuf = _rd.StorageBufferCreate((uint)(ParamFloats * sizeof(float)));
 
-        // assign the RID ONCE, now, before any dispatch or material sampling
+        // --- cloud-shadow map compute (Stage 5) ---
+        string spath = ProjectSettings.GlobalizePath("res://shaders/cloud_shadow.glsl");
+        string ssrc = System.IO.File.ReadAllText(spath)
+            .Replace("#[compute]\r\n", string.Empty).Replace("#[compute]\n", string.Empty);
+        var ssource = new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceCompute = ssrc };
+        RDShaderSpirV sspirv = _rd.ShaderCompileSpirVFromSource(ssource, false);
+        if (!string.IsNullOrEmpty(sspirv.CompileErrorCompute)) { GD.PrintErr("cloud_shadow.glsl: " + sspirv.CompileErrorCompute); return; }
+        _shadowShader = _rd.ShaderCreateFromSpirV(sspirv, "cloud_shadow");
+        _shadowPipeline = _rd.ComputePipelineCreate(_shadowShader);
+        var sf = new RDTextureFormat
+        {
+            Width = ShadowRes, Height = ShadowRes, Format = RenderingDevice.DataFormat.R16Sfloat,
+            UsageBits = RenderingDevice.TextureUsageBits.StorageBit | RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanUpdateBit | RenderingDevice.TextureUsageBits.CanCopyToBit,
+        };
+        _shadowTex = _rd.TextureCreate(sf, new RDTextureView());
+        _rd.TextureClear(_shadowTex, new Color(1, 1, 1, 1), 0, 1, 0, 1);   // full sun until first dispatch
+        _shadowParamBuf = _rd.StorageBufferCreate((uint)(ShadowParamFloats * sizeof(float)));
+
+        // assign RIDs ONCE, before any dispatch or material sampling
         if (_cloudTex != null) { _cloudTex.TextureRdRid = _outTex; }
+        if (_shadowRd != null) { _shadowRd.TextureRdRid = _shadowTex; }
         _computeReady = true;
-        GD.Print("CloudVolume: compute initialized on render thread");
+        GD.Print("CloudVolume: compute initialized on render thread (clouds + shadow map)");
     }
 
     private Rid Create3D(int res, byte[] rgbaf)
@@ -178,6 +205,41 @@ public partial class CloudVolume : Node
         _rd.ComputeListDispatch(list, (uint)((TexW + 7) / 8), (uint)((TexH + 7) / 8), 1);
         _rd.ComputeListEnd();
         _rd.FreeRid(set);
+
+        // --- cloud-shadow map dispatch (same density field, top-down toward sun) ---
+        byte[] spb = BuildShadowParams(p, (float)Time.GetTicksMsec() / 1000.0f);
+        _rd.BufferUpdate(_shadowParamBuf, 0, (uint)spb.Length, spb);
+        var sOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; sOut.AddId(_shadowTex);
+        var sShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; sShape.AddId(_sampler); sShape.AddId(_shapeTex);
+        var sDetail = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; sDetail.AddId(_sampler); sDetail.AddId(_detailTex);
+        var sWeather = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 3 }; sWeather.AddId(_sampler); sWeather.AddId(_weatherTex);
+        var sParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; sParam.AddId(_shadowParamBuf);
+        Rid sset = _rd.UniformSetCreate(new Array<RDUniform> { sOut, sShape, sDetail, sWeather, sParam }, _shadowShader, 0);
+        long slist = _rd.ComputeListBegin();
+        _rd.ComputeListBindComputePipeline(slist, _shadowPipeline);
+        _rd.ComputeListBindUniformSet(slist, sset, 0);
+        _rd.ComputeListDispatch(slist, (uint)((ShadowRes + 7) / 8), (uint)((ShadowRes + 7) / 8), 1);
+        _rd.ComputeListEnd();
+        _rd.FreeRid(sset);
+    }
+
+    private const int ShadowParamFloats = 28;
+    private byte[] BuildShadowParams(CloudParams p, float time)
+    {
+        var b = new byte[ShadowParamFloats * sizeof(float)];
+        int o = 0;
+        void F(float v) { BitConverter.GetBytes(v).CopyTo(b, o); o += 4; }
+        Vector3 sun = _sunDir;
+        F(sun.X); F(sun.Y); F(sun.Z); F(0f);            // sun_dir
+        F(ShadowRes); F(ShadowRes);                      // tex_size
+        F(RegionM); F(16f);                              // region size, march steps
+        F(time);
+        F(p.Coverage); F(p.Density); F(p.CloudType);
+        F(p.AltitudeM); F(p.ThicknessM);
+        F(p.DriftSpeed); F(p.DriftDirDeg);
+        F(p.Size); F(p.Detail); F(p.DetailSize); F(p.Edge);
+        F(_shadowStrength);
+        return b;
     }
 
     private const int ParamFloats = 48;
@@ -255,9 +317,15 @@ public partial class CloudVolume : Node
             case "brightness":      _p = _p with { Brightness = v }; break;
             case "ambient":         _p = _p with { Ambient = v }; break;
             case "update_res_scale": _p = _p with { UpdateResScale = v }; break;
-            case "shadow_strength": break;
+            case "shadow_strength": _shadowStrength = v; break;   // ground-shadow darkness (Stage 5)
         }
     }
+
+    /// The cloud-shadow map (sun transmittance over the terrain), for the terrain
+    /// material's light() to sample. Valid after InitCompute (cleared to full-sun
+    /// before then). Null until BuildSkyMaterial runs.
+    public Texture2Drd? ShadowTexture => _shadowRd;
+    public float RegionSize => RegionM;
 
     public override void _ExitTree()
     {
@@ -269,6 +337,8 @@ public partial class CloudVolume : Node
                 _rd.FreeRid(_sampler); _rd.FreeRid(_paramBuf);
                 _rd.FreeRid(_outTex); _rd.FreeRid(_shapeTex); _rd.FreeRid(_detailTex); _rd.FreeRid(_weatherTex);
                 _rd.FreeRid(_pipeline); _rd.FreeRid(_shader);
+                _rd.FreeRid(_shadowParamBuf); _rd.FreeRid(_shadowTex);
+                _rd.FreeRid(_shadowPipeline); _rd.FreeRid(_shadowShader);
             }));
         }
     }

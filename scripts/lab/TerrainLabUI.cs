@@ -94,6 +94,13 @@ public partial class TerrainLabUI : Control
         GetNode("/root/TerrainLabRoot").AddChild(_cloud);
         _cloud.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
                       GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
+        // bind the cloud-shadow map to the terrain material so light() can sample it
+        if (_cloud.ShadowTexture != null)
+        {
+            _terrain.SetTexture("cloud_shadow_tex", _cloud.ShadowTexture);
+            _terrain.SetFloat("cloud_shadow_region", _cloud.RegionSize);
+            _terrain.SetBool("cloud_shadow_on", _cloud.Enabled);
+        }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
@@ -592,7 +599,12 @@ public partial class TerrainLabUI : Control
     private CloudVolume? _cloud;
     private void ApplyCloudFloat(string knob, float v) => _cloud?.SetKnob(knob, v);
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
-    private void ApplyCloudBool(string knob, bool on) => _cloud?.SetKnobBool(knob, on);
+    private void ApplyCloudBool(string knob, bool on)
+    {
+        _cloud?.SetKnobBool(knob, on);
+        // clouds-enabled also gates the ground-shadow sampling in the terrain light()
+        if (knob == "enabled") { _terrain.SetBool("cloud_shadow_on", on); }
+    }
 
     // ---- cloud PRESETS (named sky looks, data/cloud_presets.json) --------------
     private readonly List<(string name, Godot.Collections.Dictionary values)> _cloudPresets = new();

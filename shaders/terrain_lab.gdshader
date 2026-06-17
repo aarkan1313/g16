@@ -124,8 +124,14 @@ uniform float heightblend_sharp : hint_range(0.1, 0.9) = 0.6;
 // zone d (live, no rebake). Defaults set from C# to the adjacent zone.
 uniform int sec_zone[7];
 
-// (Cloud shadows were removed 2026-06-16 — kept reading as square artifacts across
-// 3 fix attempts; to be rebuilt fresh. Full impl on branch backup/clouds-system-2026-06-16.)
+// --- Cloud shadows (Stage 5): a top-down sun-transmittance map baked by CloudVolume
+// from the SAME density field as the sky clouds, so the ground shadow matches the
+// cloud overhead. Sampled in light() to attenuate ONLY the direct sun (ambient/GI
+// untouched → shadowed ground reads lit-but-sunless). Inert when cloud_shadow_on is
+// false (light() reproduces the prior approved lighting exactly). ---
+uniform sampler2D cloud_shadow_tex : filter_linear, repeat_disable, hint_default_white;
+uniform bool cloud_shadow_on = false;     // turned on by CloudVolume once the map is live
+uniform float cloud_shadow_region = 8192.0;
 
 // Zone-band transition width (was the fixed band_softness_m=120). Wider = more
 // gradual material boundaries. Live.
@@ -484,5 +490,27 @@ void fragment(){
         NORMAL=normalize((VIEW_MATRIX*vec4(nr,0.0)).xyz);
     }
 }
-// (No custom light() — Godot's default PBR lighting handles the surface. A custom
-// light() existed only for cloud shadows, removed 2026-06-16.)
+// Cloud-shadow sun factor in [0,1] (1 = full sun). Samples the top-down transmittance
+// map (baked by CloudVolume from the same density field as the visible clouds) at this
+// fragment's world XZ. Returns 1.0 when off → light() reduces to default lighting.
+float cloud_shadow_factor(vec3 wp){
+    if (!cloud_shadow_on) { return 1.0; }
+    vec2 uv = wp.xz / cloud_shadow_region + 0.5;   // [-R/2,R/2] → [0,1] (matches the bake)
+    return texture(cloud_shadow_tex, uv).r;
+}
+
+// Custom light(): the approved "really good" lighting body (Lambert + GGX-ish spec,
+// ATTENUATION carries the sun shadow map), with the DIRECT sun scaled by the cloud
+// shadow factor. Ambient/GI untouched. cloud_shadow_on=false → factor 1.0 → identical
+// to the prior default-equivalent lighting.
+void light() {
+    float cloud = cloud_shadow_factor(v_world);
+    float ndotl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+    DIFFUSE_LIGHT += ndotl * ATTENUATION * cloud * LIGHT_COLOR * ALBEDO;
+    vec3 H = normalize(VIEW + LIGHT);
+    float ndoth = clamp(dot(NORMAL, H), 0.0, 1.0);
+    float rough = max(ROUGHNESS, 0.04);
+    float a = rough * rough;
+    float spec = pow(ndoth, max(2.0 / (a * a) - 2.0, 1.0)) * (1.0 - rough);
+    SPECULAR_LIGHT += spec * ndotl * ATTENUATION * cloud * LIGHT_COLOR * 0.25;
+}
