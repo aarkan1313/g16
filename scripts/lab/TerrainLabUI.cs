@@ -25,6 +25,7 @@ public partial class TerrainLabUI : Control
     private readonly List<LabControl> _controls = new();           // flat registry (zone/companion expanded)
     private readonly Dictionary<string, LabControl> _byId = new(); // id (or id#z) -> control
     private OptionButton _presetPick = null!;
+    private OptionButton? _moodPick;
     private LineEdit _presetName = null!;
     private Dictionary<string, Variant> _presets = new();
     private System.Random _rng = new();
@@ -70,8 +71,21 @@ public partial class TerrainLabUI : Control
         LoadRegistry();
         BuildPanel();
         ApplyAll();              // push all defaults to the shader (also fixes the .Value-doesn't-fire issue)
+        // Apply a default MOOD on spawn so the startup look matches picking a preset.
+        // Without this, spawn used the raw .tscn env (no per-mood grade/fog/sun) and
+        // looked worse than any preset — "presets good, spawn not good." Skipped when
+        // a CLI --mood override is set (headless captures choose their own).
+        if (_probeMood < 0 && _moods.Count > 0) { ApplyDefaultMood(); }
         ApplyCliOverrides();
         _ready = true;
+    }
+
+    private const int DefaultMoodIdx = 5;   // "Clear Alpine" — clean neutral good-day look
+    private void ApplyDefaultMood()
+    {
+        int idx = Mathf.Clamp(DefaultMoodIdx, 0, _moods.Count - 1);
+        ApplyMood(idx);
+        if (_moodPick != null) { _moodPick.Select(idx); }   // reflect it in the dropdown
     }
 
     private void ParseCli()
@@ -227,10 +241,10 @@ public partial class TerrainLabUI : Control
             if (tabName == "Light" && _moodNames.Count > 0)
             {
                 col.AddChild(new Label { Text = "MOOD (pick a vibe — tunes everything)" });
-                var mb = new OptionButton { CustomMinimumSize = new Vector2(300, 0) };
-                for (int i = 0; i < _moodNames.Count; i++) { mb.AddItem(_moodNames[i], i); }
-                mb.ItemSelected += idx => ApplyMood((int)idx);
-                col.AddChild(mb);
+                _moodPick = new OptionButton { CustomMinimumSize = new Vector2(300, 0) };
+                for (int i = 0; i < _moodNames.Count; i++) { _moodPick.AddItem(_moodNames[i], i); }
+                _moodPick.ItemSelected += idx => ApplyMood((int)idx);
+                col.AddChild(_moodPick);
                 col.AddChild(new HSeparator());
                 col.AddChild(new Label { Text = "fine-tune:" });
             }
