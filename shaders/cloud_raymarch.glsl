@@ -119,8 +119,12 @@ void main(){
     ivec2 px = ivec2(gl_GlobalInvocationID.xy);
     if (px.x >= int(P.tex_size.x) || px.y >= int(P.tex_size.y)) return;
 
-    // temporal amortization: only update texels whose linear index ≡ offset (mod stride)
-    int stride = max(int(P.update.y), 1);
+    // Temporal amortization (strided subset per frame). NOTE (audit L3): this updates
+    // texels in place with NO double-buffer/reprojection, so stride>1 leaves stale
+    // texels = visible stripes under drift. Until proper reconstruction is added, the
+    // C# side is clamped to stride 1; this guard is belt-and-suspenders so a stray
+    // value can't smear. (Full reconstruction is the future upgrade — see DECISIONS.)
+    int stride = clamp(int(P.update.y), 1, 1);   // forced 1 until reconstruction exists
     int idx = px.y * int(P.tex_size.x) + px.x;
     if ((idx % stride) != int(P.update.x)) return;
 

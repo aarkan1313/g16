@@ -93,13 +93,17 @@ public partial class TerrainLabUI : Control
         if (_cloud == null) { return; }
         GetNode("/root/TerrainLabRoot").AddChild(_cloud);
         _cloud.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
-                      GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
+                      GetNode<Camera3D>("/root/TerrainLabRoot/Camera"), _params.RegionSizeM);
+        _cloud.SetGroundHeight(_terrain.MidHeight);   // M4: shadow march from terrain mid-elevation
         // bind the cloud-shadow map to the terrain material so light() can sample it
         if (_cloud.ShadowTexture != null)
         {
             _terrain.SetTexture("cloud_shadow_tex", _cloud.ShadowTexture);
             _terrain.SetFloat("cloud_shadow_region", _cloud.RegionSize);
-            _terrain.SetBool("cloud_shadow_on", _cloud.Enabled);
+            // L2 fix: keep shadow sampling OFF until the render-thread RID is live
+            // (avoids the terrain sampling an empty shadow Texture2Drd on frame 1).
+            // _Process turns it on once _cloud.ComputeReady.
+            _terrain.SetBool("cloud_shadow_on", false);
         }
         // gap-aligned god rays: add the cloud-shadow-gated FogVolume (default OFF;
         // volumetric fog only enabled when god rays are toggled on, so the base look
@@ -115,6 +119,11 @@ public partial class TerrainLabUI : Control
         if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
         if (_godraysOnCli >= 0) { _cloud.SetGodraysEnabled(_godraysOnCli == 1); }
+        // H3 fix: mood + sun were applied in _Ready BEFORE this deferred attach, so the
+        // cloud's sky/sun pushes no-opped (material/env null). Re-apply now that _cloud
+        // is live, so clouds track the spawn mood/sun instead of CloudParams defaults.
+        if (_currentMood >= 0) { ApplyMood(_currentMood); }
+        PushSunToCloud(GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
     }
     private float _covOverride = -1f;
     private int _godraysOnCli = -1;
@@ -575,7 +584,7 @@ public partial class TerrainLabUI : Control
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
         switch (target)
         {
-            case "sun_energy":      sun.LightEnergy = v; _baseSunEnergy = v; PushSunToCloud(sun); break;
+            case "sun_energy":      sun.LightEnergy = v; _baseSunEnergy = v; OvercastDirty(); PushSunToCloud(sun); break;
             case "sun_soft":        sun.ShadowBlur = v; break;   // shadow softness (separate from disc)
             case "sun_disc":        sun.LightAngularDistance = v; break;   // visible sun size (PCSS penumbra too)
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
@@ -615,7 +624,7 @@ public partial class TerrainLabUI : Control
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
     private void ApplyCloudBool(string knob, bool on)
     {
-        if (knob == "godrays") { _cloud?.SetGodraysEnabled(on); return; }
+        if (knob == "godrays") { _cloud?.SetGodraysEnabled(on); OvercastDirty(); return; }
         _cloud?.SetKnobBool(knob, on);
         // clouds-enabled also gates the ground-shadow sampling in the terrain light()
         if (knob == "enabled") { _terrain.SetBool("cloud_shadow_on", on); }
@@ -688,9 +697,11 @@ public partial class TerrainLabUI : Control
     private static float F(Godot.Collections.Dictionary d, string k, float fb) => d.ContainsKey(k) ? d[k].AsSingle() : fb;
 
     /// Apply a complete coordinated mood: sun, sky, fog, ambient, exposure, glow.
+    private int _currentMood = -1;
     private void ApplyMood(int idx)
     {
         if (idx < 0 || idx >= _moods.Count) { return; }
+        _currentMood = idx;
         var m = _moods[idx].AsGodotDictionary();
         var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
@@ -761,6 +772,7 @@ public partial class TerrainLabUI : Control
         env.SetGlowLevel(4, 0.0f); env.SetGlowLevel(5, 0.0f); env.SetGlowLevel(6, 0.0f); // no huge-radius spread
 
         SyncLightControlsToScene();   // make the Light-tab sliders reflect the mood
+        OvercastDirty();              // re-apply overcast scaling onto the new mood bases
         GD.Print($"TerrainLab: mood -> {_moodNames[idx]}");
     }
 
@@ -1023,29 +1035,46 @@ public partial class TerrainLabUI : Control
     private Color _baseFogColor = new Color(0.71f, 0.78f, 0.86f);
     private bool _overcastDim = true;
 
+    // M1 fix: only re-apply when the overcast amount actually CHANGES (or after a mood/
+    // slider sets a new base), so the sun-energy slider is 1:1 in the steady state instead
+    // of being overwritten every frame. -1 forces the first apply.
+    private float _lastOvercast = -1f;
+    /// Force the next UpdateOvercast to re-apply (call after a mood or sun/ambient/fog
+    /// base change so overcast scaling picks up the new base immediately).
+    private void OvercastDirty() => _lastOvercast = -1f;
+
     private void UpdateOvercast()
     {
         if (_cloud == null) { return; }
+        float oc = _overcastDim ? _cloud.Overcast() : 0f;
+        if (Mathf.Abs(oc - _lastOvercast) < 0.002f) { return; }   // nothing changed → leave bases alone
+        _lastOvercast = oc;
+
         var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
-        float oc = _overcastDim ? _cloud.Overcast() : 0f;
-        const float OvercastAmt = 0.7f;   // how strongly full overcast dims (0..1)
+        const float OvercastAmt = 0.7f;
         float k = 1f - oc * OvercastAmt;
-        env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 1.15f, oc);   // sky fill slightly UP (diffuse dome)
+        env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 1.15f, oc);   // sky fill slightly UP
         sun.LightEnergy = _baseSunEnergy * k;                                // direct sun DOWN under cloud
-        // Aerial perspective: tint distance haze toward the cloud sky color so the
-        // atmosphere reads coherent with the cover (stronger as overcast rises).
-        Color sky = _cloud.SkyHorizonColor;
-        env.FogLightColor = _baseFogColor.Lerp(sky, 0.35f + 0.45f * oc);
-        // God-ray strength peaks at BROKEN cloud (gaps + cover both present); near 0
-        // at clear or fully-overcast sky. Drives the sun's volumetric scatter energy.
-        float broken = 4f * oc * (1f - oc);   // bell curve, max at oc=0.5
-        sun.LightVolumetricFogEnergy = Mathf.Lerp(0.5f, 12f, broken);
+        env.FogLightColor = _baseFogColor.Lerp(_cloud.SkyHorizonColor, 0.35f + 0.45f * oc);
+        // God-ray scatter energy only matters (and only written) when god rays are on.
+        if (_cloud.GodraysOn)
+        {
+            float broken = 4f * oc * (1f - oc);   // bell curve, max at oc=0.5 (broken cloud)
+            sun.LightVolumetricFogEnergy = Mathf.Lerp(0.5f, 12f, broken);
+        }
     }
 
+    private bool _shadowEnabledOnce;
     public override void _Process(double delta)
     {
         if (_ready) { UpdateOvercast(); }
+        // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
+        if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)
+        {
+            _terrain.SetBool("cloud_shadow_on", true);
+            _shadowEnabledOnce = true;
+        }
 
         // FPS / frame-time HUD (top-right). Cheap; updated ~4×/sec. The perf gate
         // needs a number, not a feeling — this is it.

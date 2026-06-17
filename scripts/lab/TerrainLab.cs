@@ -14,6 +14,7 @@ public partial class TerrainLab : MeshInstance3D
     private float _regionSize;
     private float _spacing;
     private float _minBase, _maxBase;
+    public float MidHeight => (_minBase + _maxBase) * 0.5f;   // for cloud-shadow march origin
     private const float AabbMarginM = 8f;
 
     private SplatCompute? _splat;

@@ -499,18 +499,49 @@ float cloud_shadow_factor(vec3 wp){
     return texture(cloud_shadow_tex, uv).r;
 }
 
-// Custom light(): the approved "really good" lighting body (Lambert + GGX-ish spec,
-// ATTENUATION carries the sun shadow map), with the DIRECT sun scaled by the cloud
-// shadow factor. Ambient/GI untouched. cloud_shadow_on=false → factor 1.0 → identical
-// to the prior default-equivalent lighting.
+// Custom light(): a FAITHFUL replication of Godot 4's default spatial BRDF — Burley
+// (Disney) diffuse + GGX specular (correlated Smith visibility + Schlick Fresnel) —
+// so that with cloud_shadow_on=false this matches the engine's built-in lighting (the
+// approved "really good" look) as closely as a custom light() can. The ONLY addition
+// is the cloud shadow factor multiplying the DIRECT sun term (ambient/GI untouched).
+// NOTE: a custom light() fully REPLACES the built-in BRDF (Godot has no fall-through),
+// so this must mirror it rather than be a cheaper approximation. Audit H1, per pillars.
 void light() {
     float cloud = cloud_shadow_factor(v_world);
-    float ndotl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
-    DIFFUSE_LIGHT += ndotl * ATTENUATION * cloud * LIGHT_COLOR * ALBEDO;
-    vec3 H = normalize(VIEW + LIGHT);
-    float ndoth = clamp(dot(NORMAL, H), 0.0, 1.0);
-    float rough = max(ROUGHNESS, 0.04);
+
+    vec3 N = NORMAL;
+    vec3 V = VIEW;
+    vec3 L = LIGHT;
+    vec3 H = normalize(V + L);
+    float NoL = clamp(dot(N, L), 0.0, 1.0);
+    float NoV = clamp(dot(N, V), 1e-4, 1.0);
+    float NoH = clamp(dot(N, H), 0.0, 1.0);
+    float LoH = clamp(dot(L, H), 0.0, 1.0);
+
+    float rough = clamp(ROUGHNESS, 0.02, 1.0);
     float a = rough * rough;
-    float spec = pow(ndoth, max(2.0 / (a * a) - 2.0, 1.0)) * (1.0 - rough);
-    SPECULAR_LIGHT += spec * ndotl * ATTENUATION * cloud * LIGHT_COLOR * 0.25;
+    float a2 = a * a;
+
+    // light energy reaching the surface (Godot folds energy/atten into LIGHT_COLOR/
+    // ATTENUATION); cloud scales the direct sun only.
+    vec3 radiance = LIGHT_COLOR * ATTENUATION * cloud * NoL;
+
+    // --- Burley (Disney) diffuse, matching Godot's DIFFUSE_BURLEY default ---
+    float fd90 = 0.5 + 2.0 * rough * LoH * LoH;
+    float lightScatter = 1.0 + (fd90 - 1.0) * pow(1.0 - NoL, 5.0);
+    float viewScatter  = 1.0 + (fd90 - 1.0) * pow(1.0 - NoV, 5.0);
+    float burley = lightScatter * viewScatter * (1.0 / 3.14159265);
+    DIFFUSE_LIGHT += ALBEDO * radiance * burley;
+
+    // --- GGX specular: D (Trowbridge-Reitz) * V (correlated Smith) * F (Schlick) ---
+    float d = NoH * NoH * (a2 - 1.0) + 1.0;
+    float D = a2 / (3.14159265 * d * d);
+    float k = a * 0.5;   // Schlick-GGX visibility (Godot's SchlickGGX direct-light form)
+    float visL = NoL * (NoV * (1.0 - k) + k);
+    float visV = NoV * (NoL * (1.0 - k) + k);
+    float Vis = 0.5 / max(visL + visV, 1e-4);
+    // dielectric F0 ~0.04 (terrain is non-metal); Schlick Fresnel
+    vec3 f0 = vec3(0.04);
+    vec3 F = f0 + (vec3(1.0) - f0) * pow(1.0 - LoH, 5.0);
+    SPECULAR_LIGHT += radiance * (D * Vis) * F;
 }

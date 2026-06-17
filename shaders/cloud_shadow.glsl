@@ -24,8 +24,9 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float altitude, thickness;
     float drift_speed, drift_dir;
     float size, detail, detail_size, edge;
-    float strength;      // shadow darkness (0 none .. 1 full)
-    float _pad0, _pad1, _pad2;
+    float strength;        // shadow darkness (0 none .. 1 full)
+    float ground_height;   // representative terrain elevation to start the sun-march from
+    float _pad1, _pad2;
 } P;
 
 const float PLANET_R = 200000.0;
@@ -86,11 +87,13 @@ void main(){
 
     // texel → world XZ over the terrain footprint (centered at origin)
     vec2 uv = (vec2(px) + 0.5) / P.tex_size;
-    float half_r = P.region.x * 0.5;
     vec2 wxz = (uv - 0.5) * P.region.x;
 
-    // start at ground level (planet surface), march toward the sun through the shell
-    vec3 ro = vec3(wxz.x, PLANET_R, wxz.y);
+    // March from a representative terrain elevation (M4 fix: was sea level, which
+    // offset the shell entry by up to the peak height on tall ridges). ground_height
+    // is the terrain mid-elevation; full per-texel height would be exact but needs the
+    // heightfield here — the mid-height removes most of the error for cloud_base >> it.
+    vec3 ro = vec3(wxz.x, PLANET_R + P.ground_height, wxz.y);
     vec3 L = normalize(P.sun_dir.xyz);
 
     float baseR = PLANET_R + P.altitude;

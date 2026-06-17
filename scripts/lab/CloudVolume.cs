@@ -48,7 +48,10 @@ public partial class CloudVolume : Node
     private int _frame;
     public const int TexW = 512, TexH = 128;
     public const int ShadowRes = 512;
-    public const float RegionM = 8192f;   // matches terrain region_size
+    // L1 fix: set from FieldParams.RegionSizeM at Attach so the shadow map + god-ray
+    // UV stay locked to the actual terrain footprint (was hardcoded 8192, desynced
+    // silently if field_params.json changed).
+    private float RegionM = 8192f;
 
     private FogVolume? _godrayVol;
     private ShaderMaterial? _godrayMat;
@@ -74,6 +77,7 @@ public partial class CloudVolume : Node
         return _godrayVol;
     }
 
+    public bool GodraysOn => _godraysOn;
     public void SetGodraysEnabled(bool on)
     {
         _godraysOn = on;
@@ -81,10 +85,11 @@ public partial class CloudVolume : Node
         if (_env != null) { _env.VolumetricFogEnabled = on; }   // only pay for vol-fog when on
     }
 
-    public void Attach(Godot.Environment env, Camera3D cam)
+    public void Attach(Godot.Environment env, Camera3D cam, float regionSizeM)
     {
         _p = CloudParams.Load();
         _env = env;
+        RegionM = regionSizeM;   // lock cloud shadow/god-ray footprint to the terrain
         _origSky = env.Sky;
         BakeResources();
         BuildSkyMaterial();
@@ -286,8 +291,11 @@ public partial class CloudVolume : Node
         F(p.DriftSpeed); F(p.DriftDirDeg);
         F(p.Size); F(p.Detail); F(p.DetailSize); F(p.Edge);
         F(_shadowStrength);
+        F(_groundHeight);   // M4: start the sun-march from terrain mid-elevation
         return b;
     }
+    private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
+    public void SetGroundHeight(float h) { _groundHeight = h; }
 
     private const int ParamFloats = 48;
 
@@ -327,6 +335,7 @@ public partial class CloudVolume : Node
 
     public CloudParams Params => _p;
     public bool Enabled => _enabled;
+    public bool ComputeReady => _computeReady;     // shadow Texture2Drd RID is live
     public Color SkyHorizonColor => _skyHorizon;   // for aerial-perspective tinting
 
     // ---- public knob interface (UI → here only). Knobs mutate _p; RenderProcess
@@ -399,5 +408,9 @@ public partial class CloudVolume : Node
                 _rd.FreeRid(_shadowPipeline); _rd.FreeRid(_shadowShader);
             }));
         }
+        // M3: the FogVolume node (if not in-tree) + Texture2Drd wrappers. The
+        // Texture2Drds are RefCounted (freed when refs drop); free the FogVolume node
+        // explicitly if it wasn't parented (defensive — normally it's a tree child).
+        if (_godrayVol != null && !_godrayVol.IsInsideTree()) { _godrayVol.QueueFree(); }
     }
 }
