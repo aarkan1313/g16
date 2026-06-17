@@ -253,6 +253,24 @@ public partial class TerrainLabUI : Control
             var col = new VBoxContainer();
             col.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             scroll.AddChild(col);
+
+            // Per-tab Randomize + Lock/Unlock (operate only on this tab's controls).
+            string tn = tabName;   // capture for closures
+            var tabBar = new HBoxContainer();
+            var tabRnd = new Button { Text = "🎲 tab" };
+            tabRnd.Pressed += () => RandomizeTab(tn);
+            tabBar.AddChild(tabRnd);
+            var tabLock = new Button { Text = "🔒 tab" };
+            tabLock.Pressed += () => SetTabLocks(tn, true);
+            tabBar.AddChild(tabLock);
+            var tabUnlock = new Button { Text = "🔓 tab" };
+            tabUnlock.Pressed += () => SetTabLocks(tn, false);
+            tabBar.AddChild(tabUnlock);
+            col.AddChild(tabBar);
+
+            // The Clouds tab leads with a cloud PRESET picker (named sky looks).
+            if (tabName == "Clouds") { BuildCloudPresetPicker(col); }
+
             // The Light tab leads with a MOOD selector (curated coordinated looks);
             // the sliders below are live fine-tuning on top of the picked mood.
             if (tabName == "Light" && _moodNames.Count > 0)
@@ -550,6 +568,52 @@ public partial class TerrainLabUI : Control
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
     private void ApplyCloudBool(string knob, bool on) => _cloud?.SetKnobBool(knob, on);
 
+    // ---- cloud PRESETS (named sky looks, data/cloud_presets.json) --------------
+    private readonly List<(string name, Godot.Collections.Dictionary values)> _cloudPresets = new();
+
+    private void BuildCloudPresetPicker(VBoxContainer col)
+    {
+        LoadCloudPresets();
+        col.AddChild(new Label { Text = "PRESET (named sky look)" });
+        var pick = new OptionButton { CustomMinimumSize = new Vector2(300, 0) };
+        pick.AddItem("— custom —", 0);
+        for (int i = 0; i < _cloudPresets.Count; i++) { pick.AddItem(_cloudPresets[i].name, i + 1); }
+        pick.ItemSelected += idx => { if (idx >= 1) { ApplyCloudPreset((int)idx - 1); } };
+        col.AddChild(pick);
+        col.AddChild(new HSeparator());
+    }
+
+    private void LoadCloudPresets()
+    {
+        if (_cloudPresets.Count > 0) { return; }
+        string abs = ProjectSettings.GlobalizePath("res://data/cloud_presets.json");
+        if (!System.IO.File.Exists(abs)) { return; }
+        Variant parsed = Json.ParseString(System.IO.File.ReadAllText(abs));
+        if (parsed.VariantType != Variant.Type.Dictionary) { return; }
+        var root = parsed.AsGodotDictionary();
+        if (!root.ContainsKey("presets")) { return; }
+        foreach (Variant p in root["presets"].AsGodotArray())
+        {
+            var d = p.AsGodotDictionary();
+            string name = d.ContainsKey("name") ? d["name"].AsString() : "preset";
+            if (d.ContainsKey("values")) { _cloudPresets.Add((name, d["values"].AsGodotDictionary())); }
+        }
+    }
+
+    /// Apply a cloud preset by setting each named control's widget (routes through
+    /// ApplyControl → CloudVolume). Controls not in the preset are left as-is.
+    private void ApplyCloudPreset(int idx)
+    {
+        if (idx < 0 || idx >= _cloudPresets.Count) { return; }
+        var values = _cloudPresets[idx].values;
+        foreach (var key in values.Keys)
+        {
+            string id = key.AsString();
+            if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, values[key].AsSingle()); }
+        }
+        GD.Print($"Clouds: applied preset '{_cloudPresets[idx].name}'");
+    }
+
     // ---- lighting MOODS (curated, coordinated looks) --------------------------
 
     private readonly List<string> _moodNames = new();
@@ -680,41 +744,64 @@ public partial class TerrainLabUI : Control
 
     // ---- randomize / lock -----------------------------------------------------
 
+    /// Global randomize: rolls all UNLOCKED controls flagged rand:true.
     private void Randomize()
     {
         bool needRebake = false;
         foreach (LabControl c in _controls)
         {
             if (c.Locked || !c.Rand) { continue; }
-            switch (c.Type)
-            {
-                case "slider":
-                {
-                    float v = c.Min + (float)_rng.NextDouble() * (c.Max - c.Min);
-                    SetWidgetValue(c, v);
-                    break;
-                }
-                case "toggle":
-                {
-                    // bias toggles to stay ON (~75%) so a roll doesn't flatten everything
-                    bool on = _rng.NextDouble() < 0.75;
-                    SetWidgetValue(c, on);
-                    break;
-                }
-                case "enum":
-                    SetWidgetValue(c, _rng.Next(c.Options.Length));
-                    break;
-                case "material":
-                    SetWidgetValue(c, _rng.Next(_materials.Count));
-                    break;
-                case "companion":
-                    SetWidgetValue(c, _rng.Next(_zoneNames.Length));
-                    break;
-            }
-            if (c.Rebake) { needRebake = true; }
+            if (RandomizeControl(c)) { needRebake = true; }
         }
         if (needRebake) { _terrain.RebakeSplat(); }
         GD.Print("TerrainLab: randomized (unlocked controls)");
+    }
+
+    /// Per-tab randomize: rolls EVERY unlocked control on the tab, ignoring the
+    /// rand flag (the user explicitly diced this tab, so roll everything tunable).
+    private void RandomizeTab(string tab)
+    {
+        bool needRebake = false;
+        foreach (LabControl c in _controls)
+        {
+            if (c.Tab != tab || c.Locked) { continue; }
+            if (RandomizeControl(c)) { needRebake = true; }
+        }
+        if (needRebake) { _terrain.RebakeSplat(); }
+        GD.Print($"TerrainLab: randomized tab '{tab}'");
+    }
+
+    /// Roll one control to a random value. Returns true if it needs a splat rebake.
+    /// Covers every control type incl. cloud knobs (the previous switch missed the
+    /// cloud/scene types, so those never randomized).
+    private bool RandomizeControl(LabControl c)
+    {
+        switch (c.Type)
+        {
+            case "slider":
+            case "scenef":
+            case "cloudf":
+                SetWidgetValue(c, c.Min + (float)_rng.NextDouble() * (c.Max - c.Min));
+                break;
+            case "cloudi":
+                SetWidgetValue(c, (float)Math.Round(c.Min + _rng.NextDouble() * (c.Max - c.Min)));
+                break;
+            case "toggle":
+            case "scene":
+            case "cloud":
+                SetWidgetValue(c, _rng.NextDouble() < 0.75);   // bias ON so a roll isn't all-off
+                break;
+            case "enum":
+                SetWidgetValue(c, _rng.Next(c.Options.Length));
+                break;
+            case "material":
+                SetWidgetValue(c, _rng.Next(_materials.Count));
+                break;
+            case "companion":
+                SetWidgetValue(c, _rng.Next(_zoneNames.Length));
+                break;
+        }
+        return c.Rebake;
     }
 
     /// Set a widget's value (updates UI + applies). Suppresses per-control rebake;
@@ -736,6 +823,16 @@ public partial class TerrainLabUI : Control
     private void SetAllLocks(bool locked)
     {
         foreach (LabControl c in _controls) { c.Locked = locked; if (c.LockBox != null) { c.LockBox.ButtonPressed = locked; } }
+    }
+
+    private void SetTabLocks(string tab, bool locked)
+    {
+        foreach (LabControl c in _controls)
+        {
+            if (c.Tab != tab) { continue; }
+            c.Locked = locked;
+            if (c.LockBox != null) { c.LockBox.ButtonPressed = locked; }
+        }
     }
 
     // ---- presets (registry-based) --------------------------------------------
