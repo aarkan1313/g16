@@ -20,6 +20,10 @@ field) and rebuilds outward slowly, one judged piece at a time.
 
 ## 2. Posture (how to work here — the user cares about this)
 
+- **PILLARS (the standard for every choice): quality = performance = AAA-ish =
+  long-term-best — regardless of time cost.** All four weigh equally; none is traded for
+  speed of delivery. Lead with the AAA/most-correct option, not the cheap shortcut. "It
+  works" is not the bar. (Still gate the LOOK on the user's live eye — see below.)
 - **Low plans.** No big upfront plans (they thrashed last project); no zero planning either.
   A short spec only when a feature is genuinely new; a one-line DECISIONS.md entry otherwise.
 - **The user's eye is the only gate.** Mechanical checks don't decide look — the user does,

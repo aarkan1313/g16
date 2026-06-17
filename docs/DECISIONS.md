@@ -6,6 +6,22 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-17 — Cloud system AUDITED + fixed (read-only audit → 8 real findings fixed).**
+A skeptical read-only audit of the cloud + presence work found 8 valid issues (verified
+against code, not taken on faith). Fixed per pillars: **H1** the custom terrain `light()`
+was a cheap Lambert+Blinn that REPLACED Godot's built-in BRDF unconditionally (a custom
+`light()` has no fall-through) → rewrote it as a faithful Burley-diffuse + GGX (D/V/F)
+replica so clouds-off ≈ the approved built-in look (still wants an eye-confirm vs `main`).
+**H3** mood/sun were pushed in `_Ready` before the deferred `AttachClouds`, so they
+no-opped → clouds used defaults at spawn; now re-applied after attach. **L1** cloud
+footprint hardcoded 8192 → from `FieldParams.RegionSizeM`. **M1** `UpdateOvercast` rewrote
+sun/ambient every frame (sun slider non-1:1) → dirty-flag, only on overcast change. **M4**
+shadow sun-march started at sea level → terrain mid-elevation. **M3/L2/L5/L3** exit cleanup,
+defer `cloud_shadow_on` until the shadow RID is live, dead line removed, temporal stride
+clamped to 1 (no reconstruction yet → stride>1 would smear; future upgrade). **H4** (god-ray
+fog halo at terrain edges) deferred to the god-ray live-tuning pass (default-off). Audit
+also confirmed the honest claims (CallOnRenderThread, ~2ms, match-by-construction shadows).
+
 **2026-06-17 — CLOUD PRESENCE suite (clouds affect the scene, not just the sky).** After
 the volumetric clouds shipped, added the AAA "presence" effects so clouds influence the
 whole render — all driven from the cloud field, all ~free (CPU scalars + existing-pipeline
@@ -16,6 +32,9 @@ warm clouds, storm grey, A/B verified. **(2) Coverage scalar:** `CloudVolume.Ove
 CPU proxy from the live coverage knob + `CloudWeather.Mean` (no GPU readback). **(3)
 Overcast dims ambient/sun:** `UpdateOvercast` scales sun energy down + sky-fill up as
 coverage rises, from the mood base → heavy cover reads as flat overcast (A/B verified).
+NOTE: this is an OPEN-LOOP proxy — it tracks the coverage *slider* + weather mean, not the
+actual rendered density (HG/edge/type knobs don't feed it), so very dense-but-low-coverage
+clouds won't dim. Honest fidelity caveat, not a bug.
 **(4) Aerial perspective:** `FogLightColor` blended toward the cloud horizon color, stronger
 under overcast. **(5) Reflections/GI:** the cloud Sky already feeds Godot's sky-radiance →
 ambient/SDFGI/reflections (that's why overcast works); set `roughness_layers=7`. **(6) God
