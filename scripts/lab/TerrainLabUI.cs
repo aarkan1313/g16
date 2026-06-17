@@ -37,7 +37,7 @@ public partial class TerrainLabUI : Control
     private int _overrideSplat = -1, _overrideSplatDebug = -1;
     private string? _camArg;
     private float _texScale = -1f;
-    private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1;   // lighting/splat isolation
+    private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
     private float _probeRoughFloor = -1f, _probeMixStr = -1f;
 
     /// One control: parsed registry fields + runtime state.
@@ -66,6 +66,7 @@ public partial class TerrainLabUI : Control
 
         ParseCli();
         LoadLibrary();
+        LoadMoods();
         LoadRegistry();
         BuildPanel();
         ApplyAll();              // push all defaults to the shader (also fixes the .Value-doesn't-fire issue)
@@ -92,6 +93,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--roughfloor=")) { if (float.TryParse(a.Substring("--roughfloor=".Length), out float rf)) _probeRoughFloor = rf; }
             else if (a.StartsWith("--mixstr=")) { if (float.TryParse(a.Substring("--mixstr=".Length), out float ms)) _probeMixStr = ms; }
             else if (a.StartsWith("--hb=")) { _probeHb = a.Substring("--hb=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--mood=")) { int.TryParse(a.Substring("--mood=".Length), out _probeMood); }
         }
     }
 
@@ -220,6 +222,18 @@ public partial class TerrainLabUI : Control
             var col = new VBoxContainer();
             col.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             scroll.AddChild(col);
+            // The Light tab leads with a MOOD selector (curated coordinated looks);
+            // the sliders below are live fine-tuning on top of the picked mood.
+            if (tabName == "Light" && _moodNames.Count > 0)
+            {
+                col.AddChild(new Label { Text = "MOOD (pick a vibe — tunes everything)" });
+                var mb = new OptionButton { CustomMinimumSize = new Vector2(300, 0) };
+                for (int i = 0; i < _moodNames.Count; i++) { mb.AddItem(_moodNames[i], i); }
+                mb.ItemSelected += idx => ApplyMood((int)idx);
+                col.AddChild(mb);
+                col.AddChild(new HSeparator());
+                col.AddChild(new Label { Text = "fine-tune:" });
+            }
             foreach (LabControl c in _controls.Where(c => c.Tab == tabName)) { BuildRow(col, c); }
         }
 
@@ -431,6 +445,90 @@ public partial class TerrainLabUI : Control
         sun.RotationDegrees = new Vector3(-_sunAngle, _sunAzimuth, 0f);
     }
 
+    // ---- lighting MOODS (curated, coordinated looks) --------------------------
+
+    private readonly List<string> _moodNames = new();
+    private Godot.Collections.Array _moods = new();
+
+    private void LoadMoods()
+    {
+        string abs = ProjectSettings.GlobalizePath("res://data/lighting_moods.json");
+        if (!System.IO.File.Exists(abs)) { return; }
+        Variant parsed = Json.ParseString(System.IO.File.ReadAllText(abs));
+        if (parsed.VariantType != Variant.Type.Dictionary) { return; }
+        var root = parsed.AsGodotDictionary();
+        if (!root.ContainsKey("moods")) { return; }
+        _moods = root["moods"].AsGodotArray();
+        foreach (Variant m in _moods) { _moodNames.Add(m.AsGodotDictionary()["name"].AsString()); }
+    }
+
+    private static Color Col(Variant v) { var a = v.AsGodotArray(); return new Color(a[0].AsSingle(), a[1].AsSingle(), a[2].AsSingle()); }
+    private static float F(Godot.Collections.Dictionary d, string k, float fb) => d.ContainsKey(k) ? d[k].AsSingle() : fb;
+
+    /// Apply a complete coordinated mood: sun, sky, fog, ambient, exposure, glow.
+    private void ApplyMood(int idx)
+    {
+        if (idx < 0 || idx >= _moods.Count) { return; }
+        var m = _moods[idx].AsGodotDictionary();
+        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
+        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+
+        _sunAngle = F(m, "sun_angle", 35f); _sunAzimuth = F(m, "sun_az", 40f); OrientSun(sun);
+        sun.LightEnergy = F(m, "sun_energy", 1.3f);
+        if (m.ContainsKey("sun_color")) { sun.LightColor = Col(m["sun_color"]); }
+        float soft = F(m, "shadow_soft", 1.0f);
+        sun.ShadowBlur = soft; sun.LightAngularDistance = Mathf.Max(soft, 0.1f);
+
+        env.AmbientLightEnergy = F(m, "ambient", 0.4f);
+        env.AmbientLightSkyContribution = F(m, "ambient_sky", 1.0f);
+        if (env.Sky?.SkyMaterial is ProceduralSkyMaterial sky)
+        {
+            if (m.ContainsKey("sky_top")) { sky.SkyTopColor = Col(m["sky_top"]); }
+            if (m.ContainsKey("sky_horizon")) { sky.SkyHorizonColor = Col(m["sky_horizon"]); sky.GroundHorizonColor = Col(m["sky_horizon"]); }
+            if (m.ContainsKey("sky_ground")) { sky.GroundBottomColor = Col(m["sky_ground"]); }
+        }
+
+        env.FogEnabled = true;
+        if (m.ContainsKey("fog_color")) { env.FogLightColor = Col(m["fog_color"]); }
+        env.FogDensity = F(m, "fog_density", 0.0006f);
+        env.FogAerialPerspective = F(m, "fog_aerial", 0.85f);
+        env.FogHeight = F(m, "fog_height", -200f);
+        env.FogHeightDensity = F(m, "fog_heightd", 0.04f);
+        env.FogSunScatter = F(m, "fog_sun_scatter", 0.2f);
+
+        env.TonemapExposure = F(m, "exposure", 1.0f);
+        env.TonemapWhite = F(m, "white", 6.0f);
+        env.GlowEnabled = true;
+        env.GlowIntensity = F(m, "glow", 0.3f);
+
+        SyncLightControlsToScene();   // make the Light-tab sliders reflect the mood
+        GD.Print($"TerrainLab: mood -> {_moodNames[idx]}");
+    }
+
+    /// After a mood sets the scene, update the Light-tab slider widgets so they show
+    /// the mood's values (sliders are live overrides on top of the chosen mood).
+    private void SyncLightControlsToScene()
+    {
+        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
+        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        void Set(string id, float v) { if (_byId.TryGetValue(id, out var c)) { SetWidgetValueSilent(c, v); } }
+        Set("sun_energy", sun.LightEnergy); Set("sun_angle", _sunAngle); Set("sun_azimuth", _sunAzimuth);
+        Set("sun_soft", sun.ShadowBlur); Set("ambient_e", env.AmbientLightEnergy);
+        Set("ssao_i", env.SsaoIntensity); Set("ssao_r", env.SsaoRadius);
+        Set("fog_d", env.FogDensity); Set("fog_aerial", env.FogAerialPerspective);
+        Set("fog_heightd", env.FogHeightDensity); Set("exposure", env.TonemapExposure);
+    }
+
+    /// Update a slider widget + value WITHOUT re-applying (avoids fighting the mood).
+    private void SetWidgetValueSilent(LabControl c, float v)
+    {
+        bool wasReady = _ready; _ready = false;
+        if (c.Widget is HSlider sl) { sl.Value = v; }
+        if (c.ValLabel != null) { c.ValLabel.Text = v.ToString((c.Max - c.Min) < 0.05f ? "0.0000" : "0.00"); }
+        c.Value = v;
+        _ready = wasReady;
+    }
+
     /// Flat baseline: turn EVERY visual contributor off so the user can add them
     /// back one at a time and find what causes the speckle. The plainest possible
     /// render: albedo only, no normal maps, no specular, no macro/contact/splat,
@@ -616,6 +714,7 @@ public partial class TerrainLabUI : Control
         if (_probeRoughFloor >= 0f) { _terrain.SetFloat("rough_floor", _probeRoughFloor); }
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
+        if (_probeMood >= 0) { ApplyMood(_probeMood); }
     }
     private void OverrideEnum(string id, int v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
     private void OverrideToggle(string id, bool v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }

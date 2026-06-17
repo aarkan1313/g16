@@ -1,0 +1,65 @@
+{
+  "_comment": "Curated lighting/atmosphere moods for the look lab. Each is a COMPLETE coordinated look (sun + fog + ambient + exposure tuned as a unit) so the user picks a vibe, not numbers. Colors are sRGB 0..1. sun_angle = degrees above horizon; sun_az = compass degrees. Edit/add a mood here with no code change.",
+  "moods": [
+    {
+      "name": "Golden Hour",
+      "sun_angle": 12, "sun_az": 95, "sun_energy": 1.5,
+      "sun_color": [1.0, 0.80, 0.55], "shadow_soft": 2.0,
+      "ambient": 0.35, "ambient_sky": 0.8,
+      "sky_top": [0.28, 0.42, 0.66], "sky_horizon": [0.92, 0.74, 0.55], "sky_ground": [0.25, 0.22, 0.18],
+      "fog_color": [0.95, 0.72, 0.52], "fog_density": 0.0009, "fog_aerial": 0.9,
+      "fog_height": -150, "fog_heightd": 0.05, "fog_sun_scatter": 0.5,
+      "exposure": 1.1, "glow": 0.5, "white": 6.0
+    },
+    {
+      "name": "Soft Overcast",
+      "sun_angle": 55, "sun_az": 60, "sun_energy": 0.55,
+      "sun_color": [0.92, 0.93, 0.95], "shadow_soft": 4.0,
+      "ambient": 0.9, "ambient_sky": 1.0,
+      "sky_top": [0.62, 0.66, 0.70], "sky_horizon": [0.78, 0.80, 0.82], "sky_ground": [0.45, 0.46, 0.46],
+      "fog_color": [0.80, 0.82, 0.85], "fog_density": 0.0014, "fog_aerial": 0.95,
+      "fog_height": -150, "fog_heightd": 0.06, "fog_sun_scatter": 0.1,
+      "exposure": 1.0, "glow": 0.15, "white": 8.0
+    },
+    {
+      "name": "Harsh Midday",
+      "sun_angle": 72, "sun_az": 40, "sun_energy": 1.7,
+      "sun_color": [1.0, 0.97, 0.92], "shadow_soft": 0.6,
+      "ambient": 0.45, "ambient_sky": 0.9,
+      "sky_top": [0.22, 0.45, 0.78], "sky_horizon": [0.66, 0.76, 0.86], "sky_ground": [0.30, 0.30, 0.28],
+      "fog_color": [0.72, 0.80, 0.90], "fog_density": 0.0004, "fog_aerial": 0.7,
+      "fog_height": -200, "fog_heightd": 0.02, "fog_sun_scatter": 0.2,
+      "exposure": 0.95, "glow": 0.25, "white": 6.0
+    },
+    {
+      "name": "Blue Dawn",
+      "sun_angle": 6, "sun_az": 280, "sun_energy": 0.7,
+      "sun_color": [0.75, 0.80, 1.0], "shadow_soft": 3.0,
+      "ambient": 0.55, "ambient_sky": 1.0,
+      "sky_top": [0.12, 0.20, 0.42], "sky_horizon": [0.55, 0.60, 0.78], "sky_ground": [0.18, 0.20, 0.26],
+      "fog_color": [0.55, 0.62, 0.82], "fog_density": 0.0016, "fog_aerial": 0.95,
+      "fog_height": -120, "fog_heightd": 0.09, "fog_sun_scatter": 0.3,
+      "exposure": 1.05, "glow": 0.35, "white": 7.0
+    },
+    {
+      "name": "Dramatic Storm",
+      "sun_angle": 20, "sun_az": 130, "sun_energy": 1.1,
+      "sun_color": [1.0, 0.88, 0.70], "shadow_soft": 1.5,
+      "ambient": 0.30, "ambient_sky": 0.6,
+      "sky_top": [0.18, 0.20, 0.26], "sky_horizon": [0.45, 0.43, 0.44], "sky_ground": [0.16, 0.16, 0.17],
+      "fog_color": [0.50, 0.50, 0.55], "fog_density": 0.0022, "fog_aerial": 1.0,
+      "fog_height": -120, "fog_heightd": 0.12, "fog_sun_scatter": 0.4,
+      "exposure": 1.0, "glow": 0.4, "white": 5.0
+    },
+    {
+      "name": "Clear Alpine",
+      "sun_angle": 42, "sun_az": 50, "sun_energy": 1.4,
+      "sun_color": [1.0, 0.95, 0.86], "shadow_soft": 1.2,
+      "ambient": 0.45, "ambient_sky": 0.95,
+      "sky_top": [0.20, 0.42, 0.74], "sky_horizon": [0.70, 0.78, 0.84], "sky_ground": [0.28, 0.28, 0.26],
+      "fog_color": [0.74, 0.81, 0.90], "fog_density": 0.0006, "fog_aerial": 0.85,
+      "fog_height": -200, "fog_heightd": 0.035, "fog_sun_scatter": 0.25,
+      "exposure": 1.0, "glow": 0.3, "white": 6.0
+    }
+  ]
+}
