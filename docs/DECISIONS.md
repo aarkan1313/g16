@@ -6,6 +6,32 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-17 — VOLUMETRIC CLOUDS + matched ground shadows (the fresh rebuild).** After
+the ground-only cloud-shadow retry still read wrong ("a waste without a cloud up there"),
+rebuilt as real raymarched volumetric clouds in the sky that cast their own matching
+shadows. Spec: `docs/superpowers/specs/2026-06-17-volumetric-clouds-design.md`; plan:
+`docs/superpowers/plans/2026-06-17-volumetric-clouds.md`. Technique = HZD/Nubis stack,
+referenced from clayjohn's Godot demo, our own impl. Pipeline: **(1)** `cloud_noise_3d.glsl`
+GPU-bakes tileable Perlin-Worley shape (96³) + Worley detail (32³) volumes + a 2D weather
+field (`CloudWeather`), once at load. **(2)** `cloud_raymarch.glsl` raymarches a spherical-
+shell density field (Beer + Henyey-Greenstein + powder + 6-sample light cone) into a
+lat-long hemisphere texture. **(3)** `cloud_shadow.glsl` marches the SAME field top-down
+toward the sun into a 2D transmittance map. **(4)** `cloud_sky.gdshader` samples the cloud
+texture by EYEDIR; `terrain_lab.gdshader`'s re-introduced custom `light()` samples the
+shadow map in world XZ to attenuate ONLY the direct sun (ambient/GI untouched, inert when
+off). Because clouds + shadows come from one field, they match by construction.
+**Perf (the hard part):** the per-frame compute MUST run on the render thread via
+`RenderingServer.CallOnRenderThread` driven from a plain node (clayjohn pattern) — NOT a
+CompositorEffect (that path raced the `Texture2Drd` RID, "binding not valid", unfixable in
+the attempts made). Output texture RID assigned ONCE before any dispatch (Godot #118292).
+Full system measured ~2 ms/frame (139 vs 192 fps, vsync-off mixed view) at 128 steps +
+512² shadow map — amortization (`temporal_frames`) available but not needed, so default
+temporal=1 (no smearing). Full Clouds tab: coverage/density/type/size/edge/detail/opacity/
+brightness/ambient/altitude/thickness/drift/HG/powder/sun-absorption + ground-shadow +
+perf knobs, 5 presets (Clear→Stormy), per-tab Randomize/Lock. Backup of the interim full-
+res sky-shader path: tag `backup-clouds-skyshader-2026-06-17`. Lessons banked to memory:
+local-RD compute can't run headless; CallOnRenderThread is the compute-to-material bridge.
+
 **2026-06-16 — Cloud shadows CUT (to be rebuilt fresh).** Built a procedural cloud-
 shadow system (drifting world-space FBM attenuating the sun via a custom `light()`),
 but it persistently read as **square artifacts** to the user across 3 fix rounds

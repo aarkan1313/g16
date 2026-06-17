@@ -1,6 +1,6 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-16 (late — lighting/moods done, clouds cut). **Refresh the Current State block at the end of each session.**
+Last updated: 2026-06-17 (volumetric clouds + matched ground shadows built). **Refresh the Current State block at the end of each session.**
 
 This doc is written so a fresh chat with zero context can get productive immediately.
 
@@ -74,11 +74,32 @@ Run a scene (always `--rendering-driver vulkan`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-16, late)
-> **Status:** base field proven (no bake). The **look lab is built, flown, and the user
-> says the look is "really good."** Texturing + lighting are both substantially done.
-> The active question is pushing "really good → great" via the remaining levers.
+> ### ⮕ START HERE (2026-06-17)
+> **Status:** base field proven (no bake); texturing + lighting "really good"; and now
+> **VOLUMETRIC CLOUDS + matched ground shadows are built and working** (the big new arc
+> this session). Clouds render in the sky and cast their own matching shadows on the
+> terrain. Perf ~2 ms/frame for the whole cloud+shadow system. User has NOT yet flown the
+> final shadows live (asked me to profile + proceed) — a live look is the outstanding gate.
 >
+> **The cloud system (new — see DECISIONS 2026-06-17 + spec/plan in docs/superpowers):**
+> - `shaders/cloud_noise_3d.glsl` + `CloudNoiseCompute.cs` — GPU-bake tileable Perlin-Worley
+>   shape (96³) + Worley detail (32³) volumes once at load. `CloudWeather.cs` — 2D coverage/
+>   type field. `CloudParams.cs` + `data/cloud_params.json` — knobs.
+> - `shaders/cloud_raymarch.glsl` — raymarches the cloud shell (Beer+HG+powder+light cone)
+>   into a lat-long texture. `shaders/cloud_shadow.glsl` — same field, top-down sun-march →
+>   2D shadow map. Both run on the RENDER THREAD via `RenderingServer.CallOnRenderThread`
+>   driven by `CloudVolume.cs` (NOT a CompositorEffect — that raced the Texture2Drd RID).
+> - `shaders/cloud_sky.gdshader` — samples the cloud texture by EYEDIR. `terrain_lab.gdshader`
+>   has a re-introduced custom `light()` sampling the shadow map in world XZ (sun-only
+>   attenuation, inert when `cloud_shadow_on` false).
+> - **Clouds tab** in the look lab: coverage/density/type/size/edge/detail/opacity/bright/
+>   ambient/altitude/thickness/drift/HG/powder/sun-absorb + ground-shadow + perf knobs.
+>   5 presets (Clear/Scattered/Broken/Overcast/Stormy). **Per-tab Randomize+Lock** added to
+>   every tab. **FPS HUD** top-right. CLI: `--profile[=secs]`, `--clouds=0/1`, `--cloudsteps=`,
+>   `--clouddbg=` (1 raw cloud tex). Backup of interim full-res path: tag
+>   `backup-clouds-skyshader-2026-06-17`.
+>
+
 > **What the look lab now is (`scenes/terrain_lab.tscn`):** a full **data-driven** art-
 > direction tool, not a slider farm. Every control is defined in `data/lab_controls.json`
 > and built into a **TabContainer** (Zones · Surface · Color · Detail · Splat · Light ·
@@ -99,27 +120,29 @@ Run a scene (always `--rendering-driver vulkan`):
 > alpine), each a complete coordinated look. A **default mood is applied on spawn** so
 > startup == picking a preset. Sun disc size + shadow softness are decoupled + tunable.
 >
-> **Two big lessons banked this session (don't relearn the hard way):**
-> 1. **The long "fuzziness" was textures imported WITHOUT mipmaps** → minification
->    aliasing that only shows in MOTION (invisible in stills). Fixed: all `.import` set
->    `mipmaps/generate=true`; `tools/copy_materials.py` now writes them so it can't recur.
->    **Never debug a motion artifact from a screenshot — fly it / get the user to judge.**
-> 2. **Cloud shadows were CUT** — kept reading as square artifacts across 3 fix attempts.
->    Removed (reverted to Godot default lighting). Full impl preserved on tag
->    `backup-before-cloud-removal-2026-06-16` / branch `backup/clouds-system-2026-06-16`.
->    **To be rebuilt FRESH in a new session** (the user's call).
+> **Lessons banked (don't relearn the hard way; also in `~/.claude` memory):**
+> 1. **Fuzziness was missing mipmaps** → motion-only aliasing. Fixed in `.import` +
+>    `tools/copy_materials.py`. **Never debug a motion artifact from a still — fly it.**
+> 2. **Local-RD compute can't run under `--headless`** (`CreateLocalRenderingDevice()`
+>    returns null → NullRef in the Compute ctor). Verify compute bakes WINDOWED;
+>    `--headless --import` only compile-checks shaders.
+> 3. **Per-frame compute → material texture in Godot 4.6:** drive it via
+>    `RenderingServer.CallOnRenderThread` from a plain node, create the output texture +
+>    assign the `Texture2Drd` RID ONCE before any dispatch. A CompositorEffect raced the
+>    RID ("binding not valid", Godot #118292) — avoid for compute-to-material.
+> 4. The earlier cloud-cut / ground-only-shadow approaches are superseded by the
+>    volumetric system. Old impls: branch `backup/clouds-system-2026-06-16`.
 >
 > **NEXT ACTIONS (pick with the user):**
-> - **Rebuild cloud shadows fresh** (the immediate ask). The square came from value-noise
->   patches + GI washing out albedo-darkening; a fresh attempt should (a) use a real
->   texture or better noise, (b) attenuate the sun not albedo, (c) be judged in MOTION
->   early. Backup branch has the prior (flawed) version for reference, not reuse.
-> - **Save biome presets** — bundle a favorite mood + materials + tuning into named
->   "biomes" (the original goal; preset save/load exists, may want to also snapshot mood).
-> - **The remaining "great" levers** (researched, not built): a climate/moisture field
->   driving material+color+wetness together; erosion masks (flow/curvature/aspect);
->   real silhouette geometry (Godot has NO tessellation — scatter rock meshes); more
->   composition tooling. The base field is settled; don't touch its math unless asked.
+> - **Fly the clouds + shadows live** — the outstanding gate. Confirm shadows align under
+>   their clouds and read well in motion; tune coverage/density/look + ground-shadow knobs;
+>   confirm perf on the real machine. If shadows look offset/wrong, the sun-march mapping
+>   in `cloud_shadow.glsl` is where to look.
+> - **Snapshot clouds into mood presets** so each lighting mood gets a matching skyscape.
+> - **Save biome presets** (the original goal; preset save/load exists, may snapshot mood+
+>   clouds too).
+> - **Remaining "great" levers** (researched, not built): climate/moisture field; erosion
+>   masks; scatter rock meshes (Godot has NO tessellation). Base field settled — don't touch.
 
 ## 7. The material library (gitignored — 2.5 GB)
 
