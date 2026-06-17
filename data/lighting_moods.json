@@ -9,7 +9,8 @@
       "sky_top": [0.28, 0.42, 0.66], "sky_horizon": [0.92, 0.74, 0.55], "sky_ground": [0.25, 0.22, 0.18],
       "fog_color": [0.95, 0.72, 0.52], "fog_density": 0.0009, "fog_aerial": 0.9,
       "fog_height": -150, "fog_heightd": 0.05, "fog_sun_scatter": 0.5,
-      "exposure": 1.1, "glow": 0.5, "white": 6.0
+      "exposure": 1.1, "glow": 0.5, "white": 6.0,
+      "contrast": 1.1, "saturation": 1.2
     },
     {
       "name": "Soft Overcast",
@@ -49,7 +50,8 @@
       "sky_top": [0.18, 0.20, 0.26], "sky_horizon": [0.45, 0.43, 0.44], "sky_ground": [0.16, 0.16, 0.17],
       "fog_color": [0.50, 0.50, 0.55], "fog_density": 0.0022, "fog_aerial": 1.0,
       "fog_height": -120, "fog_heightd": 0.12, "fog_sun_scatter": 0.4,
-      "exposure": 1.0, "glow": 0.4, "white": 5.0
+      "exposure": 1.0, "glow": 0.4, "white": 5.0,
+      "contrast": 1.18, "saturation": 0.85
     },
     {
       "name": "Clear Alpine",

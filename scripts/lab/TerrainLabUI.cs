@@ -504,6 +504,12 @@ public partial class TerrainLabUI : Control
 
         env.TonemapExposure = F(m, "exposure", 1.0f);
         env.TonemapWhite = F(m, "white", 6.0f);
+        // Per-mood color grade (built-in Environment adjustments). Each mood can set
+        // its own contrast/saturation; defaults give a gentle cinematic lift.
+        env.AdjustmentEnabled = true;
+        env.AdjustmentContrast = F(m, "contrast", 1.08f);
+        env.AdjustmentSaturation = F(m, "saturation", 1.12f);
+        env.AdjustmentBrightness = F(m, "brightness", 1.0f);
         // Glow: keep it a subtle highlight sheen, NOT a sky-wide wash. The over-
         // bright halo around the sun was bloom catching the whole HDR sky — raise the
         // HDR threshold so ONLY the sun disc (very bright) blooms, kill constant bloom.
