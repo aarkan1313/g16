@@ -412,20 +412,17 @@ void fragment(){
     int dbg = 0;            // set when a splat debug view should override final output
     vec3 dbg_col = vec3(0.0);
     if (splat_on){
-        // Lever 1 + baked-ground (lag fix): the splat texture supplies the LOW-FREQ
-        // decisions (dominant/secondary material + blend). Per-fragment we do just
-        // ONE dominant-plane IQ/plain tap per material — ~6 fetches total, not ~54,
-        // and NO hex (hex made the squares). Detail stays crisp (real texture taps).
+        // Lever 1 + baked-ground: the splat texture (baked by SplatCompute) supplies
+        // the LOW-FREQ decisions — dominant zone, per-zone companion, blend amount —
+        // and the fragment blends just those TWO materials via smooth plain triplanar
+        // (trip_*). ~18 texture fetches/px (3 planes × 2 materials × 3 maps), 3× under
+        // the original ~54 (which had hex × triplanar). NO hex: hex's rotated tiles
+        // made tile-seam squares. Detail stays crisp (real mipmapped texture taps).
         vec4 sp = texture(splat_tex, v_uv);
         int dom = int(sp.r + 0.5);
         int sec = clamp(sec_zone[dom], 0, 6);   // per-zone companion (UI-controlled, live)
         float t = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);
 
-        // SMOOTH triplanar (3 blended planes, plain sampling — no hex, no per-pixel
-        // plane-pick). The earlier single-plane "cheap" path hard-picked one
-        // projection per pixel, which dithered across the bumpy normal into GRAIN
-        // (the fuzz). 3-plane blend is smooth; without hex it's ~18 samples (3× under
-        // the old ~54), the right speed/quality point.
         float rD = trip_rgh_by(dom, wp, nr);
         float rS = trip_rgh_by(sec, wp, nr);
         float m = heightblend_on ? heightblend_w(rD, rS, t, heightblend_sharp) : t;

@@ -416,7 +416,7 @@ public partial class TerrainLabUI : Control
         // force matte (no specular) + no normal maps explicitly
         if (_byId.TryGetValue("dbg_fullrough", out var fr)) { SetWidgetValue(fr, true); }
         if (_byId.TryGetValue("dbg_normalmap", out var nm)) { SetWidgetValue(nm, false); }
-        GD.Print("TerrainLab: FLAT BASELINE — add contributors back one by one in Debug tab");
+        GD.Print("TerrainLab: FLAT BASELINE — everything off; re-enable contributors one at a time (Debug tab for normals/spec/scene; Color/Detail/Splat tabs for the rest)");
     }
 
     // ---- randomize / lock -----------------------------------------------------
