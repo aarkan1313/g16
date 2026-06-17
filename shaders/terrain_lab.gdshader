@@ -131,8 +131,8 @@ uniform int sec_zone[7];
 // FBM so it needs no texture asset. Darkens albedo (cheap; reads like a cloud
 // passing) rather than a full light() rewrite.
 uniform bool cloud_shadow_on = true;
-uniform float cloud_scale_m : hint_range(200.0, 4000.0) = 1100.0;  // size of cloud patches
-uniform float cloud_strength : hint_range(0.0, 1.0) = 0.45;        // how dark the shadows get
+uniform float cloud_scale_m : hint_range(100.0, 2000.0) = 450.0;   // size of cloud patches (smaller = more patches in view)
+uniform float cloud_strength : hint_range(0.0, 1.0) = 0.5;        // how dark the shadows get
 uniform float cloud_cover : hint_range(0.1, 0.9) = 0.5;            // fraction in shadow (threshold)
 uniform float cloud_softness : hint_range(0.02, 0.5) = 0.22;       // edge softness
 uniform float cloud_speed : hint_range(0.0, 120.0) = 40.0;         // drift speed m/s (world)
@@ -157,12 +157,15 @@ float vnoise(vec2 w,float wl){ vec2 p=w/wl; vec2 i=floor(p); vec2 f=fract(p); f=
 float cloud_shadow(vec3 wp){
     if(!cloud_shadow_on) return 1.0;
     vec2 p = wp.xz + vec2(0.92, 0.39) * (cloud_speed * TIME);   // drift dir × speed
-    float n = vnoise(p, cloud_scale_m) * 0.55
-            + vnoise(p + vec2(91.0,17.0), cloud_scale_m*0.45) * 0.30
-            + vnoise(p + vec2(-50.0,80.0), cloud_scale_m*0.2) * 0.15;
-    // n ~0..1; cover sets where shadow begins, softness the gradient width.
-    float shadow = smoothstep(cloud_cover - cloud_softness, cloud_cover + cloud_softness, n);
-    return 1.0 - shadow * cloud_strength;   // shadowed patches darker
+    // 2-octave FBM, then EXPAND contrast: value noise clusters near 0.5, so without
+    // this the patches are too faint (the bug: factor stayed ~1 everywhere).
+    float n = vnoise(p, cloud_scale_m) * 0.65
+            + vnoise(p + vec2(91.0,17.0), cloud_scale_m*0.4) * 0.35;
+    n = clamp((n - 0.5) * 2.6 + 0.5, 0.0, 1.0);   // expand around mid → real contrast
+    // cloud_cover: higher = MORE ground in shadow. softness = edge width.
+    float shadow = smoothstep(1.0 - cloud_cover - cloud_softness,
+                              1.0 - cloud_cover + cloud_softness, n);
+    return 1.0 - shadow * cloud_strength;
 }
 
 // ============================================================================
@@ -489,9 +492,13 @@ void fragment(){
         rgh = mix(rgh, 0.6, dust);
     }
 
-    // Cloud shadows: drifting world-space patches darken the surface (cheap stand-in
-    // for masking the sun; reads like a passing cloud). Skip for debug views.
-    if (dbg == 0) { alb *= cloud_shadow(wp); }
+    // Cloud shadows are applied in light() below (they must attenuate the SUN/direct
+    // light, not albedo — albedo-darkening gets washed out by ambient+SDFGI, which is
+    // why max strength was barely visible). Ambient still fills, so shadows read
+    // natural rather than black.
+
+    // Cloud-factor debug: splat_debug==3 shows the shadow factor as grayscale.
+    if (splat_debug == 3){ dbg = 1; dbg_col = vec3(cloud_shadow(wp)); }
 
     // splat debug view overrides the lit output (no early return — gdshader bans it).
     ALBEDO = (dbg==1) ? dbg_col : alb;
@@ -504,4 +511,22 @@ void fragment(){
     } else {
         NORMAL=normalize((VIEW_MATRIX*vec4(nr,0.0)).xyz);
     }
+}
+
+// Custom lighting so cloud shadows attenuate the DIRECT (sun) light — the correct
+// place for them. ATTENUATION already carries the sun's shadow map; we multiply in
+// the drifting cloud factor. Ambient/GI is untouched (handled by the engine), so
+// shadowed ground stays naturally lit, not black. Standard Lambert diffuse +
+// simple energy-conserving specular so we don't lose the PBR look.
+void light() {
+    float cloud = cloud_shadow(v_world);   // v_world set in vertex(); varyings are valid in light()
+    float ndotl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+    DIFFUSE_LIGHT += ndotl * ATTENUATION * cloud * LIGHT_COLOR * ALBEDO;
+    // cheap GGX-ish specular, also cloud- and shadow-attenuated
+    vec3 H = normalize(VIEW + LIGHT);
+    float ndoth = clamp(dot(NORMAL, H), 0.0, 1.0);
+    float rough = max(ROUGHNESS, 0.04);
+    float a = rough * rough;
+    float spec = pow(ndoth, max(2.0 / (a * a) - 2.0, 1.0)) * (1.0 - rough);
+    SPECULAR_LIGHT += spec * ndotl * ATTENUATION * cloud * LIGHT_COLOR * 0.25;
 }
