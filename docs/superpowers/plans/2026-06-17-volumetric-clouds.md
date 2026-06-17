@@ -1,5 +1,33 @@
 # Volumetric Clouds + Matched Terrain Shadows — Implementation Plan
 
+> ## ✅ STATUS: COMPLETE (2026-06-17) — read this AS-BUILT note before the plan body
+> The feature shipped; the build diverged from the plan below in ways worth recording.
+> The task-by-task body is kept as the original build guide, but the **as-built reality** is:
+>
+> - **Rendering path evolved through 3 approaches.** Plan Stage 3 chose "Path B" (raymarch
+>   directly in the sky shader) and shipped working full-res clouds (~54 fps). Stage 4 perf
+>   needed amortization, which the sky-shader path can't do → tried "Path A" as a
+>   **CompositorEffect** (failed: raced the `Texture2Drd` RID, "binding not valid") → landed
+>   on the **clayjohn pattern: a plain node driving compute via `RenderingServer.CallOnRenderThread`**.
+>   That is the as-built Stage 4. The raymarch lives in `cloud_raymarch.glsl` (compute) NOT
+>   the sky shader; `cloud_sky.gdshader` only samples the result.
+> - **Amortization built but not needed.** `temporal_frames` exists, but the full system is
+>   cheap enough (~2 ms/frame: 139 vs 192 fps vsync-off) that the default is `temporal=1`
+>   (no smearing) at 128 raymarch steps + 512² shadow map.
+> - **As-built files:** `cloud_noise_3d.glsl`+`CloudNoiseCompute.cs` (3D PW noise),
+>   `CloudWeather.cs` (2D weather), `CloudParams.cs`+`data/cloud_params.json`,
+>   `CloudVolume.cs` (render-thread driver), `cloud_raymarch.glsl` (sky), `cloud_shadow.glsl`
+>   (ground shadow map), `cloud_sky.gdshader` (composite), `terrain_lab.gdshader` custom
+>   `light()`, `data/cloud_presets.json`, Clouds tab + per-tab Randomize/Lock + FPS HUD in
+>   `TerrainLabUI.cs`.
+> - **Extras beyond plan (user asks):** expanded knob set (size/edge/detail/opacity/
+>   brightness/ambient), cloud presets dropdown, per-tab Randomize+Lock, FPS HUD, `--profile`
+>   CLI.
+> - **Outstanding gate:** user has not yet flown the final clouds+shadows live (asked to
+>   profile + proceed). Live judgment of shadow alignment + motion is the remaining check.
+> - **Lessons → memory:** local-RD compute can't run `--headless`; compute→material must use
+>   `CallOnRenderThread` + assign-RID-once (not CompositorEffect). See DECISIONS 2026-06-17.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Raymarched volumetric clouds in the look-lab sky (HZD/Nubis technique), with a matched 2D cloud-shadow map that attenuates the terrain sun — overhead cloud and ground shadow from one density field.
