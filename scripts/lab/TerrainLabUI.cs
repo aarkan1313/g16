@@ -346,6 +346,56 @@ public partial class TerrainLabUI : Control
 
         vb.AddChild(new Label { Text = "RMB/LMB+WASD fly · wheel speed" });
         LoadPresetsFromDisk();
+
+        // --- Hero SHOTS: composition is a top 'good->great' lever. Fly to a framing
+        // you like, save it; reload anytime. Seeded with a few decent vantages. ---
+        vb.AddChild(new HSeparator());
+        vb.AddChild(new Label { Text = "HERO SHOTS (camera framing)" });
+        var srow = new HBoxContainer();
+        _shotPick = new OptionButton { CustomMinimumSize = new Vector2(150, 0) };
+        srow.AddChild(_shotPick);
+        var goBtn = new Button { Text = "Go" };
+        goBtn.Pressed += GoToShot;
+        srow.AddChild(goBtn);
+        var saveShot = new Button { Text = "Save view" };
+        saveShot.Pressed += SaveShot;
+        srow.AddChild(saveShot);
+        vb.AddChild(srow);
+        SeedShots();
+        RefreshShotList();
+    }
+
+    // ---- hero shots (camera viewpoints) --------------------------------------
+    private OptionButton _shotPick = null!;
+    private readonly List<(string name, Vector3 pos, Vector3 rot)> _shots = new();
+
+    private void SeedShots()
+    {
+        // a few decent starting vantages found while probing (low-angle, depth).
+        _shots.Add(("ridge vista", new Vector3(-1800, 120, -1200), new Vector3(4, 55, 0)));
+        _shots.Add(("misty dawn", new Vector3(800, 90, 2600), new Vector3(6, 180, 0)));
+        _shots.Add(("high overlook", new Vector3(0, 650, 1900), new Vector3(-14, 20, 0)));
+    }
+    private void RefreshShotList()
+    {
+        _shotPick.Clear();
+        for (int i = 0; i < _shots.Count; i++) { _shotPick.AddItem(_shots[i].name, i); }
+    }
+    private void GoToShot()
+    {
+        int i = _shotPick.Selected;
+        if (i < 0 || i >= _shots.Count) { return; }
+        var cam = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+        cam.Position = _shots[i].pos;
+        cam.RotationDegrees = _shots[i].rot;
+    }
+    private void SaveShot()
+    {
+        var cam = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+        _shots.Add(($"shot{_shots.Count + 1}", cam.Position, cam.RotationDegrees));
+        RefreshShotList();
+        _shotPick.Select(_shots.Count - 1);
+        GD.Print($"TerrainLab: saved view (pos {cam.Position}, rot {cam.RotationDegrees})");
     }
 
     private int ZoneDefaultMaterialIndex(int zone)
@@ -416,6 +466,7 @@ public partial class TerrainLabUI : Control
             case "shadow": GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").ShadowEnabled = on; break;
             case "sun":    GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").Visible = on; break;
             case "sdfgi":  GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SdfgiEnabled = on; break;
+            case "volfog": GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.VolumetricFogEnabled = on; break;
         }
     }
 
@@ -437,6 +488,8 @@ public partial class TerrainLabUI : Control
             case "fog_aerial":      env.FogAerialPerspective = v; break;
             case "fog_heightd":     env.FogHeightDensity = v; break;
             case "exposure":        env.TonemapExposure = v; break;
+            case "volfog_d":        env.VolumetricFogDensity = v; break;
+            case "godray":          sun.LightVolumetricFogEnergy = v; break;
         }
     }
     private void OrientSun(DirectionalLight3D sun)
