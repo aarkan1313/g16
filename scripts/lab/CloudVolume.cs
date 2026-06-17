@@ -50,6 +50,37 @@ public partial class CloudVolume : Node
     public const int ShadowRes = 512;
     public const float RegionM = 8192f;   // matches terrain region_size
 
+    private FogVolume? _godrayVol;
+    private ShaderMaterial? _godrayMat;
+    private bool _godraysOn = false;   // OFF by default — volumetric fog look needs live tuning
+
+    /// Build the gap-aligned god-ray FogVolume (a big box whose fog density is gated
+    /// by the cloud-shadow map → shafts through cloud gaps). Called by TerrainLabUI
+    /// after attach so it can be added to the scene tree + enable volumetric fog.
+    public FogVolume BuildGodrayVolume()
+    {
+        _godrayMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/cloud_godray_fog.gdshader") };
+        _godrayMat.SetShaderParameter("cloud_shadow_tex", _shadowRd);   // shared Texture2Drd (RID set in InitCompute)
+        _godrayMat.SetShaderParameter("shadow_region", RegionM);
+        _godrayMat.SetShaderParameter("godray_on", _godraysOn);
+        _godrayVol = new FogVolume
+        {
+            Name = "CloudGodrays",
+            Shape = RenderingServer.FogVolumeShape.Box,
+            Size = new Vector3(RegionM, 4000f, RegionM),
+            Material = _godrayMat,
+        };
+        _godrayVol.Position = new Vector3(0, 1500f, 0);   // span the air above the terrain
+        return _godrayVol;
+    }
+
+    public void SetGodraysEnabled(bool on)
+    {
+        _godraysOn = on;
+        _godrayMat?.SetShaderParameter("godray_on", on);
+        if (_env != null) { _env.VolumetricFogEnabled = on; }   // only pay for vol-fog when on
+    }
+
     public void Attach(Godot.Environment env, Camera3D cam)
     {
         _p = CloudParams.Load();

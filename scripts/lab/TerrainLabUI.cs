@@ -101,13 +101,23 @@ public partial class TerrainLabUI : Control
             _terrain.SetFloat("cloud_shadow_region", _cloud.RegionSize);
             _terrain.SetBool("cloud_shadow_on", _cloud.Enabled);
         }
+        // gap-aligned god rays: add the cloud-shadow-gated FogVolume (default OFF;
+        // volumetric fog only enabled when god rays are toggled on, so the base look
+        // is untouched until the user opts in + tunes it live).
+        var genv = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
+        genv.VolumetricFogDensity = 0.0f;        // base fog 0 — the FogVolume supplies density in gaps
+        var fog = _cloud.BuildGodrayVolume();
+        GetNode("/root/TerrainLabRoot").AddChild(fog);
+
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
         if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
+        if (_godraysOnCli >= 0) { _cloud.SetGodraysEnabled(_godraysOnCli == 1); }
     }
     private float _covOverride = -1f;
+    private int _godraysOnCli = -1;
 
     private const int DefaultMoodIdx = 5;   // "Clear Alpine" — clean neutral good-day look
     private void ApplyDefaultMood()
@@ -141,6 +151,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cloudsteps=")) { int.TryParse(a.Substring("--cloudsteps=".Length), out _cloudSteps); }
             else if (a.StartsWith("--clouds=")) { _cloudsOn = a.Substring("--clouds=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--coverage=")) { float.TryParse(a.Substring("--coverage=".Length), out _covOverride); }
+            else if (a.StartsWith("--godrays=")) { _godraysOnCli = a.Substring("--godrays=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
@@ -604,6 +615,7 @@ public partial class TerrainLabUI : Control
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
     private void ApplyCloudBool(string knob, bool on)
     {
+        if (knob == "godrays") { _cloud?.SetGodraysEnabled(on); return; }
         _cloud?.SetKnobBool(knob, on);
         // clouds-enabled also gates the ground-shadow sampling in the terrain light()
         if (knob == "enabled") { _terrain.SetBool("cloud_shadow_on", on); }
@@ -1025,6 +1037,10 @@ public partial class TerrainLabUI : Control
         // atmosphere reads coherent with the cover (stronger as overcast rises).
         Color sky = _cloud.SkyHorizonColor;
         env.FogLightColor = _baseFogColor.Lerp(sky, 0.35f + 0.45f * oc);
+        // God-ray strength peaks at BROKEN cloud (gaps + cover both present); near 0
+        // at clear or fully-overcast sky. Drives the sun's volumetric scatter energy.
+        float broken = 4f * oc * (1f - oc);   // bell curve, max at oc=0.5
+        sun.LightVolumetricFogEnergy = Mathf.Lerp(0.5f, 12f, broken);
     }
 
     public override void _Process(double delta)
