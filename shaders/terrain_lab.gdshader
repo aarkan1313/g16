@@ -64,7 +64,7 @@ uniform float antitile_mult = 5.3;
 //   1 = IQ 2-tap hash-tiling (cheap, contrast-boosted)         iquilezles.org
 //   2 = hex-tiling (Mikkelsen: 3-tap, per-tile rotation,       JCGT 2022
 //       variance-preserving + contrast restore, textureGrad mip-correct)
-uniform int tile_mode = 2;
+uniform int tile_mode = 1;   // IQ 2-tap default (hex caused tile-seam squares)
 uniform float tri_sharpness : hint_range(1.0, 32.0) = 8.0;  // triplanar blend exponent
 uniform float hex_rot_strength : hint_range(0.0, 1.0) = 0.7; // per-tile rotation amount
 uniform float hex_contrast : hint_range(0.3, 1.0) = 0.7;     // contrast-restore (lower=sharper)
@@ -224,6 +224,25 @@ float s_rgh(sampler2D t, vec3 wp, vec3 nr){
     return tiled(t,wp.zy/tex_scale_m).r*bw.x + tiled(t,wp.xz/tex_scale_m).r*bw.y + tiled(t,wp.xy/tex_scale_m).r*bw.z;
 }
 
+// --- CHEAP samplers for the baked/splat path (the lag fix) -------------------
+// The full triplanar path samples 3 projection planes × the tiling taps = up to
+// 9 fetches/map. For the baked ground we sample only the DOMINANT plane (top for
+// near-flat, side for steep) with a 2-tap IQ break-up → ~2 fetches/map. That cuts
+// ~54 samples/pixel to ~6 with no visible loss on near-flat ground (most of it),
+// and NO hex (hex caused the squares). cheap_uv returns the dominant plane's uv +
+// derivatives; cheap_* never call hex.
+void cheap_plane(vec3 wp, vec3 nr, out vec2 uv, out vec2 dx, out vec2 dy, out bool topPlane){
+    // top plane (xz) when facing up enough; else the larger of the side planes.
+    if (abs(nr.y) >= abs(nr.x) && abs(nr.y) >= abs(nr.z)) { uv = wp.xz/tex_scale_m; topPlane = true; }
+    else if (abs(nr.x) >= abs(nr.z)) { uv = wp.zy/tex_scale_m; topPlane = false; }
+    else { uv = wp.xy/tex_scale_m; topPlane = false; }
+    dx = dFdx(uv); dy = dFdy(uv);
+}
+vec4 cheap_tap(sampler2D t, vec2 uv, vec2 dx, vec2 dy){
+    // plain when tile_mode==0, else IQ 2-tap. Never hex.
+    return (tile_mode == 0) ? textureGrad(t, uv, dx, dy) : iq_sample(t, uv, dx, dy);
+}
+
 void vertex(){
     v_uv=(VERTEX.xz+vec2(region_size*0.5))/region_size;
     VERTEX.y=height_at(v_uv);
@@ -347,6 +366,28 @@ float rgh_by(int z, vec3 wp, vec3 nr){
     if(z==4) return s_rgh(z4_rgh,wp,nr); if(z==5) return s_rgh(z5_rgh,wp,nr);
     return s_rgh(z6_rgh,wp,nr);
 }
+
+// CHEAP per-zone fetch: one dominant-plane IQ/plain tap for alb+nrm+rgh together.
+// Returns albedo in .rgb; nrm packed via out; rgh via out. ~2 fetches/map vs 9.
+vec3 cheap_alb_by(int z, vec2 uv, vec2 dx, vec2 dy){
+    if(z==0) return cheap_tap(z0_alb,uv,dx,dy).rgb; if(z==1) return cheap_tap(z1_alb,uv,dx,dy).rgb;
+    if(z==2) return cheap_tap(z2_alb,uv,dx,dy).rgb; if(z==3) return cheap_tap(z3_alb,uv,dx,dy).rgb;
+    if(z==4) return cheap_tap(z4_alb,uv,dx,dy).rgb; if(z==5) return cheap_tap(z5_alb,uv,dx,dy).rgb;
+    return cheap_tap(z6_alb,uv,dx,dy).rgb;
+}
+vec3 cheap_nrm_by(int z, vec2 uv, vec2 dx, vec2 dy){
+    if(z==0) return cheap_tap(z0_nrm,uv,dx,dy).rgb; if(z==1) return cheap_tap(z1_nrm,uv,dx,dy).rgb;
+    if(z==2) return cheap_tap(z2_nrm,uv,dx,dy).rgb; if(z==3) return cheap_tap(z3_nrm,uv,dx,dy).rgb;
+    if(z==4) return cheap_tap(z4_nrm,uv,dx,dy).rgb; if(z==5) return cheap_tap(z5_nrm,uv,dx,dy).rgb;
+    return cheap_tap(z6_nrm,uv,dx,dy).rgb;
+}
+float cheap_rgh_by(int z, vec2 uv, vec2 dx, vec2 dy){
+    if(z==0) return cheap_tap(z0_rgh,uv,dx,dy).r; if(z==1) return cheap_tap(z1_rgh,uv,dx,dy).r;
+    if(z==2) return cheap_tap(z2_rgh,uv,dx,dy).r; if(z==3) return cheap_tap(z3_rgh,uv,dx,dy).r;
+    if(z==4) return cheap_tap(z4_rgh,uv,dx,dy).r; if(z==5) return cheap_tap(z5_rgh,uv,dx,dy).r;
+    return cheap_tap(z6_rgh,uv,dx,dy).r;
+}
+
 // Debug palette for visualizing the splat mask's zone assignment.
 vec3 zone_color(int z){
     vec3 c[7]=vec3[7](vec3(0.2,0.7,0.2),vec3(0.5,0.6,0.2),vec3(0.6,0.5,0.3),
@@ -363,23 +404,32 @@ void fragment(){
     int dbg = 0;            // set when a splat debug view should override final output
     vec3 dbg_col = vec3(0.0);
     if (splat_on){
-        // Lever 1: GPU-baked dominant+secondary mixing — 2 materials per spot.
+        // Lever 1 + baked-ground (lag fix): the splat texture supplies the LOW-FREQ
+        // decisions (dominant/secondary material + blend). Per-fragment we do just
+        // ONE dominant-plane IQ/plain tap per material — ~6 fetches total, not ~54,
+        // and NO hex (hex made the squares). Detail stays crisp (real texture taps).
         vec4 sp = texture(splat_tex, v_uv);
         int dom = int(sp.r + 0.5);
         int sec = clamp(sec_zone[dom], 0, 6);   // per-zone companion (UI-controlled, live)
-        float t = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);  // intra-zone + boundary
+        float t = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);
 
-        // sample both materials once
-        vec3 aD=alb_by(dom,wp,nr), aS=alb_by(sec,wp,nr);
-        float rD=rgh_by(dom,wp,nr), rS=rgh_by(sec,wp,nr);
-        // height-blend by relief (roughness as proxy: rough = grit that protrudes).
+        // one dominant projection plane, derivatives once
+        vec2 uv, dx, dy; bool topPlane;
+        cheap_plane(wp, nr, uv, dx, dy, topPlane);
+
+        float rD = cheap_rgh_by(dom, uv, dx, dy);
+        float rS = cheap_rgh_by(sec, uv, dx, dy);
+        // height-blend by relief (roughness proxy: rough = grit that protrudes).
         float m = heightblend_on ? heightblend_w(rD, rS, t, heightblend_sharp) : t;
 
         if (splat_debug == 1){ dbg = 1; dbg_col = mix(zone_color(dom),zone_color(sec),m); }
         else if (splat_debug == 2){ dbg = 1; dbg_col = vec3(m); }
-        alb = mix(aD, aS, m);
+
+        alb = mix(cheap_alb_by(dom,uv,dx,dy), cheap_alb_by(sec,uv,dx,dy), m);
         if (blend_mode>=1){
-            nrm = mix(nrm_by(dom,wp,nr), nrm_by(sec,wp,nr), m)*2.0-1.0;
+            nrm = mix(cheap_nrm_by(dom,uv,dx,dy), cheap_nrm_by(sec,uv,dx,dy), m)*2.0-1.0;
+            // on near-flat top-plane the tangent normal maps straight; on side planes
+            // we keep it simple (geometric normal dominates the look there).
             rgh = mix(rD, rS, m);
         } else { rgh = 0.9; }
     } else {

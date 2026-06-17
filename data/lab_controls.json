@@ -11,7 +11,7 @@
       "options": ["height bands", "height+slope", "noise-broken", "curvature", "steep=cliff", "noise biomes"],
       "default": 2, "rand": true },
     { "id": "tile_mode", "label": "tile mode", "tab": "Surface", "type": "enum", "param": "tile_mode",
-      "options": ["none (sharp)", "IQ 2-tap", "hex-tiling"], "default": 2, "rand": true },
+      "options": ["none (sharp)", "IQ 2-tap", "hex-tiling"], "default": 1, "rand": false },
     { "id": "tex_scale_m", "label": "tex scale m", "tab": "Surface", "type": "slider",
       "param": "tex_scale_m", "min": 4, "max": 80, "default": 28, "rand": true },
     { "id": "tri_sharpness", "label": "tri sharp", "tab": "Surface", "type": "slider",
@@ -47,7 +47,7 @@
       "param": "snow_dust_amp", "min": 0, "max": 1, "default": 0, "rand": true },
 
     { "id": "splat_on", "label": "splat mix", "tab": "Splat", "type": "toggle",
-      "param": "splat_on", "default": false, "rand": true },
+      "param": "splat_on", "default": true, "rand": true },
     { "id": "mix_strength", "label": "mix strength", "tab": "Splat", "type": "slider",
       "param": "mix_strength", "min": 0, "max": 1, "default": 0.6, "rand": true },
     { "id": "heightblend_on", "label": "height blend", "tab": "Splat", "type": "toggle",

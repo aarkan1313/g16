@@ -509,6 +509,16 @@ public partial class TerrainLabUI : Control
         if (_overrideContact >= 0) { OverrideToggle("contact_on", _overrideContact == 1); }
         if (_overrideSplat >= 0) { OverrideToggle("splat_on", _overrideSplat == 1); }
         if (_texScale > 0f && _byId.TryGetValue("tex_scale_m", out LabControl ts)) { SetWidgetValue(ts, _texScale); }
+        if (_camArg != null)
+        {
+            string[] p = _camArg.Split(',');
+            if (p.Length >= 5)
+            {
+                var cam = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+                cam.Position = new Vector3(float.Parse(p[0]), float.Parse(p[1]), float.Parse(p[2]));
+                cam.RotationDegrees = new Vector3(float.Parse(p[3]), float.Parse(p[4]), 0f);
+            }
+        }
     }
     private void OverrideEnum(string id, int v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
     private void OverrideToggle(string id, bool v) { if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, v); } }
