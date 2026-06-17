@@ -127,6 +127,7 @@ public partial class TerrainLabUI : Control
     }
     private float _covOverride = -1f;
     private int _godraysOnCli = -1;
+    private int _terrainArCli = -1;
 
     private const int DefaultMoodIdx = 5;   // "Clear Alpine" — clean neutral good-day look
     private void ApplyDefaultMood()
@@ -161,6 +162,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--clouds=")) { _cloudsOn = a.Substring("--clouds=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--coverage=")) { float.TryParse(a.Substring("--coverage=".Length), out _covOverride); }
             else if (a.StartsWith("--godrays=")) { _godraysOnCli = a.Substring("--godrays=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
@@ -1019,6 +1021,7 @@ public partial class TerrainLabUI : Control
         if (_probeRoughFloor >= 0f) { _terrain.SetFloat("rough_floor", _probeRoughFloor); }
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
+        if (_terrainArCli >= 0) { _terrain.SetBool("ar_on", _terrainArCli == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
     }
     private int _cloudDbg = -1;
@@ -1069,6 +1072,8 @@ public partial class TerrainLabUI : Control
     public override void _Process(double delta)
     {
         if (_ready) { UpdateOvercast(); }
+        // push camera world pos for the ground anti-repetition distance LOD (Unit 1)
+        if (_ready) { _terrain.SetCameraWorld(GetNode<Camera3D>("/root/TerrainLabRoot/Camera").GlobalPosition); }
         // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)
         {

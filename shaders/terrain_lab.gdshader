@@ -35,6 +35,12 @@ uniform sampler2D z6_rgh : hint_roughness_gray, filter_linear_mipmap_anisotropic
 
 uniform float tex_scale_m = 9.0;
 
+// --- Ground anti-repetition (Unit 1) + shared distance seam -----------------
+uniform bool ar_on = true;             // master toggle for stochastic bombing
+uniform float ar_strength : hint_range(0.0, 1.0) = 1.0;  // blend toward bombed result
+uniform float ar_far_m : hint_range(200.0, 6000.0) = 2500.0; // distance where AR fades to cheap
+uniform vec3 cam_world = vec3(0.0);    // camera world pos (pushed from C#) for distanceWeight
+
 // mask_mode: 0 height bands | 1 height+slope | 2 noise-broken bands |
 //            3 curvature-aware (dirt in hollows) | 4 steep=cliff sharp |
 //            5 world-noise biome patches
@@ -221,7 +227,44 @@ vec4 tiled(sampler2D tex, vec2 uv){
     return textureGrad(tex, uv, dx, dy);   // tile_mode 0: plain sample
 }
 
+// 0 near .. 1 far — shared LOD factor for the ground-presentation units.
+float distanceWeight(vec3 wp){
+    float d = length(wp - cam_world);
+    return clamp(d / ar_far_m, 0.0, 1.0);
+}
+
 vec3 tri_w(vec3 nr){ vec3 bw=pow(abs(nr),vec3(tri_sharpness)); return bw/(bw.x+bw.y+bw.z); }
+
+// Unit 1: histogram-preserving stochastic bombing. 3 hash-jittered + per-tile-rotated
+// taps on a triangle grid, variance-preserving blend (keeps contrast — the old 50/50
+// blend muddiness was variance loss). LODs to 1 plain tap at distance. No LUT needed.
+// This is the SINGLE material-fetch entry the triplanar path goes through (the shared
+// sampleMaterial seam for the ground-presentation arc).
+vec4 ar_sample_wp(sampler2D tex, vec2 uv, vec3 wp){
+    vec2 dx = dFdx(uv), dy = dFdy(uv);
+    if (!ar_on) return textureGrad(tex, uv, dx, dy);
+    float far = distanceWeight(wp);
+    if (far > 0.95) return textureGrad(tex, uv, dx, dy);   // far: one cheap tap
+
+    float w1,w2,w3; vec2 v1,v2,v3;
+    tri_grid(uv, w1,w2,w3, v1,v2,v3);
+    mat2 r1 = load_rot(v1), r2 = load_rot(v2), r3 = load_rot(v3);
+    vec2 c1 = r1*(uv - v1) + v1 + hash2v(v1);
+    vec2 c2 = r2*(uv - v2) + v2 + hash2v(v2);
+    vec2 c3 = r3*(uv - v3) + v3 + hash2v(v3);
+    vec4 t1 = textureGrad(tex, c1, r1*dx, r1*dy);
+    vec4 t2 = textureGrad(tex, c2, r2*dx, r2*dy);
+    vec4 t3 = textureGrad(tex, c3, r3*dx, r3*dy);
+    vec3 w = vec3(w1,w2,w3); w *= w;                       // sharpen weights
+    w /= max(w.x+w.y+w.z, 1e-5);
+    vec4 mean = (t1+t2+t3)/3.0;
+    vec4 blend = t1*w.x + t2*w.y + t3*w.z;
+    float vc = inversesqrt(max(dot(w,w), 1e-5));           // variance restore (keep contrast)
+    vec4 bombed = mean + (blend - mean)*vc;
+    vec4 plain = textureGrad(tex, uv, dx, dy);
+    float k = ar_strength * (1.0 - smoothstep(0.7, 0.95, far));
+    return mix(plain, bombed, k);
+}
 
 vec3 s_alb(sampler2D t, vec3 wp, vec3 nr){
     vec3 bw=tri_w(nr);
@@ -376,16 +419,16 @@ float rgh_by(int z, vec3 wp, vec3 nr){
 vec3 tp_alb(sampler2D t, vec3 wp, vec3 nr){
     vec3 bw=tri_w(nr);
     vec2 ux=wp.zy/tex_scale_m, uy=wp.xz/tex_scale_m, uz=wp.xy/tex_scale_m;
-    return textureGrad(t,ux,dFdx(ux),dFdy(ux)).rgb*bw.x
-         + textureGrad(t,uy,dFdx(uy),dFdy(uy)).rgb*bw.y
-         + textureGrad(t,uz,dFdx(uz),dFdy(uz)).rgb*bw.z;
+    return ar_sample_wp(t,ux,wp).rgb*bw.x
+         + ar_sample_wp(t,uy,wp).rgb*bw.y
+         + ar_sample_wp(t,uz,wp).rgb*bw.z;
 }
 float tp_rgh(sampler2D t, vec3 wp, vec3 nr){
     vec3 bw=tri_w(nr);
     vec2 ux=wp.zy/tex_scale_m, uy=wp.xz/tex_scale_m, uz=wp.xy/tex_scale_m;
-    return textureGrad(t,ux,dFdx(ux),dFdy(ux)).r*bw.x
-         + textureGrad(t,uy,dFdx(uy),dFdy(uy)).r*bw.y
-         + textureGrad(t,uz,dFdx(uz),dFdy(uz)).r*bw.z;
+    return ar_sample_wp(t,ux,wp).r*bw.x
+         + ar_sample_wp(t,uy,wp).r*bw.y
+         + ar_sample_wp(t,uz,wp).r*bw.z;
 }
 vec3 trip_alb_by(int z, vec3 wp, vec3 nr){
     if(z==0) return tp_alb(z0_alb,wp,nr); if(z==1) return tp_alb(z1_alb,wp,nr);

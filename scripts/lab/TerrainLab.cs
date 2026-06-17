@@ -98,6 +98,7 @@ public partial class TerrainLab : MeshInstance3D
     public void SetInt(string param, int v) => _mat.SetShaderParameter(param, v);
     public void SetBool(string param, bool v) => _mat.SetShaderParameter(param, v);
     public void SetTexture(string param, Texture2D tex) => _mat.SetShaderParameter(param, tex);
+    public void SetCameraWorld(Vector3 p) => _mat.SetShaderParameter("cam_world", p);
 
     private readonly int[] _secZone = { 1, 2, 1, 4, 5, 4, 5 }; // default companion per zone
     /// Set which zone's textures act as the companion blended into zone `zone`.
