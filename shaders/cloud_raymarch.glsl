@@ -93,32 +93,45 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     float type     = clamp(ltype + (w.g - 0.5) * 0.4, 0.0, 1.0);
     float densBias = mix(0.7, 1.3, w.b);
 
+    // PER-SCALE WIND (audit): shape/cell/detail scroll at DIFFERENT rates+directions so the
+    // scales parallax against each other instead of translating in lockstep (lockstep reads
+    // rigid/procedural in motion). windOff is the base; derive offset scrolls per scale.
+    vec2 wShape  = windOff;
+    vec2 wCell   = windOff * 0.55 + vec2(-windOff.y, windOff.x) * 0.18;   // slower + slight curl
+    vec2 wDetail = windOff * 1.7  + vec2(windOff.y, -windOff.x) * 0.35;   // faster + opposite curl
+
     vec3 warp = (vec3(texture(detail_tex, lp * (DETAIL_SCALE * 0.25)).r) - 0.5) * WARP_AMOUNT;
     vec3 lpw = lp + warp;
 
     float sScale = SHAPE_SCALE / max(lsize, 0.01);
-    vec3 suv = lpw * sScale + vec3(windOff.x, h, windOff.y) * sScale;
+    vec3 suv = lpw * sScale + vec3(wShape.x, h, wShape.y) * sScale;
     vec4 sh = texture(shape_tex, suv);
     float fbm = sh.g * 0.625 + sh.b * 0.25 + sh.a * 0.125;
-    float base = remap(sh.r, fbm * 0.3, 1.0, 0.0, 1.0);
+    float base = remap(sh.r, fbm * 0.45, 1.0, 0.0, 1.0);   // stronger base erosion (was 0.3)
 
     float thresh = mix(0.92, 0.02, coverage);
     float soft = min(thresh + mix(0.30, 0.10, ledge), 1.0);
     float shape = smoothstep(thresh, soft, base);
 
+    // CELLULARITY — keep cell SEPARATION even at high coverage (don't merge into a sheet).
+    // The gate's pass-band stays narrow at high cov (lo→0.42, hi→0.78) so cells keep their
+    // seams; high coverage fills cells but the inter-cell gaps persist (audit fix #5).
     float cellScale = sScale * 0.35 * max(lcell, 0.05);
-    float cell = texture(shape_tex, lpw * cellScale + vec3(windOff.x, h, windOff.y) * cellScale).g;
-    float cellGate = smoothstep(mix(0.78, 0.35, coverage), mix(1.0, 0.6, coverage), cell);
+    float cell = texture(shape_tex, lpw * cellScale + vec3(wCell.x, h, wCell.y) * cellScale).g;
+    float cellGate = smoothstep(mix(0.80, 0.42, coverage), mix(1.0, 0.78, coverage), cell);
     shape *= cellGate;
 
     shape *= type_gradient(h, type);
     if (shape <= 0.0) return 0.0;
 
+    // DETAIL EROSION — stronger + biting harder at edges (low shape) and tops (audit:
+    // round blobs = erosion too weak). erodeAmt up; also erode more where shape is small.
     if (ldetail > 0.0){
         float dScale = DETAIL_SCALE / max(ldetsize, 0.01);
-        vec3 duv = lp * dScale + vec3(windOff.x * 1.7, h, windOff.y * 1.7) * dScale;
+        vec3 duv = lp * dScale + vec3(wDetail.x, h, wDetail.y) * dScale;
         float det = texture(detail_tex, duv).r;
-        float erodeAmt = mix(0.25, 0.6, h) * ldetail;
+        float edgeBoost = mix(1.6, 0.7, shape);              // erode edges harder than cores
+        float erodeAmt = mix(0.35, 0.85, h) * ldetail * edgeBoost;
         shape = clamp(remap(shape, det * erodeAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
     }
     return shape * ldens * densBias;   // opacity applied by the caller (sigma)
