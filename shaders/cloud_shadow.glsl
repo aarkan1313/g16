@@ -79,6 +79,13 @@ float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
     float thresh = mix(0.92, 0.02, coverage);
     float soft = min(thresh + mix(0.30, 0.10, P.edge), 1.0);
     float shape = smoothstep(thresh, soft, base);
+
+    // CELLULARITY — identical to cloud_raymarch.glsl (keep clumps+gaps even when dense).
+    float cellScale = sScale * 0.35;
+    float cell = texture(shape_tex, lpw * cellScale + vec3(windOff.x, h, windOff.y) * cellScale).g;
+    float cellGate = smoothstep(mix(0.78, 0.35, coverage), mix(1.0, 0.6, coverage), cell);
+    shape *= cellGate;
+
     shape *= type_gradient(h, type);
     if (shape <= 0.0) return 0.0;
 

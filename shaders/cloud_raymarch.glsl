@@ -97,6 +97,21 @@ float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
     float thresh = mix(0.92, 0.02, coverage);
     float soft = min(thresh + mix(0.30, 0.10, P.edge), 1.0);
     float shape = smoothstep(thresh, soft, base);
+
+    // CELLULARITY — keep clumps + gaps even at high coverage (real skies aren't one
+    // contiguous lump). A low-freq cellular mask (shape.G = a coarse Worley octave,
+    // sampled at a LARGER scale) gates where cloud is allowed; coverage GROWS the cells
+    // (lowers their gate) but the inter-cell gaps only fully close as coverage→1. So mid
+    // coverage = distinct clumps with sky between, not a slab.
+    float cellScale = sScale * 0.35;                 // coarser than the main shape
+    float cell = texture(shape_tex, lpw * cellScale + vec3(windOff.x, h, windOff.y) * cellScale).g;
+    // Keep clumps + gaps across the whole range: the gate's low edge only reaches ~0.35
+    // (not 0) even at full coverage, so inter-cell gaps never fully close → no slab. Real
+    // overcast still reads as broad cover because the cells are big + the threshold above
+    // already filled most of each cell; this just preserves the cellular SEAMS.
+    float cellGate = smoothstep(mix(0.78, 0.35, coverage), mix(1.0, 0.6, coverage), cell);
+    shape *= cellGate;
+
     shape *= type_gradient(h, type);                 // rounded bottoms, wispy tops
     if (shape <= 0.0) return 0.0;                     // hard gap → sky shows through
 

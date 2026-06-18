@@ -85,13 +85,21 @@ public static class CloudShadowCheck
         // also report the vertical-density stats + sun vector so a 0% result is diagnosable
         int hasCloud = 0; for (int i = 0; i < n; i++) { if (f[i * 4 + 1] > 0.001) hasCloud++; }
         Vector3 Ln = sunDir.Normalized();
-        bool pass = r > 0.6;   // strong positive: cloud overhead ⇒ shadow
+        // Correlation needs VARIANCE to be meaningful. Near-total cover (≳95% shadowed)
+        // saturates → r drops for lack of signal, NOT for decoupling. So r is only a valid
+        // coupling test in the unsaturated regime; flag saturation instead of failing it.
+        bool saturated = pctShadowed > 95.0 || (100.0 * hasCloud / n) > 98.0;
+        bool pass = r > 0.6;
         GD.Print($"[shadowcheck] n={n} grid={Grid}² coverage={p.Coverage:F2}  sun=({Ln.X:F2},{Ln.Y:F2},{Ln.Z:F2})  " +
                  $"cellsWithCloudOverhead={100.0*hasCloud/n:F1}%");
         GD.Print($"[shadowcheck] corr(density, shadow-darkness) r={r:F3}  shadowed={pctShadowed:F1}%  maxVertDensity={maxDens:F3}");
-        GD.Print(pass
-            ? $"[shadowcheck] PASS — shadow tracks cloud overhead (r={r:F3} > 0.6). Darker ground ⇔ more cloud above."
-            : $"[shadowcheck] FAIL — shadow does NOT track cloud overhead (r={r:F3} ≤ 0.6). The shadow is decoupled from the clouds.");
+        if (saturated)
+            GD.Print($"[shadowcheck] SATURATED — {pctShadowed:F0}% shadowed, too little variance for a valid r " +
+                     $"(test coupling at mid coverage ~0.4-0.5). r here is not a coupling verdict.");
+        else
+            GD.Print(pass
+                ? $"[shadowcheck] PASS — shadow tracks cloud overhead (r={r:F3} > 0.6). Darker ground ⇔ more cloud above."
+                : $"[shadowcheck] FAIL — shadow does NOT track cloud overhead (r={r:F3} ≤ 0.6). The shadow is decoupled from the clouds.");
 
         rd.FreeRid(set); rd.FreeRid(outBuf); rd.FreeRid(paramBuf); rd.FreeRid(sampler);
         rd.FreeRid(shapeTex); rd.FreeRid(detailTex); rd.FreeRid(weatherTex);
