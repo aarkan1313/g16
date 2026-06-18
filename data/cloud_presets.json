@@ -1,25 +1,25 @@
 {
-  "_comment": "Named cloud sky looks for the Clouds-tab preset picker. Each preset sets the listed cloud-control ids (by their lab_controls.json id). Keys are control ids; values are the knob value. Tunable — add/edit presets here, no code.",
+  "_comment": "Named cloud sky looks for the Clouds-tab preset picker. Each preset sets the listed cloud-control ids (by their lab_controls.json id). Keys are control ids; values are the knob value. Tunable — add/edit presets here, no code. NOTE: drift speeds kept modest (<=18 m/s) so motion stays smooth in the world-space cloud layer; Stormy reads as DARK+towering (low brightness/ambient, lower base), not merely 'more cloud' than Overcast.",
   "presets": [
     {
       "name": "Clear",
-      "values": { "cloud_coverage": 0.12, "cloud_density": 0.7, "cloud_type": 0.7, "cloud_size": 1.4, "cloud_edge": 0.6, "cloud_detail": 0.5, "cloud_opacity": 0.9, "cloud_brightness": 1.1, "cloud_ambient": 0.8, "cloud_altitude": 2200, "cloud_thickness": 900 }
+      "values": { "cloud_coverage": 0.12, "cloud_density": 0.7, "cloud_type": 0.6, "cloud_size": 1.4, "cloud_edge": 0.6, "cloud_detail": 0.5, "cloud_opacity": 0.9, "cloud_brightness": 1.15, "cloud_ambient": 0.85, "cloud_altitude": 2400, "cloud_thickness": 800, "cloud_drift_speed": 6.0, "cloud_drift_dir": 45 }
     },
     {
       "name": "Scattered",
-      "values": { "cloud_coverage": 0.3, "cloud_density": 1.0, "cloud_type": 0.65, "cloud_size": 1.0, "cloud_edge": 0.55, "cloud_detail": 0.45, "cloud_opacity": 1.0, "cloud_brightness": 1.0, "cloud_ambient": 0.7, "cloud_altitude": 1800, "cloud_thickness": 1400 }
+      "values": { "cloud_coverage": 0.32, "cloud_density": 1.0, "cloud_type": 0.65, "cloud_size": 1.0, "cloud_edge": 0.55, "cloud_detail": 0.5, "cloud_opacity": 1.0, "cloud_brightness": 1.05, "cloud_ambient": 0.75, "cloud_altitude": 2000, "cloud_thickness": 1200, "cloud_drift_speed": 9.0, "cloud_drift_dir": 60 }
     },
     {
       "name": "Broken",
-      "values": { "cloud_coverage": 0.5, "cloud_density": 1.2, "cloud_type": 0.55, "cloud_size": 0.85, "cloud_edge": 0.5, "cloud_detail": 0.5, "cloud_opacity": 1.2, "cloud_brightness": 0.95, "cloud_ambient": 0.65, "cloud_altitude": 1700, "cloud_thickness": 1600 }
+      "values": { "cloud_coverage": 0.58, "cloud_density": 1.2, "cloud_type": 0.55, "cloud_size": 0.85, "cloud_edge": 0.5, "cloud_detail": 0.55, "cloud_opacity": 1.2, "cloud_brightness": 0.95, "cloud_ambient": 0.7, "cloud_altitude": 1800, "cloud_thickness": 1500, "cloud_drift_speed": 12.0, "cloud_drift_dir": 75 }
     },
     {
       "name": "Overcast",
-      "values": { "cloud_coverage": 0.85, "cloud_density": 1.6, "cloud_type": 0.2, "cloud_size": 1.6, "cloud_edge": 0.25, "cloud_detail": 0.3, "cloud_opacity": 2.0, "cloud_brightness": 0.8, "cloud_ambient": 0.9, "cloud_altitude": 1300, "cloud_thickness": 1200 }
+      "values": { "cloud_coverage": 0.92, "cloud_density": 1.5, "cloud_type": 0.18, "cloud_size": 1.7, "cloud_edge": 0.2, "cloud_detail": 0.25, "cloud_opacity": 1.8, "cloud_brightness": 0.82, "cloud_ambient": 0.95, "cloud_altitude": 1500, "cloud_thickness": 1000, "cloud_drift_speed": 8.0, "cloud_drift_dir": 90 }
     },
     {
       "name": "Stormy",
-      "values": { "cloud_coverage": 0.8, "cloud_density": 2.2, "cloud_type": 0.85, "cloud_size": 1.1, "cloud_edge": 0.45, "cloud_detail": 0.6, "cloud_opacity": 2.6, "cloud_brightness": 0.6, "cloud_ambient": 0.5, "cloud_altitude": 1100, "cloud_thickness": 2400 }
+      "values": { "cloud_coverage": 0.78, "cloud_density": 2.4, "cloud_type": 0.9, "cloud_size": 1.15, "cloud_edge": 0.5, "cloud_detail": 0.65, "cloud_opacity": 2.8, "cloud_brightness": 0.5, "cloud_ambient": 0.45, "cloud_altitude": 900, "cloud_thickness": 2600, "cloud_drift_speed": 18.0, "cloud_drift_dir": 220 }
     }
   ]
 }
