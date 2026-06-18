@@ -113,7 +113,11 @@ public partial class TerrainLabUI : Control
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
         if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
+        if (_presetCli >= 0) { ApplyCloudPreset(_presetCli); }   // before coverage so --coverage can still override for testing
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
+        if (_perDeckCli >= 0f) { _cloud.SetPerDeck(_perDeckCli); }
+        if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
+        if (_cloudStatsCli) { _cloud.RequestStats(); }
         if (_godraysOnCli >= 0) { _cloud.SetGodraysEnabled(_godraysOnCli == 1); }
         if (_shadowDbgCli == 1) { _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
         if (_shadowCheckCli)   // numeric proof: correlate shadow vs cloud-overhead, print PASS/FAIL
@@ -124,6 +128,17 @@ public partial class TerrainLabUI : Control
             Vector3 toSun = sunNode.GlobalTransform.Basis.Z.Normalized();
             CloudShadowCheck.Run(_cloud.Params, toSun, _cloud.RegionSize, _terrain.MidHeight, Vector2.Zero);
         }
+        if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
+        {
+            var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+            var layers = CloudLayers.Load();
+            while (layers.Count < 2) { layers.Add(default); }
+            // same single source of truth as the renderer (CloudVolume.PackLayers) so the
+            // check matches what's actually rendered for the knob-driven cumulus deck.
+            var cumulus = CloudLayers.WithCumulusLighting(layers[0]);
+            CloudLightCheck.Run(cumulus, layers[1], sunNode.LightColor, sunNode.LightEnergy,
+                                _cloud.Params.Brightness, _cloud.Params.HgAniso);
+        }
         // H3 fix: mood + sun were applied in _Ready BEFORE this deferred attach, so the
         // cloud's sky/sun pushes no-opped (material/env null). Re-apply now that _cloud
         // is live, so clouds track the spawn mood/sun instead of CloudParams defaults.
@@ -131,6 +146,11 @@ public partial class TerrainLabUI : Control
         PushSunToCloud(GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
     }
     private float _covOverride = -1f;
+    private float _perDeckCli = -1f;   // --perdeck=0/1: A/B per-deck lighting (-1 = leave default ON)
+    private bool _lightCheckCli = false;   // --lightcheck: print per-deck lighting difference math
+    private int _deckDbgCli = -1;          // --deckdbg=1: deck-ID overlay (flat color per deck)
+    private bool _cloudStatsCli = false;   // --cloudstats: read back dome, print coverage/brightness
+    private int _presetCli = -1;           // --preset=N: apply cloud preset N at startup (test layer stacks)
     private int _godraysOnCli = -1;
     private int _terrainArCli = -1;
 
@@ -166,10 +186,15 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cloudsteps=")) { int.TryParse(a.Substring("--cloudsteps=".Length), out _cloudSteps); }
             else if (a.StartsWith("--clouds=")) { _cloudsOn = a.Substring("--clouds=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--coverage=")) { float.TryParse(a.Substring("--coverage=".Length), out _covOverride); }
+            else if (a.StartsWith("--perdeck=")) { if (float.TryParse(a.Substring("--perdeck=".Length), out float pd)) _perDeckCli = pd; }
+            else if (a.StartsWith("--deckdbg=")) { _deckDbgCli = a.Substring("--deckdbg=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--godrays=")) { _godraysOnCli = a.Substring("--godrays=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
+            else if (a == "--lightcheck") { _lightCheckCli = true; }
+            else if (a == "--cloudstats") { _cloudStatsCli = true; }
+            else if (a.StartsWith("--preset=")) { int.TryParse(a.Substring("--preset=".Length), out _presetCli); }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
@@ -640,7 +665,7 @@ public partial class TerrainLabUI : Control
     }
 
     // ---- cloud PRESETS (named sky looks, data/cloud_presets.json) --------------
-    private readonly List<(string name, Godot.Collections.Dictionary values)> _cloudPresets = new();
+    private readonly List<(string name, Godot.Collections.Dictionary values, Godot.Collections.Array? layers)> _cloudPresets = new();
 
     private void BuildCloudPresetPicker(VBoxContainer col)
     {
@@ -667,7 +692,9 @@ public partial class TerrainLabUI : Control
         {
             var d = p.AsGodotDictionary();
             string name = d.ContainsKey("name") ? d["name"].AsString() : "preset";
-            if (d.ContainsKey("values")) { _cloudPresets.Add((name, d["values"].AsGodotDictionary())); }
+            // optional "layers" block = an authored deck stack (roadmap #2); absent → default stack.
+            Godot.Collections.Array? layers = d.ContainsKey("layers") ? d["layers"].AsGodotArray() : null;
+            if (d.ContainsKey("values")) { _cloudPresets.Add((name, d["values"].AsGodotDictionary(), layers)); }
         }
     }
 
@@ -682,6 +709,10 @@ public partial class TerrainLabUI : Control
             string id = key.AsString();
             if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, values[key].AsSingle()); }
         }
+        // roadmap #2: the preset's deck stack (or the default stack when it authors none), applied
+        // AFTER the knobs so layer 0 picks up this preset's coverage/density via PackLayers.
+        var layers = _cloudPresets[idx].layers;
+        _cloud?.SetLayers(layers != null ? CloudLayers.FromGodotArray(layers) : CloudLayers.Load());
         GD.Print($"Clouds: applied preset '{_cloudPresets[idx].name}'");
     }
 

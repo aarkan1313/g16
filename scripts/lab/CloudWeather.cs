@@ -47,16 +47,21 @@ public static class CloudWeather
             // clear lanes (fronts) — not a statistically-uniform field that reads as
             // "sampled noise". The old single-low-freq ±0.35 wobble made every patch of
             // sky identical (THE root cause of the "uniform/procedural" look).
-            float coverage = Fbm(u, w, 3f, seed);            // 4-octave detail
-            float system   = Fbm(u, w, 1f, seed + 91.3f);    // very large scale: where weather IS
+            float coverage = Fbm(u, w, 2.5f, seed);          // clumpy detail (mean ~0.49)
+            float system   = Fbm(u, w, 2f, seed + 91.3f);    // LARGE-scale weather systems. Was
+                                                             // baseFreq 1 → octave-0 wrapped to a
+                                                             // 1×1 grid = a flat CONSTANT (half the
+                                                             // amplitude dead) → no macro fronts.
             float type     = Fbm(u, w, 2f, seed + 31.7f);
             float density  = Fbm(u, w, 3f, seed + 53.1f);
-            // contrast-shape coverage (open real clear lanes) then gate by the system mask:
-            // a region the system mask says is "clear" stays clear regardless of detail.
-            coverage = Mathf.Clamp((coverage - 0.3f) / 0.5f, 0f, 1f);   // expand mid → 0..1 contrast
-            coverage = coverage * coverage * (3f - 2f * coverage);      // smoothstep shaping
-            float sysMask = Mathf.Clamp((system - 0.35f) / 0.35f, 0f, 1f);
-            coverage *= sysMask;                              // clear lanes where no system
+            // Coverage centered on the field mean (~0.49) with contrast for clumpy variety, then a
+            // GENTLE large-scale modulation so the sky has cloudier and clearer regions (weather
+            // systems) WITHOUT carving it empty. Target field mean ~0.5 so the raymarch coverage
+            // knob maps ~directly to sky fill — the old asymmetric (c-0.3)/0.5 + smoothstep +
+            // hard sysMask multiply crushed the mean to 0.35 (sparse + non-intuitive knob).
+            coverage = Mathf.Clamp((coverage - 0.49f) * 1.5f + 0.5f, 0f, 1f);   // contrast, mean ~0.5
+            float sysMod = Mathf.Lerp(0.70f, 1.18f, Mathf.SmoothStep(0.28f, 0.72f, system));
+            coverage = Mathf.Clamp(coverage * sysMod, 0f, 1f);   // macro cloudy/clear regions
             WriteFloat(bytes, ref o, coverage);            // R coverage bias (shaped, gated)
             WriteFloat(bytes, ref o, type);                // G cloud type (region → kind, not just denser)
             WriteFloat(bytes, ref o, density);             // B density bias

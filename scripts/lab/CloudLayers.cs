@@ -5,10 +5,16 @@ using System.Text.Json;
 namespace WG16.Lab;
 
 /// One cloud deck. Data only — no marching/scene knowledge (separation of concerns).
+/// Fields 0-11 are DENSITY (must stay byte-identical between raymarch & shadow shaders);
+/// PhaseG..TintB are per-deck LIGHTING (raymarch only — shadow ignores them) so cumulus
+/// vs cirrus read as different cloud kinds (roadmap #1).
 public readonly record struct CloudLayer(
     float Altitude, float Thickness, float Size, float CellScale,
     float CoverageWeight, float Density, float Opacity, float Type,
-    float Edge, float Detail, float DetailSize, int NoiseId, bool Enabled);
+    float Edge, float Detail, float DetailSize,
+    float PhaseG, float PhaseIso, float Albedo, float SunAbsorb,
+    float TintR, float TintG, float TintB,
+    int NoiseId, bool Enabled);
 
 /// Owns the cloud-layer array: load/validate from JSON, pack into a float[] run for the
 /// GPU param buffer. One job. The march consumes the packed buffer; presets/weather write
@@ -16,9 +22,23 @@ public readonly record struct CloudLayer(
 public static class CloudLayers
 {
     public const int MaxLayers = 8;
-    public const int Stride = 12;   // floats per layer in the packed buffer (see Pack)
+    public const int Stride = 20;   // floats per layer in the packed buffer: 12 density + 7 lighting + 1 reserved (see Pack)
     public const string Path = "res://data/cloud_layers.json";
 
+    // Build one CloudLayer from key→value accessors. The ONLY place layer field names +
+    // defaults live, so the file loader (Load) and the preset loader (FromGodotArray) can't
+    // drift in schema. Separation of concerns: callers supply how to read a key; we own what
+    // the keys ARE and their defaults.
+    private static CloudLayer Build(System.Func<string, float, float> F, System.Func<string, int, int> I, System.Func<string, bool, bool> B)
+        => new CloudLayer(
+            F("altitude", 1800f), F("thickness", 1400f), F("size", 1f), F("cell_scale", 1.6f),
+            F("coverage_weight", 1f), F("density", 1f), F("opacity", 1f), F("type", 0.6f),
+            F("edge", 0.5f), F("detail", 0.4f), F("detail_size", 1f),
+            F("phase_g", 0.8f), F("phase_iso", 0.2f), F("albedo", 1f), F("sun_absorb", 1f),
+            F("tint_r", 1f), F("tint_g", 1f), F("tint_b", 1f),
+            I("noise_id", 0), B("enabled", true));
+
+    /// The default deck stack from data/cloud_layers.json (System.Text.Json).
     public static List<CloudLayer> Load()
     {
         string abs = ProjectSettings.GlobalizePath(Path);
@@ -30,17 +50,40 @@ public static class CloudLayers
             foreach (var e in arr.EnumerateArray())
             {
                 if (list.Count >= MaxLayers) { break; }
-                float F(string k, float d) => e.TryGetProperty(k, out var v) ? v.GetSingle() : d;
-                int I(string k, int d) => e.TryGetProperty(k, out var v) ? v.GetInt32() : d;
-                bool B(string k, bool d) => e.TryGetProperty(k, out var v) ? v.GetBoolean() : d;
-                list.Add(new CloudLayer(
-                    F("altitude", 1800f), F("thickness", 1400f), F("size", 1f), F("cell_scale", 1.6f),
-                    F("coverage_weight", 1f), F("density", 1f), F("opacity", 1f), F("type", 0.6f),
-                    F("edge", 0.5f), F("detail", 0.4f), F("detail_size", 1f), I("noise_id", 0), B("enabled", true)));
+                var el = e;
+                list.Add(Build(
+                    (k, d) => el.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetSingle() : d,
+                    (k, d) => el.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : d,
+                    (k, d) => el.TryGetProperty(k, out var v) ? (v.ValueKind == JsonValueKind.True) : d));
             }
         }
         return list;
     }
+
+    /// A deck stack authored inside a cloud PRESET (roadmap #2). Parsed from the Godot Variant
+    /// array the preset loader already holds — keeps ALL layer-schema knowledge in this unit.
+    public static List<CloudLayer> FromGodotArray(Godot.Collections.Array arr)
+    {
+        var list = new List<CloudLayer>();
+        foreach (Godot.Variant v in arr)
+        {
+            if (list.Count >= MaxLayers) { break; }
+            var e = v.AsGodotDictionary();
+            list.Add(Build(
+                (k, d) => e.ContainsKey(k) ? (float)e[k] : d,
+                (k, d) => e.ContainsKey(k) ? (int)e[k] : d,
+                (k, d) => e.ContainsKey(k) ? (bool)e[k] : d));
+        }
+        return list;
+    }
+
+    /// Layer 0 is the knob-driven cumulus deck: its per-deck LIGHTING is fixed here (one
+    /// source of truth) so the renderer (CloudVolume.PackLayers) and the diagnostic
+    /// (CloudLightCheck) can't drift. Cumulus = bold/bright sunlit edges (high albedo) with
+    /// dark self-shadowed cores (high sun_absorb) → high-contrast 3D form; faint warm tint.
+    public static CloudLayer WithCumulusLighting(CloudLayer l) => l with {
+        PhaseG = 0.85f, PhaseIso = 0.12f, Albedo = 1.7f, SunAbsorb = 1.3f,
+        TintR = 1.0f, TintG = 0.99f, TintB = 0.95f };
 
     /// Pack enabled layers into Stride floats each. Returns the float[] and active count.
     public static float[] Pack(List<CloudLayer> layers, out int count)
@@ -57,6 +100,11 @@ public static class CloudLayers
             packed[o + 6] = L.Opacity;        packed[o + 7] = L.Type;
             packed[o + 8] = L.Edge;           packed[o + 9] = L.Detail;
             packed[o + 10] = L.DetailSize;    packed[o + 11] = L.NoiseId;
+            // 12-19: per-deck LIGHTING (raymarch only)
+            packed[o + 12] = L.PhaseG;        packed[o + 13] = L.PhaseIso;
+            packed[o + 14] = L.Albedo;        packed[o + 15] = L.SunAbsorb;
+            packed[o + 16] = L.TintR;         packed[o + 17] = L.TintG;
+            packed[o + 18] = L.TintB;         packed[o + 19] = 0f;   // reserved
             count++;
         }
         return packed;

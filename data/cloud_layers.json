@@ -1,7 +1,10 @@
 {
-  "_comment": "Cloud decks. The march sums all enabled layers per step. Layer 0's params are OVERRIDDEN at runtime by the legacy flat knobs (CloudVolume) for backward-compat; layers 1+ are pure data here. coverage_weight = this deck's share of the master coverage knob. Disable layer 1 (enabled:false) to verify the single-layer regression matches the old look.",
+  "_comment": "Cloud decks. The march sums all enabled layers per step. Layer 0's params are OVERRIDDEN at runtime by the legacy flat knobs (CloudVolume), INCLUDING its per-deck lighting (cumulus defaults) — so phase_g/albedo/tint here on layer 0 are ignored. Layers 1+ are pure data here. Per-deck lighting (roadmap #1): phase_g (forward silver-lining), phase_iso (isotropic blend; cirrus high), albedo (cirrus thin&bright), sun_absorb (cumulus dark-cored; cirrus uniform), tint_r/g/b (cumulus warm, cirrus cool). coverage_weight = this deck's share of the master coverage knob. Disable layer 1 to verify the single-layer regression.",
   "layers": [
-    { "altitude": 1500, "thickness": 1200, "size": 1.0, "cell_scale": 1.6, "coverage_weight": 1.0, "density": 1.0, "opacity": 1.0, "type": 0.65, "edge": 0.55, "detail": 0.5, "detail_size": 1.0, "noise_id": 0, "enabled": true },
-    { "altitude": 5500, "thickness": 600,  "size": 2.4, "cell_scale": 0.8, "coverage_weight": 0.6, "density": 0.5, "opacity": 0.7, "type": 0.12, "edge": 0.35, "detail": 0.7, "detail_size": 1.6, "noise_id": 0, "enabled": true }
+    { "altitude": 1500, "thickness": 1200, "size": 1.0, "cell_scale": 1.6, "coverage_weight": 1.0, "density": 1.0, "opacity": 1.0, "type": 0.65, "edge": 0.55, "detail": 0.5, "detail_size": 1.0, "noise_id": 0, "enabled": true,
+      "_lighting_note": "layer 0 lighting is OVERRIDDEN by CloudLayers.WithCumulusLighting — these values are documentation only",
+      "phase_g": 0.85, "phase_iso": 0.12, "albedo": 1.7, "sun_absorb": 1.3, "tint_r": 1.0, "tint_g": 0.99, "tint_b": 0.95 },
+    { "altitude": 5500, "thickness": 600,  "size": 2.4, "cell_scale": 0.8, "coverage_weight": 0.6, "density": 0.5, "opacity": 0.55, "type": 0.12, "edge": 0.35, "detail": 0.7, "detail_size": 1.6, "noise_id": 0, "enabled": true,
+      "phase_g": 0.4, "phase_iso": 0.6, "albedo": 1.05, "sun_absorb": 0.4, "tint_r": 0.94, "tint_g": 0.97, "tint_b": 1.0 }
   ]
 }

@@ -31,21 +31,26 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float hg_aniso, powder, sun_absorb;
     float size, detail, detail_size, edge, opacity, brightness, ambient;
     float steps;
+    float perdeck;       // 0 = global phase/albedo (legacy A), 1 = per-deck lighting (B)
+    float dbgdeck;       // >0.5 = deck-ID overlay (flat per-deck color instead of lighting)
     // TAIL — a single vec4 (16-aligned) holds the trailing scalars so the layers[] vec4
     // array below starts on a 16-byte boundary. Hand-packed std430 is fragile: scalars
     // before a vec2/vec4 drift the offset (a vec2 wind_offset here put layers[] off by 4
     // bytes → scrambled → NO CLOUDS). Keeping the tail as ONE vec4 + the C# writer padding
     // to 16 before it removes the hazard. x=wind_x, y=wind_y, z=cell_scale, w=layer_count.
     vec4 tail;
-    // 8 layers × 12 floats = 3 vec4 PER LAYER (24 vec4). vec4[] (not float[]) so the stride
+    // 8 layers × 20 floats = 5 vec4 PER LAYER (40 vec4). vec4[] (not float[]) so the stride
     // is tight 16B and matches CloudLayers.Pack's contiguous float run.
-    vec4 layers[24];
+    // fields 0-11 = density (byte-identical to cloud_shadow.glsl); 12-19 = per-deck lighting.
+    vec4 layers[40];
 } P;
 #define WIND vec2(P.tail.x, P.tail.y)
 #define CELL_SCALE P.tail.z
 #define LAYER_COUNT P.tail.w
-// per-layer field accessor (f: 0 alt,1 thick,2 size,3 cell,4 covW,5 dens,6 opac,7 type,8 edge,9 detail,10 detailSize,11 noiseId)
-#define LF(i, f) P.layers[(i)*3 + ((f)>>2)][(f)&3]
+// per-layer field accessor. f: 0 alt,1 thick,2 size,3 cell,4 covW,5 dens,6 opac,7 type,
+// 8 edge,9 detail,10 detailSize,11 noiseId, 12 phaseG,13 phaseIso,14 albedo,15 sunAbsorb,
+// 16 tintR,17 tintG,18 tintB,19 reserved.
+#define LF(i, f) P.layers[(i)*5 + ((f)>>2)][(f)&3]
 
 const float PLANET_R = 200000.0;
 const float PI = 3.14159265;
@@ -71,7 +76,7 @@ vec2 ray_sphere(vec3 ro, vec3 rd, float R){
 // non-integer-related periods so the combined tiling period is enormous (defense #1):
 //   weather ~80 km · shape ~9 km · detail ~1.3 km · warp ~ low-freq detail tap.
 const float WEATHER_SCALE = 1.0 / 80000.0;
-const float SHAPE_SCALE   = 1.0 / 9000.0;
+const float SHAPE_SCALE   = 1.0 / 6000.0;   // smaller individual clouds (was 1/9000 = ~giant)
 const float DETAIL_SCALE  = 1.0 / 1300.0;
 const float WARP_AMOUNT   = 600.0;          // domain-warp displacement in meters (defense #2)
 
@@ -116,7 +121,7 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     // CELLULARITY — keep cell SEPARATION even at high coverage (don't merge into a sheet).
     // The gate's pass-band stays narrow at high cov (lo→0.42, hi→0.78) so cells keep their
     // seams; high coverage fills cells but the inter-cell gaps persist (audit fix #5).
-    float cellScale = sScale * 0.35 * max(lcell, 0.05);
+    float cellScale = sScale * 0.7 * max(lcell, 0.05);   // higher cell freq → MANY clumps, not few giants
     float cell = texture(shape_tex, lpw * cellScale + vec3(wCell.x, h, wCell.y) * cellScale).g;
     float cellGate = smoothstep(mix(0.80, 0.42, coverage), mix(1.0, 0.78, coverage), cell);
     shape *= cellGate;
@@ -129,28 +134,49 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     if (ldetail > 0.0){
         float dScale = DETAIL_SCALE / max(ldetsize, 0.01);
         vec3 duv = lp * dScale + vec3(wDetail.x, h, wDetail.y) * dScale;
+        // two-octave detail erosion → finer cauliflower than a single tap (the 32³ detail
+        // volume alone reads soft/blobby). A 3.1× finer octave carves small-scale bumps.
         float det = texture(detail_tex, duv).r;
-        float edgeBoost = mix(1.6, 0.7, shape);              // erode edges harder than cores
-        float erodeAmt = mix(0.35, 0.85, h) * ldetail * edgeBoost;
+        float det2 = texture(detail_tex, duv * 3.1 + vec3(0.37)).r;
+        det = det * 0.6 + det2 * 0.4;
+        float edgeBoost = mix(2.3, 0.5, shape);              // erode edges MUCH harder → crisp silhouettes
+        float erodeAmt = mix(0.45, 0.95, h) * ldetail * edgeBoost;
         shape = clamp(remap(shape, det * erodeAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
     }
     return shape * ldens * densBias;   // opacity applied by the caller (sigma)
 }
 
 // Sum every active layer whose band contains p. Returns total density + a density-weighted
-// opacity (so the caller's extinction reflects the mix of decks at that point).
-float density_all(vec3 p, vec2 windOff, out float opacOut){
+// opacity. activeOut = the index of the densest-contributing deck at p (decks are
+// altitude-separated so usually exactly one), used by the caller to pick per-deck lighting.
+float density_all(vec3 p, vec2 windOff, out float opacOut, out int activeOut){
     int n = clamp(int(LAYER_COUNT), 1, 8);
     float total = 0.0; float opAccum = 0.0; float r = length(p);
+    float bestD = -1.0; activeOut = 0;
     for (int i = 0; i < n; i++){
         float baseR = PLANET_R + LF(i,0), topR = baseR + LF(i,1);
         if (r < baseR || r > topR) continue;
         float d = layer_density(p, baseR, topR, windOff,
             LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4));
         total += d; opAccum += d * LF(i,6);
+        if (d > bestD){ bestD = d; activeOut = i; }
     }
     opacOut = (total > 1e-5) ? opAccum / total : 1.0;
     return total;
+}
+// density-only overload (sun light-march doesn't care which deck).
+float density_all(vec3 p, vec2 windOff, out float opacOut){
+    int unused; return density_all(p, windOff, opacOut, unused);
+}
+
+// deck-ID overlay palette (debug): each deck gets a saturated flat color so the user can
+// SEE which sky regions belong to which deck (cumulus=warm, cirrus=cyan, etc.).
+vec3 deck_dbg_color(int i){
+    if (i == 0) return vec3(1.0, 0.30, 0.18);   // cumulus — warm red
+    if (i == 1) return vec3(0.20, 0.65, 1.0);   // cirrus  — cyan
+    if (i == 2) return vec3(0.35, 1.0, 0.35);    // green
+    if (i == 3) return vec3(1.0, 0.85, 0.25);    // amber
+    return vec3(1.0, 0.4, 1.0);                  // magenta
 }
 
 float hg(float cosA, float g){
@@ -167,7 +193,13 @@ float light_optical_depth(vec3 p, vec3 L, vec2 windOff){
     float d = 0.0; vec3 q = p; float op;
     for (int i = 0; i < LSTEPS; i++){ q += L * lss; d += density_all(q, windOff, op) * lss; }
     d += density_all(p + L * lss * 16.0, windOff, op) * lss;   // far tap (distant deck shadowing)
-    return d * P.sun_absorb * 0.02;
+    // SUN extinction coefficient. Was 0.02 → for any real cloud the summed sun-path density
+    // drove od to ~10-30, so exp(-od)≈0 EVERYWHERE: direct sun never reached the cloud and
+    // it was lit by ambient ONLY (measured meanCloudLuma 0.187 = dim grey mush). Recalibrated
+    // to 0.0045 so sunward faces land at od~0.5-2 (bright) while cores stay od~5-8 (dark) —
+    // bright white clouds WITH 3D self-shadow form. (Raymarch self-lighting only; the ground
+    // shadow map is a separate shader → cloud↔shadow coupling/shadowcheck unaffected.)
+    return d * P.sun_absorb * 0.0035;
 }
 
 // dual-lobe phase: forward silver-lining (g1) + back-scatter (g2). Replaces single HG + 0.4.
@@ -251,7 +283,7 @@ void main(){
 
         vec3 L = normalize(P.sun_dir.xyz);
         float cosA = dot(rd, L);
-        float phase = phase_dual(cosA);
+        float globalPhase = phase_dual(cosA);   // legacy uniform phase (P.perdeck blends away from it)
         vec3 sunCol = P.sun_color.rgb * P.sun_dir.w;
         // Mood sky fill; modulated per-voxel by height (base-occluded) below.
         vec3 skyAmbient = mix(P.sky_horizon.rgb, P.sky_top.rgb, clamp(rd.y, 0.0, 1.0));
@@ -262,25 +294,39 @@ void main(){
         float t = tStart;
         for (int i = 0; i < maxSteps && t < tEnd; i++){
             vec3 p = ro + rd * t;
-            float opac; float dens = density_all(p, windOff, opac);   // sum all decks
+            float opac; int act; float dens = density_all(p, windOff, opac, act);   // sum all decks; act = densest deck
             if (dens > 0.001){
+                // PER-DECK LIGHTING (roadmap #1): the deck containing p picks its own phase,
+                // albedo, sun-absorption + tint so cumulus reads forward-scattering/dark-cored
+                // and cirrus near-isotropic/thin/bright. Blended toward the legacy global look
+                // by (1 - P.perdeck) so the --perdeck toggle A/Bs it in motion.
+                float pdeck   = clamp(P.perdeck, 0.0, 1.0);
+                float perPhase = mix(hg(cosA, LF(act,12)), hg(cosA, -0.25), LF(act,13));
+                float phase   = mix(globalPhase, perPhase, pdeck);
+                float albedo  = mix(1.0, LF(act,14), pdeck);
+                float absorb  = mix(1.0, LF(act,15), pdeck);
+                vec3  tint    = mix(vec3(1.0), vec3(LF(act,16), LF(act,17), LF(act,18)), pdeck);
+
                 float dt = fineStep;
-                float od = light_optical_depth(p, L, windOff);   // optical depth toward sun
-                // MULTIPLE-SCATTERING approx (Frostbite/HZD): N octaves, geometrically
-                // decaying extinction + phase → bright voluminous interiors, not hard Beer.
-                float sun = 0.0; float a = 1.0, b = 1.0, c = 1.0;
-                for (int o = 0; o < 3; o++){
-                    sun += a * exp(-od * b) * mix(phase, 0.5, 1.0 - c);   // isotropic-er per octave
-                    a *= 0.5; b *= 0.55; c *= 0.5;
-                }
+                float od = light_optical_depth(p, L, windOff) * absorb;   // per-deck sun absorption
+                // MULTIPLE-SCATTERING: a SHARP direct term (exp(-od)*phase) → dark self-shadowed
+                // cores = 3D FORM, plus a softer isotropic fill (exp(-od*0.25)) for voluminous
+                // interior light WITHOUT flattening. The old 3-octave loop summed ~1.75 weight
+                // with weak extinction decay so cores stayed lit (flat). This separates the
+                // crisp sun-modeling (direct) from the soft body fill (MS).
+                float sun = exp(-od) * phase + 0.45 * exp(-od * 0.25);
                 // BASE-OCCLUDED ambient: base dark (sky-occluded), tops bright → 3D form.
                 float h = height_frac(p);
                 vec3 amb = skyAmbient * P.ambient * mix(0.25, 1.0, h);
                 // powder (dark edges) only when looking TOWARD the sun (back-lit); gated.
                 float powder = mix(1.0, 1.0 - exp(-dens * 2.0 * P.powder), forward);
-                float sigma = dens * 0.02 * opac;
+                // VIEW-ray extinction. Was 0.02 → meanAlpha only ~0.52 (clouds half-transparent,
+                // read as wispy haze not solid masses = "not a ton of clouds"). Raised so healthy
+                // cloud bodies reach high opacity within a deck while wisps stay translucent.
+                float sigma = dens * 0.05 * opac;
                 float beer = exp(-sigma * dt);
-                vec3 lum = (sunCol * sun * powder + amb) * P.brightness;
+                vec3 lum = (sunCol * sun * powder * albedo * tint + amb) * P.brightness;
+                if (P.dbgdeck > 0.5) lum = deck_dbg_color(act) * 1.5;   // deck-ID overlay: flat per-deck color
                 scattered += T * lum * (1.0 - beer);
                 T *= beer;
                 if (T < 0.01) break;

@@ -160,7 +160,7 @@ public partial class CloudVolume : Node
         var of = new RDTextureFormat
         {
             Width = TexW, Height = TexH, Format = RenderingDevice.DataFormat.R16G16B16A16Sfloat,
-            UsageBits = RenderingDevice.TextureUsageBits.StorageBit | RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanUpdateBit | RenderingDevice.TextureUsageBits.CanCopyToBit,
+            UsageBits = RenderingDevice.TextureUsageBits.StorageBit | RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanUpdateBit | RenderingDevice.TextureUsageBits.CanCopyToBit | RenderingDevice.TextureUsageBits.CanCopyFromBit,
         };
         _outTex = _rd.TextureCreate(of, new RDTextureView());
         _rd.TextureClear(_outTex, new Color(0, 0, 0, 0), 0, 1, 0, 1);   // valid sample before first dispatch
@@ -277,6 +277,36 @@ public partial class CloudVolume : Node
         _rd.ComputeListDispatch(slist, (uint)((ShadowRes + 7) / 8), (uint)((ShadowRes + 7) / 8), 1);
         _rd.ComputeListEnd();
         _rd.FreeRid(sset);
+
+        if (_statsCountdown > 0 && --_statsCountdown == 0) { DumpDomeStats(p); }
+    }
+
+    private int _statsCountdown = 0;
+    /// Request a one-shot readback of the rendered cloud dome (after N frames so it's
+    /// converged). Answers the user's "barely visible" with MATH: how much of the visible
+    /// sky has cloud (mean alpha) and how bright it is (sparse vs washed-out).
+    public void RequestStats() { _statsCountdown = 30; }
+
+    private void DumpDomeStats(CloudParams p)
+    {
+        byte[] data = _rd.TextureGetData(_outTex, 0);   // rgba16f, TexW×TexH
+        int n = TexW * TexH;
+        if (data.Length < n * 8) { GD.Print($"[cloudstats] readback short ({data.Length} bytes) — skipping"); return; }
+        double sumA = 0, sumL = 0, maxA = 0; int covered = 0;
+        for (int i = 0; i < n; i++)
+        {
+            int o = i * 8;   // 4 channels × 2 bytes (half)
+            float r = (float)BitConverter.ToHalf(data, o + 0);
+            float g = (float)BitConverter.ToHalf(data, o + 2);
+            float b = (float)BitConverter.ToHalf(data, o + 4);
+            float a = (float)BitConverter.ToHalf(data, o + 6);
+            double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            sumA += a; sumL += lum; if (a > maxA) maxA = a; if (a > 0.2) covered++;
+        }
+        GD.Print($"[cloudstats] coverage_knob={p.Coverage:F2}  perdeck={_perDeck:F0}  " +
+                 $"meanAlpha={sumA / n:F3}  skyCovered(α>0.2)={100.0 * covered / n:F1}%  maxAlpha={maxA:F2}  meanCloudLuma={sumL / n:F3}");
+        GD.Print("[cloudstats] read: skyCovered = how much of the dome has cloud; meanCloudLuma = how bright. " +
+                 "Low covered = SPARSE; high covered + low luma = WASHED-OUT/too dark.");
     }
 
     // Field order MUST match cloud_shadow.glsl's ParamsBuf; Std430Writer handles alignment.
@@ -295,11 +325,32 @@ public partial class CloudVolume : Node
             .F(_shadowStrength)
             .F(_groundHeight)                           // terrain mid-elevation
             .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
-            .Vec4Array(layerData)                       // layers[24]
+            .Vec4Array(layerData)                       // layers[40] (5 vec4/layer; shadow uses 0-11)
             .ToArray();
     }
     private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
     public void SetGroundHeight(float h) { _groundHeight = h; }
+
+    /// Swap the active deck stack (roadmap #2: presets author a layer stack). Layer 0 stays
+    /// knob-driven (see PackLayers) so the legacy UI + single-layer regression hold; the stack
+    /// defines decks 1+ and the per-deck mix. Console-logs the result so the swap is verifiable
+    /// without the eye. CloudVolume OWNS the active stack; CloudLayers OWNS the data; presets AUTHOR.
+    public void SetLayers(System.Collections.Generic.List<CloudLayer> layers)
+    {
+        if (layers == null || layers.Count == 0) { return; }
+        if (layers.Count > CloudLayers.MaxLayers) { layers = layers.GetRange(0, CloudLayers.MaxLayers); }
+        _layers = layers;
+        var on = _layers.FindAll(l => l.Enabled);
+        GD.Print($"CloudVolume: layer stack set — {on.Count} deck(s), altitudes [{string.Join(", ", on.ConvertAll(l => l.Altitude.ToString("0")))}]");
+    }
+
+    /// Seam for the future weather/biome system (design): override one deck's share of the
+    /// master coverage without touching the march. Narrow input, no render change.
+    public void SetLayerWeight(int i, float w)
+    {
+        if (i < 0 || i >= _layers.Count) { return; }
+        _layers[i] = _layers[i] with { CoverageWeight = Mathf.Max(0f, w) };
+    }
 
     // Layer 0's deck params come from the legacy flat knobs (_p / _cellScale) so the single-
     // layer look + the existing UI keep working; layers 1+ are the JSON data verbatim.
@@ -307,10 +358,10 @@ public partial class CloudVolume : Node
     {
         var eff = new System.Collections.Generic.List<CloudLayer>(_layers);
         var l0 = eff[0];
-        eff[0] = l0 with {
+        eff[0] = CloudLayers.WithCumulusLighting(l0 with {
             Altitude = _p.AltitudeM, Thickness = _p.ThicknessM, Size = _p.Size, CellScale = _cellScale,
             CoverageWeight = 1f, Density = _p.Density, Opacity = _p.Opacity, Type = _p.CloudType,
-            Edge = _p.Edge, Detail = _p.Detail, DetailSize = _p.DetailSize, NoiseId = 0, Enabled = true };
+            Edge = _p.Edge, Detail = _p.Detail, DetailSize = _p.DetailSize, NoiseId = 0, Enabled = true });
         return CloudLayers.Pack(eff, out count);
     }
 
@@ -334,10 +385,16 @@ public partial class CloudVolume : Node
             .F(p.HgAniso).F(p.Powder).F(p.SunAbsorption)
             .F(p.Size).F(p.Detail).F(p.DetailSize).F(p.Edge).F(p.Opacity).F(p.Brightness).F(p.Ambient)
             .F(p.RaymarchSteps)
+            .F(_perDeck)                                // 0 = global lighting (A), 1 = per-deck (B)
+            .F(_dbgDeck)                                // >0.5 = deck-ID overlay
             .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
-            .Vec4Array(layerData)                       // layers[24]
+            .Vec4Array(layerData)                       // layers[40] (5 vec4/layer)
             .ToArray();
     }
+    private float _perDeck = 1f;   // per-deck phase/albedo/tint ON by default; --perdeck toggles
+    public void SetPerDeck(float v) { _perDeck = Mathf.Clamp(v, 0f, 1f); }
+    private float _dbgDeck = 0f;    // deck-ID overlay off by default; --deckdbg toggles
+    public void SetDeckDebug(bool on) { _dbgDeck = on ? 1f : 0f; }
 
     public void SetSun(Vector3 dir, Color color, float energy) { _sunDir = dir.Normalized(); _sunColor = color; _sunEnergy = energy; }
 
@@ -405,6 +462,7 @@ public partial class CloudVolume : Node
             case "shadow_strength": _shadowStrength = v; break;   // ground-shadow darkness (Stage 5)
             case "cell_scale":      _cellScale = v; break;        // clump scale (anti-slab; higher = smaller clumps)
             case "godray_strength": _godrayStrength = v; break;
+            case "perdeck":         _perDeck = Mathf.Clamp(v, 0f, 1f); break;   // 0=global lighting, 1=per-deck
         }
     }
 

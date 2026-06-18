@@ -29,11 +29,12 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     // TAIL vec4 (16-aligned) so layers[] starts on a 16-byte boundary. x=wind_x, y=wind_y,
     // z=cell_scale, w=layer_count. (See cloud_raymarch.glsl — hand-packed std430 drift.)
     vec4 tail;
-    vec4 layers[24];       // 8 layers × 3 vec4 (CloudLayers.Pack order)
+    vec4 layers[40];       // 8 layers × 5 vec4 (CloudLayers.Pack order); fields 12-19 are
+                           // raymarch-only lighting — shadow uses only density fields 0-11.
 } P;
 #define WIND vec2(P.tail.x, P.tail.y)
 #define LAYER_COUNT P.tail.w
-#define LF(i, f) P.layers[(i)*3 + ((f)>>2)][(f)&3]
+#define LF(i, f) P.layers[(i)*5 + ((f)>>2)][(f)&3]
 
 const float PLANET_R = 200000.0;
 
@@ -56,7 +57,7 @@ vec2 ray_sphere(vec3 ro, vec3 rd, float R){
 
 // Anti-repetition scale consts — MUST match cloud_raymarch.glsl exactly.
 const float WEATHER_SCALE = 1.0 / 80000.0;
-const float SHAPE_SCALE   = 1.0 / 9000.0;
+const float SHAPE_SCALE   = 1.0 / 6000.0;   // smaller individual clouds (was 1/9000 = ~giant)
 const float DETAIL_SCALE  = 1.0 / 1300.0;
 const float WARP_AMOUNT   = 600.0;
 
@@ -91,7 +92,7 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     float soft = min(thresh + mix(0.30, 0.10, ledge), 1.0);
     float shape = smoothstep(thresh, soft, base);
 
-    float cellScale = sScale * 0.35 * max(lcell, 0.05);
+    float cellScale = sScale * 0.7 * max(lcell, 0.05);   // higher cell freq → MANY clumps, not few giants
     float cell = texture(shape_tex, lpw * cellScale + vec3(wCell.x, h, wCell.y) * cellScale).g;
     float cellGate = smoothstep(mix(0.80, 0.42, coverage), mix(1.0, 0.78, coverage), cell);
     shape *= cellGate;

@@ -29,14 +29,14 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float strength, ground_height;
     vec2 wind_offset;
     vec4 tail;            // w = layer_count (x/y/z unused here)
-    vec4 layers[24];      // 8 layers × 3 vec4 (CloudLayers.Pack order) — 16-aligned @112
+    vec4 layers[40];      // 8 layers × 5 vec4 (CloudLayers.Pack order) — fields 0-11 density
 } P;
 #define LAYER_COUNT P.tail.w
-#define LF(i, f) P.layers[(i)*3 + ((f)>>2)][(f)&3]
+#define LF(i, f) P.layers[(i)*5 + ((f)>>2)][(f)&3]
 
 const float PLANET_R = 200000.0;
 const float WEATHER_SCALE = 1.0 / 80000.0;
-const float SHAPE_SCALE   = 1.0 / 9000.0;
+const float SHAPE_SCALE   = 1.0 / 6000.0;   // smaller individual clouds (was 1/9000 = ~giant)
 const float DETAIL_SCALE  = 1.0 / 1300.0;
 const float WARP_AMOUNT   = 600.0;
 
@@ -76,7 +76,7 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     float thresh = mix(0.92, 0.02, coverage);
     float soft = min(thresh + mix(0.30, 0.10, ledge), 1.0);
     float shape = smoothstep(thresh, soft, base);
-    float cellScale = sScale * 0.35 * max(lcell, 0.05);
+    float cellScale = sScale * 0.7 * max(lcell, 0.05);   // higher cell freq → MANY clumps, not few giants
     float cell = texture(shape_tex, lpw * cellScale + vec3(wCell.x, h, wCell.y) * cellScale).g;
     float cellGate = smoothstep(mix(0.80, 0.42, coverage), mix(1.0, 0.78, coverage), cell);
     shape *= cellGate;
