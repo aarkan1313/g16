@@ -34,7 +34,7 @@ float hash13(vec3 p){
     return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
 }
 
-// --- tileable gradient (Perlin-ish value) noise on a grid of `freq` cells ------
+// --- tileable VALUE noise (per-corner scalar, trilinear) — kept for reference -----
 float vnoise_tiled(vec3 x, float freq){
     vec3 p = floor(x);
     vec3 f = fract(x);
@@ -52,6 +52,29 @@ float vnoise_tiled(vec3 x, float freq){
         n += h * w;
     }
     return n;
+}
+
+// --- tileable GRADIENT (true Perlin) noise — per-corner random gradient · offset,
+// quintic-interpolated. Value noise (above) reads blobby/low-contrast; gradient noise
+// gives the flowing, billowing ridges real cloud base shape needs (audit). Returns ~[0,1].
+float gnoise_tiled(vec3 x, float freq){
+    vec3 p = floor(x);
+    vec3 f = fract(x);
+    vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);   // quintic fade
+    float n = 0.0;
+    for (int dz = 0; dz <= 1; dz++)
+    for (int dy = 0; dy <= 1; dy++)
+    for (int dx = 0; dx <= 1; dx++){
+        vec3 corner = vec3(dx, dy, dz);
+        vec3 cw = mod(p + corner, freq);                 // wrap → tileable
+        vec3 grad = normalize(hash33(cw) * 2.0 - 1.0);   // random unit gradient per corner
+        float val = dot(grad, f - corner);               // gradient · offset
+        float wgt = mix(1.0 - u.x, u.x, float(dx))
+                  * mix(1.0 - u.y, u.y, float(dy))
+                  * mix(1.0 - u.z, u.z, float(dz));
+        n += val * wgt;
+    }
+    return clamp(n * 0.7 + 0.5, 0.0, 1.0);               // [-~0.7,~0.7] → [0,1]
 }
 
 // --- tileable Worley (cellular): 1 - dist to nearest jittered feature point ----
@@ -89,9 +112,9 @@ void main(){
         // SHAPE: R = Perlin-Worley base; G/B/A = Worley FBM octaves. Each detail channel is
         // now a 2-octave Worley FBM (audit: single-octave channels read blobby/round). The
         // Perlin base also gets a 3rd octave for finer structure.
-        float perlin = vnoise_tiled(uvw * 4.0, 4.0) * 0.55
-                     + vnoise_tiled(uvw * 8.0, 8.0) * 0.30
-                     + vnoise_tiled(uvw * 16.0, 16.0) * 0.15;
+        float perlin = gnoise_tiled(uvw * 4.0, 4.0) * 0.55
+                     + gnoise_tiled(uvw * 8.0, 8.0) * 0.30
+                     + gnoise_tiled(uvw * 16.0, 16.0) * 0.15;
         float w0 = worley_tiled(uvw * 3.0, 3.0);
         float pw = remap(perlin, w0 - 1.0, 1.0, 0.0, 1.0);  // Perlin-Worley (Schneider)
         // 2-octave Worley FBM per channel (low/mid/high bands)
