@@ -30,7 +30,7 @@ Project root: `C:\Wg16\wg-16-project`. Run all commands from there.
 - `groundData` seam = the splat read in `fragment()` ~line 474: `vec4 sp = texture(splat_tex, v_uv)` → `R=dom`, `G=sec`, `B=mix`, `A=boundary`. RGBA #1 is FULL; Unit 4 adds `breakup_tex` (RGBA #2).
 - The bake call site is `TerrainLab.RebakeSplat()` (`scripts/lab/TerrainLab.cs` ~66): builds `SplatCompute.Params`, calls `_splat.Bake(_heights, _res, sp)`, binds the result via `SetShaderParameter("splat_tex", tex)`. `Bake` currently returns ONE `ImageTexture`; Unit 4 makes it return BOTH (splat + breakup).
 - `Bake` allocates `oBuf` (binding 1) = `cells*4*float`, dispatches `groups=(res+7)/8` 2D, syncs, reads back, builds `Image.Format.Rgbaf`. Mirror this exactly for the second output buffer.
-- `BuildParams` packs 17 scalar fields into an 80-byte buffer. Unit 4 appends fields → re-count and re-pad.
+- `BuildParams` packs **16** scalar 4-byte fields = **64 bytes used**, allocated as **80** (the existing `// 17 fields … 80B` comment in SplatCompute.cs is WRONG — count the actual writes: 16). Unit 4 appends 6 → **22 fields = 88 bytes used → allocate 96** (next 16-byte multiple). Order matters, not the miscount — keep packing order identical C#↔GLSL.
 - Material fetch entry is `ar_sample_wp(sampler2D, vec2, vec3)` (~243) via `tp_alb`/`trip_alb_by` (~419/433). Do NOT bypass it — breakup chooses *which zone index* feeds `trip_*_by`, then still fetches through `ar_sample_wp`.
 - `distanceWeight(vec3 wp)` (~231) — reuse to LOD-fade breakup detail with distance.
 - Varyings `v_slope = 1.0 - v_normal.y` and `v_curv = (hl+hr+hd+hu)*0.25 - VERTEX.y` already exist (set in `vertex()`), and the compute shader already computes the SAME `slope`/`curv` from neighbour heights in `main()` (~113). The masks reuse that math.
@@ -135,12 +135,13 @@ float flow_at(ivec2 id, float hh, float slope){
     float cavity  = cavity_at(id, hh);
     float aspect  = aspect_at(n);
     float flow    = flow_at(id, hh, slope);
-    // Pack flow into curvature's spare precision is NOT done — keep masks clean.
-    // Layout: R slope, G curvature, B cavity, A = max(aspect-shade, flow streak)
-    // so the fragment gets BOTH orientation wear and flow streaking in one channel,
-    // disambiguated by sign of curvature where needed. (Aspect dominates on faces,
-    // flow dominates in low-slope channels.)
-    float a_chan = mix(aspect, max(aspect, flow), step(0.05, flow));
+    // Layout: R slope, G curvature, B cavity, A = a single combined WEAR driver =
+    // max(aspect-shade, flow-streak). The fragment treats A as one "wear" amount (it
+    // does NOT separate aspect vs flow — there's no disambiguation, and the earlier
+    // "by sign of curvature" claim was wrong/unimplemented). If aspect and flow ever
+    // need to drive DIFFERENT effects, split flow into a 5th output (own texture);
+    // for now one merged wear channel is intentional and sufficient.
+    float a_chan = max(aspect, flow);
     breakup[id.y*int(res)+id.x] = vec4(slope01, curv01, cavity, a_chan);
 ```
 
@@ -238,12 +239,12 @@ git commit -m "Ground unit 4: bake slope/curv/cavity/aspect + cheap flow proxy i
     }
 ```
 
-- [ ] **Step 3: Extend `BuildParams`** to pack the 6 new fields and re-pad. 17 + 6 = 23 scalar fields × 4 bytes = 92 → pad to the next 16-byte multiple = **96 bytes**:
+- [ ] **Step 3: Extend `BuildParams`** to pack the 6 new fields and re-pad. **16 existing + 6 new = 22 scalar fields × 4 bytes = 88 used → pad to the next 16-byte multiple = 96 bytes** (do NOT trust the old "17/80" comment — verify by counting the writes below: 16 before the Unit-4 block):
 
 ```csharp
     private static byte[] BuildParams(Params p)
     {
-        // 23 fields, std430 scalar layout (all 4-byte) → pad to 16-byte multiple (96B).
+        // 22 fields (16 existing + 6 Unit-4), std430 scalar (all 4-byte) = 88 used → 96B padded.
         var b = new byte[96];
         int o = 0;
         void U(uint v) { BitConverter.GetBytes(v).CopyTo(b, o); o += 4; }
@@ -526,10 +527,10 @@ The masks' SHAPE knobs (`bk_curv_scale`, `bk_cavity_gain`, `bk_sun_azimuth`, `bk
       "field": "BkCavityGain", "min": 0.2, "max": 4, "default": 1.4, "rand": true, "rebake": true },
     { "id": "bk_sun_azimuth", "label": "weather sun dir", "tab": "Detail", "type": "slider",
       "field": "BkSunAzimuth", "min": 0, "max": 6.28, "default": 0.7, "rand": false, "rebake": true },
-    { "id": "bk_flow_iters", "label": "flow iters (0=off)", "tab": "Detail", "type": "slideri",
+    { "id": "bk_flow_iters", "label": "flow iters (0=off)", "tab": "Detail", "type": "slider",
       "field": "BkFlowIters", "min": 0, "max": 8, "default": 3, "rand": false, "rebake": true },
 ```
-(If `slideri` is not a registered integer-slider type, use `"type": "slider"` and the C# setter will round — confirm against how `BkFlowIters` is read in the UI's `field` dispatch; match the existing integer `field` convention.)
+(**Audit fix:** `slideri` does NOT exist as a registered type — use `"slider"`; the C# `SetTerrainField` case for `BkFlowIters` rounds to int (Step 3). All four use `"field"` (NOT `"param"`) because they feed `SplatCompute.Params` for a rebake, not a live shader uniform — a `param` here would silently no-op.)
 
 - [ ] **Step 2: Validate JSON.**
 ```bash
@@ -537,11 +538,14 @@ python -c "import json;json.load(open(r'data/lab_controls.json'));print('ok')"
 ```
 Expected: `ok`.
 
-- [ ] **Step 3: Confirm the UI dispatches the new `field` ids.** The `field`+`rebake` rows must map to the `Params` struct fields. If the UI's field dispatcher is a hardcoded switch (not reflection), add cases for `BkCurvScale`/`BkCavityGain`/`BkSunAzimuth`/`BkFlowIters` mirroring how `MixScaleM`/`MixBias` are handled. Grep first:
+- [ ] **Step 3: Wire the new `field` ids into `SetTerrainField` (MANDATORY — audit HIGH).** `SetTerrainField` in `TerrainLabUI.cs` is a **hardcoded switch** that only handles `MixScaleM`/`MixBias` (confirmed) — so the four new `field` rows will **silently no-op** (the rebake runs with stale defaults) unless you add cases. It's `(string field, float v)`, so `BkFlowIters` (int) must round. Add to the switch:
+```csharp
+        else if (field == "BkCurvScale")  { _terrain.BkCurvScale = v; }
+        else if (field == "BkCavityGain") { _terrain.BkCavityGain = v; }
+        else if (field == "BkSunAzimuth") { _terrain.BkSunAzimuth = v; }
+        else if (field == "BkFlowIters")  { _terrain.BkFlowIters = (uint)Mathf.RoundToInt(v); }
 ```
-grep -n "MixScaleM\|case \"Mix\|rebake" scripts/lab/TerrainLabUI.cs
-```
-If it's reflection-based (sets the property by `field` name), no change needed — the property names already match. If switch-based, add the four cases + call `RebakeSplat()`.
+(These `TerrainLab` public fields are added in Task 3 where `RebakeSplat` reads them into `SplatCompute.Params`. The `"rebake": true` flag already triggers `RebakeSplat()` after the value is set — same path as `mix_scale_m`. Verify: `grep -n "SetTerrainField\|MixScaleM" scripts/lab/TerrainLabUI.cs`.)
 
 - [ ] **Step 4: Build + profile A/B.**
 ```
@@ -576,7 +580,9 @@ dotnet build WG16.csproj
 ## Self-Review notes
 
 - **Spec coverage:** Implements arc-spec Unit 4 (procedural breakup) end to end — extends the compute bake with slope/curvature/cavity/aspect/flow masks (arc-spec §"4. Procedural breakup") output as a SECOND data texture, consumes them through the `groundData` seam to vary material + add crevice/cavity dirt, exposed steep rock, shelf debris, and aspect/flow wear. Folds in the palette/zone-assignment retune the spec assigned to units 4-5 via `bk_rock_zone`/`bk_dirt_zone` pickers + per-context material re-pointing (the breakup decides *what material goes where*, the live gate tunes it; Unit 5 finishes color/value on top). Per-unit toggle (`breakup_on`) + knobs in the registry, isolating it for live bisection per the spec's testing model. Keeps Presenter-only, additive, revertable.
-- **Placeholder scan:** No `TODO`/`add appropriate X`/stubs. Every code step is concrete GLSL/C#: the cavity/aspect/flow mask math, the 2nd std430 output buffer + matching `BuildParams` packing, the 2nd `ImageTexture` return + call-site binding, the `breakup_tex` sampler + `groundBreakup` read, the mask-driven material variation, and the five per-mask debug views. The only conditional note is Task 6 Step 1's `slideri` type + Step 3's UI-dispatch check (reflection vs switch) — both are explicit "grep and confirm" instructions, not deferred work.
-- **std430-layout consistency (C# struct fields vs GLSL `ParamsBuf`, field-for-field):** GLSL appends `bk_slope_lo, bk_slope_hi, bk_curv_scale, bk_cavity_gain, bk_sun_azimuth, bk_flow_iters` to `ParamsBuf`; C# `Params` appends `BkSlopeLo, BkSlopeHi, BkCurvScale, BkCavityGain, BkSunAzimuth, BkFlowIters` in the SAME order; `BuildParams` packs them in that order (5×`F` then 1×`U` for the uint `flow_iters`). Count: 17 → 23 scalar 4-byte fields = 92 bytes, padded to 96 (next 16-byte multiple), buffer resized from 80→96. The bake's SPIR-V compile + first dispatch under WINDOWED run (Task 4 Step 4) is the canary for any drift. NOTE: `bk_slope_lo/hi` ALSO exist as fragment uniforms (Task 5 Step 2) — intentional: the bake stores raw `slope01`, the fragment reshapes it live without a rebake; the same-named compute params (`BkSlopeLo/Hi` in `Params`) are reserved/passed but the fragment owns the visible ramp. (If unused by the compute mask math, they can be dropped from `Params` to save 8 bytes — but keeping them keeps the struct stable for Unit 5; left in deliberately.)
+- **Audit fixes applied:** std430 count corrected to 16→22 (88 used → 96 padded); the existing SplatCompute "17/80" comment is wrong, flagged so a builder doesn't "fix" it into a mis-size. Registry `field` rows: `slideri`→`slider`, and `SetTerrainField` switch cases for `BkCurvScale`/`BkCavityGain`/`BkSunAzimuth`/`BkFlowIters` (int-rounded) are now MANDATORY in Task 6 Step 3 (was wrongly "conditional" — it IS a switch, so the knobs would silently no-op). Flow/aspect A-channel honestly documented as one merged WEAR driver (removed the false "disambiguated by sign of curvature" claim). **Caveat inherited:** `trip_nrm_by` is already broken upstream (calls `tp_alb` on `_nrm` samplers) — baked-mask normal blends inherit that; not this unit's bug to fix, but don't trust baked-mask normals look right until that's addressed.
+- **Cross-cutting (all ground units):** find seam functions by NAME/content not line number; `param` rows silently no-op if the uniform is missing (Unit 4's shape knobs correctly use `field`+`rebake`, NOT `param`, since they drive a C# rebake).
+- **Placeholder scan:** No `TODO`/`add appropriate X`/stubs. Every code step is concrete GLSL/C#: the cavity/aspect/flow mask math, the 2nd std430 output buffer + matching `BuildParams` packing, the 2nd `ImageTexture` return + call-site binding, the `breakup_tex` sampler + `groundBreakup` read, the mask-driven material variation, and the five per-mask debug views.
+- **std430-layout consistency (C# struct fields vs GLSL `ParamsBuf`, field-for-field):** GLSL appends `bk_slope_lo, bk_slope_hi, bk_curv_scale, bk_cavity_gain, bk_sun_azimuth, bk_flow_iters` to `ParamsBuf`; C# `Params` appends `BkSlopeLo, BkSlopeHi, BkCurvScale, BkCavityGain, BkSunAzimuth, BkFlowIters` in the SAME order; `BuildParams` packs them in that order (5×`F` then 1×`U` for the uint `flow_iters`). Count (CORRECTED — the existing SplatCompute comment "17/80" is wrong): **16 → 22** scalar 4-byte fields = **88 bytes used**, padded to **96** (next 16-byte multiple), buffer resized 80→96. The bake's SPIR-V compile + first dispatch under WINDOWED run (Task 4 Step 4) is the canary for any drift. NOTE: `bk_slope_lo/hi` ALSO exist as fragment uniforms (Task 5 Step 2) — intentional: the bake stores raw `slope01`, the fragment reshapes it live without a rebake; the same-named compute params (`BkSlopeLo/Hi` in `Params`) are reserved/passed but the fragment owns the visible ramp. (If unused by the compute mask math, they can be dropped from `Params` to save 8 bytes — but keeping them keeps the struct stable for Unit 5; left in deliberately.)
 - **Interface consistency with the `groundData` seam:** `splat_tex` (RGBA #1: dom/sec/mix/boundary) is untouched; breakup ships as RGBA #2 (`breakup_tex`) because #1 is full — exactly the arc-spec's "extends the current splat read" intent. The single consumption point is `groundBreakup(uv, wp)` (the breakup half of `groundData`), used identically by both the debug views (Task 4) and the lit path (Task 5). Material fetches still route through `ar_sample_wp` via `trip_*_by` — breakup changes the zone INDEX + post-modulates, never bypassing the Unit-1 sampler. `distanceWeight()` is reused to far-fade the high-freq masks (consistent with Unit 1/2's LOD-gating).
 - **Masks: GPU-compute-now vs deferred.** GPU-compute NOW (pure per-cell, embarrassingly parallel, one dispatch): **slope** (surface normal), **curvature** (4-tap Laplacian), **cavity** (8-neighbour clamped concavity), **aspect** (normal XZ vs sun azimuth). DEFERRED / cheap-approx: **flow** — true water accumulation is SEQUENTIAL D8 downhill routing (each cell's value depends on upslope cells' resolved values), which is NOT embarrassingly parallel and would need an ordered multi-dispatch or jump-flood pass. Shipped here as a bounded gather-only proxy (`flow_at`, `bk_flow_iters`, default 3, `0`=off) that stays per-cell-parallel and only reads neighbours — good enough for gully streaking. Flagged as the hard one to revisit with a real routing pass if the live gate demands stronger hydrology; it does NOT block the unit.

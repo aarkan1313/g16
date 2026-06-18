@@ -110,7 +110,15 @@ The active workbench. A **data-driven** art-direction tool.
 - `data/material_library.json` — the 108 accepted materials (derived from verdicts).
 - `data/lab_controls.json` — **the look-lab control registry** (every UI control:
   id/label/tab/type/range/default + shader param / mode-setter / scene target).
-  Add or retune a control by editing this — no C# change.
+  Add or retune a control by editing this — no C# change **ONLY for the `param`
+  path** (a `slider`/`toggle` with `"param":"X"` auto-calls `SetFloat/SetBool("X")`
+  → `SetShaderParameter`). ⚠ **GOTCHA (bit 3 ground units in audit):** a `param`
+  naming a uniform that doesn't exist **silently no-ops** (Godot ignores unknown
+  shader params). Controls that drive C#-side state, a rebake, or a non-shader object
+  (e.g. `field`+`rebake` for SplatCompute params, or a node like PebbleScatter) must
+  use the `field`/`setter`/`scene`/`cloud` mechanisms and a **matching C# case** in
+  `TerrainLabUI` (`SetTerrainField`/`ApplyScene`/etc.) or by control `id` — NOT `param`.
+  There is no `slideri` type; round an int in the C# setter.
 - `data/lighting_moods.json` — the 6 curated lighting **mood presets** (each a full
   coordinated sun+sky+fog+exposure+grade look).
 

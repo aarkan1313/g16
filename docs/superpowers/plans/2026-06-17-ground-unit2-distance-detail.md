@@ -8,6 +8,8 @@
 
 **Tech Stack:** Godot 4.6 mono, GLSL spatial shader (`shaders/terrain_lab.gdshader`), C# registry + CLI (`scripts/lab/TerrainLab.cs`, `scripts/lab/TerrainLabUI.cs`), control registry (`data/lab_controls.json`).
 
+> **Cross-cutting (all ground units):** (1) **Find the seam functions by NAME/content, not line number** — several units edit the same `fragment()`/`trip_*`/`tp_*` region, so a prior-built unit may have shifted the lines; the anchors here are approximate. (2) **Registry-wiring gotcha:** a `lab_controls.json` row with `"type":"slider"`/`"toggle"` + `"param":"X"` auto-routes to `SetFloat/SetBool("X")` → `SetShaderParameter`, which **silently no-ops if uniform `X` doesn't exist**. Every `param` here must name a uniform actually added in the shader edits (verified below). (Units that need C#-side state, not a shader uniform, must use the `field`/`setter`/`cloud` mechanisms + a C# case — NOT `param`.)
+
 **Verification model:** GPU/visual, no unit harness (there is no test harness; this is a GPU/visual subsystem — do NOT write unit tests / TDD). Per task gate: `dotnet build WG16.csproj` → headless `--import` (GLSL compiles) → `--auto-shot` A/B (`--detail=0` vs `--detail=1`) at three ranges → `--profile` (ms cost). **THE gate is the user flying it live at close / mid / far** — the badness ("flat up close", "samey far") is range-spanning, so all three must improve. Commit per task. Never judge a motion artifact from a still.
 
 ---
@@ -55,7 +57,7 @@
 uniform bool detail_on = true;            // master toggle for distance detail
 uniform float detail_strength : hint_range(0.0, 1.0) = 0.6;  // near detail blend amount
 uniform float detail_scale : hint_range(2.0, 16.0) = 6.0;    // finer = tex_scale_m / this
-uniform float detail_dist : hint_range(0.05, 1.0) = 0.45;    // fraction of ar_far_m over which detail fades out
+uniform float detail_dist : hint_range(0.05, 1.0) = 0.1;     // fraction of ar_far_m over which detail fades out (0.1*2500 ≈ 250m near band; "near" detail should be genuinely near)
 uniform float detail_nrm_amp : hint_range(0.0, 2.0) = 0.8;   // derived detail-normal strength
 ```
 
@@ -93,9 +95,11 @@ float detailWeight(vec3 wp){
 
 ```glsl
 // Macro (existing scale) (+) near detail (finer scale), both via ar_sample_wp so
-// each inherits Unit-1 bombing. Detail is a value-preserving overlay: it adds the
-// detail tap's deviation from its own mean (mid-grey 0.5) so it sharpens/varies
-// without shifting overall brightness. Crossfaded out by detailWeight.
+// each inherits Unit-1 bombing. The detail is added as the detail tap's deviation
+// from ITS OWN luma (not a constant mid-grey) — so it layers high-freq contrast
+// WITHOUT shifting the macro's brightness regardless of how dark/light the material
+// is (audit M1: `det - 0.5` lifts dark textures / crushes light ones; subtracting
+// the detail's own luma is the correct value-preserving form). Crossfaded by detailWeight.
 vec3 detail_alb(sampler2D t, vec3 wp, vec3 nr){
     vec3 bw = tri_w(nr);
     vec2 ux = wp.zy/tex_scale_m, uy = wp.xz/tex_scale_m, uz = wp.xy/tex_scale_m;
@@ -110,8 +114,9 @@ vec3 detail_alb(sampler2D t, vec3 wp, vec3 nr){
     vec3 det = ar_sample_wp(t,dux,wp).rgb*bw.x
              + ar_sample_wp(t,duy,wp).rgb*bw.y
              + ar_sample_wp(t,duz,wp).rgb*bw.z;
-    // overlay deviation about mid-grey: keeps macro value, layers detail contrast
-    vec3 over = macro + (det - vec3(0.5)) * (detail_strength * dw);
+    // value-preserving: add detail's deviation from its OWN luma (mean stays = macro)
+    float detLuma = dot(det, vec3(0.299, 0.587, 0.114));
+    vec3 over = macro + (det - vec3(detLuma)) * (detail_strength * dw);
     return clamp(over, 0.0, 1.0);
 }
 ```
@@ -131,18 +136,22 @@ git commit -m "Ground unit 2: detailWeight() + detail_alb() (near-detail overlay
 
 **Files:** Modify `shaders/terrain_lab.gdshader`.
 
-No-new-asset detail normal: derive a tangent-space high-freq normal from the **detail albedo's luminance gradient** (Sobel-ish via screen-space derivatives of the finer tap). This adds micro-relief that survives the BRDF without any dedicated detail-normal texture. The real material normal map still drives the macro normal via the existing `tp_alb`-on-`_nrm` reuse; the derived normal is composited on top, near only.
+No-new-asset detail normal: derive a tangent-space high-freq bump from the **detail albedo's luminance gradient**, but compute that gradient from **explicit neighbouring texture taps** (finite differences via `textureGrad`), **NOT** from `dFdx`/`dFdy` of an `ar_sample_wp` result. (Audit H1: `ar_sample_wp` does per-tile rotation/jitter, so its output luminance is *discontinuous at tile-cell boundaries*; taking screen-space derivatives of it spikes at those seams → grid-aligned crawl in motion — the exact artifact we fear. Plain offset taps of the texture have no such seams.) The real material normal map still drives the macro normal via the existing path; the derived bump is added on top, near only.
 
-- [ ] **Step 1: Add `detail_nrm()`** right after `detail_alb()` (~line 425+). It returns a tangent-space normal (`.xy` perturbation, `+z` up) combining the macro normal-map sample (read like the current `trip_nrm_by` path) with the derived high-freq bump:
+The macro normal must also match the current path's behaviour **exactly** when detail is off. The current path is `tp_alb(z*_nrm,…)` → raw `ar_sample_wp(...).rgb` (0..1) → caller does `*2-1`, and the fragment only consumes `nrm.x`/`nrm.y` (`vec3 wn=normalize(nr + vec3(nrm.x,0.0,nrm.y)*0.8);` — `nrm.z` is discarded). So: **do NOT `normalize()`** (that shrinks `.xy` and would change the look even with detail off, breaking the off==current guarantee); just add the bump to the raw macro normal's `.xy` and pass `.z` through unchanged.
+
+- [ ] **Step 1: Add `detail_nrm()`** right after `detail_alb()` (~line 425+). It returns the tangent-space normal (`-1..1`) — the macro normal-map sample with a derived high-freq bump added to `.xy`, near only:
 
 ```glsl
-// Returns the macro normal-map tangent-space vector (-1..1) with a derived
-// high-frequency bump layered in near the camera. The bump comes from the
-// luminance gradient of the finer-scale albedo tap (no detail-normal asset).
+// Macro normal-map (-1..1) + a derived high-freq bump near the camera. The bump's
+// slope = luminance gradient of the finer albedo tap, taken from EXPLICIT offset
+// taps (textureGrad), NOT dFdx of an ar_sample_wp result — the latter crawls at
+// the bombing's tile seams (audit H1). Un-normalized: matches the existing raw
+// path so detail-off == current, and fragment() only uses .xy anyway.
 vec3 detail_nrm(sampler2D albT, sampler2D nrmT, vec3 wp, vec3 nr){
     vec3 bw = tri_w(nr);
     vec2 ux = wp.zy/tex_scale_m, uy = wp.xz/tex_scale_m, uz = wp.xy/tex_scale_m;
-    // macro normal-map (same path trip_nrm_by used: tp via ar_sample_wp, *2-1)
+    // macro normal exactly as the current trip_nrm_by path (raw, *2-1, NOT normalized)
     vec3 macroN = (ar_sample_wp(nrmT,ux,wp).rgb*bw.x
                  + ar_sample_wp(nrmT,uy,wp).rgb*bw.y
                  + ar_sample_wp(nrmT,uz,wp).rgb*bw.z) * 2.0 - 1.0;
@@ -154,14 +163,16 @@ vec3 detail_nrm(sampler2D albT, sampler2D nrmT, vec3 wp, vec3 nr){
     vec2 duv = (bw.x >= bw.y && bw.x >= bw.z) ? wp.zy/ds
              : (bw.y >= bw.z)                 ? wp.xz/ds
                                               : wp.xy/ds;
-    // luminance of the finer albedo tap, and its screen-space gradient = slope
-    float l = dot(ar_sample_wp(albT, duv, wp).rgb, vec3(0.299, 0.587, 0.114));
-    vec2 g = vec2(dFdx(l), dFdy(l));
-    // perturb tangent normal by -gradient (bumps face the gradient uphill)
-    vec3 bump = vec3(-g * detail_nrm_amp * dw, 1.0);
-    // combine via partial-derivative blend (Blinn): add xy slopes, keep z
-    vec3 n = vec3(macroN.xy + bump.xy, macroN.z);
-    return normalize(n);
+    // luminance gradient via EXPLICIT finite differences (seam-free, unlike dFdx of
+    // the bombed tap). One texel-ish offset at the detail scale; plain textureGrad.
+    vec2 dx = dFdx(duv), dy = dFdy(duv);
+    float e = 1.0 / 512.0;                      // small uv offset for the difference
+    float lC = dot(textureGrad(albT, duv,                dx, dy).rgb, vec3(0.299,0.587,0.114));
+    float lX = dot(textureGrad(albT, duv + vec2(e,0.0),  dx, dy).rgb, vec3(0.299,0.587,0.114));
+    float lY = dot(textureGrad(albT, duv + vec2(0.0,e),  dx, dy).rgb, vec3(0.299,0.587,0.114));
+    vec2 g = vec2(lX - lC, lY - lC) / e;        // surface luminance slope
+    // add the bump's xy slope to the macro normal; keep macro .z (fragment uses .xy)
+    return vec3(macroN.xy - g * detail_nrm_amp * dw, macroN.z);
 }
 ```
 
@@ -238,7 +249,7 @@ git commit -m "Ground unit 2: route splat trip_alb_by/trip_nrm_by through detail
     { "id": "detail_scale", "label": "detail scale", "tab": "Detail", "type": "slider",
       "param": "detail_scale", "min": 2, "max": 16, "default": 6, "rand": true },
     { "id": "detail_dist", "label": "detail fade dist", "tab": "Detail", "type": "slider",
-      "param": "detail_dist", "min": 0.05, "max": 1, "default": 0.45, "rand": false },
+      "param": "detail_dist", "min": 0.05, "max": 1, "default": 0.1, "rand": false },
     { "id": "detail_nrm_amp", "label": "detail normal", "tab": "Detail", "type": "slider",
       "param": "detail_nrm_amp", "min": 0, "max": 2, "default": 0.8, "rand": true },
 ```
@@ -339,7 +350,8 @@ The no-new-asset approach (resample existing material finer + derive a normal fr
   - `ar_sample_wp(sampler2D, vec2, vec3) -> vec4` — called identically in `detail_alb` and `detail_nrm` (Tasks 2–3); never bypassed.
   - `distanceWeight(vec3) -> float` — consumed by `detailWeight(vec3) -> float` (Task 2); not redefined.
   - `detail_alb(sampler2D, vec3, vec3) -> vec3` matches `tp_alb`'s signature, so `trip_alb_by` re-points with no caller change (Task 4 Step 1).
-  - `detail_nrm(sampler2D albT, sampler2D nrmT, vec3, vec3) -> vec3` returns `-1..1`; Task 4 Step 2 re-encodes `*0.5+0.5` so `fragment()`'s existing `*2.0-1.0` (line ~488) round-trips to identity — verified the decode is untouched.
+  - `detail_nrm(sampler2D albT, sampler2D nrmT, vec3, vec3) -> vec3` returns raw `-1..1` (UN-normalized, matching the existing path — audit H2); Task 4 Step 2 re-encodes `*0.5+0.5` so `fragment()`'s existing `*2.0-1.0` (line ~488) round-trips. Detail-off returns exactly `macroN` ⇒ pixel-identical to current (the normalize() that broke this is removed).
+  - **Audit fixes applied:** H1 — detail-normal gradient now from explicit `textureGrad` offset taps, not `dFdx` of a bombed `ar_sample_wp` (no tile-seam crawl). H2 — dropped `normalize()`; off==current preserved. M1 — value-preserving overlay subtracts the detail tap's OWN luma (not constant 0.5), so dark/light materials don't shift brightness. M2 — `detail_dist` default 0.45→0.1 (≈250m near band, genuinely near).
   - `cam_world` uniform reused (no new camera plumbing); already pushed each frame by `TerrainLabUI._Process` (Unit 1).
   - Registry `param` ids (`detail_on`/`detail_strength`/`detail_scale`/`detail_dist`/`detail_nrm_amp`) match the shader uniform names exactly; `--detail=` mirrors `--ar=` (field + parse + apply), verified against the existing `_terrainArCli` pattern.
 - **Forward-reference check:** `detailWeight` defined after `distanceWeight` (~234); `detail_alb`/`detail_nrm` defined after `tp_alb` (~425) and use `tri_w`/`ar_sample_wp`/`tex_scale_m` all defined above — no forward references. `trip_alb_by`/`trip_nrm_by` (~433–443) sit below the detail samplers, so re-pointing them compiles.

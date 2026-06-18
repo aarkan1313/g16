@@ -243,11 +243,18 @@ Call `EnsurePebbleScatter()` from the same place the splat bake/apply runs after
 
 - [ ] **Step 6: Registry — Ground+ tab.** In `data/lab_controls.json`, add `"Ground+"` to the `tabs` array, then add rows:
 ```json
-    { "id": "pebble_on", "label": "pebbles (demo)", "tab": "Ground+", "type": "toggle", "param": "pebble_on", "default": false, "rand": false },
-    { "id": "pebble_count", "label": "pebble count", "tab": "Ground+", "type": "slider", "param": "pebble_count", "min": 0, "max": 30000, "default": 4000, "rand": false },
-    { "id": "pebble_scale", "label": "pebble scale", "tab": "Ground+", "type": "slider", "param": "pebble_scale", "min": 0.1, "max": 2.0, "default": 0.6, "rand": false },
+    { "id": "pebble_on", "label": "pebbles (demo)", "tab": "Ground+", "type": "toggle", "default": false, "rand": false },
+    { "id": "pebble_count", "label": "pebble count", "tab": "Ground+", "type": "slider", "min": 0, "max": 30000, "default": 4000, "rand": false },
+    { "id": "pebble_scale", "label": "pebble scale", "tab": "Ground+", "type": "slider", "min": 0.1, "max": 2.0, "default": 0.6, "rand": false },
 ```
-> `pebble_*` are NOT shader uniforms — they're UI-only ids routed to `_pebbles.SetEnabled/SetCount/SetScale` in the UI's apply switch (handle them as special cases like the existing setter-typed controls, NOT via `SetShaderParameter`). Validate JSON: `python -c "import json;json.load(open(r'data/lab_controls.json'));print('ok')"`.
+> **Audit H1 — these rows DELIBERATELY have NO `"param"`** (they're not shader uniforms). A `toggle`/`slider` with a `param` would route to `SetShaderParameter("pebble_*")` and **silently no-op** (no such uniform); with no `param` the generic case does nothing either. So they MUST be special-cased by `id` in `ApplyControl` (TerrainLabUI.cs) BEFORE the generic routing — this is mandatory wiring, not optional:
+> ```csharp
+>     // Unit 6A pebble demo controls (id-routed, not shader uniforms):
+>     if (c.Id == "pebble_on")    { _pebbles?.SetEnabled(c.Value.AsBool());  return; }
+>     if (c.Id == "pebble_count") { _pebbles?.SetCount(c.Value.AsInt32());   return; }
+>     if (c.Id == "pebble_scale") { _pebbles?.SetScale(c.Value.AsSingle());  return; }
+> ```
+> (`_pebbles` is the `PebbleScatter` instance created in Group A. Put these checks at the top of `ApplyControl`, mirroring how cloud `cloud`-typed ids are handled.) Validate JSON: `python -c "import json;json.load(open(r'data/lab_controls.json'));print('ok')"`.
 
 - [ ] **Step 7: Build + A/B + profile.**
 ```
@@ -360,7 +367,7 @@ uniform float snow_aspect_k  : hint_range(0.0, 1.0) = 0.4;      // aspect influe
 uniform vec3  snow_color = vec3(0.92, 0.95, 1.0);
 ```
 
-- [ ] **Step 2: REMOVE the old snow_dust lines** from the contact block (~lines 512-516):
+- [ ] **Step 2: REMOVE whatever snow-dust logic survives Unit 4** (audit H2 — do NOT trust the line numbers). Unit 4 reworks the `contact_on` block before this unit runs (it demotes contact shading to a `!breakup_on` fallback), so the `snow_dust` lines may have moved, been re-indented, or been gated. **Find them by content** (`grep -n "snow_dust" shaders/terrain_lab.gdshader`) and delete the dusting block wherever it now lives — originally these lines (and any `breakup_on`-gated copy Unit 4 left):
 ```glsl
         // snow dusting on near-flat upward faces above a height.
         float dust = snow_dust_amp * smoothstep(snow_dust_h, snow_dust_h+120.0, v_h)
@@ -483,4 +490,6 @@ git commit -m "Ground unit 6D: higher-quality triplanar (sharpened weights + bip
 - **Dependency notes (Unit 4 masks):** **B and C HARD-DEPEND on Unit 4's `groundData()`** — B reads `cavity`+`flow`, C reads `aspect`+`slope`. Both steps say STOP if `--import` reports `groundData` undeclared (Unit 4 not landed). **A degrades gracefully** (slope/height heuristic density; consumes Unit 4 `scatterDensity` when available). **D has NO Unit 4 dependency** (touches `tri_w` only). So B/C are gated on Unit 4; A and D can ship even if Unit 4 slips.
 - **Flora-overlap boundary:** Group A builds ONLY the `IScatterProvider` seam + a throwaway pebble demo. Flora is NOT built here. Two `// FLORA-COORD:` markers call out where flora plugs in (density source + delete-the-demo-if-flora-ships). The interface (`ScatterSample` = pos+normal+density) is the single contract both consume — no duplicated placement logic.
 - **Interface consistency:** `groundData(uv) → GroundData{...cavity, flow, aspect, slope, scatterDensity}` consumed identically in B and C (one fetch each, field names aliased-once if Unit 4 differs). `IScatterProvider`/`ScatterSample` defined in A Step 1, implemented by `TerrainLab` (A Step 2), consumed by `PebbleScatter` (A Step 3) — same struct shape throughout. `tri_w(vec3)` signature unchanged (D upgrades the body, mode 0 = exact current behavior, zero regression). All registry `param` ids match shader uniforms exactly except the flagged UI-only `pebble_*`. New controls all land on one new **"Ground+"** tab.
-- **Watch-points:** (1) `groundData`/`GroundData` MUST exist (Unit 4) before B/C compile — enforced by the import-error STOP. (2) `tri_quality=2` zeroes a tap's weight but still issues the fetch; real fetch-saving needs per-plane branching in `tp_*`/`s_*` — only pursue if profiled as the bottleneck (noted in D Step 2). (3) `pebble_*` controls need special-case handling in the UI apply switch (not `SetShaderParameter`) — noted in A Step 6. (4) PebbleScatter must be a SIBLING of `TerrainLab` (shared centered world space), not a child of the displaced mesh.
+- **Audit fixes applied:** H1 — pebble rows now have NO `"param"` and are id-routed in `ApplyControl` to `_pebbles.SetEnabled/SetCount/SetScale` with explicit code (a `param` would silently no-op; the prose-only note was insufficient). H2 — Group C Step 2 reframed from a verbatim line-512-516 delete to "grep `snow_dust` and remove whatever survives Unit 4" (Unit 4 reworks that contact block first, so the lines move). M3 — when both B and C are on they each fetch `groundData(v_uv)`; acceptable (cheap, and they're independent task-groups), but if profiled hot, hoist one shared `GroundData gd = groundData(v_uv);` guarded by `wet_on || snow_on`.
+- **Cross-cutting (all ground units):** find seam functions by NAME/content not line number; `param` rows silently no-op if the uniform is missing — Unit 6's non-uniform controls (`pebble_*`) are correctly id-routed instead. Note `_spacing = region/res` (not `region/(res-1)`) in the scatter lookup mirrors the shader's own normal convention — intentional, fine for a density heuristic.
+- **Watch-points:** (1) `groundData`/`GroundData` MUST exist (Unit 4) before B/C compile — enforced by the import-error STOP. (2) `tri_quality=2` zeroes a tap's weight but still issues the fetch; real fetch-saving needs per-plane branching in `tp_*`/`s_*` — only pursue if profiled as the bottleneck (noted in D Step 2). (3) `pebble_*` controls are id-routed in the UI apply switch (not `SetShaderParameter`) — code in A Step 6 / Step 6 registry note. (4) PebbleScatter must be a SIBLING of `TerrainLab` (shared centered world space), not a child of the displaced mesh.

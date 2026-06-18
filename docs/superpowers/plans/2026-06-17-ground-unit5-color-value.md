@@ -8,6 +8,8 @@
 
 **Tech Stack:** GLSL (terrain_lab.gdshader fragment + a new color stage and helpers, reusing existing `vnoise`/`rgb2hsv`/`hsv2rgb`); JSON control registry (data/lab_controls.json Color tab) for live toggles/knobs; C# Lab harness for `--mood`/`--auto-shot`/`--profile`. Optional baked-tint path: shaders/splat_weights.glsl + scripts/lab/SplatCompute.cs (NOT built in this unit unless Unit 4 already shipped the channel — see Task 6, deferred).
 
+> **Cross-cutting (all ground units):** (1) **Seam collision with Unit 4** — Unit 4 *also* edits the `alb = macro_color(alb, wp);` region (~line 505), adding `dbg`/`breakup` blocks around it. If Unit 4 built first, find the CURRENT color-apply call by content (it may no longer be literally `macro_color`), not by line number. (2) Registry `param` rows silently no-op if the uniform is missing — every `param` here names a real new uniform; the per-zone `zone_tint_*` stay shader-side (no registry row, so NOT live-tunable — iterate by editing the shader defaults). (3) **Judge LIT + post-AgX, never raw albedo.**
+
 ---
 
 ## Environment / Gotchas (READ EVERY TASK)
@@ -47,16 +49,17 @@ Establish `color_grade_terrain` as the single color seam and a master toggle, wi
       return macro_color(alb, wp);
   }
   ```
-- [ ] In `fragment()`, replace the `alb = macro_color(alb, wp);` call (~line 505) with:
+- [ ] **First, HOIST `dom`/`sec` so they're in scope at the color seam (audit H1-A — REQUIRED, not optional; `dom`/`sec` are currently declared *inside* the `if(splat_on)` block ~475-476 and go out of scope before line 505, so the code below won't compile otherwise):**
+  1. At ~line 463 (with `alb`/`nrm`/`rgh`/`ao`), add: `int dom = 0; int sec = 0;`
+  2. At ~lines 475-476, change the existing `int dom = int(sp.r + 0.5);` / `int sec = clamp(...)` to **plain assignments** (drop the `int` so they assign the hoisted vars, not re-declare/shadow): `dom = int(sp.r + 0.5);` / `sec = clamp(...);`
+- [ ] Then replace the `alb = macro_color(alb, wp);` call (~line 505) with:
   ```glsl
   // Unit 5: large-scale color/value variation + per-area hue/value break.
-  // Needs dom/sec zone; in the splat path they are `dom`/`sec`, else dominant of w[].
-  int domZ = 0; int secZ = 0;
-  if (splat_on){ domZ = dom; secZ = sec; }
-  else { float bw=-1.0; for(int i=0;i<7;i++){ if(w[i]>bw){ bw=w[i]; secZ=domZ; domZ=i; } } }
+  // dom/sec are now hoisted (above); in the non-splat path pick the dominant of w[].
+  int domZ = dom; int secZ = sec;
+  if (!splat_on){ float bw=-1.0; domZ=0; secZ=0; for(int i=0;i<7;i++){ if(w[i]>bw){ bw=w[i]; secZ=domZ; domZ=i; } } }
   alb = color_grade_terrain(alb, wp, domZ, secZ);
   ```
-  (Note: `dom`/`sec`/`w[]` are declared inside the `if(splat_on)`/`else` branches at ~line 475/492 — hoist `dom`/`sec` declarations to before the branch if the compiler complains about scope; declare `int dom=0, sec=0;` at ~line 463 and assign inside the splat branch.)
 - [ ] Add Color-tab controls in data/lab_controls.json after the existing `macro_scale2` row (~line 42):
   ```json
   { "id": "color_on", "label": "color stage", "tab": "Color", "type": "toggle",
@@ -167,6 +170,7 @@ Replace the legacy neutral-centered HSV drift with a large-scale warm↔cool *va
       return max(base, vec3(0.0));
   }
   ```
+- [ ] **Retire the now-dead `macro_color` (audit cleanup).** Once nothing calls it, the `macro_color` function AND its Color-tab registry rows (`macro_on`/`macro_val_amp`/`macro_hue_amp`/`macro_sat_amp`/`macro_scale2`, `data/lab_controls.json` ~33-42) are orphaned — they'd show in the UI doing nothing. Remove those 5 rows (or, if you want them for A/B during tuning, keep ONLY and label them "legacy"). Delete the `macro_color` function body. **Do NOT delete `macro_m`/`macro_amp` uniforms** — they're still read by `zone_weights()` (mask logic), unrelated to color. Validate JSON after.
 - [ ] Add Color-tab knobs:
   ```json
   { "id": "macro_tint_amp", "label": "warm/cool", "tab": "Color", "type": "slider",
@@ -249,10 +253,11 @@ AgX desaturates and S-curves; combined with SDFGI ambient fill the ground can st
       vec3 hsv = rgb2hsv(c);
       hsv.y = max(hsv.y, sat_floor);                       // anti-muddy floor
       hsv.y = clamp(hsv.y * (1.0 + sat_lift), 0.0, 1.0);   // pre-AgX over-saturate
-      vec3 rgb = hsv2rgb(hsv);
-      // value contrast around pivot (lift mids apart; AgX will re-soften the extremes).
-      rgb = mix(vec3(val_pivot), rgb, 1.0 + val_contrast);
-      return max(rgb, vec3(0.0));
+      // value contrast around pivot in HSV VALUE (bounded), NOT RGB extrapolation
+      // (audit MED: mix(pivot,rgb,1+contrast) had no upper bound → blew >1 and AgX
+      // desaturated-to-white the brights under --mood=0, the opposite of the goal).
+      hsv.z = clamp(val_pivot + (hsv.z - val_pivot) * (1.0 + val_contrast), 0.0, 1.0);
+      return max(hsv2rgb(hsv), vec3(0.0));
   }
   ```
 - [ ] Wire as sub-pass (4), the last step of `color_grade_terrain`:
@@ -298,5 +303,7 @@ The large-scale tint (Task 3 `macro_tint_field`) is a pure function of world pos
 **Placeholder scan.** No placeholders: all GLSL and JSON is concrete and uses the verified existing symbols — `vnoise(vec2,float)` (line 155), `rgb2hsv`/`hsv2rgb` (lines 355/362), the splat-path `dom`/`sec`/`mix m` (lines 475-486), the `w[7]` weights (line 461), the `macro_color` seam at line 505, and the Color-tab JSON shape (data/lab_controls.json lines 33-42). The only thing left to the worker is numeric tuning of the tint vec3s/amps — which is *correct*, because per the verification model those values can only be set from the LIT, post-AgX result, live.
 
 **Consistency / Unit-4 dependency.** This plan is STANDALONE: Tasks 1-5 require nothing from Unit 4 — the large-scale tint is computed in-shader via `vnoise` (Task 3). Unit 4 is touched only in Task 6, which is explicitly OPTIONAL and gated on (a) a measured perf need and (b) Unit 4 having already shipped a `macroTint` ground-data channel; if either is false, Task 6 closes with no change. Zone indices, the splat read, and the fragment seam all match the current shader, so the unit composes with Units 1-4 (it runs after the material blend, before contact shading, exactly where `macro_color` ran).
+
+**Audit fixes applied.** H1-A — `dom`/`sec` are now explicitly HOISTED to ~463 + the in-branch declarations changed to assignments (the old code block referenced out-of-scope vars → wouldn't compile). H1-B — added the Unit-4 seam-collision note (find the color-apply call by content, not line). MED — value contrast moved to bounded HSV value (was unbounded RGB extrapolation `mix(pivot,rgb,1+contrast)` → AgX-blowout under `--mood=0`); + a step to retire the orphaned `macro_color` + its 5 Color-tab rows (keeping `macro_m`/`macro_amp` which `zone_weights` still uses).
 
 **Validation is UNDER LIGHT + TONEMAP — explicit.** Every task's gate auto-shots the LIT, AgX-tonemapped, color-graded result under a mood (default `--mood=5`, plus `--mood=0` golden and `--mood=2` midday because chroma reads differently per light), never raw albedo — this is the whole point of the unit (the old tint died under GI+AgX). Task 5 specifically over-saturates and lifts contrast *pre-tonemap* to counter AgX's desaturation/S-curve, and the saturation floor is the anti-muddy guard. The final gate is the user flying it live across moods at close/mid/far; commit per task only after acceptance.

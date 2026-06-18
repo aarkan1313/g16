@@ -9,6 +9,8 @@
 
 **Tech Stack:** Godot 4.6.2 mono, C# orchestration (`scripts/lab/TerrainLab.cs`, `TerrainLabUI.cs`), GLSL spatial shader (`shaders/terrain_lab.gdshader`), data-driven controls (`data/lab_controls.json`). POM stays in the spatial fragment shader (per-fragment work — no compute pre-pass is justified here; see Self-Review PERF).
 
+> **Cross-cutting (all ground units):** find seam functions by NAME/content, not line number (other units shift them). Registry `param` rows silently no-op if the uniform doesn't exist — every `param` here names a real new uniform. **Custom-`light()` caveat (this unit relies on it):** `AO_LIGHT_AFFECT` does NOT reach the direct term under a custom `light()` — AO must be multiplied inside `light()` via a varying (handled in Task 1).
+
 ---
 
 ## Environment & Godot 4.6 gotchas
@@ -72,11 +74,18 @@ and in the 7-zone `ZONE` macro (~line 493) change it to also accumulate AO:
         ZONE(5,z5_alb,z5_nrm,z5_rgh,z5_ao)
         ZONE(6,z6_alb,z6_nrm,z6_rgh,z6_ao)
 ```
-- [ ] Write `AO` near the final outputs (~line 526, after `ROUGHNESS`):
+- [ ] Write `AO` near the final outputs (~line 526, after `ROUGHNESS`). **Audit M4:** this shader has a CUSTOM `light()`, and `AO`/`AO_LIGHT_AFFECT` only fold AO into the *built-in* lighting + the engine's ambient/GI path — a custom `light()` does NOT see `AO_LIGHT_AFFECT` for the DIRECT term. So writing `AO` here darkens **ambient/GI only**; to darken **direct** light we must pass AO into `light()` and multiply there (next bullet). Set both anyway for the ambient/GI contribution:
 ```glsl
     AO = ao_on ? clamp(ao, 0.0, 1.0) : 1.0;
-    AO_LIGHT_AFFECT = 1.0;   // let material AO darken direct + ambient (kills flat look)
+    AO_LIGHT_AFFECT = 1.0;   // affects ENGINE ambient/GI; direct term handled in light()
 ```
+- [ ] **Pass AO to `light()` for the direct term (M4 fix).** `light()` runs separately and can't read the `ao` local from `fragment()`, so carry it on a varying. Add `varying float v_ao;` with the other varyings (~line 134), set it in `fragment()` right after computing `ao` (e.g. `v_ao = ao_on ? clamp(ao,0.0,1.0) : 1.0;`), and in the custom `light()` multiply the direct contributions by it — change the `DIFFUSE_LIGHT +=` / `SPECULAR_LIGHT +=` lines to include `* v_ao`:
+```glsl
+    // in light(): material AO darkens the DIRECT sun term too (not just ambient/GI)
+    DIFFUSE_LIGHT  += ... * v_ao;
+    SPECULAR_LIGHT += ... * v_ao;
+```
+  (Apply `* v_ao` to the existing diffuse/specular accumulate expressions; don't rewrite the BRDF.)
 - [ ] In `TerrainLab.cs` `SetZoneMaterial` (~line 90) add the AO bind:
 ```csharp
         _mat.SetShaderParameter($"z{zone}_ao", LoadOr(b, "ao"));
@@ -158,11 +167,16 @@ vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, vec3 wp, vec3 nr, vec3 vdir, o
     vec3 bw = tri_w(nr);
     dom = (bw.x >= bw.y && bw.x >= bw.z) ? 0 : (bw.y >= bw.z ? 1 : 2);
 
-    // plane uv + the 2D view direction projected into that plane (x = parallax axis)
-    vec2 uv; vec2 vp;
-    if (dom == 0){ uv = wp.zy / tex_scale_m; vp = vdir.zy; }
-    else if (dom == 1){ uv = wp.xz / tex_scale_m; vp = vdir.xz; }
-    else { uv = wp.xy / tex_scale_m; vp = vdir.xy; }
+    // plane uv + the 2D view direction projected into that plane (the in-plane axes),
+    // AND the DEPTH axis = the component along the plane's normal (audit H1: the parallax
+    // depth divisor must be the axis PERPENDICULAR to the plane, not always vdir.y).
+    //   dom 0 = zy plane (normal = x) → depth = vdir.x
+    //   dom 1 = xz plane (normal = y) → depth = vdir.y
+    //   dom 2 = xy plane (normal = z) → depth = vdir.z
+    vec2 uv; vec2 vp; float vdepth;
+    if (dom == 0){ uv = wp.zy / tex_scale_m; vp = vdir.zy; vdepth = vdir.x; }
+    else if (dom == 1){ uv = wp.xz / tex_scale_m; vp = vdir.xz; vdepth = vdir.y; }
+    else { uv = wp.xy / tex_scale_m; vp = vdir.xy; vdepth = vdir.z; }
 
     float far = distanceWeight(wp);
     // LOD gate: full steps near, ramp to 0 by pom_far_fade.
@@ -171,19 +185,20 @@ vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, vec3 wp, vec3 nr, vec3 vdir, o
     if (!pom_on || steps < 1 || pom_scale_m <= 0.0) return vec2(0.0);
 
     vec2 dx = dFdx(uv), dy = dFdy(uv);
-    // scale meters->uv; vviewz = how steep the ray hits (grazing => longer offset)
-    float vz = max(abs(vdir.y), 0.05);                  // dominant plane is ~ground-facing
+    // depth into the surface along THIS plane's normal (grazing → longer offset).
+    // Correct per-plane (H1); was hardcoded vdir.y which only suited the ground plane.
+    float vz = max(abs(vdepth), 0.05);
     vec2 maxShift = (vp / vz) * (pom_scale_m / tex_scale_m);
 
     float dStep = 1.0 / float(steps);
     vec2 dUV = maxShift * dStep;
-    float prevH = 1.0; vec2 curUV = uv; float rayH = 1.0;
+    vec2 curUV = uv; float rayH = 1.0;
     float h = pom_height_at(rgh_t, alb_t, curUV, dx, dy);
     // march until the ray depth drops below the surface height
     for (int i = 0; i < 64; i++){
         if (i >= steps) break;
         if (rayH <= h) break;
-        prevH = rayH; rayH -= dStep;
+        rayH -= dStep;
         curUV -= dUV;
         h = pom_height_at(rgh_t, alb_t, curUV, dx, dy);
     }
@@ -195,7 +210,11 @@ vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, vec3 wp, vec3 nr, vec3 vdir, o
     float wgt = after / max(after - before, 1e-4);
     vec2 finalUV = mix(curUV, prevUV, wgt);
     vec2 off = finalUV - uv;
-    return off * lod;   // fade the offset itself so the seam to far is silent
+    // Single fade (audit M1): step-count already drops with lod for COST; do NOT also
+    // multiply the offset by lod (that squared the falloff). Only soft-fade the offset
+    // in the last sliver before the cutoff so the switch-off is seamless, not lod^2.
+    float seam = smoothstep(0.0, 0.15, lod);   // ~0 only in the final 15% before cutoff
+    return off * seam;
 }
 ```
 - [ ] In `fragment()` (~line 460) compute the offset once and apply it to `wp`. Right after `vec3 wp=v_world; vec3 nr=v_normal;`:
@@ -204,10 +223,23 @@ vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, vec3 wp, vec3 nr, vec3 vdir, o
     // field; shift the world pos along the dominant plane so every later fetch parallaxes.
     if (pom_on){
         vec3 vdir = normalize(wp - cam_world);          // view ray, world space
-        int dz = 0;
-        // height field = dominant zone's maps; in splat path use the splat dom, else zone 0.
+        // Height-field zone selection. SPLAT path (the default): use the baked dominant
+        // zone — correct. NON-splat 7-zone path: pick the zone by the same height/slope
+        // bands the accumulate uses, so cliffs/peaks parallax with THEIR relief, not
+        // valley grass (audit M2). Cheap height/slope classify (matches zone_weights order).
         int hz = 0;
         if (splat_on){ vec4 spd = texture(splat_tex, v_uv); hz = clamp(int(spd.r+0.5),0,6); }
+        else {
+            // approximate dominant zone from height + slope (h_valley/h_slope/h_high/h_peak,
+            // slope_cliff_*). Mirrors the band logic so POM relief matches the lit material.
+            if      (v_slope > slope_cliff_hi)            hz = 4;             // cliff
+            else if (v_h > h_peak)                        hz = 6;             // peak/snow
+            else if (v_h > h_high)                        hz = 5;             // high
+            else if (v_slope > slope_cliff_lo)            hz = 3;             // slope→cliff
+            else if (v_h > h_slope)                       hz = 2;             // slope
+            else if (v_h > h_valley)                      hz = 1;             // valley→slope
+            else                                          hz = 0;             // valley
+        }
         int domPlane;
         vec2 off = vec2(0.0);
         // pick the height textures by zone (samplers can't be indexed)
@@ -279,7 +311,9 @@ Confirm the existing normal/roughness path is actually applied (the spec flags a
 - Locked interfaces used: `ar_sample_wp` (Task 1 AO fetch), `distanceWeight` (Tasks 3-4 gate), `cam_world` (Task 3 view ray), default render path zone-fetch order untouched (POM only edits `wp`).
 - Debug toggles referenced: `dbg_use_normalmap` / `dbg_fullrough` (Task 4); new `pom_on`/`ao_on` toggles for live bisection (Task 2 controls).
 
-**Placeholder scan.** No TODO/placeholder code — every GLSL/C#/JSON block is concrete and complete. Loop uses a constant `64` upper bound with a `break` at `steps` (GLSL requires constant bounds).
+**Audit fixes applied.** H1 — POM depth divisor is now per-plane (`vdir.x`/`.y`/`.z` by dominant plane), not always `vdir.y`; this stops swimming on cliffs (where the dominant plane is vertical). M4 — AO reaches the DIRECT light via `varying v_ao` multiplied inside the custom `light()` (`AO_LIGHT_AFFECT` alone only touches ambient/GI under a custom `light()`). M2 — non-splat path picks the POM height-field zone by height/slope bands (cliffs/peaks parallax with their own relief, not zone-0 grass). M1 — removed the doubled `lod` (was `lod²`); offset uses a thin seam-fade only. H2 — removed the dead `prevH`.
+
+**Placeholder scan.** No TODO/placeholder code — every GLSL/C#/JSON block is concrete and complete. Loop uses a constant `64` upper bound with a `break` at `steps` (GLSL requires constant bounds). The `v_ao` varying + `light()` `* v_ao` edits are described in Task 1 as exact-location changes (apply to the existing accumulate lines, don't rewrite the BRDF).
 
 **Interface consistency.** AO fetch reuses `ar_sample_wp` + `tri_w` (same as `tp_*`). POM uses `tri_w`, `distanceWeight`, `tex_scale_m`, and `cam_world` exactly as the rest of the shader does. Controls follow the `lab_controls.json` `slider`/`toggle` + `"param"` convention; AO bind uses the existing `LoadOr` fallback (white-default sampler hint means missing AO reads as 1.0 = no occlusion, safe).
 
