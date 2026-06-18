@@ -69,10 +69,14 @@ public partial class CloudVolume : Node
     public void SetGodraysEnabled(bool on) { _godraysOn = on; }
     private float _godrayStrength = 1.0f;
     private float _cellScale = 1.6f;   // clump-scale knob: higher = smaller/more clumps (anti-slab). >1 = tighter than the old fixed look.
+    private System.Collections.Generic.List<CloudLayer> _layers = new();
+    private int _layerCount;
 
     public void Attach(Godot.Environment env, Camera3D cam, float regionSizeM)
     {
         _p = CloudParams.Load();
+        _layers = CloudLayers.Load();
+        if (_layers.Count == 0) { _layers.Add(default); }   // ensure at least layer 0 (filled from knobs)
         _env = env;
         RegionM = regionSizeM;   // lock cloud shadow/god-ray footprint to the terrain
         _origSky = env.Sky;
@@ -274,7 +278,7 @@ public partial class CloudVolume : Node
         _rd.FreeRid(sset);
     }
 
-    private const int ShadowParamFloats = 28;
+    private const int ShadowParamFloats = 128;   // 28 base + 4 (layer_count+pad) + 96 (8 layers × 12)
     private byte[] BuildShadowParams(CloudParams p, float time)
     {
         var b = new byte[ShadowParamFloats * sizeof(float)];
@@ -293,12 +297,28 @@ public partial class CloudVolume : Node
         F(_groundHeight);   // M4: start the sun-march from terrain mid-elevation
         F(_windOffset.X); F(_windOffset.Y);   // CPU-integrated wind (match the raymarch)
         F(_cellScale);                         // clump-scale knob (match the raymarch)
+        float[] layerData = PackLayers(out _);
+        F(_layerCount); F(0f); F(0f); F(0f);
+        for (int i = 0; i < layerData.Length; i++) { F(layerData[i]); }
         return b;
     }
     private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
     public void SetGroundHeight(float h) { _groundHeight = h; }
 
-    private const int ParamFloats = 52;   // +4 (cam_world vec4) over the old 48
+    // Layer 0's deck params come from the legacy flat knobs (_p / _cellScale) so the single-
+    // layer look + the existing UI keep working; layers 1+ are the JSON data verbatim.
+    private float[] PackLayers(out int count)
+    {
+        var eff = new System.Collections.Generic.List<CloudLayer>(_layers);
+        var l0 = eff[0];
+        eff[0] = l0 with {
+            Altitude = _p.AltitudeM, Thickness = _p.ThicknessM, Size = _p.Size, CellScale = _cellScale,
+            CoverageWeight = 1f, Density = _p.Density, Opacity = _p.Opacity, Type = _p.CloudType,
+            Edge = _p.Edge, Detail = _p.Detail, DetailSize = _p.DetailSize, NoiseId = 0, Enabled = true };
+        return CloudLayers.Pack(eff, out count);
+    }
+
+    private const int ParamFloats = 152;   // 52 base + 4 (layer_count+pad) + 96 (8 layers × 12)
 
     private byte[] BuildParams(CloudParams p, float time, int offset, int stride)
     {
@@ -322,6 +342,9 @@ public partial class CloudVolume : Node
         F(p.RaymarchSteps);
         F(_windOffset.X); F(_windOffset.Y);   // CPU-integrated wind (was the _pad0/_pad1 slot)
         F(_cellScale);                         // clump-scale knob
+        float[] layerData = PackLayers(out _layerCount);
+        F(_layerCount); F(0f); F(0f); F(0f);   // layer_count + pad (16B)
+        for (int i = 0; i < layerData.Length; i++) { F(layerData[i]); }
         return b;
     }
 
