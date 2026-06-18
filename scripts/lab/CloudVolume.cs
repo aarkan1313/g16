@@ -54,7 +54,11 @@ public partial class CloudVolume : Node
     private int _frame;
     private float _lastTime;          // for CPU drift integration (dt)
     private Vector2 _windOffset;      // accumulated wind offset (m) — changing speed changes rate, not position
-    public const int TexW = 512, TexH = 128;
+    // Lat-long cloud dome resolution (az 0..2π : el 0..π/2 = 4:1). Configurable at launch via
+    // --cloudtex=H (sets TexH=H, TexW=4H) — roadmap #5 stopgap for horizon blockiness. Default
+    // 512×128 (no perf regression); 1024×256 sharpens the horizon at 4× compute (pair with the
+    // temporal amortization knob). MUST be set before InitCompute creates the texture.
+    public static int TexW = 512, TexH = 128;
     public const int ShadowRes = 512;
     // L1 fix: set from FieldParams.RegionSizeM at Attach so the shadow map + god-ray
     // UV stay locked to the actual terrain footprint (was hardcoded 8192, desynced
@@ -159,7 +163,7 @@ public partial class CloudVolume : Node
 
         var of = new RDTextureFormat
         {
-            Width = TexW, Height = TexH, Format = RenderingDevice.DataFormat.R16G16B16A16Sfloat,
+            Width = (uint)TexW, Height = (uint)TexH, Format = RenderingDevice.DataFormat.R16G16B16A16Sfloat,
             UsageBits = RenderingDevice.TextureUsageBits.StorageBit | RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanUpdateBit | RenderingDevice.TextureUsageBits.CanCopyToBit | RenderingDevice.TextureUsageBits.CanCopyFromBit,
         };
         _outTex = _rd.TextureCreate(of, new RDTextureView());

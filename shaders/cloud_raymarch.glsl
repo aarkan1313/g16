@@ -11,7 +11,7 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(rgba16f, set = 0, binding = 0) uniform restrict writeonly image2D out_tex;
+layout(rgba16f, set = 0, binding = 0) uniform restrict image2D out_tex;   // read+write: temporal history
 layout(set = 0, binding = 1) uniform sampler3D shape_tex;
 layout(set = 0, binding = 2) uniform sampler3D detail_tex;
 layout(set = 0, binding = 3) uniform sampler2D weather_tex;
@@ -237,14 +237,17 @@ void main(){
     ivec2 px = ivec2(gl_GlobalInvocationID.xy);
     if (px.x >= int(P.tex_size.x) || px.y >= int(P.tex_size.y)) return;
 
-    // Temporal amortization (strided subset per frame). NOTE (audit L3): this updates
-    // texels in place with NO double-buffer/reprojection, so stride>1 leaves stale
-    // texels = visible stripes under drift. Until proper reconstruction is added, the
-    // C# side is clamped to stride 1; this guard is belt-and-suspenders so a stray
-    // value can't smear. (Full reconstruction is the future upgrade — see DECISIONS.)
-    int stride = clamp(int(P.update.y), 1, 1);   // forced 1 until reconstruction exists
+    // TEMPORAL AMORTIZATION (roadmap #4, toggleable). Update only 1/stride of texels each frame,
+    // cycling the offset over `stride` frames; non-updated texels PERSIST from prior frames
+    // (history lives in out_tex, now read+write). Refreshed texels BLEND with history to smooth
+    // the refresh seam. stride=1 (temporal_frames=1, the default) = every texel every frame = the
+    // validated look, zero amortization. Higher stride = cheaper (fewer marches) but stale texels
+    // can shimmer under fast drift — the dispersed (idx%stride) pattern keeps it noise, not rows.
+    // Evaluate per scene; safe because default is OFF.
+    int stride = clamp(int(P.update.y), 1, 16);
     int idx = px.y * int(P.tex_size.x) + px.x;
-    if ((idx % stride) != int(P.update.x)) return;
+    vec4 history = imageLoad(out_tex, px);
+    if (stride > 1 && (idx % stride) != int(P.update.x)) { return; }   // keep history (persistence)
 
     // Curved shell anchored at the CAMERA (world space → density samples land at true
     // world XZ, so the ground shadow matches the visible cloud). The curved shell (vs a
@@ -337,5 +340,7 @@ void main(){
         }
         result = vec4(scattered, clamp(1.0 - T, 0.0, 1.0));
     }
+    // temporal blend on REFRESHED texels (smooths the strided-refresh seam vs persisted history).
+    if (stride > 1) { result = mix(history, result, 0.6); }
     imageStore(out_tex, px, result);
 }
