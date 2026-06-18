@@ -6,6 +6,31 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-18 — CLOUD system refactored from scratch + multi-layer + audit-driven look fixes.**
+The earlier volumetric clouds rendered but read "procedural/flat/uniform" through ~5 review
+rounds. Path taken: (1) full from-scratch refactor to a **world-space camera-anchored
+volumetric march** (spec `2026-06-17-cloud-atmosphere-refactor-design.md`) replacing the
+origin-dome (which couldn't match shadows or stop jittering); (2) **multi-layer clouds** —
+N data-driven decks (`CloudLayers` + `data/cloud_layers.json`, up to 8, layer 0 = legacy flat
+knobs), summed in one full-span per-step march (spec `2026-06-18-multi-layer-clouds-design.md`);
+(3) when the look still read procedural, got an **external shader audit** (`docs/cloud-look-
+audit-prompt.md` + memory `cloud-look-audit-findings`) which correctly re-ranked the causes:
+NOT texture res (a red herring I'd over-weighted) but **lighting** (added multiple-scattering
+octaves + dual-lobe phase + base-occluded ambient — fog→form), **macro coverage variety**
+(high-contrast multi-octave weather + cloud-system mask — kill the uniform "sampled noise"
+look), and a **stepping bug** (uniform dt over the whole multi-deck span + 16-step floor →
+~3 samples/deck = mush → fixed to empty-space-skip + ~64 fine samples/deck), plus secondary
+fixes (stronger edge erosion, per-scale wind vs lockstep, high-coverage cellularity, 2-octave
+Worley FBM noise). User verdict after the fixes: **"doesn't look bad overall"** — accepted;
+moving on. **Two hard-won infra lessons (banked to memory):** hand-packing std430 param
+buffers drifts on vec2/vec4 alignment (caused "no clouds" 3× → built `Std430Writer`); and
+local-RD compute can't read back headless, so a windowed numeric self-check (`--shadowcheck`,
+correlates shadow vs cloud-overhead density) is how shadow coupling is PROVEN (r≈0.79) rather
+than eyeballed. Remaining cloud polish (per-deck phase/albedo, presets→layers, ranged presets,
+god-ray rebuild as in-march in-scatter, temporal reconstruction, texture-res bump) is queued at
+the front of ROADMAP "Cloud follow-ups". God-ray FogVolume was REMOVED (it collided with the
+sun's volumetric shadows → black wedges).
+
 **2026-06-17 — EROSION re-introduced as a fresh arc (WG15's graveyard, done differently).**
 WG15 shipped ~19 erosion versions + 5 water systems, all judged bad; WG16 was *defined* by
 dropping the whole bake/erosion/water stack. User asked to bring erosion back — "AAA + best

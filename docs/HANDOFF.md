@@ -1,6 +1,6 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-17 (clouds+presence built; ground-texturing rebuild arc started, Unit 1 built; EROSION arc spec'd + E1 planned; build-arcs unflown — user reviewing later). **Refresh the Current State block at the end of each session.**
+Last updated: 2026-06-18 (clouds refactored → multi-layer → audit-driven look fixes, user-accepted "doesn't look bad"; ground Unit 1 anti-repeat APPROVED; EROSION arc spec'd + E1 planned; library zips staged at c:\Wg16\_incoming awaiting integration). **Refresh the Current State block at the end of each session.**
 
 This doc is written so a fresh chat with zero context can get productive immediately.
 
@@ -79,22 +79,30 @@ Run a scene (always `--rendering-driver vulkan`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-17, late)
-> **Status:** base field proven (no bake); LIGHTING "really good"; **TEXTURING is NOT —
-> user verdict is "functional but bad"** (repetitive/flat/muddy/drab at all ranges; the
-> usage/presentation layer was never built out). Two big arcs built this session, BOTH
-> **unflown by the user** (he's reviewing visuals later; meanwhile we discuss/plan):
+> ### ⮕ START HERE (2026-06-18)
+> **Status:** base field proven (no bake); LIGHTING "really good". **GROUND TEXTURING** rebuild
+> in progress (Unit 1 anti-repetition APPROVED by user → the gate for units 2-6 is passed;
+> units 2-6 PLANNED, not built). **CLOUDS** heavily reworked + reviewed live this session.
 >
-> **⚠ REVIEW BACKLOG (all built + committed, none flown — the live gate):**
-> 1. **Ground Unit 1 — anti-repetition** (Surface tab `anti-repeat` toggle). THE GATE for
->    ground units 2-6 — verify it breaks up the wallpaper tiling before building on it.
-> 2. **Clouds + matched shadows** (Clouds tab) — clouds drift; shadows match cloud overhead.
-> 3. **Cloud-presence suite** — mood cloud color (Light-tab MOOD), overcast dimming +
->    aerial tint (driven by `cloud_coverage`, no direct toggle), reflections, **god rays**
->    (`god rays (live-tune)` toggle, default-OFF, EXPECT tuning — darkens scene first-pass).
-> 4. **H1 BRDF regression check** — clouds-off terrain vs the approved look (the custom
->    `light()` was rewritten to a faithful Burley+GGX replica; confirm it matches).
-> All toggleable live in `scenes/terrain_lab.tscn`. See "ground arc" + "cloud system" below.
+> **CLOUDS — current state (2026-06-17→18, see DECISIONS 2026-06-18):** went origin-dome →
+> world-space volumetric refactor → **multi-layer decks** (`CloudLayers`/`data/cloud_layers.json`,
+> up to 8; layer 0 = legacy flat knobs) → an external shader audit (`docs/cloud-look-audit-
+> prompt.md`) → audit fixes (multi-scatter lighting + base-occluded ambient + dual-lobe phase;
+> empty-skip/~64-samples-per-deck march; high-contrast multi-octave weather + cloud-system mask;
+> stronger erosion; per-scale wind; 2-octave Worley FBM noise). **User verdict: "doesn't look
+> bad overall" — accepted, moved on.** Shadow coupling PROVEN numerically via `--shadowcheck`
+> (r≈0.79 PASS), NOT eyeballed. Sun disc renders + occludes. God-ray FogVolume REMOVED (black
+> wedges); to be rebuilt in-march. **Remaining cloud polish is queued at the FRONT of ROADMAP
+> "Cloud follow-ups"** (per-deck phase/albedo, presets→layers, ranged presets, god rays, temporal
+> reconstruction, texture-res). **Infra lessons (memory):** `std430-packing-helper` (Std430Writer;
+> "no clouds" was vec2/vec4 alignment drift 3×), `cloud-look-audit-findings`, `wg16-launch-absolute-path`.
+>
+> **⚠ STILL WANTS THE USER'S EYE (live in `scenes/terrain_lab.tscn`):**
+> 1. **Ground Unit 1 — anti-repetition** — APPROVED. (Units 2-6 are the next ground work.)
+> 2. **H1 BRDF regression check** — clouds-off terrain vs the approved look (custom `light()`
+>    = Burley+GGX replica; confirm no regression).
+> 3. **Cloud-presence** — overcast dimming + aerial tint + reflections + mood cloud color
+>    (coherence pass once the cloud look polish lands).
 >
 > **ACTIVE WORK = the GROUND-PRESENTATION ARC** (the current focus; see DECISIONS 2026-06-17
 > + `docs/superpowers/specs/2026-06-17-ground-presentation-arc-design.md`). 6-unit rebuild

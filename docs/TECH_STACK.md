@@ -82,6 +82,16 @@ The active workbench. A **data-driven** art-direction tool.
     3D Perlin-Worley shape + Worley detail volumes (local-RD, once at load).
   - `scripts/lab/CloudWeather.cs` — 2D coverage/type field (CPU FBM).
   - `scripts/lab/CloudParams.cs` + `data/cloud_params.json` — knobs (look + perf).
+  - `scripts/lab/CloudLayers.cs` + `data/cloud_layers.json` — **N cloud decks** (up to 8;
+    each: altitude/thickness/size/cell/coverage_weight/density/opacity/type/edge/detail/noise).
+    Layer 0 = the legacy flat knobs (regression-safe). The raymarch sums all decks in one
+    full-span march. Packed into the cloud param buffers as `vec4[24]` (3 vec4/layer).
+  - `scripts/lab/Std430Writer.cs` — **std430 alignment-correct param-buffer writer** (vec2→8B,
+    vec4/array→16B). Hand-packing these buffers as a flat float run drifted offsets on every
+    vec2/vec4 → scrambled GPU data ("no clouds" 3×); all cloud param writers go through this.
+  - `scripts/lab/CloudShadowCheck.cs` + `shaders/cloud_shadow_check.glsl` — **numeric shadow
+    self-check** (`--shadowcheck`, windowed): correlates the shadow value vs cloud density
+    along the sun ray → PASS/FAIL + decoded-layer dump. Proves coupling without eyeballing.
   - `scripts/lab/CloudVolume.cs` — owns it all; drives the per-frame raymarch +
     shadow-map compute on the RENDER THREAD via `RenderingServer.CallOnRenderThread`
     (NOT a CompositorEffect — that raced the Texture2Drd RID). Exposes both as

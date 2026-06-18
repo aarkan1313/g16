@@ -15,16 +15,17 @@ Last updated: 2026-06-17.
   tonemap, color grade, 6 curated MOOD presets. User: "really good."
 - **Material judging** — 738 → 108 accepted materials (the library; choices are fine).
 
-## ⚠ Built this session — UNFLOWN, awaiting user's live review (the gate)
-> User is unavailable for visual review; these are mechanically verified only. Listed in
-> review priority. All live in `scenes/terrain_lab.tscn`.
-1. **Ground Unit 1 — anti-repetition** (Surface tab `anti-repeat`). THE GATE for ground
-   units 2-6. Verify it breaks the wallpaper tiling, contrast preserved.
-2. **Volumetric clouds + matched ground shadows** (Clouds tab). Shadow-cloud alignment esp.
-3. **Cloud-presence suite** — mood cloud color, overcast dim + aerial (coverage-driven),
-   reflections, **god rays** (default-OFF, needs tuning).
-4. **H1 BRDF check** — clouds-off terrain vs the approved look (custom `light()` rewritten
-   to faithful Burley+GGX; confirm no regression).
+## ⚠ Review state (live in `scenes/terrain_lab.tscn`)
+1. **Ground Unit 1 — anti-repetition** (Surface tab `anti-repeat`). REVIEWED → APPROVED by
+   user. THE GATE for ground units 2-6 is passed.
+2. **Clouds — heavily reworked + reviewed this session (2026-06-17→18).** Full refactor:
+   world-space volumetric → multi-layer decks → audit-driven lighting/macro/stepping fixes.
+   User verdict: "doesn't look bad overall" (acceptable; remaining polish in Cloud follow-ups).
+   Shadow coupling PROVEN numerically (`--shadowcheck` r≈0.79 PASS). Sun disc renders+occludes.
+3. **Cloud-presence suite** — mood cloud color, overcast dim + aerial, reflections. God rays
+   REMOVED (FogVolume ripped out); to be rebuilt as in-march in-scatter (Cloud follow-ups).
+4. **H1 BRDF check** — clouds-off terrain vs the approved look (custom `light()` = Burley+GGX);
+   still wants an eye-confirm of no regression.
 
 ## 🔨 Active arc — GROUND PRESENTATION rebuild (6 units)
 > Ground texturing is "functional but bad"; the presentation layer was never built out.
@@ -74,8 +75,18 @@ Last updated: 2026-06-17.
 - **Water** — surface rivers/lakes/ocean (additive; placement improves once flow/erosion data
   exists). Considered for an isolated chat; deferred. Natural consumer of E2's flow field.
 - **Composition tooling** — more hero-shot / framing aids.
-- **Cloud follow-ups** — snapshot cloud settings into mood presets; tune god rays; proper
-  temporal reconstruction (current temporal_frames clamped to 1, no reconstruction).
+- **Cloud follow-ups** (NEXT cloud items, in order — the cloud LOOK is now "doesn't look bad",
+  multi-layer + the audit fixes are in; these are the remaining polish):
+  1. **Per-deck phase/albedo** — carry per-deck luminance so cumulus forward-scatters + cirrus
+     reads near-isotropic/bright (audit Q5 follow-up); makes the decks visually distinct.
+  2. **Presets → layers** — presets currently only drive layer 0 (the flat knobs); wire them to
+     set the whole layer stack (so Overcast/Stormy bring in the cirrus deck etc.). Authoring.
+  3. **Ranged presets + 'surprise me'** — center+spread per knob/layer so a preset isn't
+     identical every load; a coherent global randomize. (Build the seam so the future
+     weather/biome system can drive per-layer weights — already designed for.)
+  4. Snapshot cloud settings into mood presets; tune god rays; proper temporal reconstruction
+     (temporal_frames clamped to 1, no reconstruction — the perf lever for mid-range).
+  5. Output texture res bump (512×128 → 1024×256) / eventually view-space half-res march + TAA.
 - **Distant sky / horizon handling** (cloud refactor, 2026-06-17) — the far/horizon sky reads
   weird (flat cloud band + no convincing clear-sky falloff toward the horizon). Need a proper
   distance/horizon treatment: cloud density fade-to-haze near the horizon + a believable
