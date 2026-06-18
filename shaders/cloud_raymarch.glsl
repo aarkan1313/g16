@@ -33,6 +33,8 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float steps;
     float perdeck;       // 0 = global phase/albedo (legacy A), 1 = per-deck lighting (B)
     float dbgdeck;       // >0.5 = deck-ID overlay (flat per-deck color instead of lighting)
+    float godrays;       // 0/1 enable in-march in-scatter (crepuscular rays)
+    float godray_strength;
     // TAIL — a single vec4 (16-aligned) holds the trailing scalars so the layers[] vec4
     // array below starts on a 16-byte boundary. Hand-packed std430 is fragile: scalars
     // before a vec2/vec4 drift the offset (a vec2 wind_offset here put layers[] off by 4
@@ -292,6 +294,13 @@ void main(){
         vec3 skyAmbient = mix(P.sky_horizon.rgb, P.sky_top.rgb, clamp(rd.y, 0.0, 1.0));
         float forward = pow(max(cosA, 0.0), 6.0);   // for view-gated powder (back-lit only)
 
+        // GOD RAYS (roadmap #6): in-march in-scatter. Only meaningful near the sun direction
+        // (where crepuscular rays are seen) → grGate bounds cost. Uses CLOUD optical depth toward
+        // the sun (NOT the scene's directional-light volumetric shadow — that collision is what
+        // made the old removed FogVolume's black wedges). Default OFF (P.godrays).
+        float grGate = (P.godrays > 0.5) ? pow(max(cosA, 0.0), 3.0) : 0.0;
+        float grPhase = hg(cosA, 0.55);
+
         float T = 1.0;
         vec3 scattered = vec3(0.0);
         float t = tStart;
@@ -335,6 +344,14 @@ void main(){
                 if (T < 0.01) break;
                 t += fineStep;     // fine step while inside cloud
             } else {
+                // GOD RAYS: air in-scatter between clouds. Bright where the sun reaches through a
+                // gap, dark where a cloud occludes it (sunVis) → crepuscular shafts. Adds light
+                // only (no alpha), weighted by view transmittance T so it sits behind clouds.
+                if (grGate > 0.001){
+                    float odSun = light_optical_depth(p, L, windOff);
+                    float sunVis = exp(-odSun * 3.0);
+                    scattered += T * sunCol * (P.godray_strength * 0.03 * grGate * grPhase * sunVis * (coarseStep * 0.001));
+                }
                 t += coarseStep;   // empty-space skip through the void between decks
             }
         }

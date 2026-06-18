@@ -391,6 +391,8 @@ public partial class CloudVolume : Node
             .F(p.RaymarchSteps)
             .F(_perDeck)                                // 0 = global lighting (A), 1 = per-deck (B)
             .F(_dbgDeck)                                // >0.5 = deck-ID overlay
+            .F(_godraysOn ? 1f : 0f)                    // god-ray in-scatter enable (roadmap #6)
+            .F(_godrayStrength)
             .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
             .Vec4Array(layerData)                       // layers[40] (5 vec4/layer)
             .ToArray();
