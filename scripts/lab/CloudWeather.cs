@@ -45,10 +45,11 @@ public static class CloudWeather
             float coverage = Fbm(u, w, 2f, seed);          // big low-freq blobs (full range)
             float type = Fbm(u, w, 2f, seed + 31.7f);      // even larger type regions
             float density = Fbm(u, w, 3f, seed + 53.1f);   // per-region density variation
-            // Light contrast centered on 0.5 so the field stays roughly zero-mean — the
-            // raymarch adds (coverage-0.5)*k to the knob, so this neither floors nor
-            // saturates the knob; it just spatially varies it.
-            coverage = Contrast(coverage, 0.5f, 1.3f);
+            // Centre the field near 0.5 with contrast so it stays roughly zero-MEAN: the
+            // raymarch adds (coverage-0.5)*0.7 to the coverage knob, so a ~0.5-mean field
+            // neither floors nor saturates the knob — it just spatially varies it. (The
+            // FBM's natural mean drifts high, which made the baseline sky full; re-centre.)
+            coverage = Contrast(coverage, 0.45f, 1.5f);
             WriteFloat(bytes, ref o, coverage);            // R coverage bias
             WriteFloat(bytes, ref o, type);                // G cloud type
             WriteFloat(bytes, ref o, density);             // B density bias
