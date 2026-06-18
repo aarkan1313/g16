@@ -18,12 +18,16 @@ Last updated: 2026-06-17.
 ## ⚠ Review state (live in `scenes/terrain_lab.tscn`)
 1. **Ground Unit 1 — anti-repetition** (Surface tab `anti-repeat`). REVIEWED → APPROVED by
    user. THE GATE for ground units 2-6 is passed.
-2. **Clouds — heavily reworked + reviewed this session (2026-06-17→18).** Full refactor:
-   world-space volumetric → multi-layer decks → audit-driven lighting/macro/stepping fixes.
-   User verdict: "doesn't look bad overall" (acceptable; remaining polish in Cloud follow-ups).
-   Shadow coupling PROVEN numerically (`--shadowcheck` r≈0.79 PASS). Sun disc renders+occludes.
-3. **Cloud-presence suite** — mood cloud color, overcast dim + aerial, reflections. God rays
-   REMOVED (FogVolume ripped out); to be rebuilt as in-march in-scatter (Cloud follow-ups).
+2. **Clouds — refactored, then POLISHED to "good" (2026-06-17→18).** World-space volumetric →
+   multi-layer decks → the cloud-polish session found the audit's "already fixed" lighting was
+   BUGGY (premultiplied-composite double-alpha, sun-extinction crushing direct light, dead
+   weather macro-octave + mean 0.32, giant scale) and fixed the real root causes + finished the
+   cloud roadmap #1-#6 (per-deck lighting, presets→layer stack, coherent randomize, temporal
+   amortization, configurable dome res, in-march god rays), each behind a toggle. Coupling PROVEN
+   (`--shadowcheck` PASS throughout). Lab menu complete + correctly linked. ⮕ Awaiting the user's
+   feature-by-feature visual review — see `docs/cloud-next-steps.md` + `docs/cloud-system-overview.md`.
+3. **Cloud-presence suite** — mood cloud color, overcast dim + aerial, reflections. (God rays
+   are now REBUILT as in-march in-scatter — toggle, default off; no FogVolume.)
 4. **H1 BRDF check** — clouds-off terrain vs the approved look (custom `light()` = Burley+GGX);
    still wants an eye-confirm of no regression.
 

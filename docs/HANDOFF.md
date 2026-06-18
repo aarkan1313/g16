@@ -1,6 +1,6 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-18 (clouds refactored → multi-layer → audit-driven look fixes, user-accepted "doesn't look bad"; ground Unit 1 anti-repeat APPROVED; EROSION arc spec'd + E1 planned; library zips staged at c:\Wg16\_incoming awaiting integration). **Refresh the Current State block at the end of each session.**
+Last updated: 2026-06-18 (CLOUD-POLISH session: found the audit's "already fixed" lighting was buggy → fixed real root causes → finished cloud roadmap #1-#6, all behind toggles → awaiting user's feature-by-feature visual review; ground Unit 1 anti-repeat APPROVED; EROSION arc spec'd + E1 planned; library zips staged at c:\Wg16\_incoming awaiting integration). **Refresh the Current State block at the end of each session.**
 
 This doc is written so a fresh chat with zero context can get productive immediately.
 
@@ -84,25 +84,32 @@ Run a scene (always `--rendering-driver vulkan`):
 > in progress (Unit 1 anti-repetition APPROVED by user → the gate for units 2-6 is passed;
 > units 2-6 PLANNED, not built). **CLOUDS** heavily reworked + reviewed live this session.
 >
-> **CLOUDS — current state (2026-06-17→18, see DECISIONS 2026-06-18):** went origin-dome →
-> world-space volumetric refactor → **multi-layer decks** (`CloudLayers`/`data/cloud_layers.json`,
-> up to 8; layer 0 = legacy flat knobs) → an external shader audit (`docs/cloud-look-audit-
-> prompt.md`) → audit fixes (multi-scatter lighting + base-occluded ambient + dual-lobe phase;
-> empty-skip/~64-samples-per-deck march; high-contrast multi-octave weather + cloud-system mask;
-> stronger erosion; per-scale wind; 2-octave Worley FBM noise). **User verdict: "doesn't look
-> bad overall" — accepted, moved on.** Shadow coupling PROVEN numerically via `--shadowcheck`
-> (r≈0.79 PASS), NOT eyeballed. Sun disc renders + occludes. God-ray FogVolume REMOVED (black
-> wedges); to be rebuilt in-march. **Remaining cloud polish is queued at the FRONT of ROADMAP
-> "Cloud follow-ups"** (per-deck phase/albedo, presets→layers, ranged presets, god rays, temporal
-> reconstruction, texture-res). **Infra lessons (memory):** `std430-packing-helper` (Std430Writer;
-> "no clouds" was vec2/vec4 alignment drift 3×), `cloud-look-audit-findings`, `wg16-launch-absolute-path`.
+> **CLOUDS — current state (cloud-polish session 2026-06-18; see DECISIONS 2026-06-18,
+> `docs/cloud-system-overview.md`, `docs/cloud-next-steps.md`):** the prior audit's "already
+> fixed" lighting was BUGGY. This session found + fixed the real root causes (premultiplied-
+> composite double-alpha ~2× dim; sun-extinction crushing direct light → ambient-only mush;
+> dead weather macro-octave + mean 0.32 → sparse/non-intuitive coverage; giant cloud scale)
+> — plus gradient base noise, direct+fill multi-scatter, 2-octave erosion. THAT is what made
+> the clouds read good. Then finished the cloud roadmap **#1-#6, each behind a toggle defaulting
+> to the validated look**: per-deck lighting, presets→layer stack (`SetLayers`/`SetLayerWeight`),
+> coherent randomize, temporal amortization, configurable dome res (`--cloudtex`), in-march god
+> rays. Coupling PROVEN via `--shadowcheck` (PASS at every density change). New diagnostics:
+> `--cloudstats` (dome readback), `--lightcheck`, `--auto-shot` self-screenshots. Cloud render
+> ~1.3 ms (512×128). **The lab menu is complete + correctly linked (no dead controls).** ⮕ NEXT:
+> the user reviews each cloud feature in motion (see `docs/cloud-next-steps.md` §"feature review")
+> and the eye-gated items (view-space march rewrite, horizon/sun-disc) get tackled after.
+> **Infra lessons (memory):** `cloud-look-real-rootcauses` (THE root causes + the diagnostics),
+> `std430-packing-helper`, `cloud-look-audit-findings`, `wg16-launch-absolute-path`.
 >
 > **⚠ STILL WANTS THE USER'S EYE (live in `scenes/terrain_lab.tscn`):**
 > 1. **Ground Unit 1 — anti-repetition** — APPROVED. (Units 2-6 are the next ground work.)
 > 2. **H1 BRDF regression check** — clouds-off terrain vs the approved look (custom `light()`
 >    = Burley+GGX replica; confirm no regression).
-> 3. **Cloud-presence** — overcast dimming + aerial tint + reflections + mood cloud color
->    (coherence pass once the cloud look polish lands).
+> 3. **Cloud feature-by-feature review (NOW)** — the cloud roadmap is built behind toggles;
+>    the user reviews each in motion (per-deck, presets/stack, god rays, temporal, hi-res). See
+>    the toggle table in `docs/cloud-system-overview.md` and the prioritized `docs/cloud-next-steps.md`.
+> 4. **Cloud-presence** — overcast dimming + aerial tint + reflections + mood cloud color
+>    (coherence pass now that the look polish has landed).
 >
 > **ACTIVE WORK = the GROUND-PRESENTATION ARC** (the current focus; see DECISIONS 2026-06-17
 > + `docs/superpowers/specs/2026-06-17-ground-presentation-arc-design.md`). 6-unit rebuild
