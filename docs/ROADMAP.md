@@ -81,6 +81,25 @@ Last updated: 2026-06-17.
   distance/horizon treatment: cloud density fade-to-haze near the horizon + a believable
   non-cloud sky gradient in the distance so a sparse sky doesn't look cut off. Surfaced in the
   T-checkpoint review; deferred to a focused pass after the cloud core is judged good.
+- **Sun disc shader polish** (2026-06-17) — the sun now renders (cloud sky shader draws a
+  LIGHT0-based disc + glow, clouds occlude it) but it's just a flat bright circle. Wants a real
+  sun shader: limb darkening, corona/bloom, atmospheric scatter halo, sun-near-horizon
+  reddening, so it reads "sunny" not "white dot." Smallish focused pass; do near-term (it's
+  visible whenever clouds are on).
+
+## 🌌 Future arc — DAY/NIGHT + CELESTIAL BODIES (near the end; big, its own spec)
+> User vision (2026-06-17): a full sky-time system. Sequenced LATE — after clouds/ground/
+> erosion cores are solid — because it's a large coordinated arc touching lighting, sky, and
+> mood. Captured now so it's not lost.
+- **Day/night cycle** — sun travels, time-of-day drives sky color + light energy + shadows;
+  dawn/dusk/golden-hour transitions; sun peeking over / setting behind mountains.
+- **Variable sun coverage / position** — sun height/azimuth as part of the cycle, not a fixed
+  transform.
+- **Moon(s)** — moon disc(s), phases, distinct cool moonlight + night ambient/GI; star field.
+- **Fantasy options** — red/blood moon, differently-colored suns, multiple suns/moons, exotic
+  skies — all as tunable/togglable looks (fits WG16's data-driven, full-range ethos).
+- Coordinates with the existing MOOD presets (which would become time-of-day points) and the
+  cloud mood-tint wiring. Almost certainly its own brainstorm → spec → plan when reached.
 
 ## 📌 Conventions
 - main = clean baseline · `experiment/presentation` = HEAD (work here). Git is the undo.
