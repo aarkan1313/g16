@@ -1,6 +1,6 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-17 (clouds+presence built; ground-texturing rebuild arc started, Unit 1 built; ALL unflown — user reviewing later). **Refresh the Current State block at the end of each session.**
+Last updated: 2026-06-17 (clouds+presence built; ground-texturing rebuild arc started, Unit 1 built; EROSION arc spec'd + E1 planned; build-arcs unflown — user reviewing later). **Refresh the Current State block at the end of each session.**
 
 This doc is written so a fresh chat with zero context can get productive immediately.
 
@@ -112,6 +112,22 @@ Run a scene (always `--rendering-driver vulkan`):
 > terrain deformation (brush + GPU-compute height-delta layer + undo). On return, both need
 > integration: providers, scene wiring; world-editing edits invalidate splat + ground
 > breakup masks + flora scatter → re-bake after edits.
+>
+> **EROSION arc (spec'd + first plan written this session — NOTHING built yet; see DECISIONS
+> 2026-06-17 + `docs/superpowers/specs/2026-06-17-erosion-arc-design.md`):** re-introducing
+> WG15's graveyard, done differently. WG15 failed on a STACK of fighting solvers with no
+> drainage coherence (the user's symptom: valleys grew/shrank, elevation reversals); WG16
+> redoes it as ONE coherent coupled drainage model, a transform DOWNSTREAM of the settled base
+> field behind a pristine↔eroded toggle (base-field math untouched). Reconciles coupled sim +
+> infinite + small bakes by **baking the low-freq drainage SKELETON (MBs) + synthesizing
+> detail procedurally** (clouds DNA). **Build order (user's call): prove the sim GREAT on the
+> current single region FIRST** — E1 (coupled droplet hydraulic + thermal sim on a local RD,
+> watched cutting live; plan `docs/superpowers/plans/2026-06-17-erosion-unit1-sim-core.md`) is
+> THE gate. E2 skeleton bake / E3 semi-procedural detail / E4 coarse global + streaming are
+> LATER and need a chunk system WG16 doesn't have. ⚠ E2 is a scoped, deliberate reversal of
+> the "no bake stage" stance, erosion-only. **STOP clause:** if E1 can't reach "great" after a
+> fair effort, surface it — don't grind 19 versions like WG15. NOT started; needs E1 built +
+> flown before anything downstream.
 >
 > **The cloud system (built this session — see DECISIONS 2026-06-17 + spec/plan):**
 > - `shaders/cloud_noise_3d.glsl` + `CloudNoiseCompute.cs` — GPU-bake tileable Perlin-Worley

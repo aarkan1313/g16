@@ -6,6 +6,30 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-17 — EROSION re-introduced as a fresh arc (WG15's graveyard, done differently).**
+WG15 shipped ~19 erosion versions + 5 water systems, all judged bad; WG16 was *defined* by
+dropping the whole bake/erosion/water stack. User asked to bring erosion back — "AAA + best
+long-term; must work procedurally/infinitely whether that's pure perf or bake/presolve;
+bakes can't take crazy room," and wants the "really cool" coupled erosion+water sim as a
+reconciled-via-precompute toggle. **Diagnosed WG15 root cause** (from its post-mortem + the
+user's live symptom — valleys that grew then shrank, elevation reversals, dips that didn't
+drain): a STACK of independently-tuned solvers (valley_carve→stream_power→hydraulic→thermal→
+alluvial) baked at an arbitrary iteration balance, with **no unifying drainage model** — the
+solvers fought each other and froze incoherent. **Decided:** redo erosion as ONE coherent
+coupled drainage-driven model (NOT a solver stack), as a transform DOWNSTREAM of the settled
+base field (behind a pristine↔eroded toggle — base-field math untouched). Reconcile coupled
+sim + infinite + small bakes by **baking the low-freq drainage SKELETON (MBs) and
+synthesizing high-freq detail procedurally per-chunk**, mirroring the clouds DNA (heavy
+compute → field → cheap consumers). **Build order (user's call): prove the sim GREAT on the
+current single region FIRST**; bake/stream/chunk layers are explicitly LATER and depend on a
+chunk system WG16 doesn't have. Arc = E1 sim core+live lab (NOW) → E2 skeleton bake → E3
+semi-procedural detail → E4 coarse global + streaming. **Honest flag:** E2 is a scoped,
+deliberate reversal of WG16's "no bake stage" stance, for erosion only, justified by the
+infinite-world requirement. Spec: `docs/superpowers/specs/2026-06-17-erosion-arc-design.md`;
+E1 plan: `docs/superpowers/plans/2026-06-17-erosion-unit1-sim-core.md`. **STOP clause:** if
+E1 can't reach "great" after a fair effort, that's a real stop point — surface it, don't
+grind 19 versions like WG15.
+
 **2026-06-17 — GROUND TEXTURING rebuild started (it's "functional but bad").** User
 verdict (live): the ground reads repetitive + flat + muddy-blended + drab at ALL ranges,
 and swapping/randomizing materials doesn't help → the **application/presentation layer was

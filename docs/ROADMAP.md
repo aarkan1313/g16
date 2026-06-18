@@ -39,6 +39,24 @@ Last updated: 2026-06-17.
 - [ ] **Unit 6 — "and more"** (scatter hooks/wetness/snow-by-aspect/hi-Q triplanar). PLANNED.
   Plans: `plans/2026-06-17-ground-unit{1..6}-*.md`. Don't build 2+ until Unit 1 verified.
 
+## 🌊 Active arc — EROSION (re-introduced fresh; WG15's graveyard, done differently)
+> WG15 had ~19 erosion versions + 5 water systems, all bad — root cause was a STACK of
+> fighting solvers with no unifying drainage model. WG16 redoes it as ONE coherent coupled
+> model, eye-gated in motion, downstream of the settled base field (behind a toggle).
+> Spec: `specs/2026-06-17-erosion-arc-design.md`. Reconciles "really cool coupled sim" +
+> infinite + small bakes via **bake the low-freq drainage SKELETON, synthesize detail
+> procedurally**. Build order (user's call): prove the sim GREAT on the current single
+> region FIRST, before any bake/stream/chunk infra.
+- [ ] **E1 — coupled sim core + live lab** (droplet hydraulic + thermal on a local RD;
+  pristine↔eroded toggle; watched cutting live). PLANNED — THE "is erosion good" gate.
+  Plan: `plans/2026-06-17-erosion-unit1-sim-core.md`.
+- [ ] **E2 — drainage skeleton bake** (compact coarse height-delta + flow + sediment; small
+  on disk). LATER. ⚠ scoped reversal of WG16's no-bake stance, for erosion only.
+- [ ] **E3 — semi-procedural detail synthesis** (per-chunk fine detail from the skeleton).
+  LATER — needs a chunk/streaming system WG16 doesn't have yet.
+- [ ] **E4 — coarse global pre-solve + streaming** (true-infinite). LATER — biggest infra,
+  needs chunks. Build E1 → judge GREAT → E2 → E3 → E4, each its own plan, each eye-gated.
+
 ## 🌍 Parallel (isolated build chats — no project access → return LIBRARY code to integrate)
 - **Procedural flora** — trees/grass/forests/shrubs; GPU-instanced scatter, LOD/impostors,
   wind. Returns drop-in units + interfaces (no demo).
@@ -54,9 +72,7 @@ Last updated: 2026-06-17.
 - **Climate / moisture field** — drives material + color + wetness together (ties into
   ground units 4-5 + flora).
 - **Water** — surface rivers/lakes/ocean (additive; placement improves once flow/erosion data
-  exists). Considered for an isolated chat; deferred.
-- **Erosion** — DEFERRED / high-risk: WG15's graveyard, fundamentally sequential (GPU can't
-  fully accelerate), and would modify the SETTLED base field. Only on explicit ask.
+  exists). Considered for an isolated chat; deferred. Natural consumer of E2's flow field.
 - **Composition tooling** — more hero-shot / framing aids.
 - **Cloud follow-ups** — snapshot cloud settings into mood presets; tune god rays; proper
   temporal reconstruction (current temporal_frames clamped to 1, no reconstruction).
