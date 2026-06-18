@@ -86,25 +86,25 @@ void main(){
     uint base = (id.z * P.res + id.y) * P.res + id.x;
 
     if (P.mode == 0u){
-        // SHAPE: R = Perlin-Worley base; G/B/A = single Worley octaves (3,6,12).
-        float perlin = vnoise_tiled(uvw * 4.0, 4.0) * 0.6
-                     + vnoise_tiled(uvw * 8.0, 8.0) * 0.4;
-        float w0 = worley_tiled(uvw * 3.0,  3.0);    // low-freq Worley for the base
+        // SHAPE: R = Perlin-Worley base; G/B/A = Worley FBM octaves. Each detail channel is
+        // now a 2-octave Worley FBM (audit: single-octave channels read blobby/round). The
+        // Perlin base also gets a 3rd octave for finer structure.
+        float perlin = vnoise_tiled(uvw * 4.0, 4.0) * 0.55
+                     + vnoise_tiled(uvw * 8.0, 8.0) * 0.30
+                     + vnoise_tiled(uvw * 16.0, 16.0) * 0.15;
+        float w0 = worley_tiled(uvw * 3.0, 3.0);
         float pw = remap(perlin, w0 - 1.0, 1.0, 0.0, 1.0);  // Perlin-Worley (Schneider)
-        float w1 = worley_tiled(uvw * 3.0,  3.0);
-        float w2 = worley_tiled(uvw * 6.0,  6.0);
-        float w3 = worley_tiled(uvw * 12.0, 12.0);
+        // 2-octave Worley FBM per channel (low/mid/high bands)
+        float w1 = worley_tiled(uvw * 3.0, 3.0) * 0.65 + worley_tiled(uvw * 6.0, 6.0) * 0.35;
+        float w2 = worley_tiled(uvw * 6.0, 6.0) * 0.65 + worley_tiled(uvw * 12.0, 12.0) * 0.35;
+        float w3 = worley_tiled(uvw * 12.0, 12.0) * 0.65 + worley_tiled(uvw * 24.0, 24.0) * 0.35;
         v[base * 4u + 0u] = clamp(pw, 0.0, 1.0);
         v[base * 4u + 1u] = clamp(w1, 0.0, 1.0);
         v[base * 4u + 2u] = clamp(w2, 0.0, 1.0);
         v[base * 4u + 3u] = clamp(w3, 0.0, 1.0);
     } else {
-        // DETAIL: high-freq Worley octaves in G/B/A; R holds the mid octave.
-        float d1 = worley_tiled(uvw * 8.0,  8.0);
-        float d2 = worley_tiled(uvw * 16.0, 16.0);
-        float d3 = worley_tiled(uvw * 32.0, 32.0);
-        v[base] = clamp(d1, 0.0, 1.0);   // single-channel detail buffer (R)
-        // (detail volume is stored R-only; raymarch reads .r and builds its own
-        //  micro-fbm via tex scale — keeps the detail bake cheap.)
+        // DETAIL: 2-octave Worley FBM (was single freq-8) for stronger, wispier edge erosion.
+        float d = worley_tiled(uvw * 8.0, 8.0) * 0.6 + worley_tiled(uvw * 16.0, 16.0) * 0.4;
+        v[base] = clamp(d, 0.0, 1.0);   // single-channel detail buffer (R)
     }
 }
