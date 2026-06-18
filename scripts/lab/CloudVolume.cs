@@ -174,7 +174,8 @@ public partial class CloudVolume : Node
             RepeatU = RenderingDevice.SamplerRepeatMode.Repeat, RepeatV = RenderingDevice.SamplerRepeatMode.Repeat, RepeatW = RenderingDevice.SamplerRepeatMode.Repeat,
         };
         _sampler = _rd.SamplerCreate(ss);
-        _paramBuf = _rd.StorageBufferCreate((uint)(ParamFloats * sizeof(float)));
+        // size the buffer from an actual packed sample (Std430Writer determines the layout).
+        _paramBuf = _rd.StorageBufferCreate((uint)BuildParams(_p, 0f, 0, 1).Length);
 
         // --- cloud-shadow map compute (Stage 5) ---
         string spath = ProjectSettings.GlobalizePath("res://shaders/cloud_shadow.glsl");
@@ -192,7 +193,7 @@ public partial class CloudVolume : Node
         };
         _shadowTex = _rd.TextureCreate(sf, new RDTextureView());
         _rd.TextureClear(_shadowTex, new Color(1, 1, 1, 1), 0, 1, 0, 1);   // full sun until first dispatch
-        _shadowParamBuf = _rd.StorageBufferCreate((uint)(ShadowParamFloats * sizeof(float)));
+        _shadowParamBuf = _rd.StorageBufferCreate((uint)BuildShadowParams(_p, 0f).Length);
 
         // assign RIDs ONCE, before any dispatch or material sampling
         if (_cloudTex != null) { _cloudTex.TextureRdRid = _outTex; }
@@ -278,29 +279,24 @@ public partial class CloudVolume : Node
         _rd.FreeRid(sset);
     }
 
-    private const int ShadowParamFloats = 128;   // 28 base + 4 (layer_count+pad) + 96 (8 layers × 12)
+    // Field order MUST match cloud_shadow.glsl's ParamsBuf; Std430Writer handles alignment.
     private byte[] BuildShadowParams(CloudParams p, float time)
     {
-        var b = new byte[ShadowParamFloats * sizeof(float)];
-        int o = 0;
-        void F(float v) { BitConverter.GetBytes(v).CopyTo(b, o); o += 4; }
-        Vector3 sun = _sunDir;
-        F(sun.X); F(sun.Y); F(sun.Z); F(0f);            // sun_dir
-        F(ShadowRes); F(ShadowRes);                      // tex_size
-        F(RegionM); F(16f);                              // region size, march steps
-        F(time);
-        F(p.Coverage); F(p.Density); F(p.CloudType);
-        F(p.AltitudeM); F(p.ThicknessM);
-        F(p.DriftSpeed); F(p.DriftDirDeg);
-        F(p.Size); F(p.Detail); F(p.DetailSize); F(p.Edge);
-        F(_shadowStrength);
-        F(_groundHeight);   // M4: start the sun-march from terrain mid-elevation
-        F(_windOffset.X); F(_windOffset.Y);   // CPU-integrated wind (match the raymarch)
-        F(_cellScale);                         // clump-scale knob (match the raymarch)
-        float[] layerData = PackLayers(out _);
-        F(_layerCount); F(0f); F(0f); F(0f);
-        for (int i = 0; i < layerData.Length; i++) { F(layerData[i]); }
-        return b;
+        float[] layerData = PackLayers(out _layerCount);
+        return new Std430Writer()
+            .Vec4(_sunDir, 0f)                          // sun_dir
+            .Vec2(ShadowRes, ShadowRes)                 // tex_size
+            .Vec2(RegionM, 16f)                         // region (size, march steps)
+            .F(time)
+            .F(p.Coverage).F(p.Density).F(p.CloudType)
+            .F(p.AltitudeM).F(p.ThicknessM)
+            .F(p.DriftSpeed).F(p.DriftDirDeg)
+            .F(p.Size).F(p.Detail).F(p.DetailSize).F(p.Edge)
+            .F(_shadowStrength)
+            .F(_groundHeight)                           // terrain mid-elevation
+            .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
+            .Vec4Array(layerData)                       // layers[24]
+            .ToArray();
     }
     private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
     public void SetGroundHeight(float h) { _groundHeight = h; }
@@ -318,34 +314,29 @@ public partial class CloudVolume : Node
         return CloudLayers.Pack(eff, out count);
     }
 
-    private const int ParamFloats = 152;   // 52 base + 4 (layer_count+pad) + 96 (8 layers × 12)
-
+    // Byte layout is handled by Std430Writer (alignment-correct) — declare fields in the
+    // SAME ORDER as cloud_raymarch.glsl's ParamsBuf and the offsets can't drift.
     private byte[] BuildParams(CloudParams p, float time, int offset, int stride)
     {
-        var b = new byte[ParamFloats * sizeof(float)];
-        int o = 0;
-        void F(float v) { BitConverter.GetBytes(v).CopyTo(b, o); o += 4; }
-        Vector3 sun = _sunDir; Color sc = _sunColor;
-        F(sun.X); F(sun.Y); F(sun.Z); F(_sunEnergy);
-        F(sc.R); F(sc.G); F(sc.B); F(0f);
-        F(_skyTop.R); F(_skyTop.G); F(_skyTop.B); F(0f);              // sky_top (mood)
-        F(_skyHorizon.R); F(_skyHorizon.G); F(_skyHorizon.B); F(0f);  // sky_horizon (mood)
-        F(_camWorld.X); F(_camWorld.Y); F(_camWorld.Z); F(0f);        // cam_world (ray origin)
-        F(TexW); F(TexH);
-        F(offset); F(stride);
-        F(time);
-        F(p.Coverage); F(p.Density); F(p.CloudType);
-        F(p.AltitudeM); F(p.ThicknessM);
-        F(p.DriftSpeed); F(p.DriftDirDeg);
-        F(p.HgAniso); F(p.Powder); F(p.SunAbsorption);
-        F(p.Size); F(p.Detail); F(p.DetailSize); F(p.Edge); F(p.Opacity); F(p.Brightness); F(p.Ambient);
-        F(p.RaymarchSteps);
-        F(_windOffset.X); F(_windOffset.Y);   // CPU-integrated wind (was the _pad0/_pad1 slot)
-        F(_cellScale);                         // clump-scale knob
         float[] layerData = PackLayers(out _layerCount);
-        F(_layerCount); F(0f); F(0f); F(0f);   // layer_count + pad (16B)
-        for (int i = 0; i < layerData.Length; i++) { F(layerData[i]); }
-        return b;
+        return new Std430Writer()
+            .Vec4(_sunDir, _sunEnergy)                  // sun_dir
+            .Vec4(_sunColor)                            // sun_color
+            .Vec4(_skyTop)                              // sky_top (mood)
+            .Vec4(_skyHorizon)                          // sky_horizon (mood)
+            .Vec4(_camWorld, 0f)                        // cam_world (ray origin)
+            .Vec2(TexW, TexH)                           // tex_size
+            .Vec2(offset, stride)                       // update
+            .F(time)
+            .F(p.Coverage).F(p.Density).F(p.CloudType)
+            .F(p.AltitudeM).F(p.ThicknessM)
+            .F(p.DriftSpeed).F(p.DriftDirDeg)
+            .F(p.HgAniso).F(p.Powder).F(p.SunAbsorption)
+            .F(p.Size).F(p.Detail).F(p.DetailSize).F(p.Edge).F(p.Opacity).F(p.Brightness).F(p.Ambient)
+            .F(p.RaymarchSteps)
+            .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
+            .Vec4Array(layerData)                       // layers[24]
+            .ToArray();
     }
 
     public void SetSun(Vector3 dir, Color color, float energy) { _sunDir = dir.Normalized(); _sunColor = color; _sunEnergy = energy; }

@@ -89,6 +89,7 @@ public static class CloudShadowCheck
         // saturates → r drops for lack of signal, NOT for decoupling. So r is only a valid
         // coupling test in the unsaturated regime; flag saturation instead of failing it.
         bool saturated = pctShadowed > 95.0 || (100.0 * hasCloud / n) > 98.0;
+        GD.Print($"[shadowcheck] DECODED layer0.altitude={f[2]:F1} (expect ~1800), layer_count={f[3]:F1} (expect 2)");
         bool pass = r > 0.6;
         GD.Print($"[shadowcheck] n={n} grid={Grid}² coverage={p.Coverage:F2}  sun=({Ln.X:F2},{Ln.Y:F2},{Ln.Z:F2})  " +
                  $"cellsWithCloudOverhead={100.0*hasCloud/n:F1}%");
@@ -126,18 +127,27 @@ public static class CloudShadowCheck
 
     private static byte[] BuildParams(CloudParams p, Vector3 sun, float regionM, float groundH, Vector2 wind, int grid)
     {
-        // matches cloud_shadow_check.glsl ParamsBuf
-        var b = new byte[24 * sizeof(float)];
-        int o = 0;
-        void F(float v) { BitConverter.GetBytes(v).CopyTo(b, o); o += 4; }
-        F(sun.X); F(sun.Y); F(sun.Z); F(0f);            // sun_dir
-        F(grid); F(grid);                                // grid
-        F(regionM); F(16f);                              // region size, march steps
-        F(p.AltitudeM); F(p.ThicknessM);
-        F(p.Coverage); F(p.Density); F(p.CloudType);
-        F(p.Size); F(p.Detail); F(p.DetailSize); F(p.Edge);
-        F(0.45f); F(groundH);                            // strength, ground_height
-        F(wind.X); F(wind.Y);                            // wind_offset
-        return b;
+        // Field order MUST match cloud_shadow_check.glsl's ParamsBuf; Std430Writer aligns.
+        // layer 0 = flat knobs (same as CloudVolume.PackLayers) so the check tests the real stack.
+        var layers = CloudLayers.Load();
+        if (layers.Count == 0) { layers.Add(default); }
+        var l0 = layers[0];
+        layers[0] = l0 with {
+            Altitude = p.AltitudeM, Thickness = p.ThicknessM, Size = p.Size, CellScale = 1.6f,
+            CoverageWeight = 1f, Density = p.Density, Opacity = p.Opacity, Type = p.CloudType,
+            Edge = p.Edge, Detail = p.Detail, DetailSize = p.DetailSize, NoiseId = 0, Enabled = true };
+        float[] layerData = CloudLayers.Pack(layers, out int count);
+        return new Std430Writer()
+            .Vec4(sun, 0f)                              // sun_dir
+            .Vec2(grid, grid)                           // grid
+            .Vec2(regionM, 16f)                         // region (size, march steps)
+            .F(p.AltitudeM).F(p.ThicknessM)
+            .F(p.Coverage).F(p.Density).F(p.CloudType)
+            .F(p.Size).F(p.Detail).F(p.DetailSize).F(p.Edge)
+            .F(0.45f).F(groundH)                        // strength, ground_height
+            .Vec2(wind)                                 // wind_offset
+            .Vec4(0f, 0f, 0f, count)                    // tail (w = layer_count)
+            .Vec4Array(layerData)                       // layers[24]
+            .ToArray();
     }
 }

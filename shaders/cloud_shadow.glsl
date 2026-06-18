@@ -26,9 +26,14 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float size, detail, detail_size, edge;
     float strength;        // shadow darkness (0 none .. 1 full)
     float ground_height;   // representative terrain elevation to start the sun-march from
-    vec2 wind_offset;      // CPU-integrated wind (m) — match cloud_raymarch.glsl
-    float cell_scale;      // clump-scale multiplier — match cloud_raymarch.glsl
+    // TAIL vec4 (16-aligned) so layers[] starts on a 16-byte boundary. x=wind_x, y=wind_y,
+    // z=cell_scale, w=layer_count. (See cloud_raymarch.glsl — hand-packed std430 drift.)
+    vec4 tail;
+    vec4 layers[24];       // 8 layers × 3 vec4 (CloudLayers.Pack order)
 } P;
+#define WIND vec2(P.tail.x, P.tail.y)
+#define LAYER_COUNT P.tail.w
+#define LF(i, f) P.layers[(i)*3 + ((f)>>2)][(f)&3]
 
 const float PLANET_R = 200000.0;
 
@@ -55,34 +60,34 @@ const float SHAPE_SCALE   = 1.0 / 9000.0;
 const float DETAIL_SCALE  = 1.0 / 1300.0;
 const float WARP_AMOUNT   = 600.0;
 
-// ===== SHARED DENSITY — byte-identical to cloud_raymarch.glsl's sample_density. If this
-// ever diverges from the raymarch copy, the shadow desyncs from the visible cloud.
-float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
+// ===== PER-LAYER DENSITY — byte-identical to cloud_raymarch.glsl's layer_density.
+float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
+                    float lsize, float lcell, float ldens, float ltype,
+                    float ledge, float ldetail, float ldetsize, float covW){
     float r = length(p);
     float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
     vec3 lp = vec3(p.x, r - baseR, p.z);
 
     vec2 wuv = lp.xz * WEATHER_SCALE + windOff * WEATHER_SCALE;
     vec4 w = texture(weather_tex, wuv);
-    float coverage = clamp(P.coverage + (w.r - 0.5) * 0.7, 0.0, 1.0);
-    float type     = clamp(P.cloud_type + (w.g - 0.5) * 0.4, 0.0, 1.0);
+    float coverage = clamp(P.coverage * covW + (w.r - 0.5) * 0.7, 0.0, 1.0);
+    float type     = clamp(ltype + (w.g - 0.5) * 0.4, 0.0, 1.0);
     float densBias = mix(0.7, 1.3, w.b);
 
     vec3 warp = (vec3(texture(detail_tex, lp * (DETAIL_SCALE * 0.25)).r) - 0.5) * WARP_AMOUNT;
     vec3 lpw = lp + warp;
 
-    float sScale = SHAPE_SCALE / max(P.size, 0.01);
+    float sScale = SHAPE_SCALE / max(lsize, 0.01);
     vec3 suv = lpw * sScale + vec3(windOff.x, h, windOff.y) * sScale;
     vec4 sh = texture(shape_tex, suv);
     float fbm = sh.g * 0.625 + sh.b * 0.25 + sh.a * 0.125;
     float base = remap(sh.r, fbm * 0.3, 1.0, 0.0, 1.0);
 
     float thresh = mix(0.92, 0.02, coverage);
-    float soft = min(thresh + mix(0.30, 0.10, P.edge), 1.0);
+    float soft = min(thresh + mix(0.30, 0.10, ledge), 1.0);
     float shape = smoothstep(thresh, soft, base);
 
-    // CELLULARITY — identical to cloud_raymarch.glsl (keep clumps+gaps even when dense).
-    float cellScale = sScale * 0.35 * max(P.cell_scale, 0.05);
+    float cellScale = sScale * 0.35 * max(lcell, 0.05);
     float cell = texture(shape_tex, lpw * cellScale + vec3(windOff.x, h, windOff.y) * cellScale).g;
     float cellGate = smoothstep(mix(0.78, 0.35, coverage), mix(1.0, 0.6, coverage), cell);
     shape *= cellGate;
@@ -90,14 +95,28 @@ float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
     shape *= type_gradient(h, type);
     if (shape <= 0.0) return 0.0;
 
-    if (P.detail > 0.0){
-        float dScale = DETAIL_SCALE / max(P.detail_size, 0.01);
+    if (ldetail > 0.0){
+        float dScale = DETAIL_SCALE / max(ldetsize, 0.01);
         vec3 duv = lp * dScale + vec3(windOff.x * 1.7, h, windOff.y * 1.7) * dScale;
         float det = texture(detail_tex, duv).r;
-        float erodeAmt = mix(0.25, 0.6, h) * P.detail;
+        float erodeAmt = mix(0.25, 0.6, h) * ldetail;
         shape = clamp(remap(shape, det * erodeAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
     }
-    return shape * P.density * densBias;
+    return shape * ldens * densBias;
+}
+
+float density_all(vec3 p, vec2 windOff, out float opacOut){
+    int n = clamp(int(LAYER_COUNT), 1, 8);
+    float total = 0.0; float opAccum = 0.0; float r = length(p);
+    for (int i = 0; i < n; i++){
+        float baseR = PLANET_R + LF(i,0), topR = baseR + LF(i,1);
+        if (r < baseR || r > topR) continue;
+        float d = layer_density(p, baseR, topR, windOff,
+            LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4));
+        total += d; opAccum += d * LF(i,6);
+    }
+    opacOut = (total > 1e-5) ? opAccum / total : 1.0;
+    return total;
 }
 
 void main(){
@@ -108,14 +127,15 @@ void main(){
     vec2 uv = (vec2(px) + 0.5) / P.tex_size;
     vec2 wxz = (uv - 0.5) * P.region.x;
 
-    // March from a representative terrain elevation toward the sun, through the SAME curved
-    // shell as cloud_raymarch.glsl (lifted into planet space) so the shadow's density taps
-    // land at the same world XZ as the visible cloud → matched cast.
     vec3 ro = vec3(wxz.x, PLANET_R + P.ground_height, wxz.y);
     vec3 L = normalize(P.sun_dir.xyz);
 
-    float baseR = PLANET_R + P.altitude;
-    float topR  = baseR + P.thickness;
+    // full span across all ACTIVE decks (matches cloud_raymarch.glsl)
+    int nL = clamp(int(LAYER_COUNT), 1, 8);
+    float minBase = 1e9, maxTop = -1e9;
+    for (int i = 0; i < nL; i++){ float a = LF(i,0); minBase = min(minBase, a); maxTop = max(maxTop, a + LF(i,1)); }
+    float baseR = PLANET_R + minBase;
+    float topR  = PLANET_R + maxTop;
     vec2 hitB = ray_sphere(ro, L, baseR);
     vec2 hitT = ray_sphere(ro, L, topR);
     float tStart = max(hitB.y, 0.0);
@@ -123,22 +143,17 @@ void main(){
 
     float vis = 1.0;
     if (L.y > 0.05 && tEnd > tStart){
-        // CAP the marched path to ~the vertical layer thickness. A low sun makes the raw
-        // slanted chord (tEnd-tStart) huge → it accumulates density from clouds far away,
-        // darkening ground under thin/clear sky (the "way more shadow than cloud in view"
-        // bug). Normalizing by 1/L.y so the optical depth reflects the cloud DIRECTLY above
-        // the point (cosine-corrected), not the long slant.
         float chord = tEnd - tStart;
-        float maxPath = P.thickness / max(L.y, 0.2);   // bound the slant to ~thickness/sinSun
+        float maxPath = (maxTop - minBase) / max(L.y, 0.2);   // bound the slant
         float pathLen = min(chord, maxPath);
         int steps = clamp(int(P.region.y), 4, 32);
         float dt = pathLen / float(steps);
-        vec2 windOff = P.wind_offset;   // CPU-integrated; no teleport
+        vec2 windOff = WIND;
         float d = 0.0;
-        float t = tStart;
+        float t = tStart; float op;
         for (int i = 0; i < steps; i++){
             vec3 p = ro + L * t;
-            d += sample_density(p, baseR, topR, windOff) * dt;
+            d += density_all(p, windOff, op) * dt;   // sum all decks
             t += dt;
         }
         // cosine-correct so the shadow ~ cloud thickness overhead, independent of sun angle.

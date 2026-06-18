@@ -31,14 +31,19 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float hg_aniso, powder, sun_absorb;
     float size, detail, detail_size, edge, opacity, brightness, ambient;
     float steps;
-    vec2 wind_offset;     // CPU-integrated wind (m) — changing speed changes rate, not position
-    float cell_scale;     // clump-scale multiplier: higher = smaller/more clumps (anti-slab)
-    float layer_count; float _lpad0, _lpad1, _lpad2;
-    // 8 layers × 12 floats, packed as 3 vec4 PER LAYER (24 vec4). std430 arrays of `float`
-    // have a 16-byte stride (each padded to a vec4!) — using vec4[] keeps it tight + matches
-    // CloudLayers.Pack's contiguous float run exactly. (A float[] here = scrambled layers.)
+    // TAIL — a single vec4 (16-aligned) holds the trailing scalars so the layers[] vec4
+    // array below starts on a 16-byte boundary. Hand-packed std430 is fragile: scalars
+    // before a vec2/vec4 drift the offset (a vec2 wind_offset here put layers[] off by 4
+    // bytes → scrambled → NO CLOUDS). Keeping the tail as ONE vec4 + the C# writer padding
+    // to 16 before it removes the hazard. x=wind_x, y=wind_y, z=cell_scale, w=layer_count.
+    vec4 tail;
+    // 8 layers × 12 floats = 3 vec4 PER LAYER (24 vec4). vec4[] (not float[]) so the stride
+    // is tight 16B and matches CloudLayers.Pack's contiguous float run.
     vec4 layers[24];
 } P;
+#define WIND vec2(P.tail.x, P.tail.y)
+#define CELL_SCALE P.tail.z
+#define LAYER_COUNT P.tail.w
 // per-layer field accessor (f: 0 alt,1 thick,2 size,3 cell,4 covW,5 dens,6 opac,7 type,8 edge,9 detail,10 detailSize,11 noiseId)
 #define LF(i, f) P.layers[(i)*3 + ((f)>>2)][(f)&3]
 
@@ -122,7 +127,7 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
 // Sum every active layer whose band contains p. Returns total density + a density-weighted
 // opacity (so the caller's extinction reflects the mix of decks at that point).
 float density_all(vec3 p, vec2 windOff, out float opacOut){
-    int n = clamp(int(P.layer_count), 1, 8);
+    int n = clamp(int(LAYER_COUNT), 1, 8);
     float total = 0.0; float opAccum = 0.0; float r = length(p);
     for (int i = 0; i < n; i++){
         float baseR = PLANET_R + LF(i,0), topR = baseR + LF(i,1);
@@ -184,7 +189,7 @@ void main(){
     // "clouds vanish from above"). Sampling stays world XZ → shadow stays coupled.
     vec3 rd = dir_from_texel(px);
     // full span across all ACTIVE decks: march one shell from min-base to max-top.
-    int nL = clamp(int(P.layer_count), 1, 8);
+    int nL = clamp(int(LAYER_COUNT), 1, 8);
     float minBase = 1e9, maxTop = -1e9;
     for (int i = 0; i < nL; i++){ float a = LF(i,0); minBase = min(minBase, a); maxTop = max(maxTop, a + LF(i,1)); }
     float belowBase = min(P.cam_world.y, minBase - 1.0);
@@ -201,7 +206,7 @@ void main(){
         int steps = clamp(int(P.steps), 16, 160);
         float dt = (tEnd - tStart) / float(steps);
 
-        vec2 windOff = P.wind_offset;   // CPU-integrated; no teleport when speed/dir changes
+        vec2 windOff = WIND;   // CPU-integrated; no teleport when speed/dir changes
 
         vec3 L = normalize(P.sun_dir.xyz);
         float cosA = dot(rd, L);
