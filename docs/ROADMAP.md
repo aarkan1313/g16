@@ -76,6 +76,11 @@ Last updated: 2026-06-17.
 - **Composition tooling** — more hero-shot / framing aids.
 - **Cloud follow-ups** — snapshot cloud settings into mood presets; tune god rays; proper
   temporal reconstruction (current temporal_frames clamped to 1, no reconstruction).
+- **Distant sky / horizon handling** (cloud refactor, 2026-06-17) — the far/horizon sky reads
+  weird (flat cloud band + no convincing clear-sky falloff toward the horizon). Need a proper
+  distance/horizon treatment: cloud density fade-to-haze near the horizon + a believable
+  non-cloud sky gradient in the distance so a sparse sky doesn't look cut off. Surfaced in the
+  T-checkpoint review; deferred to a focused pass after the cloud core is judged good.
 
 ## 📌 Conventions
 - main = clean baseline · `experiment/presentation` = HEAD (work here). Git is the undo.

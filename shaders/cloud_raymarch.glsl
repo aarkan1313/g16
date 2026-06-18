@@ -31,7 +31,7 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float hg_aniso, powder, sun_absorb;
     float size, detail, detail_size, edge, opacity, brightness, ambient;
     float steps;
-    float _pad0, _pad1;
+    vec2 wind_offset;     // CPU-integrated wind (m) — changing speed changes rate, not position
 } P;
 
 const float PLANET_R = 200000.0;
@@ -174,8 +174,7 @@ void main(){
         int steps = clamp(int(P.steps), 16, 160);
         float dt = (tEnd - tStart) / float(steps);
 
-        float ang = radians(P.drift_dir);
-        vec2 windOff = vec2(cos(ang), sin(ang)) * P.time * P.drift_speed;
+        vec2 windOff = P.wind_offset;   // CPU-integrated; no teleport when speed/dir changes
 
         vec3 L = normalize(P.sun_dir.xyz);
         float cosA = dot(rd, L);

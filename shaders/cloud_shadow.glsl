@@ -26,7 +26,7 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float size, detail, detail_size, edge;
     float strength;        // shadow darkness (0 none .. 1 full)
     float ground_height;   // representative terrain elevation to start the sun-march from
-    float _pad1, _pad2;
+    vec2 wind_offset;      // CPU-integrated wind (m) — match cloud_raymarch.glsl
 } P;
 
 const float PLANET_R = 200000.0;
@@ -115,10 +115,17 @@ void main(){
 
     float vis = 1.0;
     if (L.y > 0.05 && tEnd > tStart){
+        // CAP the marched path to ~the vertical layer thickness. A low sun makes the raw
+        // slanted chord (tEnd-tStart) huge → it accumulates density from clouds far away,
+        // darkening ground under thin/clear sky (the "way more shadow than cloud in view"
+        // bug). Normalizing by 1/L.y so the optical depth reflects the cloud DIRECTLY above
+        // the point (cosine-corrected), not the long slant.
+        float chord = tEnd - tStart;
+        float maxPath = P.thickness / max(L.y, 0.2);   // bound the slant to ~thickness/sinSun
+        float pathLen = min(chord, maxPath);
         int steps = clamp(int(P.region.y), 4, 32);
-        float dt = (tEnd - tStart) / float(steps);
-        float ang = radians(P.drift_dir);
-        vec2 windOff = vec2(cos(ang), sin(ang)) * P.time * P.drift_speed;
+        float dt = pathLen / float(steps);
+        vec2 windOff = P.wind_offset;   // CPU-integrated; no teleport
         float d = 0.0;
         float t = tStart;
         for (int i = 0; i < steps; i++){
@@ -126,7 +133,8 @@ void main(){
             d += sample_density(p, baseR, topR, windOff) * dt;
             t += dt;
         }
-        float trans = exp(-d * 0.02);          // Beer transmittance through the cloud
+        // cosine-correct so the shadow ~ cloud thickness overhead, independent of sun angle
+        float trans = exp(-d * 0.02 * L.y);    // Beer transmittance, slant-normalized
         vis = mix(1.0, trans, P.strength);     // strength scales how dark shadows get
     }
     imageStore(shadow_tex, px, vec4(vis, 0.0, 0.0, 1.0));

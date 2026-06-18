@@ -49,9 +49,11 @@ public partial class CloudVolume : Node
     // map over the terrain; the terrain light() samples it to attenuate the sun.
     private Rid _shadowShader, _shadowPipeline, _shadowTex, _shadowParamBuf;
     private Texture2Drd? _shadowRd;
-    private float _shadowStrength = 0.7f;
+    private float _shadowStrength = 0.45f;   // was 0.7 — clouds are sparse; subtler ground shadow
     private bool _computeReady;
     private int _frame;
+    private float _lastTime;          // for CPU drift integration (dt)
+    private Vector2 _windOffset;      // accumulated wind offset (m) — changing speed changes rate, not position
     public const int TexW = 512, TexH = 128;
     public const int ShadowRes = 512;
     // L1 fix: set from FieldParams.RegionSizeM at Attach so the shadow map + god-ray
@@ -223,7 +225,17 @@ public partial class CloudVolume : Node
         int offset = _frame % stride;
         _frame++;
 
-        byte[] pb = BuildParams(p, (float)Time.GetTicksMsec() / 1000.0f, offset, stride);
+        // Integrate drift on the CPU: advance a persistent wind offset by dir*speed*dt each
+        // frame. Changing the speed/dir knob then changes the RATE, not the position — the
+        // old windOff = time*speed teleported clouds whenever the knob moved (the user's
+        // "moving the speed knob moves the cloud" bug).
+        float now = (float)Time.GetTicksMsec() / 1000.0f;
+        float dt = (_lastTime > 0f) ? Mathf.Clamp(now - _lastTime, 0f, 0.1f) : 0f;
+        _lastTime = now;
+        float ang = Mathf.DegToRad(p.DriftDirDeg);
+        _windOffset += new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * p.DriftSpeed * dt;
+
+        byte[] pb = BuildParams(p, now, offset, stride);
         _rd.BufferUpdate(_paramBuf, 0, (uint)pb.Length, pb);
 
         var uOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; uOut.AddId(_outTex);
@@ -274,6 +286,7 @@ public partial class CloudVolume : Node
         F(p.Size); F(p.Detail); F(p.DetailSize); F(p.Edge);
         F(_shadowStrength);
         F(_groundHeight);   // M4: start the sun-march from terrain mid-elevation
+        F(_windOffset.X); F(_windOffset.Y);   // CPU-integrated wind (match the raymarch)
         return b;
     }
     private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
@@ -301,6 +314,7 @@ public partial class CloudVolume : Node
         F(p.HgAniso); F(p.Powder); F(p.SunAbsorption);
         F(p.Size); F(p.Detail); F(p.DetailSize); F(p.Edge); F(p.Opacity); F(p.Brightness); F(p.Ambient);
         F(p.RaymarchSteps);
+        F(_windOffset.X); F(_windOffset.Y);   // CPU-integrated wind (was the _pad0/_pad1 slot)
         return b;
     }
 
