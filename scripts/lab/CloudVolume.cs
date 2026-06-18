@@ -95,14 +95,18 @@ public partial class CloudVolume : Node
         GD.Print($"CloudVolume: resources baked (weather mean {_weatherMean:F2})");
     }
 
-    /// 0 = clear sky, 1 = fully overcast. CPU proxy from the live coverage knob + the
-    /// weather field mean (matches the shader's coverage remap, averaged) — drives
-    /// overcast ambient/sun dimming + aerial tint, no GPU readback. Disabled → 0.
+    /// 0 = clear sky, 1 = fully overcast. CPU proxy driving overcast sun/ambient dimming +
+    /// aerial tint (no GPU readback). RECALIBRATED to the new threshold-coverage scale: with
+    /// thresh = mix(0.92, 0.02, coverage), low coverage is a genuinely SPARSE sky, so the
+    /// overcast proxy must stay ~0 until coverage is high — otherwise the sun dims + the fog
+    /// tints over a near-clear sky (the "sun is a light behind fog even with no cloud there"
+    /// bug). Only the coverage KNOB drives this now (not the field mean — the field is
+    /// zero-centred and just spatial variance, it shouldn't bias the global dimming).
     public float Overcast()
     {
         if (!_enabled) { return 0f; }
-        float covered = Mathf.Clamp(_p.Coverage + (_weatherMean - 0.5f) * 0.6f, 0f, 1f);
-        return Mathf.SmoothStep(0.25f, 0.9f, covered);
+        // sparse (cov<=0.55) → 0 overcast; ramps to full only as coverage approaches overcast.
+        return Mathf.SmoothStep(0.55f, 0.9f, _p.Coverage);
     }
 
     private void BuildSkyMaterial()

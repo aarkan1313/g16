@@ -1051,11 +1051,15 @@ public partial class TerrainLabUI : Control
 
         var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
-        const float OvercastAmt = 0.7f;
+        const float OvercastAmt = 0.8f;
         float k = 1f - oc * OvercastAmt;
-        env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 1.15f, oc);   // sky fill slightly UP
+        // Real overcast = flat, dim, diffuse: pull direct sun WAY down + ambient DOWN a bit
+        // (the sky becomes a dull grey source, not a brighter one). oc is ~0 for sparse skies
+        // now, so this only engages when the sky is genuinely heavily covered.
+        env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 0.7f, oc);     // sky fill DOWN (grey gloom)
         sun.LightEnergy = _baseSunEnergy * k;                                // direct sun DOWN under cloud
-        env.FogLightColor = _baseFogColor.Lerp(_cloud.SkyHorizonColor, 0.35f + 0.45f * oc);
+        // fog only tints toward the cloud-grey when actually overcast (oc~0 → no tint shift).
+        env.FogLightColor = _baseFogColor.Lerp(_cloud.SkyHorizonColor, 0.55f * oc);
         // God-ray scatter energy only matters (and only written) when god rays are on.
         if (_cloud.GodraysOn)
         {
