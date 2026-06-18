@@ -29,6 +29,8 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float _pad1, _pad2;
 } P;
 
+const float PLANET_R = 200000.0;
+
 float remap(float v, float a, float b, float c, float d){ return c + (v - a) * (d - c) / max(b - a, 1e-5); }
 
 float type_gradient(float h, float type){
@@ -37,12 +39,22 @@ float type_gradient(float h, float type){
     return baseRound * topFade;
 }
 
-// Identical density model to cloud_raymarch.glsl (world-space slab, world-XZ lp) so the
-// shadow lands at the same world XZ as the visible cloud. MUST stay byte-identical to
-// the raymarch's sample_density or the shadow desyncs from the cloud again.
-float sample_density(vec3 p, float base_y, float top_y, vec2 windOff){
-    float h = clamp((p.y - base_y) / max(top_y - base_y, 1.0), 0.0, 1.0);
-    vec3 lp = vec3(p.x, p.y - base_y, p.z);
+vec2 ray_sphere(vec3 ro, vec3 rd, float R){
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - R * R;
+    float disc = b * b - c;
+    if (disc < 0.0) return vec2(-1.0);
+    float s = sqrt(disc);
+    return vec2(-b - s, -b + s);
+}
+
+// ===== SHARED DENSITY — MUST stay byte-identical to cloud_raymarch.glsl's sample_density.
+// Curved shell (baseR/topR planet radii), world-XZ lp, coverage→threshold gap remap. If
+// this ever diverges from the raymarch copy, the shadow desyncs from the visible cloud.
+float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
+    float r = length(p);
+    float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
+    vec3 lp = vec3(p.x, r - baseR, p.z);
 
     vec2 wuv = lp.xz * 0.00008 + windOff * 0.00008;
     vec4 w = texture(weather_tex, wuv);
@@ -55,18 +67,19 @@ float sample_density(vec3 p, float base_y, float top_y, vec2 windOff){
     float fbm = sh.g * 0.625 + sh.b * 0.25 + sh.a * 0.125;
     float base = remap(sh.r, fbm * 0.3, 1.0, 0.0, 1.0);
 
-    float band = mix(0.5, 0.02, P.edge);
-    float lo = clamp(1.0 - coverage, 0.0, 1.0);
-    base = clamp(remap(base, lo, min(lo + band, 1.0), 0.0, 1.0), 0.0, 1.0);
-    base *= type_gradient(h, type);
+    float thresh = mix(0.6, 0.05, coverage);
+    float soft = min(thresh + mix(0.35, 0.12, P.edge), 1.0);
+    float shape = smoothstep(thresh, soft, base);
+    shape *= type_gradient(h, type);
+    if (shape <= 0.0) return 0.0;
 
-    if (base > 0.0 && P.detail > 0.0){
+    if (P.detail > 0.0){
         float dScale = 0.004 / max(P.detail_size, 0.01);
         vec3 duv = lp * dScale + vec3(windOff.x, h, windOff.y) * dScale;
         float det = texture(detail_tex, duv).r;
-        base = clamp(remap(base, det * 0.6 * P.detail, 1.0, 0.0, 1.0), 0.0, 1.0);
+        shape = clamp(remap(shape, det * 0.5 * P.detail, 1.0, 0.0, 1.0), 0.0, 1.0);
     }
-    return base * P.density;
+    return shape * P.density;
 }
 
 void main(){
@@ -77,21 +90,18 @@ void main(){
     vec2 uv = (vec2(px) + 0.5) / P.tex_size;
     vec2 wxz = (uv - 0.5) * P.region.x;
 
-    // March from a representative terrain elevation (M4 fix: was sea level, which
-    // offset the shell entry by up to the peak height on tall ridges). ground_height
-    // is the terrain mid-elevation; full per-texel height would be exact but needs the
-    // heightfield here — the mid-height removes most of the error for cloud_base >> it.
-    vec3 ro = vec3(wxz.x, P.ground_height, wxz.y);   // world ground point (no planet offset)
+    // March from a representative terrain elevation toward the sun, through the SAME curved
+    // shell as cloud_raymarch.glsl (lifted into planet space) so the shadow's density taps
+    // land at the same world XZ as the visible cloud → matched cast.
+    vec3 ro = vec3(wxz.x, PLANET_R + P.ground_height, wxz.y);
     vec3 L = normalize(P.sun_dir.xyz);
 
-    // Same flat world-space slab as cloud_raymarch.glsl: march from the ground toward the
-    // sun, entering at world Y = altitude and exiting at altitude+thickness.
-    float cloudBase = P.altitude;
-    float cloudTop  = P.altitude + P.thickness;
-    float tBase = (cloudBase - ro.y) / max(L.y, 1e-4);
-    float tTop  = (cloudTop  - ro.y) / max(L.y, 1e-4);
-    float tStart = max(min(tBase, tTop), 0.0);
-    float tEnd   = max(tBase, tTop);
+    float baseR = PLANET_R + P.altitude;
+    float topR  = baseR + P.thickness;
+    vec2 hitB = ray_sphere(ro, L, baseR);
+    vec2 hitT = ray_sphere(ro, L, topR);
+    float tStart = max(hitB.y, 0.0);
+    float tEnd   = max(hitT.y, 0.0);
 
     float vis = 1.0;
     if (L.y > 0.05 && tEnd > tStart){
@@ -103,7 +113,7 @@ void main(){
         float t = tStart;
         for (int i = 0; i < steps; i++){
             vec3 p = ro + L * t;
-            d += sample_density(p, cloudBase, cloudTop, windOff) * dt;
+            d += sample_density(p, baseR, topR, windOff) * dt;
             t += dt;
         }
         float trans = exp(-d * 0.02);          // Beer transmittance through the cloud
