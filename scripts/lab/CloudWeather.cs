@@ -25,7 +25,14 @@ public static class CloudWeather
         return (float)(sum / cells);
     }
 
-    /// Raw RGBAF bytes (R=coverage, G=type). Used to upload to a main-RD texture.
+    /// Raw RGBAF bytes (R=coverage bias, G=cloud type, B=density bias). Large-scale,
+    /// LOW-frequency weather: the macro distribution of clouds (cloudy here, clear
+    /// there) reads as weather systems. Sampled at a very large world scale in the
+    /// raymarch (WEATHER_SCALE ~1/80km) so it never visibly repeats in view. Coverage
+    /// spans the FULL 0..1 range (centered, light contrast) so the raymarch's coverage
+    /// knob can reach TRUE CLEAR at one end and overcast at the other — the old
+    /// Smoothstep(0.35,0.85) biased it upward into a permanent wash (the "can't get
+    /// clouds to go" + "every preset full" complaint).
     public static byte[] BakeRaw(float seed = 5.0f)
     {
         var bytes = new byte[Res * Res * 4 * sizeof(float)];
@@ -35,17 +42,24 @@ public static class CloudWeather
         {
             float u = (x + 0.5f) / Res;
             float w = (y + 0.5f) / Res;
-            float coverage = Fbm(u, w, 3f, seed);          // big soft blobs
-            float type = Fbm(u, w, 2f, seed + 31.7f);      // even larger regions
-            // gentle contrast so coverage has clear gaps (sparse) rather than a wash.
-            coverage = Smoothstep(0.35f, 0.85f, coverage);
-            WriteFloat(bytes, ref o, coverage);            // R
-            WriteFloat(bytes, ref o, type);                // G
-            WriteFloat(bytes, ref o, 0f);                  // B (rain — unused for now)
+            float coverage = Fbm(u, w, 2f, seed);          // big low-freq blobs (full range)
+            float type = Fbm(u, w, 2f, seed + 31.7f);      // even larger type regions
+            float density = Fbm(u, w, 3f, seed + 53.1f);   // per-region density variation
+            // Light contrast centered on 0.5 so the field stays roughly zero-mean — the
+            // raymarch adds (coverage-0.5)*k to the knob, so this neither floors nor
+            // saturates the knob; it just spatially varies it.
+            coverage = Contrast(coverage, 0.5f, 1.3f);
+            WriteFloat(bytes, ref o, coverage);            // R coverage bias
+            WriteFloat(bytes, ref o, type);                // G cloud type
+            WriteFloat(bytes, ref o, density);             // B density bias
             WriteFloat(bytes, ref o, 1f);                  // A
         }
         return bytes;
     }
+
+    /// Push values away from a pivot by `k` (k>1 = more contrast), clamped 0..1.
+    private static float Contrast(float x, float pivot, float k)
+        => Mathf.Clamp(pivot + (x - pivot) * k, 0f, 1f);
 
     public static ImageTexture Bake(float seed = 5.0f)
     {
@@ -85,12 +99,6 @@ public static class CloudWeather
     {
         float h = Mathf.Sin(x * 127.1f + y * 311.7f + seed) * 43758.5453f;
         return h - Mathf.Floor(h);
-    }
-
-    private static float Smoothstep(float e0, float e1, float x)
-    {
-        float t = Mathf.Clamp((x - e0) / Mathf.Max(e1 - e0, 1e-5f), 0f, 1f);
-        return t * t * (3f - 2f * t);
     }
 
     private static void WriteFloat(byte[] dst, ref int o, float v)
