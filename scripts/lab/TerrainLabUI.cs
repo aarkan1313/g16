@@ -105,13 +105,9 @@ public partial class TerrainLabUI : Control
             // _Process turns it on once _cloud.ComputeReady.
             _terrain.SetBool("cloud_shadow_on", false);
         }
-        // gap-aligned god rays: add the cloud-shadow-gated FogVolume (default OFF;
-        // volumetric fog only enabled when god rays are toggled on, so the base look
-        // is untouched until the user opts in + tunes it live).
-        var genv = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
-        genv.VolumetricFogDensity = 0.0f;        // base fog 0 — the FogVolume supplies density in gaps
-        var fog = _cloud.BuildGodrayVolume();
-        GetNode("/root/TerrainLabRoot").AddChild(fog);
+        // god rays rebuilt in-march (refactor T7) — no FogVolume. The old gap-aligned
+        // FogVolume collided with the directional light's volumetric shadows (black
+        // wedges); removed. In-scatter god rays now emerge from the cloud raymarch.
 
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }

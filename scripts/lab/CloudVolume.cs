@@ -59,37 +59,13 @@ public partial class CloudVolume : Node
     // silently if field_params.json changed).
     private float RegionM = 8192f;
 
-    private FogVolume? _godrayVol;
-    private ShaderMaterial? _godrayMat;
-    private bool _godraysOn = false;   // OFF by default — volumetric fog look needs live tuning
-
-    /// Build the gap-aligned god-ray FogVolume (a big box whose fog density is gated
-    /// by the cloud-shadow map → shafts through cloud gaps). Called by TerrainLabUI
-    /// after attach so it can be added to the scene tree + enable volumetric fog.
-    public FogVolume BuildGodrayVolume()
-    {
-        _godrayMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/cloud_godray_fog.gdshader") };
-        _godrayMat.SetShaderParameter("cloud_shadow_tex", _shadowRd);   // shared Texture2Drd (RID set in InitCompute)
-        _godrayMat.SetShaderParameter("shadow_region", RegionM);
-        _godrayMat.SetShaderParameter("godray_on", _godraysOn);
-        _godrayVol = new FogVolume
-        {
-            Name = "CloudGodrays",
-            Shape = RenderingServer.FogVolumeShape.Box,
-            Size = new Vector3(RegionM, 4000f, RegionM),
-            Material = _godrayMat,
-        };
-        _godrayVol.Position = new Vector3(0, 1500f, 0);   // span the air above the terrain
-        return _godrayVol;
-    }
+    // God rays are rebuilt as in-march in-scatter (refactor T7) — no FogVolume. This
+    // flag is read into the raymarch param buffer (0/1 multiply on the in-scatter term).
+    private bool _godraysOn = false;   // OFF by default
 
     public bool GodraysOn => _godraysOn;
-    public void SetGodraysEnabled(bool on)
-    {
-        _godraysOn = on;
-        _godrayMat?.SetShaderParameter("godray_on", on);
-        if (_env != null) { _env.VolumetricFogEnabled = on; }   // only pay for vol-fog when on
-    }
+    public void SetGodraysEnabled(bool on) { _godraysOn = on; }
+    private float _godrayStrength = 1.0f;
 
     public void Attach(Godot.Environment env, Camera3D cam, float regionSizeM)
     {
@@ -415,9 +391,7 @@ public partial class CloudVolume : Node
                 _rd.FreeRid(_shadowPipeline); _rd.FreeRid(_shadowShader);
             }));
         }
-        // M3: the FogVolume node (if not in-tree) + Texture2Drd wrappers. The
-        // Texture2Drds are RefCounted (freed when refs drop); free the FogVolume node
-        // explicitly if it wasn't parented (defensive — normally it's a tree child).
-        if (_godrayVol != null && !_godrayVol.IsInsideTree()) { _godrayVol.QueueFree(); }
+        // Texture2Drd wrappers are RefCounted (freed when refs drop). No FogVolume to
+        // clean up — god rays are in-march now (refactor T7).
     }
 }
