@@ -33,7 +33,11 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float steps;
     vec2 wind_offset;     // CPU-integrated wind (m) — changing speed changes rate, not position
     float cell_scale;     // clump-scale multiplier: higher = smaller/more clumps (anti-slab)
+    float layer_count; float _lpad0, _lpad1, _lpad2;
+    float layers[96];     // 8 layers × 12 floats (CloudLayers.Pack order); flat std430 run
 } P;
+// per-layer field accessor (f: 0 alt,1 thick,2 size,3 cell,4 covW,5 dens,6 opac,7 type,8 edge,9 detail,10 detailSize,11 noiseId)
+#define LF(i, f) P.layers[(i)*12 + (f)]
 
 const float PLANET_R = 200000.0;
 const float PI = 3.14159265;
@@ -63,68 +67,69 @@ const float SHAPE_SCALE   = 1.0 / 9000.0;
 const float DETAIL_SCALE  = 1.0 / 1300.0;
 const float WARP_AMOUNT   = 600.0;          // domain-warp displacement in meters (defense #2)
 
-// ===== SHARED DENSITY — MUST stay byte-identical to cloud_shadow.glsl's sample_density.
-// HZD recipe on a curved shell (baseR/topR planet radii; h = radial height fraction; lp
-// keeps WORLD XZ so the ground shadow lands at the same world XZ as the visible cloud).
-// Anti-repeat: mismatched sample scales (#1) + domain warp (#2) + large weather field (#3)
-// + height-varied erosion (#4). Coverage raises the THRESHOLD so coverage=0 → TRUE CLEAR
-// (nothing passes) and coverage=1 → overcast; the knob spans the full range.
-float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
+// ===== PER-LAYER DENSITY — MUST stay byte-identical to cloud_shadow.glsl's layer_density.
+// One cloud deck's density at world point p. baseR/topR = this deck's shell radii; all shape
+// params come from the LAYER args (so each deck differs in size/clump/type/etc). Same HZD
+// recipe + anti-repeat (mismatched scales, domain warp, weather field, height erosion) +
+// cellularity as before — just parameterized per layer instead of from P.* globals.
+float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
+                    float lsize, float lcell, float ldens, float ltype,
+                    float ledge, float ldetail, float ldetsize, float covW){
     float r = length(p);
     float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
     vec3 lp = vec3(p.x, r - baseR, p.z);
 
-    // #3 large low-freq weather field — macro placement never repeats in view.
     vec2 wuv = lp.xz * WEATHER_SCALE + windOff * WEATHER_SCALE;
     vec4 w = texture(weather_tex, wuv);
-    float coverage = clamp(P.coverage + (w.r - 0.5) * 0.7, 0.0, 1.0);
-    float type     = clamp(P.cloud_type + (w.g - 0.5) * 0.4, 0.0, 1.0);
-    float densBias = mix(0.7, 1.3, w.b);             // per-region density variation
+    float coverage = clamp(P.coverage * covW + (w.r - 0.5) * 0.7, 0.0, 1.0);
+    float type     = clamp(ltype + (w.g - 0.5) * 0.4, 0.0, 1.0);
+    float densBias = mix(0.7, 1.3, w.b);
 
-    // #2 domain warp — bend tiling seams into organic shapes (the biggest "kills the
-    // procedural look" lever). Warp by a low-freq detail tap before sampling the shape.
     vec3 warp = (vec3(texture(detail_tex, lp * (DETAIL_SCALE * 0.25)).r) - 0.5) * WARP_AMOUNT;
     vec3 lpw = lp + warp;
 
-    // #1 shape at a scale MISMATCHED from the detail scale below.
-    float sScale = SHAPE_SCALE / max(P.size, 0.01);
+    float sScale = SHAPE_SCALE / max(lsize, 0.01);
     vec3 suv = lpw * sScale + vec3(windOff.x, h, windOff.y) * sScale;
     vec4 sh = texture(shape_tex, suv);
     float fbm = sh.g * 0.625 + sh.b * 0.25 + sh.a * 0.125;
     float base = remap(sh.r, fbm * 0.3, 1.0, 0.0, 1.0);
 
-    // coverage → threshold: cov0 → thresh 0.92 (almost nothing passes = clear sky);
-    // cov1 → thresh 0.02 (overcast). Smooth, full range.
     float thresh = mix(0.92, 0.02, coverage);
-    float soft = min(thresh + mix(0.30, 0.10, P.edge), 1.0);
+    float soft = min(thresh + mix(0.30, 0.10, ledge), 1.0);
     float shape = smoothstep(thresh, soft, base);
 
-    // CELLULARITY — keep clumps + gaps even at high coverage (real skies aren't one
-    // contiguous lump). A low-freq cellular mask (shape.G = a coarse Worley octave,
-    // sampled at a LARGER scale) gates where cloud is allowed; coverage GROWS the cells
-    // (lowers their gate) but the inter-cell gaps only fully close as coverage→1. So mid
-    // coverage = distinct clumps with sky between, not a slab.
-    float cellScale = sScale * 0.35 * max(P.cell_scale, 0.05);   // clump scale (live knob; higher = smaller clumps)
+    float cellScale = sScale * 0.35 * max(lcell, 0.05);
     float cell = texture(shape_tex, lpw * cellScale + vec3(windOff.x, h, windOff.y) * cellScale).g;
-    // Keep clumps + gaps across the whole range: the gate's low edge only reaches ~0.35
-    // (not 0) even at full coverage, so inter-cell gaps never fully close → no slab. Real
-    // overcast still reads as broad cover because the cells are big + the threshold above
-    // already filled most of each cell; this just preserves the cellular SEAMS.
     float cellGate = smoothstep(mix(0.78, 0.35, coverage), mix(1.0, 0.6, coverage), cell);
     shape *= cellGate;
 
-    shape *= type_gradient(h, type);                 // rounded bottoms, wispy tops
-    if (shape <= 0.0) return 0.0;                     // hard gap → sky shows through
+    shape *= type_gradient(h, type);
+    if (shape <= 0.0) return 0.0;
 
-    // #4 detail erosion at a MISMATCHED scale, height-varied (erode tops more than bases).
-    if (P.detail > 0.0){
-        float dScale = DETAIL_SCALE / max(P.detail_size, 0.01);
+    if (ldetail > 0.0){
+        float dScale = DETAIL_SCALE / max(ldetsize, 0.01);
         vec3 duv = lp * dScale + vec3(windOff.x * 1.7, h, windOff.y * 1.7) * dScale;
         float det = texture(detail_tex, duv).r;
-        float erodeAmt = mix(0.25, 0.6, h) * P.detail;
+        float erodeAmt = mix(0.25, 0.6, h) * ldetail;
         shape = clamp(remap(shape, det * erodeAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
     }
-    return shape * P.density * densBias;
+    return shape * ldens * densBias;   // opacity applied by the caller (sigma)
+}
+
+// Sum every active layer whose band contains p. Returns total density + a density-weighted
+// opacity (so the caller's extinction reflects the mix of decks at that point).
+float density_all(vec3 p, vec2 windOff, out float opacOut){
+    int n = clamp(int(P.layer_count), 1, 8);
+    float total = 0.0; float opAccum = 0.0; float r = length(p);
+    for (int i = 0; i < n; i++){
+        float baseR = PLANET_R + LF(i,0), topR = baseR + LF(i,1);
+        if (r < baseR || r > topR) continue;
+        float d = layer_density(p, baseR, topR, windOff,
+            LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4));
+        total += d; opAccum += d * LF(i,6);
+    }
+    opacOut = (total > 1e-5) ? opAccum / total : 1.0;
+    return total;
 }
 
 float hg(float cosA, float g){
@@ -132,13 +137,12 @@ float hg(float cosA, float g){
     return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosA, 1.5));
 }
 
-float light_march(vec3 p, vec3 L, float baseR, float topR, vec2 windOff){
+// light march toward the sun summing ALL decks (fixed metres/step, layer-agnostic).
+float light_march_all(vec3 p, vec3 L, vec2 windOff){
     const int LSTEPS = 6;
-    float lss = P.thickness / float(LSTEPS) * 0.5;
-    float d = 0.0;
-    vec3 q = p;
-    for (int i = 0; i < LSTEPS; i++){ q += L * lss; d += sample_density(q, baseR, topR, windOff) * lss; }
-    d += sample_density(p + L * lss * 18.0, baseR, topR, windOff) * lss;
+    float lss = 250.0;
+    float d = 0.0; vec3 q = p; float op;
+    for (int i = 0; i < LSTEPS; i++){ q += L * lss; d += density_all(q, windOff, op) * lss; }
     return exp(-d * P.sun_absorb * 0.02);
 }
 
@@ -176,10 +180,14 @@ void main(){
     // clouds aren't geometry; always march as if viewed from under the shell (fixes
     // "clouds vanish from above"). Sampling stays world XZ → shadow stays coupled.
     vec3 rd = dir_from_texel(px);
-    float belowBase = min(P.cam_world.y, P.altitude - 1.0);
+    // full span across all ACTIVE decks: march one shell from min-base to max-top.
+    int nL = clamp(int(P.layer_count), 1, 8);
+    float minBase = 1e9, maxTop = -1e9;
+    for (int i = 0; i < nL; i++){ float a = LF(i,0); minBase = min(minBase, a); maxTop = max(maxTop, a + LF(i,1)); }
+    float belowBase = min(P.cam_world.y, minBase - 1.0);
     vec3 ro = vec3(P.cam_world.x, PLANET_R + belowBase, P.cam_world.z);
-    float baseR = PLANET_R + P.altitude;
-    float topR  = baseR + P.thickness;
+    float baseR = PLANET_R + minBase;
+    float topR  = PLANET_R + maxTop;
     vec2 hitB = ray_sphere(ro, rd, baseR);
     vec2 hitT = ray_sphere(ro, rd, topR);
     float tStart = max(hitB.y, 0.0);
@@ -203,14 +211,15 @@ void main(){
 
         float T = 1.0;
         vec3 scattered = vec3(0.0);
-        float t = tStart;
+        float t = tStart; float emptyRun = 0.0;
         for (int i = 0; i < steps; i++){
             vec3 p = ro + rd * t;
-            float dens = sample_density(p, baseR, topR, windOff);
+            float opac; float dens = density_all(p, windOff, opac);   // sum all decks
             if (dens > 0.001){
-                float lightT = light_march(p, L, baseR, topR, windOff);
+                emptyRun = 0.0;
+                float lightT = light_march_all(p, L, windOff);
                 float powder = mix(1.0, 1.0 - exp(-dens * 2.0 * P.powder), 0.5);
-                float sigma = dens * 0.02 * P.opacity;
+                float sigma = dens * 0.02 * opac;   // density-weighted per-deck opacity
                 float beer = exp(-sigma * dt);
                 float sun = lightT * (phase + 0.4);
                 vec3 lum = (sunCol * sun + skyAmbient * P.ambient) * P.brightness;
@@ -218,8 +227,12 @@ void main(){
                 scattered += T * lum * (1.0 - beer);
                 T *= beer;
                 if (T < 0.01) break;
+                t += dt;
+            } else {
+                // step acceleration: bigger stride through empty air between decks
+                emptyRun += 1.0;
+                t += dt * (1.0 + min(emptyRun, 4.0));
             }
-            t += dt;
         }
         result = vec4(scattered, clamp(1.0 - T, 0.0, 1.0));
     }
