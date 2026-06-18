@@ -464,7 +464,6 @@ public partial class CloudVolume : Node
             case "opacity":         _p = _p with { Opacity = v }; break;
             case "brightness":      _p = _p with { Brightness = v }; break;
             case "ambient":         _p = _p with { Ambient = v }; break;
-            case "update_res_scale": _p = _p with { UpdateResScale = v }; break;
             case "shadow_strength": _shadowStrength = v; break;   // ground-shadow darkness (Stage 5)
             case "cell_scale":      _cellScale = v; break;        // clump scale (anti-slab; higher = smaller clumps)
             case "godray_strength": _godrayStrength = v; break;

@@ -1,5 +1,5 @@
 {
-  "_comment": "Volumetric cloud knobs. LOOK knobs are also pushed live from the lab Clouds tab to sky-shader uniforms; these are the startup defaults. PERF knobs (raymarch_steps, update_res_scale, temporal_frames) are read by CloudVolume (C#). Default coverage 0.55 (~50% sky fill on the round-2 weather curve, mean ~0.56) so the lab OPENS with a good amount of cloud.",
+  "_comment": "Volumetric cloud knobs. LOOK knobs are also pushed live from the lab Clouds tab; these are the startup defaults. PERF knobs (raymarch_steps, temporal_frames) are read by CloudVolume (C#). Dome resolution is a launch param (--cloudtex), not a live knob. Default coverage 0.55 (~50% sky fill on the round-2 weather curve, mean ~0.56).",
   "coverage": 0.55,
   "density": 1.0,
   "cloud_type": 0.6,
@@ -18,6 +18,5 @@
   "brightness": 1.0,
   "ambient": 0.7,
   "raymarch_steps": 128,
-  "update_res_scale": 1.0,
   "temporal_frames": 1
 }

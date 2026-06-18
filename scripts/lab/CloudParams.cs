@@ -7,8 +7,9 @@ namespace WG16.Lab;
 ///  - LOOK knobs (coverage, density, type, lighting, drift) are pushed live from
 ///    the lab registry straight to the sky-shader uniforms — they live here only as
 ///    DEFAULTS so the system has a sane starting look before the UI touches it.
-///  - PERF knobs (raymarch steps, update resolution, temporal frames) are read by
-///    the C# dispatch (CloudVolume), so they must round-trip through C#.
+///  - PERF knobs (raymarch steps, temporal frames) are read by the C# dispatch
+///    (CloudVolume), so they must round-trip through C#. (Dome resolution is a launch
+///    param — CloudVolume.TexW/TexH via --cloudtex — not a live knob.)
 /// Loaded from data/cloud_params.json if present; otherwise these defaults. Pure
 /// data — knows nothing about how the values are consumed.
 public record CloudParams(
@@ -33,13 +34,12 @@ public record CloudParams(
     float Ambient,         // sky-fill on shadowed sides
     // perf (read by CloudVolume)
     int RaymarchSteps,     // view-ray steps through the cloud shell
-    float UpdateResScale,  // raymarch target res as a fraction of viewport (0..1)
-    int TemporalFrames)    // frames to spread a full update over
+    int TemporalFrames)    // temporal amortization stride (1 = update every texel every frame)
 {
     public const string Path = "res://data/cloud_params.json";
 
     public static CloudParams Defaults() => new(
-        Coverage: 0.35f,        // sparse — the user's note: occasional patches, not a blanket
+        Coverage: 0.55f,        // ~50% sky fill on the round-2 weather curve (mean ~0.56)
         Density: 1.0f,
         CloudType: 0.6f,        // mostly cumulus
         AltitudeM: 1800f,
@@ -57,8 +57,7 @@ public record CloudParams(
         Brightness: 1.0f,
         Ambient: 0.7f,
         RaymarchSteps: 128,
-        UpdateResScale: 1.0f,   // Stage 3 is full-res; Stage 4 lowers this
-        TemporalFrames: 1);     // Stage 3 updates every frame; Stage 4 raises this
+        TemporalFrames: 1);     // 1 = update every texel every frame (amortization off)
 
     public static CloudParams Load()
     {
@@ -76,7 +75,7 @@ public record CloudParams(
             F("hg_aniso", d.HgAniso), F("powder", d.Powder), F("sun_absorption", d.SunAbsorption),
             F("size", d.Size), F("detail", d.Detail), F("detail_size", d.DetailSize),
             F("edge", d.Edge), F("opacity", d.Opacity), F("brightness", d.Brightness), F("ambient", d.Ambient),
-            I("raymarch_steps", d.RaymarchSteps), F("update_res_scale", d.UpdateResScale),
+            I("raymarch_steps", d.RaymarchSteps),
             I("temporal_frames", d.TemporalFrames));
     }
 }

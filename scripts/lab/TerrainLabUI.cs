@@ -663,6 +663,7 @@ public partial class TerrainLabUI : Control
     private void ApplyCloudBool(string knob, bool on)
     {
         if (knob == "godrays") { _cloud?.SetGodraysEnabled(on); OvercastDirty(); return; }
+        if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)
         _cloud?.SetKnobBool(knob, on);
         // clouds-enabled also gates the ground-shadow sampling in the terrain light()
         if (knob == "enabled") { _terrain.SetBool("cloud_shadow_on", on); }
