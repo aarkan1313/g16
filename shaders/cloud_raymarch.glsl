@@ -54,41 +54,61 @@ vec2 ray_sphere(vec3 ro, vec3 rd, float R){
     return vec2(-b - s, -b + s);
 }
 
+// Anti-repetition scale consts (world meters → texture UV). DELIBERATELY MISMATCHED,
+// non-integer-related periods so the combined tiling period is enormous (defense #1):
+//   weather ~80 km · shape ~9 km · detail ~1.3 km · warp ~ low-freq detail tap.
+const float WEATHER_SCALE = 1.0 / 80000.0;
+const float SHAPE_SCALE   = 1.0 / 9000.0;
+const float DETAIL_SCALE  = 1.0 / 1300.0;
+const float WARP_AMOUNT   = 600.0;          // domain-warp displacement in meters (defense #2)
+
 // ===== SHARED DENSITY — MUST stay byte-identical to cloud_shadow.glsl's sample_density.
-// Curved shell: baseR/topR are planet-space radii; h = radial height fraction; lp keeps
-// WORLD XZ (so the ground shadow lands at the same world XZ as the visible cloud).
-// Coverage raises the noise THRESHOLD (carving gaps) instead of scaling global density, so
-// even high coverage keeps holes — dense presets read as structured cover, not full-sky fog.
+// HZD recipe on a curved shell (baseR/topR planet radii; h = radial height fraction; lp
+// keeps WORLD XZ so the ground shadow lands at the same world XZ as the visible cloud).
+// Anti-repeat: mismatched sample scales (#1) + domain warp (#2) + large weather field (#3)
+// + height-varied erosion (#4). Coverage raises the THRESHOLD so coverage=0 → TRUE CLEAR
+// (nothing passes) and coverage=1 → overcast; the knob spans the full range.
 float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
     float r = length(p);
     float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
     vec3 lp = vec3(p.x, r - baseR, p.z);
 
-    vec2 wuv = lp.xz * 0.00008 + windOff * 0.00008;
+    // #3 large low-freq weather field — macro placement never repeats in view.
+    vec2 wuv = lp.xz * WEATHER_SCALE + windOff * WEATHER_SCALE;
     vec4 w = texture(weather_tex, wuv);
-    float coverage = clamp(P.coverage + (w.r - 0.5) * 0.6, 0.0, 1.0);
-    float type = clamp(P.cloud_type + (w.g - 0.5) * 0.4, 0.0, 1.0);
+    float coverage = clamp(P.coverage + (w.r - 0.5) * 0.7, 0.0, 1.0);
+    float type     = clamp(P.cloud_type + (w.g - 0.5) * 0.4, 0.0, 1.0);
+    float densBias = mix(0.7, 1.3, w.b);             // per-region density variation
 
-    float sScale = 0.0006 / max(P.size, 0.01);
-    vec3 suv = lp * sScale + vec3(windOff.x, h, windOff.y) * sScale;
+    // #2 domain warp — bend tiling seams into organic shapes (the biggest "kills the
+    // procedural look" lever). Warp by a low-freq detail tap before sampling the shape.
+    vec3 warp = (vec3(texture(detail_tex, lp * (DETAIL_SCALE * 0.25)).r) - 0.5) * WARP_AMOUNT;
+    vec3 lpw = lp + warp;
+
+    // #1 shape at a scale MISMATCHED from the detail scale below.
+    float sScale = SHAPE_SCALE / max(P.size, 0.01);
+    vec3 suv = lpw * sScale + vec3(windOff.x, h, windOff.y) * sScale;
     vec4 sh = texture(shape_tex, suv);
     float fbm = sh.g * 0.625 + sh.b * 0.25 + sh.a * 0.125;
     float base = remap(sh.r, fbm * 0.3, 1.0, 0.0, 1.0);
 
-    // coverage → threshold: high cov lowers the bar (more cloud) but stays >0 so gaps remain.
-    float thresh = mix(0.6, 0.05, coverage);
-    float soft = min(thresh + mix(0.35, 0.12, P.edge), 1.0);
+    // coverage → threshold: cov0 → thresh 0.92 (almost nothing passes = clear sky);
+    // cov1 → thresh 0.02 (overcast). Smooth, full range.
+    float thresh = mix(0.92, 0.02, coverage);
+    float soft = min(thresh + mix(0.30, 0.10, P.edge), 1.0);
     float shape = smoothstep(thresh, soft, base);
     shape *= type_gradient(h, type);                 // rounded bottoms, wispy tops
     if (shape <= 0.0) return 0.0;                     // hard gap → sky shows through
 
+    // #4 detail erosion at a MISMATCHED scale, height-varied (erode tops more than bases).
     if (P.detail > 0.0){
-        float dScale = 0.004 / max(P.detail_size, 0.01);
-        vec3 duv = lp * dScale + vec3(windOff.x, h, windOff.y) * dScale;
+        float dScale = DETAIL_SCALE / max(P.detail_size, 0.01);
+        vec3 duv = lp * dScale + vec3(windOff.x * 1.7, h, windOff.y * 1.7) * dScale;
         float det = texture(detail_tex, duv).r;
-        shape = clamp(remap(shape, det * 0.5 * P.detail, 1.0, 0.0, 1.0), 0.0, 1.0);
+        float erodeAmt = mix(0.25, 0.6, h) * P.detail;
+        shape = clamp(remap(shape, det * erodeAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
     }
-    return shape * P.density;
+    return shape * P.density * densBias;
 }
 
 float hg(float cosA, float g){
