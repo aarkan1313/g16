@@ -75,18 +75,24 @@ Last updated: 2026-06-17.
 - **Water** — surface rivers/lakes/ocean (additive; placement improves once flow/erosion data
   exists). Considered for an isolated chat; deferred. Natural consumer of E2's flow field.
 - **Composition tooling** — more hero-shot / framing aids.
-- **Cloud follow-ups** (NEXT cloud items, in order — the cloud LOOK is now "doesn't look bad",
-  multi-layer + the audit fixes are in; these are the remaining polish):
-  1. **Per-deck phase/albedo** — carry per-deck luminance so cumulus forward-scatters + cirrus
-     reads near-isotropic/bright (audit Q5 follow-up); makes the decks visually distinct.
-  2. **Presets → layers** — presets currently only drive layer 0 (the flat knobs); wire them to
-     set the whole layer stack (so Overcast/Stormy bring in the cirrus deck etc.). Authoring.
-  3. **Ranged presets + 'surprise me'** — center+spread per knob/layer so a preset isn't
-     identical every load; a coherent global randomize. (Build the seam so the future
-     weather/biome system can drive per-layer weights — already designed for.)
-  4. Snapshot cloud settings into mood presets; tune god rays; proper temporal reconstruction
-     (temporal_frames clamped to 1, no reconstruction — the perf lever for mid-range).
-  5. Output texture res bump (512×128 → 1024×256) / eventually view-space half-res march + TAA.
+- **Cloud follow-ups — ALL DONE 2026-06-18** (cloud-polish session; see
+  `docs/cloud-system-overview.md` for the full feature/toggle inventory, and the memory note
+  `cloud-look-real-rootcauses`). The session first found the audit's "already fixed" lighting was
+  BUGGY (premultiplied-composite double-alpha, sun-extinction crushing direct light, weather mean
+  0.32 + a dead macro octave, giant cloud scale) — fixing those is what actually made the clouds
+  read good. Then the roadmap items, each behind a toggle defaulting to the validated look:
+  1. ✅ **Per-deck phase/albedo** — per-deck phase_g/iso/albedo/sun_absorb/tint; `--perdeck` / `cloud_perdeck`.
+  2. ✅ **Presets → layers** — presets author a deck stack (Overcast = 3 decks); `CloudVolume.SetLayers`
+     + `SetLayerWeight` seam for the future weather/biome system; `--preset=N`.
+  3. ✅ **Ranged presets + 'surprise me'** — seeded jitter around a known-good preset (coherent randomize).
+  4. ✅ **Temporal amortization** — strided update + history blend; `temporal_frames` / `--temporal=N` (default 1 = off).
+  5. ✅ **Texture res** — configurable dome res `--cloudtex=H` (default 512×128). [View-space half-res
+     march + TAA remains a separate, EYE-GATED rewrite — not done.]
+  6. ✅ **God rays** — in-march in-scatter (cloud-od sun visibility, NOT the directional-light shadow →
+     no black wedges); `--godrays` / `cloud_godrays` + `godray_strength` (default off).
+  - REMAINING (eye-gated, after the user reviews visuals feature-by-feature): the view-space march
+    rewrite; horizon/distant-sky handling (below); sun-disc polish (below); snapshot cloud settings
+    into mood presets.
 - **Distant sky / horizon handling** (cloud refactor, 2026-06-17) — the far/horizon sky reads
   weird (flat cloud band + no convincing clear-sky falloff toward the horizon). Need a proper
   distance/horizon treatment: cloud density fade-to-haze near the horizon + a believable

@@ -6,6 +6,23 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-18 — Cloud polish: the audit's "already fixed" lighting was BUGGY; fixed the
+real root causes, then finished the roadmap behind toggles.** The 2026-06-18 external
+audit said lighting/macro/stepping were done. They weren't: (1) `cloud_sky.gdshader`
+composited PREMULTIPLIED radiance with `mix(bg,rgb,a)` → ×alpha twice → ~2× too dim;
+(2) the sun light-march extinction (0.02) drove optical depth to ~10–30 → `exp(-od)≈0`
+→ clouds lit by ambient ONLY (dim grey mush); (3) `CloudWeather` had a dead macro octave
+(`Fbm(baseFreq=1)` wraps to a constant) and an asymmetric remap that crushed the field mean
+to 0.32 → sparse, non-intuitive coverage; (4) cloud scale (SHAPE_SCALE 1/9000, cellScale 0.35)
+made a few giant blobs. Fixing those — plus gradient base noise, direct+fill multi-scatter,
+2-octave erosion — is what made the clouds read good. The breakthrough was **measuring, not
+eyeballing**: built `--cloudstats` (dome readback), `--lightcheck`, and used `--auto-shot` to
+view frames directly. Then shipped the cloud-follow-up roadmap (per-deck lighting, presets→layer
+stack, coherent randomize, temporal amortization, configurable dome res, in-march god rays),
+**each behind a toggle defaulting to the validated look** so they can be reviewed feature by
+feature. NOT done (eye-gated): the view-space half-res march rewrite (`--cloudtex` is the
+stopgap). See `docs/cloud-system-overview.md` and memory `cloud-look-real-rootcauses`.
+
 **2026-06-18 — CLOUD system refactored from scratch + multi-layer + audit-driven look fixes.**
 The earlier volumetric clouds rendered but read "procedural/flat/uniform" through ~5 review
 rounds. Path taken: (1) full from-scratch refactor to a **world-space camera-anchored
