@@ -34,10 +34,13 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     vec2 wind_offset;     // CPU-integrated wind (m) — changing speed changes rate, not position
     float cell_scale;     // clump-scale multiplier: higher = smaller/more clumps (anti-slab)
     float layer_count; float _lpad0, _lpad1, _lpad2;
-    float layers[96];     // 8 layers × 12 floats (CloudLayers.Pack order); flat std430 run
+    // 8 layers × 12 floats, packed as 3 vec4 PER LAYER (24 vec4). std430 arrays of `float`
+    // have a 16-byte stride (each padded to a vec4!) — using vec4[] keeps it tight + matches
+    // CloudLayers.Pack's contiguous float run exactly. (A float[] here = scrambled layers.)
+    vec4 layers[24];
 } P;
 // per-layer field accessor (f: 0 alt,1 thick,2 size,3 cell,4 covW,5 dens,6 opac,7 type,8 edge,9 detail,10 detailSize,11 noiseId)
-#define LF(i, f) P.layers[(i)*12 + (f)]
+#define LF(i, f) P.layers[(i)*3 + ((f)>>2)][(f)&3]
 
 const float PLANET_R = 200000.0;
 const float PI = 3.14159265;
