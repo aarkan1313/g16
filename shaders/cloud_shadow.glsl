@@ -27,6 +27,7 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float strength;        // shadow darkness (0 none .. 1 full)
     float ground_height;   // representative terrain elevation to start the sun-march from
     vec2 wind_offset;      // CPU-integrated wind (m) — match cloud_raymarch.glsl
+    float cell_scale;      // clump-scale multiplier — match cloud_raymarch.glsl
 } P;
 
 const float PLANET_R = 200000.0;
@@ -81,7 +82,7 @@ float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
     float shape = smoothstep(thresh, soft, base);
 
     // CELLULARITY — identical to cloud_raymarch.glsl (keep clumps+gaps even when dense).
-    float cellScale = sScale * 0.35;
+    float cellScale = sScale * 0.35 * max(P.cell_scale, 0.05);
     float cell = texture(shape_tex, lpw * cellScale + vec3(windOff.x, h, windOff.y) * cellScale).g;
     float cellGate = smoothstep(mix(0.78, 0.35, coverage), mix(1.0, 0.6, coverage), cell);
     shape *= cellGate;

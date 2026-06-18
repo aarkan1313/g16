@@ -32,6 +32,7 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float size, detail, detail_size, edge, opacity, brightness, ambient;
     float steps;
     vec2 wind_offset;     // CPU-integrated wind (m) — changing speed changes rate, not position
+    float cell_scale;     // clump-scale multiplier: higher = smaller/more clumps (anti-slab)
 } P;
 
 const float PLANET_R = 200000.0;
@@ -103,7 +104,7 @@ float sample_density(vec3 p, float baseR, float topR, vec2 windOff){
     // sampled at a LARGER scale) gates where cloud is allowed; coverage GROWS the cells
     // (lowers their gate) but the inter-cell gaps only fully close as coverage→1. So mid
     // coverage = distinct clumps with sky between, not a slab.
-    float cellScale = sScale * 0.35;                 // coarser than the main shape
+    float cellScale = sScale * 0.35 * max(P.cell_scale, 0.05);   // clump scale (live knob; higher = smaller clumps)
     float cell = texture(shape_tex, lpw * cellScale + vec3(windOff.x, h, windOff.y) * cellScale).g;
     // Keep clumps + gaps across the whole range: the gate's low edge only reaches ~0.35
     // (not 0) even at full coverage, so inter-cell gaps never fully close → no slab. Real

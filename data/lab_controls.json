@@ -91,6 +91,7 @@
     { "id": "cloud_density", "label": "density", "tab": "Clouds", "type": "cloudf", "cloud": "density", "min": 0.0, "max": 3.0, "default": 1.0, "rand": false },
     { "id": "cloud_type", "label": "type (flat↔towering)", "tab": "Clouds", "type": "cloudf", "cloud": "cloud_type", "min": 0.0, "max": 1.0, "default": 0.6, "rand": false },
     { "id": "cloud_size", "label": "size", "tab": "Clouds", "type": "cloudf", "cloud": "size", "min": 0.3, "max": 4.0, "default": 1.0, "rand": false },
+    { "id": "cloud_cell_scale", "label": "clump scale", "tab": "Clouds", "type": "cloudf", "cloud": "cell_scale", "min": 0.3, "max": 4.0, "default": 1.6, "rand": false },
     { "id": "cloud_edge", "label": "edge (soft↔crisp)", "tab": "Clouds", "type": "cloudf", "cloud": "edge", "min": 0.0, "max": 1.0, "default": 0.5, "rand": false },
     { "id": "cloud_detail", "label": "detail amount", "tab": "Clouds", "type": "cloudf", "cloud": "detail", "min": 0.0, "max": 1.0, "default": 0.4, "rand": false },
     { "id": "cloud_detail_size", "label": "detail size", "tab": "Clouds", "type": "cloudf", "cloud": "detail_size", "min": 0.3, "max": 4.0, "default": 1.0, "rand": false },

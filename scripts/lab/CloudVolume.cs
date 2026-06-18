@@ -68,6 +68,7 @@ public partial class CloudVolume : Node
     public bool GodraysOn => _godraysOn;
     public void SetGodraysEnabled(bool on) { _godraysOn = on; }
     private float _godrayStrength = 1.0f;
+    private float _cellScale = 1.6f;   // clump-scale knob: higher = smaller/more clumps (anti-slab). >1 = tighter than the old fixed look.
 
     public void Attach(Godot.Environment env, Camera3D cam, float regionSizeM)
     {
@@ -291,6 +292,7 @@ public partial class CloudVolume : Node
         F(_shadowStrength);
         F(_groundHeight);   // M4: start the sun-march from terrain mid-elevation
         F(_windOffset.X); F(_windOffset.Y);   // CPU-integrated wind (match the raymarch)
+        F(_cellScale);                         // clump-scale knob (match the raymarch)
         return b;
     }
     private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
@@ -319,6 +321,7 @@ public partial class CloudVolume : Node
         F(p.Size); F(p.Detail); F(p.DetailSize); F(p.Edge); F(p.Opacity); F(p.Brightness); F(p.Ambient);
         F(p.RaymarchSteps);
         F(_windOffset.X); F(_windOffset.Y);   // CPU-integrated wind (was the _pad0/_pad1 slot)
+        F(_cellScale);                         // clump-scale knob
         return b;
     }
 
@@ -386,6 +389,8 @@ public partial class CloudVolume : Node
             case "ambient":         _p = _p with { Ambient = v }; break;
             case "update_res_scale": _p = _p with { UpdateResScale = v }; break;
             case "shadow_strength": _shadowStrength = v; break;   // ground-shadow darkness (Stage 5)
+            case "cell_scale":      _cellScale = v; break;        // clump scale (anti-slab; higher = smaller clumps)
+            case "godray_strength": _godrayStrength = v; break;
         }
     }
 
