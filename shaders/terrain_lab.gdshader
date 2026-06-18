@@ -138,6 +138,10 @@ uniform int sec_zone[7];
 uniform sampler2D cloud_shadow_tex : filter_linear, repeat_disable, hint_default_white;
 uniform bool cloud_shadow_on = false;     // turned on by CloudVolume once the map is live
 uniform float cloud_shadow_region = 8192.0;
+// DEBUG (proof tool): when on, the terrain renders the cloud-shadow factor directly as
+// albedo (white = full sun, black = fully shadowed) so you can fly up, look at the clouds,
+// look down, and verify the dark ground patches sit UNDER the clouds. Off in normal use.
+uniform bool cloud_shadow_debug = false;
 
 // Zone-band transition width (was the fixed band_softness_m=120). Wider = more
 // gradual material boundaries. Live.
@@ -523,6 +527,13 @@ void fragment(){
 
     // splat debug view overrides the lit output (no early return — gdshader bans it).
     ALBEDO = (dbg==1) ? dbg_col : alb;
+    // PROOF tool: paint the cloud-shadow factor as albedo (white=sun, black=shadow) so the
+    // ground darkening can be compared 1:1 against the clouds overhead. Emissive too so it's
+    // not re-shaded by light(). Overrides everything when on.
+    if (cloud_shadow_debug){
+        float sv = cloud_shadow_factor(v_world);
+        ALBEDO = vec3(sv);
+    }
     ROUGHNESS = dbg_fullrough ? 1.0 : clamp(rgh, rough_floor, 1.0);
     // Normal: detailed normal-map (specular-shimmer suspect) only when enabled AND
     // blend_mode supports it. Otherwise the flat geometric normal.
