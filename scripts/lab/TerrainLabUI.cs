@@ -700,20 +700,30 @@ public partial class TerrainLabUI : Control
 
     /// Apply a cloud preset by setting each named control's widget (routes through
     /// ApplyControl → CloudVolume). Controls not in the preset are left as-is.
-    private void ApplyCloudPreset(int idx)
+    private void ApplyCloudPreset(int idx, float jitter = 0f)
     {
         if (idx < 0 || idx >= _cloudPresets.Count) { return; }
         var values = _cloudPresets[idx].values;
         foreach (var key in values.Keys)
         {
             string id = key.AsString();
-            if (_byId.TryGetValue(id, out LabControl c)) { SetWidgetValue(c, values[key].AsSingle()); }
+            if (!_byId.TryGetValue(id, out LabControl c)) { continue; }
+            if (jitter > 0f && c.Locked) { continue; }   // randomize respects locks; explicit pick doesn't
+            float v = values[key].AsSingle();
+            // ranged presets / surprise-me (roadmap #3): seeded ± jitter of the knob's range,
+            // CENTERED on a known-good preset value → always coherent. Respects the rand flag
+            // (so e.g. shadow_strength stays put).
+            if (jitter > 0f && c.Rand)
+            {
+                v = Mathf.Clamp(v + (float)(_rng.NextDouble() * 2.0 - 1.0) * jitter * (c.Max - c.Min), c.Min, c.Max);
+            }
+            SetWidgetValue(c, v);
         }
         // roadmap #2: the preset's deck stack (or the default stack when it authors none), applied
         // AFTER the knobs so layer 0 picks up this preset's coverage/density via PackLayers.
         var layers = _cloudPresets[idx].layers;
         _cloud?.SetLayers(layers != null ? CloudLayers.FromGodotArray(layers) : CloudLayers.Load());
-        GD.Print($"Clouds: applied preset '{_cloudPresets[idx].name}'");
+        GD.Print($"Clouds: applied preset '{_cloudPresets[idx].name}'" + (jitter > 0f ? " (jittered)" : ""));
     }
 
     // ---- lighting MOODS (curated, coordinated looks) --------------------------
@@ -864,7 +874,19 @@ public partial class TerrainLabUI : Control
 
     // ---- randomize / lock -----------------------------------------------------
 
-    /// Global randomize: rolls all UNLOCKED controls flagged rand:true.
+    /// Coherent cloud "surprise me" (roadmap #3): pick a known-good preset and apply seeded
+    /// jitter around it, so the result is ALWAYS a believable sky — vs the old behaviour of
+    /// rolling every cloud knob independently into incoherent garbage (the user's "randomize
+    /// doesn't work"). One job: produce a coherent random cloud look.
+    private void RandomizeClouds()
+    {
+        if (_cloudPresets.Count == 0) { return; }
+        int idx = _rng.Next(_cloudPresets.Count);
+        ApplyCloudPreset(idx, 0.18f);
+    }
+
+    /// Global randomize: rolls all UNLOCKED controls flagged rand:true. Cloud controls are
+    /// handled COHERENTLY (preset + jitter), not rolled independently.
     private void Randomize()
     {
         bool needRebake = false;
@@ -874,6 +896,7 @@ public partial class TerrainLabUI : Control
             if (RandomizeControl(c)) { needRebake = true; }
         }
         if (needRebake) { _terrain.RebakeSplat(); }
+        RandomizeClouds();
         GD.Print("TerrainLab: randomized (unlocked controls)");
     }
 
@@ -881,6 +904,7 @@ public partial class TerrainLabUI : Control
     /// rand flag (the user explicitly diced this tab, so roll everything tunable).
     private void RandomizeTab(string tab)
     {
+        if (tab == "Clouds") { RandomizeClouds(); GD.Print("TerrainLab: randomized tab 'Clouds' (coherent surprise-me)"); return; }
         bool needRebake = false;
         foreach (LabControl c in _controls)
         {
@@ -896,6 +920,10 @@ public partial class TerrainLabUI : Control
     /// cloud/scene types, so those never randomized).
     private bool RandomizeControl(LabControl c)
     {
+        // Cloud controls are randomized COHERENTLY via RandomizeClouds() (preset + seeded jitter),
+        // NOT rolled independently here — independent per-knob rolls produce incoherent/garbage
+        // skies (the user's "randomize doesn't work"). Skip them.
+        if (c.Type == "cloudf" || c.Type == "cloudi" || c.Type == "cloud") { return false; }
         switch (c.Type)
         {
             case "slider":
