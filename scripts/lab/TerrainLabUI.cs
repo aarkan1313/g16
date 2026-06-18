@@ -1073,7 +1073,14 @@ public partial class TerrainLabUI : Control
     {
         if (_ready) { UpdateOvercast(); }
         // push camera world pos for the ground anti-repetition distance LOD (Unit 1)
-        if (_ready) { _terrain.SetCameraWorld(GetNode<Camera3D>("/root/TerrainLabRoot/Camera").GlobalPosition); }
+        // AND the world-space cloud raymarch (rays start at the camera so clouds + the
+        // ground shadow map share one world frame — fixes the dome-vs-world mismatch).
+        if (_ready)
+        {
+            Vector3 camPos = GetNode<Camera3D>("/root/TerrainLabRoot/Camera").GlobalPosition;
+            _terrain.SetCameraWorld(camPos);
+            _cloud?.SetCameraWorld(camPos);
+        }
         // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)
         {

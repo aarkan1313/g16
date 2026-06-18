@@ -32,6 +32,12 @@ public partial class CloudVolume : Node
     private Vector3 _sunDir = new Vector3(0.5f, 0.6f, 0.4f).Normalized();
     private Color _sunColor = new Color(1f, 0.95f, 0.85f);
     private float _sunEnergy = 1.3f;
+    // camera world position — the world-space cloud raymarch starts rays here so the
+    // visible clouds and the ground shadow map share one world-XZ frame (the fix for
+    // the origin-dome-vs-world-shadow mismatch + camera-motion jitter). Pushed each
+    // frame from TerrainLabUI._Process.
+    private Vector3 _camWorld = Vector3.Zero;
+    public void SetCameraWorld(Vector3 p) { _camWorld = p; }
     // mood sky colors → cloud ambient/background (set by TerrainLabUI.ApplyMood)
     private Color _skyTop = new Color(0.30f, 0.48f, 0.74f);
     private Color _skyHorizon = new Color(0.68f, 0.74f, 0.80f);
@@ -297,7 +303,7 @@ public partial class CloudVolume : Node
     private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
     public void SetGroundHeight(float h) { _groundHeight = h; }
 
-    private const int ParamFloats = 48;
+    private const int ParamFloats = 52;   // +4 (cam_world vec4) over the old 48
 
     private byte[] BuildParams(CloudParams p, float time, int offset, int stride)
     {
@@ -309,6 +315,7 @@ public partial class CloudVolume : Node
         F(sc.R); F(sc.G); F(sc.B); F(0f);
         F(_skyTop.R); F(_skyTop.G); F(_skyTop.B); F(0f);              // sky_top (mood)
         F(_skyHorizon.R); F(_skyHorizon.G); F(_skyHorizon.B); F(0f);  // sky_horizon (mood)
+        F(_camWorld.X); F(_camWorld.Y); F(_camWorld.Z); F(0f);        // cam_world (ray origin)
         F(TexW); F(TexH);
         F(offset); F(stride);
         F(time);
