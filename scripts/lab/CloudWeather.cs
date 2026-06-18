@@ -45,11 +45,11 @@ public static class CloudWeather
             float coverage = Fbm(u, w, 2f, seed);          // big low-freq blobs (full range)
             float type = Fbm(u, w, 2f, seed + 31.7f);      // even larger type regions
             float density = Fbm(u, w, 3f, seed + 53.1f);   // per-region density variation
-            // Centre the field near 0.5 with contrast so it stays roughly zero-MEAN: the
-            // raymarch adds (coverage-0.5)*0.7 to the coverage knob, so a ~0.5-mean field
-            // neither floors nor saturates the knob — it just spatially varies it. (The
-            // FBM's natural mean drifts high, which made the baseline sky full; re-centre.)
-            coverage = Contrast(coverage, 0.45f, 1.5f);
+            // The raw value-noise FBM sits high (mean ~0.6-0.7), which floods the coverage
+            // knob (the raymarch adds (w.r-0.5)*0.7). Remap so the field is centered LOW
+            // (mean ~0.4) with gaps reaching toward 0 — gives the knob room to read clear
+            // at the low end. remap [0.25..0.85] of the raw FBM onto [0..0.8].
+            coverage = Mathf.Clamp((coverage - 0.25f) / 0.6f, 0f, 1f) * 0.8f;
             WriteFloat(bytes, ref o, coverage);            // R coverage bias
             WriteFloat(bytes, ref o, type);                // G cloud type
             WriteFloat(bytes, ref o, density);             // B density bias
@@ -58,9 +58,6 @@ public static class CloudWeather
         return bytes;
     }
 
-    /// Push values away from a pivot by `k` (k>1 = more contrast), clamped 0..1.
-    private static float Contrast(float x, float pivot, float k)
-        => Mathf.Clamp(pivot + (x - pivot) * k, 0f, 1f);
 
     public static ImageTexture Bake(float seed = 5.0f)
     {
