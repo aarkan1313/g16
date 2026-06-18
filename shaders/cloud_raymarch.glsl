@@ -145,13 +145,33 @@ float hg(float cosA, float g){
     return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * cosA, 1.5));
 }
 
-// light march toward the sun summing ALL decks (fixed metres/step, layer-agnostic).
-float light_march_all(vec3 p, vec3 L, vec2 windOff){
+// light march toward the sun summing ALL decks — returns raw OPTICAL DEPTH toward the sun
+// (the caller does multi-octave multiple-scattering from it, per the audit). Cone-ish: a
+// long final tap captures distant self-shadowing cheaply.
+float light_optical_depth(vec3 p, vec3 L, vec2 windOff){
     const int LSTEPS = 6;
-    float lss = 250.0;
+    float lss = 220.0;
     float d = 0.0; vec3 q = p; float op;
     for (int i = 0; i < LSTEPS; i++){ q += L * lss; d += density_all(q, windOff, op) * lss; }
-    return exp(-d * P.sun_absorb * 0.02);
+    d += density_all(p + L * lss * 16.0, windOff, op) * lss;   // far tap (distant deck shadowing)
+    return d * P.sun_absorb * 0.02;
+}
+
+// dual-lobe phase: forward silver-lining (g1) + back-scatter (g2). Replaces single HG + 0.4.
+float phase_dual(float cosA){
+    return mix(hg(cosA, P.hg_aniso), hg(cosA, -0.25), 0.35);
+}
+
+// radial height fraction of point p within whichever deck contains it (0 base .. 1 top),
+// for base-occluded ambient. 0.5 if between decks (harmless — ambient unused where dens=0).
+float height_frac(vec3 p){
+    float r = length(p);
+    int n = clamp(int(LAYER_COUNT), 1, 8);
+    for (int i = 0; i < n; i++){
+        float baseR = PLANET_R + LF(i,0), topR = baseR + LF(i,1);
+        if (r >= baseR && r <= topR) return clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
+    }
+    return 0.5;
 }
 
 // texel → view direction (lat-long over the upper hemisphere)
@@ -203,43 +223,57 @@ void main(){
 
     vec4 result = vec4(0.0);
     if (rd.y > 0.02 && tEnd > tStart){
-        int steps = clamp(int(P.steps), 16, 160);
-        float dt = (tEnd - tStart) / float(steps);
+        // STEPPING (audit fix #3): a FIXED cloud-relative fine step sized to the THINNEST
+        // active deck (~1.5% of its thickness → ~64 samples through it), with empty-space
+        // skip taking coarse strides through the void between decks. The old uniform
+        // dt=span/steps put ~3 samples through a 1km deck (mush) + wasted budget on the
+        // ~3km inter-deck gap. maxSteps caps total iterations for the budget.
+        float minThick = 1e9;
+        for (int i = 0; i < nL; i++){ minThick = min(minThick, LF(i,1)); }
+        float fineStep = max(minThick * 0.015, 12.0);     // in-cloud step (m)
+        float coarseStep = fineStep * 8.0;                // empty-air step (m)
+        int maxSteps = clamp(int(P.steps), 32, 256);
 
         vec2 windOff = WIND;   // CPU-integrated; no teleport when speed/dir changes
 
         vec3 L = normalize(P.sun_dir.xyz);
         float cosA = dot(rd, L);
-        float phase = mix(hg(cosA, P.hg_aniso), hg(cosA, -0.2), 0.3);
+        float phase = phase_dual(cosA);
         vec3 sunCol = P.sun_color.rgb * P.sun_dir.w;
-        // Ambient/sky fill from the MOOD sky colors (passed in): top-of-sky tint blends
-        // toward the warmer horizon near the bottom of the cloud. So golden-hour gives
-        // warm fill, overcast grey, blue-dawn cool — clouds track the mood automatically.
+        // Mood sky fill; modulated per-voxel by height (base-occluded) below.
         vec3 skyAmbient = mix(P.sky_horizon.rgb, P.sky_top.rgb, clamp(rd.y, 0.0, 1.0));
+        float forward = pow(max(cosA, 0.0), 6.0);   // for view-gated powder (back-lit only)
 
         float T = 1.0;
         vec3 scattered = vec3(0.0);
-        float t = tStart; float emptyRun = 0.0;
-        for (int i = 0; i < steps; i++){
+        float t = tStart;
+        for (int i = 0; i < maxSteps && t < tEnd; i++){
             vec3 p = ro + rd * t;
             float opac; float dens = density_all(p, windOff, opac);   // sum all decks
             if (dens > 0.001){
-                emptyRun = 0.0;
-                float lightT = light_march_all(p, L, windOff);
-                float powder = mix(1.0, 1.0 - exp(-dens * 2.0 * P.powder), 0.5);
-                float sigma = dens * 0.02 * opac;   // density-weighted per-deck opacity
+                float dt = fineStep;
+                float od = light_optical_depth(p, L, windOff);   // optical depth toward sun
+                // MULTIPLE-SCATTERING approx (Frostbite/HZD): N octaves, geometrically
+                // decaying extinction + phase → bright voluminous interiors, not hard Beer.
+                float sun = 0.0; float a = 1.0, b = 1.0, c = 1.0;
+                for (int o = 0; o < 3; o++){
+                    sun += a * exp(-od * b) * mix(phase, 0.5, 1.0 - c);   // isotropic-er per octave
+                    a *= 0.5; b *= 0.55; c *= 0.5;
+                }
+                // BASE-OCCLUDED ambient: base dark (sky-occluded), tops bright → 3D form.
+                float h = height_frac(p);
+                vec3 amb = skyAmbient * P.ambient * mix(0.25, 1.0, h);
+                // powder (dark edges) only when looking TOWARD the sun (back-lit); gated.
+                float powder = mix(1.0, 1.0 - exp(-dens * 2.0 * P.powder), forward);
+                float sigma = dens * 0.02 * opac;
                 float beer = exp(-sigma * dt);
-                float sun = lightT * (phase + 0.4);
-                vec3 lum = (sunCol * sun + skyAmbient * P.ambient) * P.brightness;
-                lum *= powder;
+                vec3 lum = (sunCol * sun * powder + amb) * P.brightness;
                 scattered += T * lum * (1.0 - beer);
                 T *= beer;
                 if (T < 0.01) break;
-                t += dt;
+                t += fineStep;     // fine step while inside cloud
             } else {
-                // step acceleration: bigger stride through empty air between decks
-                emptyRun += 1.0;
-                t += dt * (1.0 + min(emptyRun, 4.0));
+                t += coarseStep;   // empty-space skip through the void between decks
             }
         }
         result = vec4(scattered, clamp(1.0 - T, 0.0, 1.0));

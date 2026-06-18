@@ -42,16 +42,23 @@ public static class CloudWeather
         {
             float u = (x + 0.5f) / Res;
             float w = (y + 0.5f) / Res;
-            float coverage = Fbm(u, w, 2f, seed);          // big low-freq blobs (full range)
-            float type = Fbm(u, w, 2f, seed + 31.7f);      // even larger type regions
-            float density = Fbm(u, w, 3f, seed + 53.1f);   // per-region density variation
-            // The raw value-noise FBM sits high (mean ~0.6-0.7), which floods the coverage
-            // knob (the raymarch adds (w.r-0.5)*0.7). Remap so the field is centered LOW
-            // (mean ~0.4) with gaps reaching toward 0 — gives the knob room to read clear
-            // at the low end. remap [0.25..0.85] of the raw FBM onto [0..0.8].
-            coverage = Mathf.Clamp((coverage - 0.25f) / 0.6f, 0f, 1f) * 0.8f;
-            WriteFloat(bytes, ref o, coverage);            // R coverage bias
-            WriteFloat(bytes, ref o, type);                // G cloud type
+            // MACRO VARIETY (audit fix #2): multi-octave HIGH-CONTRAST coverage + a much
+            // larger-scale "cloud system" mask, so there are genuinely cloudy regions AND
+            // clear lanes (fronts) — not a statistically-uniform field that reads as
+            // "sampled noise". The old single-low-freq ±0.35 wobble made every patch of
+            // sky identical (THE root cause of the "uniform/procedural" look).
+            float coverage = Fbm(u, w, 3f, seed);            // 4-octave detail
+            float system   = Fbm(u, w, 1f, seed + 91.3f);    // very large scale: where weather IS
+            float type     = Fbm(u, w, 2f, seed + 31.7f);
+            float density  = Fbm(u, w, 3f, seed + 53.1f);
+            // contrast-shape coverage (open real clear lanes) then gate by the system mask:
+            // a region the system mask says is "clear" stays clear regardless of detail.
+            coverage = Mathf.Clamp((coverage - 0.3f) / 0.5f, 0f, 1f);   // expand mid → 0..1 contrast
+            coverage = coverage * coverage * (3f - 2f * coverage);      // smoothstep shaping
+            float sysMask = Mathf.Clamp((system - 0.35f) / 0.35f, 0f, 1f);
+            coverage *= sysMask;                              // clear lanes where no system
+            WriteFloat(bytes, ref o, coverage);            // R coverage bias (shaped, gated)
+            WriteFloat(bytes, ref o, type);                // G cloud type (region → kind, not just denser)
             WriteFloat(bytes, ref o, density);             // B density bias
             WriteFloat(bytes, ref o, 1f);                  // A
         }
