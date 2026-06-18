@@ -531,7 +531,8 @@ void fragment(){
     // ground darkening can be compared 1:1 against the clouds overhead. Emissive too so it's
     // not re-shaded by light(). Overrides everything when on.
     if (cloud_shadow_debug){
-        float sv = cloud_shadow_factor(v_world);
+        // inline the shadow-map sample (cloud_shadow_factor is declared after fragment()).
+        float sv = cloud_shadow_on ? texture(cloud_shadow_tex, v_world.xz / cloud_shadow_region + 0.5).r : 1.0;
         ALBEDO = vec3(sv);
     }
     ROUGHNESS = dbg_fullrough ? 1.0 : clamp(rgh, rough_floor, 1.0);
