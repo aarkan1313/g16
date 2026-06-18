@@ -116,6 +116,14 @@ public partial class TerrainLabUI : Control
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
         if (_godraysOnCli >= 0) { _cloud.SetGodraysEnabled(_godraysOnCli == 1); }
         if (_shadowDbgCli == 1) { _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
+        if (_shadowCheckCli)   // numeric proof: correlate shadow vs cloud-overhead, print PASS/FAIL
+        {
+            var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+            // use the SAME "to sun" convention as PushSunToCloud (+Basis.Z), or the check
+            // feeds a downward sun and the shadow march bails everywhere (false FAIL).
+            Vector3 toSun = sunNode.GlobalTransform.Basis.Z.Normalized();
+            CloudShadowCheck.Run(_cloud.Params, toSun, _cloud.RegionSize, _terrain.MidHeight, Vector2.Zero);
+        }
         // H3 fix: mood + sun were applied in _Ready BEFORE this deferred attach, so the
         // cloud's sky/sun pushes no-opped (material/env null). Re-apply now that _cloud
         // is live, so clouds track the spawn mood/sun instead of CloudParams defaults.
@@ -161,6 +169,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--godrays=")) { _godraysOnCli = a.Substring("--godrays=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
+            else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
@@ -1023,6 +1032,7 @@ public partial class TerrainLabUI : Control
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
     }
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)
+    private bool _shadowCheckCli;     // --shadowcheck → numeric correlation test, PASS/FAIL to console
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;

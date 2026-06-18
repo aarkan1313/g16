@@ -133,9 +133,13 @@ void main(){
             d += sample_density(p, baseR, topR, windOff) * dt;
             t += dt;
         }
-        // cosine-correct so the shadow ~ cloud thickness overhead, independent of sun angle
+        // cosine-correct so the shadow ~ cloud thickness overhead, independent of sun angle.
+        // The numeric self-check (--shadowcheck) showed ~91% of ground was at least faintly
+        // shadowed at coverage 0.45 — correct PLACEMENT (r=0.60) but too BROAD. Gate out the
+        // faint tail so only meaningful cloud casts a visible shadow (thin wisps → ~full sun).
         float trans = exp(-d * 0.02 * L.y);    // Beer transmittance, slant-normalized
-        vis = mix(1.0, trans, P.strength);     // strength scales how dark shadows get
+        float shadowed = smoothstep(0.02, 0.5, 1.0 - trans);   // ignore the faint tail
+        vis = mix(1.0, trans, P.strength * shadowed);          // strength scales darkness
     }
     imageStore(shadow_tex, px, vec4(vis, 0.0, 0.0, 1.0));
 }
