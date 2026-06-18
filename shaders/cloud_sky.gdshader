@@ -37,8 +37,21 @@ vec2 dir_to_uv(vec3 d){
 void sky(){
     vec3 rd = EYEDIR;
     vec3 bg = background(rd);
-    vec3 outColor = bg;
 
+    // SUN DISC + glow — drawn into the BACKGROUND so clouds composite OVER it (a cloud in
+    // front of the sun correctly occludes it; in clear sky the disc shows). The cloud sky
+    // shader previously drew no sun at all, so toggling clouds on made the sun vanish and
+    // left only a bright gradient ("a light behind fog"). LIGHT0_* is the scene's sun.
+    if (LIGHT0_ENABLED){
+        float cosSun = dot(rd, LIGHT0_DIRECTION);
+        // tight disc + wider soft glow toward the sun
+        float disc = smoothstep(0.9994, 0.9998, cosSun);          // ~0.6° disc
+        float glow = pow(max(cosSun, 0.0), 220.0) * 0.5;          // halo
+        vec3 sunRGB = LIGHT0_COLOR * LIGHT0_ENERGY;
+        bg += sunRGB * (disc * 12.0 + glow);
+    }
+
+    vec3 outColor = bg;
     if (cloud_enabled && rd.y > 0.0){
         vec4 c = texture(cloud_rd_tex, dir_to_uv(rd));
         if (cloud_debug == 1){ outColor = c.rgb; }
