@@ -590,6 +590,10 @@ float cloud_shadow_factor(vec3 wp){
 // is the cloud shadow factor multiplying the DIRECT sun term (ambient/GI untouched).
 // NOTE: a custom light() fully REPLACES the built-in BRDF (Godot has no fall-through),
 // so this must mirror it rather than be a cheaper approximation. Audit H1, per pillars.
+// Exact (1-x)^5 as 5 multiplies — the Schlick/Burley exponent. Removes 3 transcendental
+// pow() per lit pixel with bit-identical result (perf pass 2026-06-18).
+float pow5(float x){ float x2 = x * x; return x2 * x2 * x; }
+
 void light() {
     float cloud = cloud_shadow_factor(v_world);
 
@@ -612,8 +616,8 @@ void light() {
 
     // --- Burley (Disney) diffuse, matching Godot's DIFFUSE_BURLEY default ---
     float fd90 = 0.5 + 2.0 * rough * LoH * LoH;
-    float lightScatter = 1.0 + (fd90 - 1.0) * pow(1.0 - NoL, 5.0);
-    float viewScatter  = 1.0 + (fd90 - 1.0) * pow(1.0 - NoV, 5.0);
+    float lightScatter = 1.0 + (fd90 - 1.0) * pow5(1.0 - NoL);
+    float viewScatter  = 1.0 + (fd90 - 1.0) * pow5(1.0 - NoV);
     float burley = lightScatter * viewScatter * (1.0 / 3.14159265);
     DIFFUSE_LIGHT += ALBEDO * radiance * burley;
 
@@ -626,6 +630,6 @@ void light() {
     float Vis = 0.5 / max(visL + visV, 1e-4);
     // dielectric F0 ~0.04 (terrain is non-metal); Schlick Fresnel
     vec3 f0 = vec3(0.04);
-    vec3 F = f0 + (vec3(1.0) - f0) * pow(1.0 - LoH, 5.0);
+    vec3 F = f0 + (vec3(1.0) - f0) * pow5(1.0 - LoH);
     SPECULAR_LIGHT += radiance * (D * Vis) * F;
 }
