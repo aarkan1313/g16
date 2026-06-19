@@ -44,7 +44,10 @@ public partial class GodRaysVolumetric : Node3D
     // Shaft BRIGHTNESS = the sun's light_volumetric_fog_energy = UI strength × this (a LINEAR engine
     // multiplier on the in-scatter). Driving brightness HERE — not via a clamped ALBEDO multiply —
     // keeps the gap/shadow contrast intact at any strength (the earlier ALBEDO-clamp bug killed it).
-    private const float EnergyPerStrength = 12f;   // strength 4 (default) → energy 48; strength 12 → 144
+    // SANE energy scale: the froxel fog is a SOFT base only (crisp beams come from the screen-space
+    // layer). energy 84 (the earlier 7×12) whitewashed the whole frame — outdoor froxel fog blows out
+    // fast (Godot docs: "open outdoor areas tend to look hazy"). Keep the multiplier low.
+    private const float EnergyPerStrength = 1.0f;  // strength 4 (default) → energy 4; strength 12 → 12
     private float _strength = 4f;                  // UI "god ray strength" (lab_controls default)
 
     public GodRaysVolumetric()

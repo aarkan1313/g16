@@ -27,7 +27,8 @@ uniform float ground_y = 250.0;         // cloud-bake ground reference (CloudVol
 uniform vec3 sun_dir = vec3(0.0, 1.0, 0.0);   // direction TOWARD the sun (normalized, world) — sun_dir.y > 0
 
 uniform vec3 fog_tint : source_color = vec3(1.0, 0.97, 0.92);   // warm single-scatter ALBEDO of the shaft air
-uniform float base_density = 0.02;       // LOW: fog everywhere but thin enough to see through; only shafts pop
+uniform float base_density = 0.006;      // VERY LOW: this is a SOFT atmospheric base only (crisp beams come
+                                         // from the screen-space layer). Outdoor froxel fog blows out fast.
 uniform float height_base = 120.0;       // altitude where haze is densest (valley floor / terrain mid)
 uniform float height_falloff = 1600.0;   // metres over which haze thins upward (tall → shafts have vertical reach)
 uniform float shadow_softness = 0.15;    // shadowed air keeps this fraction lit (soft shaft shoulders, not pure black)
