@@ -84,6 +84,31 @@ density field + lighting stay identical (reuse). Coupling guarantee unchanged (s
 
 ---
 
+## E. Deck vertical structure / meteorological realism (RESEARCH item — user-flagged 2026-06-18)
+
+Observation (user, during review): real clouds within a type are NOT at one fixed altitude — they
+have a vertical DISTRIBUTION; "each deck should have a range of elevations the clouds can be in."
+Currently a deck is a flat slab: `altitude` (base) + `thickness`, so cloud BASES are a perfect
+plane and the deck sits in one rigid band. The realism gap is real; this is a research + design
+pass (not blocking — per-deck lighting itself works).
+
+Meteorological grounding (to inform it):
+- Altitude tiers: LOW <2 km (cumulus/stratus/stratocumulus), MID 2–7 km (alto-), HIGH 5–13 km
+  (cirrus). Our decks ≈ these tiers — keep that mapping.
+- Cumulus BASES are ~flat in a region (form at the lifting-condensation level ≈ constant) — so a
+  flat base is partly correct; the missing realism is in the TOPS and the across-region variation.
+- TOPS vary hugely: flat fair-weather cumulus → towering congestus → cumulonimbus spanning low→high.
+
+Candidate levers (cheap; mostly shape, empty-skip absorbs the wider span — NOT a big perf cost):
+1. **Base undulation** — modulate a deck's base by a low-freq noise (±100–300 m) so it's not a plane.
+2. **Per-clump top/height variation** within the deck (towering vs flat clumps side by side).
+3. **Weather-field-driven base offset per region** (add a base-height channel, like coverage/type
+   already drive density/kind) → different regions sit at different heights.
+4. **Vertical-development clouds** — a deck with large thickness + strong type→height so towers punch up.
+5. Possibly a richer taxonomy: the 3 tiers × types as authored deck presets.
+Approach when picked up: a short research pass (deep-research skill or meteorology refs) → brainstorm
+→ spec, since it touches the density model in all 3 coupled shaders (keep `--shadowcheck` PASS).
+
 ## D. Health / regression guards (run after any density-affecting change)
 
 - `--shadowcheck --coverage=0.5` → must PASS (Pearson r>0.6); proves the 3 density shaders stay
