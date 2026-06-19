@@ -25,7 +25,7 @@ public partial class TerrainLabUI : Control
     {
         // "god rays" toggle now drives the volumetric FogVolume system (redesign 2026-06-18),
         // unifying what used to be two knobs (Light-tab uniform fog + in-cloud in-scatter).
-        if (knob == "godrays") { _godrays?.SetEnabled(on); return; }
+        if (knob == "godrays") { _godrays?.SetEnabled(on); _cloud?.SetGodraysEnabled(on); return; }
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)
         _cloud?.SetKnobBool(knob, on);
         // clouds-enabled also gates the ground-shadow sampling in the terrain light()

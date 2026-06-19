@@ -102,9 +102,11 @@ public partial class TerrainLabUI : Control
         {
             GetNode("/root/TerrainLabRoot").AddChild(_godrays);
             _godrays.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
-                            GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
+                            GetNode<Camera3D>("/root/TerrainLabRoot/Camera"),
+                            GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
             _godrays.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
-            _godrays.SetGroundHeight(_terrain.MidHeight);
+            // shafts project cloud gaps from the cloud deck altitude (terrain mid + cloud base height).
+            _godrays.SetCloudHeight(_terrain.MidHeight + _cloud.Params.AltitudeM);
         }
 
         // cloud CLI overrides apply here (after attach, so _cloud is live)

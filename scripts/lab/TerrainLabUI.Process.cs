@@ -43,11 +43,15 @@ public partial class TerrainLabUI : Control
         sun.LightEnergy = _baseSunEnergy * k;                                // direct sun DOWN under cloud
         // fog only tints toward the cloud-grey when actually overcast (oc~0 → no tint shift).
         env.FogLightColor = _baseFogColor.Lerp(_cloud.SkyHorizonColor, 0.55f * oc);
-        // God-ray scatter energy only matters (and only written) when god rays are on.
+        // God-ray scatter energy only matters (and only written) when god rays are on. CANONICAL:
+        // the shaft brightness is sun.LightVolumetricFogEnergy × the thin medium, so this rides in
+        // the high range (GodRays sets ~64 baseline). Scale by a broken-cloud bell curve (peaks at
+        // ~50% coverage = the most dramatic mix of gaps + clouds), but never below a floor so clear
+        // skies still show soft shafts. oc≈0 (clear) → floor; oc≈0.5 → full.
         if (_cloud.GodraysOn)
         {
-            float broken = 4f * oc * (1f - oc);   // bell curve, max at oc=0.5 (broken cloud)
-            sun.LightVolumetricFogEnergy = Mathf.Lerp(0.5f, 12f, broken);
+            float broken = 4f * oc * (1f - oc);            // 0 at clear/overcast, 1 at half cover
+            sun.LightVolumetricFogEnergy = Mathf.Lerp(40f, 110f, broken);
         }
     }
 

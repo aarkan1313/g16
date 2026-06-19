@@ -100,7 +100,9 @@ public partial class TerrainLabUI : Control
             case "fog_aerial":      env.FogAerialPerspective = v; break;
             case "fog_heightd":     env.FogHeightDensity = v; break;
             case "exposure":        env.TonemapExposure = v; break;
-            case "volfog_d":        env.VolumetricFogDensity = v; break;
+            // While god rays own the base volfog (forced ~0 so it doesn't wash the shafts),
+            // this slider must not write the live env — route it to the restore-target instead.
+            case "volfog_d":        if (_godrays == null || !_godrays.RedirectBaseDensity(v)) { env.VolumetricFogDensity = v; } break;
             // (Light-tab "godray power" retired 2026-06-18 — god rays are now the unified
             //  cloud-occluded FogVolume system in the Clouds tab; see godray-redesign-spec.md)
         }
