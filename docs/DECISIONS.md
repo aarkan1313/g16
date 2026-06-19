@@ -6,6 +6,30 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-19 — Terrain LOD roadmap SPEC'd (CDLOD), built around the WG1-15 clipmap post-mortem.**
+The terrain is one 2048² PlaneMesh (4M verts, no LOD) = the ~3.8 ms perf floor + ×4 shadow redraw, and
+the keystone streaming/erosion-E4/world-editing/flora need. PARKED for a roadmap because **clipmap
+killed WG1-15** — user post-mortem: the killer was **elevation + quality POPS** (vertices snapping to
+new heights + detail quality jumping at LOD transitions), i.e. missing *continuous* LOD, NOT the
+topology. So the arc is anchored on POP-FREE CONTINUOUS LOD (geomorph + detail cross-fade), chosen
+approach **CDLOD (quadtree + per-vertex geomorph)** — the AAA heightfield standard whose purpose is
+killing pops; stable world-XZ tiles fit WG16's per-region systems (clipmap's moving rings don't).
+Staged T1 (prove pop-free on the fixed region — THE gate) → T2 (tiles) → T3 (streaming), each
+eye-gated; T1 gates the rest (anti-WG1-15: no infra before the core technique is proven). NOT
+scheduled — spec only. `specs/2026-06-18-terrain-lod-roadmap-design.md`; memory `terrain-clipmap-killed-wg1-15`.
+
+**2026-06-19 — Performance pass: code-efficiency wins, not quality cuts (user push).** Profiled +
+decomposed the frame (added `--sdfgi` probe). Found anti-repetition ~3.4 ms, the un-LOD'd mesh ~3.8 ms
+floor, shadows ~2 ms; SDFGI/SSAO surprisingly ~free. Landed, all look-preserving (verified): **branched
+triplanar** (skip <0.4% triplanar planes), **AR on albedo-only** (normal/rough → plain triplanar),
+`light()` **`pow→`5-muls**, **cloud GC** (cache compute uniform sets + alloc-free `Std430Writer` → kill
+~400 byte[]/frame + per-frame UniformSetCreate), **16-bit half noise/weather volumes** (cloudstats
+byte-identical), **MSAA 4×→2×**. Net **baseline ~9.7→5.6 ms, clouds-on ~12.4→7 ms**. **TRIED & REVERTED**
+the cheap sun light-march (detail volume is cache-resident → ~0 gain, darkened clouds 6%). The mesh floor
+is OUT of this pass (→ terrain LOD roadmap). ⚠ AA (off/FXAA/TAA) + temporal-default 1→3 flagged for the
+user's in-motion review. Earlier this session: split the 1229-line `TerrainLabUI.cs` into responsibility
+partials (zero behavior change). See `docs/performance.md`.
+
 **2026-06-18 — Cloud feature-by-feature review pass (live, user-driven).** Outcomes:
 (1) **Dome res / texel crawl** — 512×128 was pixelly looking up (zenith) + crawling squares on
 moving edges. Fixed CHEAPLY (no view-space rewrite): a 5-tap softened dome sample in

@@ -79,40 +79,47 @@ Run a scene (always `--rendering-driver vulkan`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-18)
-> **Status:** base field proven (no bake); LIGHTING "really good". **GROUND TEXTURING** rebuild
-> in progress (Unit 1 anti-repetition APPROVED by user → the gate for units 2-6 is passed;
-> units 2-6 PLANNED, not built). **CLOUDS** heavily reworked + reviewed live this session.
+> ### ⮕ START HERE (2026-06-19)
+> **Status:** base field proven (no bake); LIGHTING "really good"; CLOUDS reworked + reviewed good.
+> Last sessions did a **god-ray redesign (paused)**, a **performance pass (big terrain/cloud wins)**,
+> and **spec'd the terrain-LOD roadmap**. **⮕ NEXT = back to GROUND TEXTURES (the ground-presentation
+> arc, Unit 2 — distance detail).**
 >
-> **CLOUDS — current state (cloud-polish session 2026-06-18; see DECISIONS 2026-06-18,
-> `docs/cloud-system-overview.md`, `docs/cloud-next-steps.md`):** the prior audit's "already
-> fixed" lighting was BUGGY. This session found + fixed the real root causes (premultiplied-
-> composite double-alpha ~2× dim; sun-extinction crushing direct light → ambient-only mush;
-> dead weather macro-octave + mean 0.32 → sparse/non-intuitive coverage; giant cloud scale)
-> — plus gradient base noise, direct+fill multi-scatter, 2-octave erosion. THAT is what made
-> the clouds read good. Then finished the cloud roadmap **#1-#6, each behind a toggle defaulting
-> to the validated look**: per-deck lighting, presets→layer stack (`SetLayers`/`SetLayerWeight`),
-> coherent randomize, temporal amortization, configurable dome res (`--cloudtex`), in-march god
-> rays. Coupling PROVEN via `--shadowcheck` (PASS at every density change). New diagnostics:
-> `--cloudstats` (dome readback), `--lightcheck`, `--auto-shot` self-screenshots. Cloud render
-> ~1.3 ms (512×128 base; default raised to 1024×256 + softened sky sample after review). **Lab menu
-> complete + correctly linked.** REVIEW IN PROGRESS (2026-06-18): per-deck, presets (Clear sky
-> brightened, Stormy darkened), sun-disc dimming bug, overcast (now its own knob that greys the sky)
-> all done; **view-space rewrite NO LONGER needed** (softening fixed zenith pixelation + motion crawl).
-> ⮕ NEXT review items: god rays, temporal, randomize. See `docs/cloud-next-steps.md` (REVIEW STATUS)
-> + memory `cloud-lighting-model` (clouds dim ground / brighten sky — physical, not a bug).
-> **Infra lessons (memory):** `cloud-look-real-rootcauses` (THE root causes + the diagnostics),
-> `std430-packing-helper`, `cloud-look-audit-findings`, `wg16-launch-absolute-path`.
+> **PERFORMANCE PASS (2026-06-19; see `docs/performance.md`):** profiled + decomposed the frame, then
+> landed CODE-efficiency wins (NOT quality cuts): branched triplanar (skip ~0 triplanar planes),
+> anti-repetition on albedo-only (normal/rough use plain triplanar), `light()` `pow→`5-muls, cloud
+> compute GC (cached uniform sets + alloc-free `Std430Writer` → no per-frame churn), 16-bit half
+> noise/weather volumes, MSAA 4×→2×. **Baseline frame ~9.7→~5.6 ms, clouds-on ~12.4→~7 ms, zero look
+> change.** Tried + REVERTED the "cheap sun light-march" (cache-resident → no gain, darkened clouds).
+> ⚠ **AA REVIEW NEEDED (user, in motion):** MSAA is at safe 2×; off/FXAA/TAA are bigger but risk
+> crawl/shimmer/cloud-ghosting — see performance.md. Also flagged: cloud temporal default 1→3 (validated).
+>
+> **TERRAIN LOD — SPEC'D, not scheduled (`docs/superpowers/specs/2026-06-18-terrain-lod-roadmap-design.md`,
+> ROADMAP "⛰ TERRAIN LOD" arc):** the terrain is ONE 2048² PlaneMesh (4M verts, no LOD) = the ~3.8 ms
+> "floor" + a ×4 shadow redraw — PARKED for its roadmap because **clipmap killed WG1-15** via ELEVATION
+> + QUALITY POPS (memory `terrain-clipmap-killed-wg1-15`). Chosen approach **CDLOD (quadtree + per-vertex
+> geomorph + detail cross-fade)** — pop-free is the gate; staged T1 (prove on fixed region) → T2 (tiles)
+> → T3 (streaming). Do NOT add a clipmap or touch the mesh-LOD without that roadmap.
+>
+> **GOD RAYS — Component A built, PAUSED (other thread; `godray-redesign-spec.md`):** unified the two
+> old god-ray knobs into one cloud-occluded VOLUMETRIC system — a FogVolume (`GodRays.cs` +
+> `shaders/godray_fog.gdshader`) that samples the cloud shadow map by world-XZ so air glows through
+> cloud gaps. Reads as a soft sun-ward glow (froxel fog can't do knife-edge shafts — Component B
+> screen-space radial is the crisp layer, not built). WIP committed in the checkpoint tag. Default OFF.
+>
+> **CLOUDS — reviewed good (cloud-polish + review, 2026-06-18; `cloud-system-overview.md`,
+> `cloud-next-steps.md`):** root-cause fixes (premult double-alpha, sun-extinction, weather, scale) made
+> them read good; roadmap #1-#6 built behind toggles; coupling PROVEN (`--shadowcheck`). Review DONE:
+> per-deck, presets, sun-disc bug, overcast-as-knob, dome-res (view-space NOT needed), temporal (3 fine),
+> randomize. Memory: `cloud-lighting-model` (clouds dim ground / brighten sky — physical, not a bug),
+> `cloud-look-real-rootcauses`, `std430-packing-helper`, `wg16-launch-absolute-path`.
 >
 > **⚠ STILL WANTS THE USER'S EYE (live in `scenes/terrain_lab.tscn`):**
-> 1. **Ground Unit 1 — anti-repetition** — APPROVED. (Units 2-6 are the next ground work.)
-> 2. **H1 BRDF regression check** — clouds-off terrain vs the approved look (custom `light()`
->    = Burley+GGX replica; confirm no regression).
-> 3. **Cloud feature-by-feature review (NOW)** — the cloud roadmap is built behind toggles;
->    the user reviews each in motion (per-deck, presets/stack, god rays, temporal, hi-res). See
->    the toggle table in `docs/cloud-system-overview.md` and the prioritized `docs/cloud-next-steps.md`.
-> 4. **Cloud-presence** — overcast dimming + aerial tint + reflections + mood cloud color
->    (coherence pass now that the look polish has landed).
+> 1. **AA in motion** — MSAA off vs FXAA vs TAA vs the current safe 2× (perf vs crawl/shimmer/ghosting).
+> 2. **H1 BRDF regression check** — clouds-off terrain vs the approved look (custom `light()` =
+>    Burley+GGX replica; confirm no regression — note the perf pass touched the terrain shader, all
+>    bit-near-identical, but an eye-confirm is owed).
+> 3. **God rays** (when un-paused) — the soft volumetric base, then Component B for crisp shafts.
 >
 > **ACTIVE WORK = the GROUND-PRESENTATION ARC** (the current focus; see DECISIONS 2026-06-17
 > + `docs/superpowers/specs/2026-06-17-ground-presentation-arc-design.md`). 6-unit rebuild
