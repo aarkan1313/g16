@@ -53,7 +53,16 @@ void sky(){
 
     vec3 outColor = bg;
     if (cloud_enabled && rd.y > 0.0){
-        vec4 c = texture(cloud_rd_tex, dir_to_uv(rd));
+        // SOFTENED dome sample: a 5-tap rotated-cross blur (~0.75 texel) damps the lat-long
+        // texel-grid CRAWL on moving cloud edges (the "squares as it moves" artifact) without
+        // any temporal history (so no ghosting during flight). Cheap — this is the light sky pass.
+        vec2 uv = dir_to_uv(rd);
+        vec2 tx = 0.75 / vec2(textureSize(cloud_rd_tex, 0));
+        vec4 c = texture(cloud_rd_tex, uv) * 0.40
+               + texture(cloud_rd_tex, uv + vec2( tx.x,  tx.y)) * 0.15
+               + texture(cloud_rd_tex, uv + vec2(-tx.x,  tx.y)) * 0.15
+               + texture(cloud_rd_tex, uv + vec2( tx.x, -tx.y)) * 0.15
+               + texture(cloud_rd_tex, uv + vec2(-tx.x, -tx.y)) * 0.15;
         if (cloud_debug == 1){ outColor = c.rgb; }
         // PREMULTIPLIED over-composite. The raymarch accumulates `scattered` front-to-back
         // (scattered += T*lum*(1-beer)) so c.rgb is ALREADY weighted by coverage/transmittance.
