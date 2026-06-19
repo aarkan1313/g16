@@ -105,18 +105,18 @@ public partial class CloudVolume : Node
         GD.Print($"CloudVolume: resources baked (weather mean {_weatherMean:F2})");
     }
 
-    /// 0 = clear sky, 1 = fully overcast. CPU proxy driving overcast sun/ambient dimming +
-    /// aerial tint (no GPU readback). RECALIBRATED to the new threshold-coverage scale: with
-    /// thresh = mix(0.92, 0.02, coverage), low coverage is a genuinely SPARSE sky, so the
-    /// overcast proxy must stay ~0 until coverage is high — otherwise the sun dims + the fog
-    /// tints over a near-clear sky (the "sun is a light behind fog even with no cloud there"
-    /// bug). Only the coverage KNOB drives this now (not the field mean — the field is
-    /// zero-centred and just spatial variance, it shouldn't bias the global dimming).
+    /// The overcast MOOD amount (0 clear → 1 full gloom): drives the diffuse-grey ambient dim +
+    /// aerial fog tint (CPU proxy, no GPU readback). REALITY-ish + TUNABLE (user ask 2026-06-18):
+    /// the gloom scales GRADUALLY with how much sky is covered (a gentle power curve — partly-cloudy
+    /// barely dims, the grey flatness builds toward full cover) — NO hard threshold — times the
+    /// `overcast_strength` knob so it's a controllable dial, not an automatic hard ramp. The future
+    /// weather/biome system can drive the strength. (The sun DISC is decoupled — SetSunDiscEnergy —
+    /// so this never dims the visible sun in a gap.)
+    private float _overcastStrength = 0.7f;
     public float Overcast()
     {
         if (!_enabled) { return 0f; }
-        // sparse (cov<=0.55) → 0 overcast; ramps to full only as coverage approaches overcast.
-        return Mathf.SmoothStep(0.55f, 0.9f, _p.Coverage);
+        return Mathf.Pow(Mathf.Clamp(_p.Coverage, 0f, 1f), 1.8f) * _overcastStrength;
     }
 
     private void BuildSkyMaterial()
@@ -476,6 +476,7 @@ public partial class CloudVolume : Node
             case "cell_scale":      _cellScale = v; break;        // clump scale (anti-slab; higher = smaller clumps)
             case "godray_strength": _godrayStrength = v; break;
             case "perdeck":         _perDeck = Mathf.Clamp(v, 0f, 1f); break;   // 0=global lighting, 1=per-deck
+            case "overcast_strength": _overcastStrength = Mathf.Max(0f, v); break;   // overcast gloom dial
         }
     }
 
