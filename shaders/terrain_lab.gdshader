@@ -41,6 +41,20 @@ uniform float ar_strength : hint_range(0.0, 1.0) = 1.0;  // blend toward bombed 
 uniform float ar_far_m : hint_range(200.0, 6000.0) = 2500.0; // distance where AR fades to cheap
 uniform vec3 cam_world = vec3(0.0);    // camera world pos (pushed from C#) for distanceWeight
 
+// --- Distance detail layering (Unit 2) --------------------------------------
+// Near detail = the SAME material textures resampled at a finer world->uv scale
+// (tex_scale_m / detail_scale), still through ar_sample_wp (inherits Unit-1
+// bombing), cross-faded into the macro sample by (1 - distanceWeight) shaped by
+// detail_dist. A high-freq detail-normal is DERIVED from the detail albedo
+// luminance gradient (no new asset/fetch). Off => pixel-identical to current.
+// DEFAULT OFF: Unit 2 isn't user-approved yet, so startup keeps the approved
+// (Unit-1-only) look; the Detail-tab toggle / --detail=1 turn it on to judge.
+uniform bool detail_on = false;           // master toggle for distance detail
+uniform float detail_strength : hint_range(0.0, 1.0) = 0.6;  // near detail blend amount
+uniform float detail_scale : hint_range(2.0, 16.0) = 6.0;    // finer = tex_scale_m / this
+uniform float detail_dist : hint_range(0.05, 1.0) = 0.1;     // fraction of ar_far_m over which detail fades out (0.1*2500 ≈ 250m near band; "near" detail should be genuinely near)
+uniform float detail_nrm_amp : hint_range(0.0, 2.0) = 0.8;   // derived detail-normal strength
+
 // mask_mode: 0 height bands | 1 height+slope | 2 noise-broken bands |
 //            3 curvature-aware (dirt in hollows) | 4 steep=cliff sharp |
 //            5 world-noise biome patches
@@ -235,6 +249,14 @@ vec4 tiled(sampler2D tex, vec2 uv){
 float distanceWeight(vec3 wp){
     float d = length(wp - cam_world);
     return clamp(d / ar_far_m, 0.0, 1.0);
+}
+
+// Near-detail blend factor: 1 at the camera, 0 by detail_dist*ar_far_m. Shares
+// distanceWeight's normalization so the detail band scales with ar_far_m.
+float detailWeight(vec3 wp){
+    float far = distanceWeight(wp);                 // 0 near .. 1 far
+    float k = 1.0 - smoothstep(0.0, max(detail_dist, 1e-3), far);
+    return clamp(k, 0.0, 1.0);
 }
 
 vec3 tri_w(vec3 nr){ vec3 bw=pow(abs(nr),vec3(tri_sharpness)); return bw/(bw.x+bw.y+bw.z); }
@@ -463,17 +485,76 @@ float tp_rgh_plain(sampler2D t, vec3 wp, vec3 nr){
     if(bw.z>TRI_EPS) r+=tap_plain(t,wp.xy/tex_scale_m).r*bw.z;
     return r;
 }
+// --- Unit 2: distance detail ------------------------------------------------
+// Macro (existing branched ar_sample_wp scale) (+) near detail (finer scale),
+// both through ar_sample_wp so each inherits Unit-1 bombing. Branched on TRI_EPS
+// exactly like tp_alb so detail-off == current (perf pass preserved). The detail
+// is added as the detail tap's deviation from ITS OWN luma (not a constant 0.5),
+// so it layers high-freq contrast WITHOUT shifting macro brightness for dark/light
+// materials (audit M1). Crossfaded by detailWeight. detail_on=false ⇒ exactly tp_alb.
+vec3 detail_alb(sampler2D t, vec3 wp, vec3 nr){
+    vec3 bw=tri_w(nr);
+    vec3 macro=vec3(0.0);
+    if(bw.x>TRI_EPS) macro+=ar_sample_wp(t,wp.zy/tex_scale_m,wp).rgb*bw.x;
+    if(bw.y>TRI_EPS) macro+=ar_sample_wp(t,wp.xz/tex_scale_m,wp).rgb*bw.y;
+    if(bw.z>TRI_EPS) macro+=ar_sample_wp(t,wp.xy/tex_scale_m,wp).rgb*bw.z;
+    if(!detail_on) return macro;
+    float dw=detailWeight(wp);
+    if(dw<0.001) return macro;                      // far: skip the extra taps
+    float ds=tex_scale_m/max(detail_scale,1e-3);    // finer world->uv scale
+    vec3 det=vec3(0.0);
+    if(bw.x>TRI_EPS) det+=ar_sample_wp(t,wp.zy/ds,wp).rgb*bw.x;
+    if(bw.y>TRI_EPS) det+=ar_sample_wp(t,wp.xz/ds,wp).rgb*bw.y;
+    if(bw.z>TRI_EPS) det+=ar_sample_wp(t,wp.xy/ds,wp).rgb*bw.z;
+    float detLuma=dot(det,vec3(0.299,0.587,0.114));
+    vec3 over=macro+(det-vec3(detLuma))*(detail_strength*dw);
+    return clamp(over,0.0,1.0);
+}
+
+// Macro normal-map (-1..1) + a derived high-freq bump near the camera. The MACRO
+// normal uses the SAME plain branched taps as tp_nrm (perf pass: normal is NOT
+// bombed — averaging tangent normals flattens detail; matte ground at distance
+// hides normal tiling), so detail-off == current. The bump's slope = luminance
+// gradient of the finer ALBEDO tap, taken from EXPLICIT offset taps (textureGrad),
+// NOT dFdx of an ar_sample_wp result — the latter crawls at the bombing's tile
+// seams (audit H1). Un-normalized: fragment() only consumes .xy.
+vec3 detail_nrm(sampler2D albT, sampler2D nrmT, vec3 wp, vec3 nr){
+    vec3 bw=tri_w(nr);
+    vec3 mraw=vec3(0.0);                            // macro normal raw 0..1 (== tp_nrm)
+    if(bw.x>TRI_EPS) mraw+=tap_plain(nrmT,wp.zy/tex_scale_m).rgb*bw.x;
+    if(bw.y>TRI_EPS) mraw+=tap_plain(nrmT,wp.xz/tex_scale_m).rgb*bw.y;
+    if(bw.z>TRI_EPS) mraw+=tap_plain(nrmT,wp.xy/tex_scale_m).rgb*bw.z;
+    vec3 macroN=mraw*2.0-1.0;
+    if(!detail_on) return macroN;
+    float dw=detailWeight(wp);
+    if(dw<0.001) return macroN;
+    float ds=tex_scale_m/max(detail_scale,1e-3);
+    // dominant triplanar plane drives the bump (cheap, avoids 3x derivative work)
+    vec2 duv = (bw.x>=bw.y && bw.x>=bw.z) ? wp.zy/ds
+             : (bw.y>=bw.z)               ? wp.xz/ds
+                                          : wp.xy/ds;
+    vec2 dx=dFdx(duv), dy=dFdy(duv);
+    float e=1.0/512.0;                              // small uv offset for the difference
+    float lC=dot(textureGrad(albT,duv,               dx,dy).rgb, vec3(0.299,0.587,0.114));
+    float lX=dot(textureGrad(albT,duv+vec2(e,0.0),   dx,dy).rgb, vec3(0.299,0.587,0.114));
+    float lY=dot(textureGrad(albT,duv+vec2(0.0,e),   dx,dy).rgb, vec3(0.299,0.587,0.114));
+    vec2 g=vec2(lX-lC,lY-lC)/e;                     // surface luminance slope
+    return vec3(macroN.xy - g*detail_nrm_amp*dw, macroN.z);
+}
+
 vec3 trip_alb_by(int z, vec3 wp, vec3 nr){
-    if(z==0) return tp_alb(z0_alb,wp,nr); if(z==1) return tp_alb(z1_alb,wp,nr);
-    if(z==2) return tp_alb(z2_alb,wp,nr); if(z==3) return tp_alb(z3_alb,wp,nr);
-    if(z==4) return tp_alb(z4_alb,wp,nr); if(z==5) return tp_alb(z5_alb,wp,nr);
-    return tp_alb(z6_alb,wp,nr);
+    if(z==0) return detail_alb(z0_alb,wp,nr); if(z==1) return detail_alb(z1_alb,wp,nr);
+    if(z==2) return detail_alb(z2_alb,wp,nr); if(z==3) return detail_alb(z3_alb,wp,nr);
+    if(z==4) return detail_alb(z4_alb,wp,nr); if(z==5) return detail_alb(z5_alb,wp,nr);
+    return detail_alb(z6_alb,wp,nr);
 }
 vec3 trip_nrm_by(int z, vec3 wp, vec3 nr){
-    if(z==0) return tp_nrm(z0_nrm,wp,nr); if(z==1) return tp_nrm(z1_nrm,wp,nr);
-    if(z==2) return tp_nrm(z2_nrm,wp,nr); if(z==3) return tp_nrm(z3_nrm,wp,nr);
-    if(z==4) return tp_nrm(z4_nrm,wp,nr); if(z==5) return tp_nrm(z5_nrm,wp,nr);
-    return tp_nrm(z6_nrm,wp,nr);
+    // detail_nrm returns -1..1; re-encode to 0..1 so fragment()'s *2-1 is correct.
+    // detail_on=false ⇒ detail_nrm == tp_nrm*2-1, so *0.5+0.5 round-trips to tp_nrm.
+    if(z==0) return detail_nrm(z0_alb,z0_nrm,wp,nr)*0.5+0.5; if(z==1) return detail_nrm(z1_alb,z1_nrm,wp,nr)*0.5+0.5;
+    if(z==2) return detail_nrm(z2_alb,z2_nrm,wp,nr)*0.5+0.5; if(z==3) return detail_nrm(z3_alb,z3_nrm,wp,nr)*0.5+0.5;
+    if(z==4) return detail_nrm(z4_alb,z4_nrm,wp,nr)*0.5+0.5; if(z==5) return detail_nrm(z5_alb,z5_nrm,wp,nr)*0.5+0.5;
+    return detail_nrm(z6_alb,z6_nrm,wp,nr)*0.5+0.5;
 }
 float trip_rgh_by(int z, vec3 wp, vec3 nr){
     if(z==0) return tp_rgh_plain(z0_rgh,wp,nr); if(z==1) return tp_rgh_plain(z1_rgh,wp,nr);
