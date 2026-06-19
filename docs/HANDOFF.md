@@ -79,7 +79,17 @@ Run a scene (always `--rendering-driver vulkan`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-19, refreshed — GROUND FOUNDATION pivot)
+> ### ⮕ START HERE (2026-06-19, refreshed — GROUND FOUNDATION pivot + PERF win)
+> **PERF (2026-06-19, user push "code not settings"):** static `--profile` was hiding the flying cost.
+> Added **`--profmove`** (orbit during profile) → found **SDFGI ≈12 ms IN MOTION** (≈0 static): it
+> re-voxelizes the 4M-vert un-LOD'd mesh as the camera moves (shadows +~3 ms the same way); frame is
+> geometry-bound (4K≈1440p). **Fix BUILT: GI/shadow PROXY** — a coarse 256² heightfield copy feeds
+> SDFGI + casts shadows while the detail mesh renders the view. In-motion 1440p **clouds-off 55→131,
+> clouds-on 49→101 fps**; GI retained. Toggle `GI/shadow proxy (perf)` (Debug) / `--giproxy=1`,
+> **DEFAULT OFF** pending the user's eye-gate on GI/shadow fidelity → then default ON. Restore tag
+> `backup-pre-gi-proxy-2026-06-19`. ALWAYS profile with `--profmove` now. Next mesh lever = CDLOD arc.
+>
+
 > **Status:** base field proven (no bake); LIGHTING "really good"; CLOUDS reworked + reviewed good.
 > Recent: god-ray redesign (paused), performance pass (big wins), terrain-LOD roadmap spec'd.
 > **This session: built ground Unit 2 (distance detail), then live judging exposed the real problem —

@@ -15,6 +15,15 @@ Last updated: 2026-06-19.
   tonemap, color grade, 6 curated MOOD presets. User: "really good."
 - **Material judging** — 738 → 108 accepted materials (the library; choices are fine).
 
+## ⚡ Perf (in-motion is the real metric — profile with `--profmove`)
+- **GI/shadow PROXY — BUILT 2026-06-19, default OFF, awaiting eye-gate.** Coarse 256² heightfield copy
+  feeds SDFGI + casts shadows so the 4M-vert detail mesh isn't re-voxelized/re-shadowed every frame in
+  motion. In-motion 1440p: clouds-off 55→131 fps, clouds-on 49→101 fps. `--giproxy=0/1` / Debug toggle.
+  ⚠ Eye-gate: confirm GI/shadow fidelity in motion, then default ON. (`docs/performance.md`, tag
+  `backup-pre-gi-proxy-2026-06-19`.)
+- **Lesson:** static `--profile` hid the flying cost (SDFGI converges when still); SDFGI ≈12 ms IN
+  MOTION re-voxelizing the un-LOD'd mesh. Always profile with `--profmove`. Next mesh lever = CDLOD arc.
+
 ## ⚠ Review state (live in `scenes/terrain_lab.tscn`)
 1. **Ground Unit 1 — anti-repetition** (Surface tab `anti-repeat`). REVIEWED → APPROVED by
    user. THE GATE for ground units 2-6 is passed.

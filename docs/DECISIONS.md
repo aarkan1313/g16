@@ -6,6 +6,20 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-19 — Perf: in-motion profiling correction + GI/shadow PROXY mesh (user push, "code not
+settings").** The user reported 30–120 fps flying at 1440p; static `--profile` showed 130–230 and
+hid it. Root cause: **static profiling lets SDFGI converge** — added `--profmove` (orbit during
+profile) and found **SDFGI costs ~12 ms IN MOTION** (≈0.2 ms static) because it re-voxelizes the
+4M-vert un-LOD'd mesh every frame the camera moves; shadows add ~3 ms the same way. Frame is
+geometry-bound (4K≈1440p), not pixel/fragment-bound. **Fix (the AAA/structural one, user's call):
+a coarse GI/shadow PROXY** — a 256² (~65k-vert) copy of the same heightfield feeds SDFGI
+(`GIMode Static`) + casts shadows (`ShadowsOnly`, invisible in colour) while the detail mesh renders
+the view (`GIMode Disabled`/`CastShadow Off`). GI/shadows are low-freq → need shape not fine verts.
+In-motion 1440p: clouds-off 55→131 fps, clouds-on 49→101 fps; GI retained (~1.7 ms vs ~12 ms).
+Behind `--giproxy`/Debug toggle, **DEFAULT OFF** (GI/shadow fidelity is the user's eye-gate; flip to
+default-on once approved). git restore point: tag `backup-pre-gi-proxy-2026-06-19`. Next mesh lever =
+the CDLOD arc. See `docs/performance.md`.
+
 **2026-06-19 — Ground-presentation arc REORDERED: build the placement+palette FOUNDATION first
 (user direction, live).** Flying the lab, the user judged the ground "doesn't look good enough to
 even judge detail" — "it's just random ground, never had real setup/masks/shaders other than the

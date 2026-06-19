@@ -10,7 +10,45 @@ Profiling probes: `--clouds=0/1`, `--godrays=0/1`, `--temporal=N`, `--cloudtex=H
 Caveat: the laptop GPU thermally throttles after many back-to-back runs — space runs out / trust
 reproduced numbers, and treat single wild outliers as hitches.
 
-## Results so far (terrain-filling view)
+## 2026-06-19 — IN-MOTION profiling (major correction) + GI/shadow proxy
+
+**The static `--profile` was measuring the wrong thing.** A still camera lets SDFGI converge,
+shadows settle, and cloud temporal idle — so it badly *understated* the real cost of FLYING. Added
+**`--profmove`** (orbits the camera during `--profile`) to capture motion cost. Reproduce:
+`--profmove --profile=4 [--clouds= --giproxy= --groundrules=]`.
+
+**In-motion decomposition (1440p, moving, clouds off):**
+
+| State | ms | fps | Δ vs baseline |
+|---|---|---|---|
+| baseline (moving) | 18.3 | 55 | — |
+| `--sdfgi=0` | 6.1 | 163 | **SDFGI ≈ 12 ms IN MOTION** (≈0.2 ms static!) |
+| `--shadow=0` | 15.3 | 65 | shadows ≈ 3 ms moving |
+| sdfgi+shadow off | 3.9 | 257 | — |
+
+**Root cause:** SDFGI re-voxelizes — and shadows re-raster — the **4M-vertex un-LOD'd mesh** every
+frame as the camera translates. Resolution barely matters (4K ≈ 1440p) → the frame is
+**geometry/CPU-bound, not pixel-bound**. This (not the fragment shader) is the flying-fps problem,
+and explains the 30–120 swing (slow look ≈ 120, fast fly ≈ 30 — the SDFGI revoxelization signature).
+
+**Fix landed — GI/shadow PROXY mesh** (`TerrainLab.SetGiProxy`; toggle "GI/shadow proxy (perf)" on
+the Debug tab + `--giproxy=0/1`, **default OFF** pending the user's eye-gate on GI/shadow fidelity):
+a coarse 256² (~65k-vert) copy of the *same* heightfield feeds SDFGI (`GIMode Static`) + casts
+shadows (`ShadowsOnly`, invisible in colour); the 4M-vert detail mesh renders the view only
+(`GIMode Disabled`, `CastShadow Off`). GI/shadows are low-frequency → they need terrain *shape*, not
+fine verts. SDFGI/shadow passes process ~60× less geometry.
+
+| In-motion 1440p (rule on) | proxy OFF | proxy ON |
+|---|---|---|
+| clouds off | 55 fps (18.3 ms) | **131 fps (7.6 ms)** |
+| clouds on  | 49 fps (20.5 ms) | **101 fps (9.9 ms)** |
+
+GI is **retained, not dropped**: proxy-on SDFGI still costs ~1.7 ms (vs ~12 ms full mesh, ~0 fully
+off). Reuses `_mat` so GI bounce colour stays accurate. Static A/B shots identical (no z-fight, proxy
+not visible). ⚠ **Look eye-gate owed:** confirm GI/shadow fidelity in motion before defaulting ON.
+Next perf lever after this is the same mesh's raster/vertex floor → the CDLOD terrain-LOD arc.
+
+## Results so far (terrain-filling view, STATIC — see in-motion section above for the real flying cost)
 
 | State | Before | After | Δ |
 |---|---|---|---|
