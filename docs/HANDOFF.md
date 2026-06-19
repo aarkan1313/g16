@@ -87,10 +87,23 @@ Run a scene (always `--rendering-driver vulkan`):
 > So we **reordered the ground arc: build the placement+palette FOUNDATION first** (rule-based
 > splatting), then resume the detail units on top. Unit 2 is **BUILT, default OFF, SHELVED** until the
 > foundation reads good.
-> **⮕ NEXT = GROUND FOUNDATION G1** (signals + rule engine in the splat bake). Spec:
-> `docs/superpowers/specs/2026-06-19-ground-foundation-splatting-design.md`; plan (when written):
-> `docs/superpowers/plans/2026-06-19-ground-foundation-g1-*.md`. Perf target the user set: **160+ fps
-> final**; baseline this session (lab window) clouds-off 227 fps/4.4 ms, clouds-on 156 fps/6.4 ms.
+> **⮕ GROUND FOUNDATION G1 — BUILT + mechanically verified (2026-06-19); awaiting the USER's LIVE
+> EYE-GATE (user couldn't do visual checks this session).** Spec:
+> `docs/superpowers/specs/2026-06-19-ground-foundation-splatting-design.md`; plan:
+> `docs/superpowers/plans/2026-06-19-ground-foundation-g1-rule-engine.md` (all 7 tasks done except the
+> live gate). G1 = `role_weights()` rule engine in the splat bake (signal-driven placement by
+> altitude/slope/signed-curvature; runner-up ROLE becomes the baked secondary; fragment now READS
+> `splat.g` — it previously ignored it for a fixed `sec_zone[dom]` lookup). Behind a **`rule placement`
+> toggle (Splat tab, default OFF = current look)** + `--groundrules=0/1`; placement breakpoints promoted
+> to **live re-bake sliders** (valley/alpine/snow line, rock slope lo/hi, band soft, curve split).
+> **Mechanical verify PASSED:** builds/imports/bake-runs; toggle+CLI work; perf NEUTRAL (baked-once:
+> ~220 legacy vs ~233 rule fps); zone-debug A/B (`C:/tmp/g1_zones_{legacy,rule}.png`) proves placement
+> meaningfully changed + coherent (rock confined to steep/convex, gentle ground stays green). **NOT
+> judged: whether it reads good — that's the user's eye-gate (G1 plan Task 7), at close/mid/far.**
+> ⚠ Pre-existing (NOT G1) startup noise seen clouds-off: `Texture (binding 1/24) not valid` /
+> `Parameter "us" is null` — identical in legacy+rule runs, bake succeeds after; unrelated, flagged.
+> **⮕ NEXT:** user flies G1 → on approval, write the **G2 plan** (curated palette: `ground_palette.json`
+> + per-role dropdowns). Perf target: **160+ fps final**; baseline clouds-off 227/4.4 ms, on 156/6.4 ms.
 >
 > **PERFORMANCE PASS (2026-06-19; see `docs/performance.md`):** profiled + decomposed the frame, then
 > landed CODE-efficiency wins (NOT quality cuts): branched triplanar (skip ~0 triplanar planes),
