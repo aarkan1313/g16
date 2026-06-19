@@ -441,6 +441,28 @@ float tp_rgh(sampler2D t, vec3 wp, vec3 nr){
     if(bw.z>TRI_EPS) r+=ar_sample_wp(t,wp.xy/tex_scale_m,wp).r*bw.z;
     return r;
 }
+// PLAIN branched triplanar (no anti-repetition bombing) for NORMAL + ROUGHNESS. The
+// histogram-preserving multi-tap exists to hide ALBEDO (color) tiling, which the eye
+// catches; normal/roughness tiling under a matte ground BRDF at terrain distances is
+// imperceptible, AND averaging tangent-space normals actually flattens detail. So these
+// take ONE tap per (branched) plane instead of ar_sample_wp's 4 (perf pass 2026-06-18).
+vec4 tap_plain(sampler2D t, vec2 uv){ return textureGrad(t, uv, dFdx(uv), dFdy(uv)); }
+vec3 tp_nrm(sampler2D t, vec3 wp, vec3 nr){
+    vec3 bw=tri_w(nr);
+    vec3 c=vec3(0.0);
+    if(bw.x>TRI_EPS) c+=tap_plain(t,wp.zy/tex_scale_m).rgb*bw.x;
+    if(bw.y>TRI_EPS) c+=tap_plain(t,wp.xz/tex_scale_m).rgb*bw.y;
+    if(bw.z>TRI_EPS) c+=tap_plain(t,wp.xy/tex_scale_m).rgb*bw.z;
+    return c;
+}
+float tp_rgh_plain(sampler2D t, vec3 wp, vec3 nr){
+    vec3 bw=tri_w(nr);
+    float r=0.0;
+    if(bw.x>TRI_EPS) r+=tap_plain(t,wp.zy/tex_scale_m).r*bw.x;
+    if(bw.y>TRI_EPS) r+=tap_plain(t,wp.xz/tex_scale_m).r*bw.y;
+    if(bw.z>TRI_EPS) r+=tap_plain(t,wp.xy/tex_scale_m).r*bw.z;
+    return r;
+}
 vec3 trip_alb_by(int z, vec3 wp, vec3 nr){
     if(z==0) return tp_alb(z0_alb,wp,nr); if(z==1) return tp_alb(z1_alb,wp,nr);
     if(z==2) return tp_alb(z2_alb,wp,nr); if(z==3) return tp_alb(z3_alb,wp,nr);
@@ -448,16 +470,16 @@ vec3 trip_alb_by(int z, vec3 wp, vec3 nr){
     return tp_alb(z6_alb,wp,nr);
 }
 vec3 trip_nrm_by(int z, vec3 wp, vec3 nr){
-    if(z==0) return tp_alb(z0_nrm,wp,nr); if(z==1) return tp_alb(z1_nrm,wp,nr);
-    if(z==2) return tp_alb(z2_nrm,wp,nr); if(z==3) return tp_alb(z3_nrm,wp,nr);
-    if(z==4) return tp_alb(z4_nrm,wp,nr); if(z==5) return tp_alb(z5_nrm,wp,nr);
-    return tp_alb(z6_nrm,wp,nr);
+    if(z==0) return tp_nrm(z0_nrm,wp,nr); if(z==1) return tp_nrm(z1_nrm,wp,nr);
+    if(z==2) return tp_nrm(z2_nrm,wp,nr); if(z==3) return tp_nrm(z3_nrm,wp,nr);
+    if(z==4) return tp_nrm(z4_nrm,wp,nr); if(z==5) return tp_nrm(z5_nrm,wp,nr);
+    return tp_nrm(z6_nrm,wp,nr);
 }
 float trip_rgh_by(int z, vec3 wp, vec3 nr){
-    if(z==0) return tp_rgh(z0_rgh,wp,nr); if(z==1) return tp_rgh(z1_rgh,wp,nr);
-    if(z==2) return tp_rgh(z2_rgh,wp,nr); if(z==3) return tp_rgh(z3_rgh,wp,nr);
-    if(z==4) return tp_rgh(z4_rgh,wp,nr); if(z==5) return tp_rgh(z5_rgh,wp,nr);
-    return tp_rgh(z6_rgh,wp,nr);
+    if(z==0) return tp_rgh_plain(z0_rgh,wp,nr); if(z==1) return tp_rgh_plain(z1_rgh,wp,nr);
+    if(z==2) return tp_rgh_plain(z2_rgh,wp,nr); if(z==3) return tp_rgh_plain(z3_rgh,wp,nr);
+    if(z==4) return tp_rgh_plain(z4_rgh,wp,nr); if(z==5) return tp_rgh_plain(z5_rgh,wp,nr);
+    return tp_rgh_plain(z6_rgh,wp,nr);
 }
 
 // Debug palette for visualizing the splat mask's zone assignment.
