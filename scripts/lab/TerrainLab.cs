@@ -19,7 +19,7 @@ public partial class TerrainLab : MeshInstance3D
 
     private SplatCompute? _splat;
     private MeshInstance3D? _giProxy;   // coarse GI/shadow proxy (perf)
-    public bool UseGiProxy = false;     // default off = current look (detail mesh feeds GI+shadows)
+    public bool UseGiProxy = true;      // default ON (user-approved 2026-06-19): coarse proxy feeds GI+shadows
     // Splat bake params the UI can tweak before a rebake (Lever 1).
     public float MixScaleM = 26f, MixBias = 0.5f, EdgeNoiseM = 80f, EdgeNoiseAmp = 0.30f, MacroM = 480f;
     public int SplatMaskMode = 2;

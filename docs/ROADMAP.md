@@ -15,14 +15,21 @@ Last updated: 2026-06-19.
   tonemap, color grade, 6 curated MOOD presets. User: "really good."
 - **Material judging** — 738 → 108 accepted materials (the library; choices are fine).
 
-## ⚡ Perf (in-motion is the real metric — profile with `--profmove`)
-- **GI/shadow PROXY — BUILT 2026-06-19, default OFF, awaiting eye-gate.** Coarse 256² heightfield copy
-  feeds SDFGI + casts shadows so the 4M-vert detail mesh isn't re-voxelized/re-shadowed every frame in
-  motion. In-motion 1440p: clouds-off 55→131 fps, clouds-on 49→101 fps. `--giproxy=0/1` / Debug toggle.
-  ⚠ Eye-gate: confirm GI/shadow fidelity in motion, then default ON. (`docs/performance.md`, tag
-  `backup-pre-gi-proxy-2026-06-19`.)
-- **Lesson:** static `--profile` hid the flying cost (SDFGI converges when still); SDFGI ≈12 ms IN
-  MOTION re-voxelizing the un-LOD'd mesh. Always profile with `--profmove`. Next mesh lever = CDLOD arc.
+## ⚡ Perf arc — TARGET 8 ms total (in-motion is the real metric; profile with `--profmove`)
+> **Long-term budget = 8 ms (~125 fps) for the WHOLE world generator**, with flora + water + erosion +
+> biomes still to fit. Current flying frame (1440p, clouds on) = **9.6 ms** → over budget before those.
+> **Lesson banked:** static `--profile` hid the flying cost (SDFGI converges when still) — ALWAYS use
+> `--profmove`. Full decomposition + numbers in `docs/performance.md`.
+- [x] **GI/shadow PROXY — BUILT + DEFAULT ON (2026-06-19).** Coarse 256² heightfield copy feeds SDFGI
+  + casts shadows so the 4M-vert detail mesh isn't re-voxelized/re-shadowed each frame. In-motion 1440p:
+  clouds-off 55→131, clouds-on 49→101 fps. `--giproxy=0/1` / Debug toggle. ⚠ GI/shadow *fidelity*
+  eye-check still owed (default-on was the user's call). Restore tag `backup-pre-gi-proxy-2026-06-19`.
+- **Remaining levers to 8 ms — ALL eye-gated → PARKED until the user can do visual checks:**
+  1. **CDLOD terrain LOD** (mesh floor ~4 ms, resolution-independent; also cuts SDFGI+shadow further) —
+     the dominant lever. Spec `specs/2026-06-18-terrain-lod-roadmap-design.md`. Gate: pop-free in motion.
+  2. **SDFGI config / cheaper GI** (~2.9 ms intrinsic cascade cost even on the proxy) — cascade/cell/
+     update tuning behind toggles; quality/eye call.
+  3. **Cloud cost** (~2.0 ms) — temporal + dome res + march steps.
 
 ## ⚠ Review state (live in `scenes/terrain_lab.tscn`)
 1. **Ground Unit 1 — anti-repetition** (Surface tab `anti-repeat`). REVIEWED → APPROVED by
@@ -105,7 +112,11 @@ Last updated: 2026-06-19.
 - [ ] **T3 — streaming** (load/unload tiles → true-infinite; erosion E4 / world-editing / flora consume). LATER.
   Anti-WG1-15 discipline: T1 must be eye-approved pop-free BEFORE T2/T3 (no infra before the core).
 
-## 🌍 Parallel (isolated build chats — no project access → return LIBRARY code to integrate)
+## 🌍 Parallel (other chats — coordinate, don't double-work)
+- **God rays — REFACTOR IN ANOTHER CHAT (2026-06-19).** The god-ray thread is being reworked in a
+  separate chat. **Do NOT touch `GodRays.cs` / `shaders/godray*.gdshader` / the cloud god-ray in-march
+  here** — expect returning changes to integrate. (Was: Component A built + paused; in-march in-scatter,
+  default off. See `godray-redesign-spec.md`.)
 - **Procedural flora** — trees/grass/forests/shrubs; GPU-instanced scatter, LOD/impostors,
   wind. Returns drop-in units + interfaces (no demo).
 - **World editing / terrain deformation** — brush system (raise/lower/flatten/smooth/noise/

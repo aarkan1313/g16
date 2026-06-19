@@ -80,14 +80,22 @@ Run a scene (always `--rendering-driver vulkan`):
 ## 6. Current State — REFRESH EVERY SESSION
 
 > ### ⮕ START HERE (2026-06-19, refreshed — GROUND FOUNDATION pivot + PERF win)
-> **PERF (2026-06-19, user push "code not settings"):** static `--profile` was hiding the flying cost.
-> Added **`--profmove`** (orbit during profile) → found **SDFGI ≈12 ms IN MOTION** (≈0 static): it
-> re-voxelizes the 4M-vert un-LOD'd mesh as the camera moves (shadows +~3 ms the same way); frame is
-> geometry-bound (4K≈1440p). **Fix BUILT: GI/shadow PROXY** — a coarse 256² heightfield copy feeds
-> SDFGI + casts shadows while the detail mesh renders the view. In-motion 1440p **clouds-off 55→131,
-> clouds-on 49→101 fps**; GI retained. Toggle `GI/shadow proxy (perf)` (Debug) / `--giproxy=1`,
-> **DEFAULT OFF** pending the user's eye-gate on GI/shadow fidelity → then default ON. Restore tag
-> `backup-pre-gi-proxy-2026-06-19`. ALWAYS profile with `--profmove` now. Next mesh lever = CDLOD arc.
+> **PERF (2026-06-19, user push "code not settings") — TARGET 8 ms total (world generator, long-term;
+> flora/water/erosion must still fit).** Static `--profile` was hiding the flying cost. Added
+> **`--profmove`** (orbit during profile) → **SDFGI ≈12 ms IN MOTION** (≈0 static): re-voxelizes the
+> 4M-vert un-LOD'd mesh as the camera moves; frame is geometry-bound (4K≈1440p). **Built + DEFAULT ON:
+> GI/shadow PROXY** — coarse 256² heightfield copy feeds SDFGI + casts shadows while the detail mesh
+> renders the view. In-motion 1440p **clouds-off 55→131, clouds-on 49→101 fps**; GI retained. Toggle
+> `GI/shadow proxy (perf)` (Debug) / `--giproxy=0/1`; restore tag `backup-pre-gi-proxy-2026-06-19`.
+> ⚠ GI/shadow *fidelity* eye-check still owed. **Current flying frame ≈9.6 ms** (clouds on) — breakdown:
+> mesh floor ~4 ms, SDFGI-on-proxy ~2.9 ms, clouds ~2 ms. **Remaining levers to 8 ms (CDLOD #1, SDFGI
+> config #2, clouds #3) are ALL eye-gated → PARKED until the user can do visual checks.** ALWAYS profile
+> with `--profmove`. Details: `docs/performance.md`.
+>
+> **⚠ THE USER CANNOT DO VISUAL CHECKS RIGHT NOW (2026-06-19).** Everything whose gate is the live eye
+> is parked: ground G1 (placement coherence), GI-proxy fidelity, CDLOD pops, SDFGI/cloud quality tuning.
+> Do mechanical/measured work + capture for their review; don't build eye-gated quality changes blind.
+> **God rays are being refactored in ANOTHER CHAT — do not touch `GodRays.cs`/`shaders/godray*`.**
 >
 
 > **Status:** base field proven (no bake); LIGHTING "really good"; CLOUDS reworked + reviewed good.

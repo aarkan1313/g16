@@ -6,6 +6,15 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-19 — Perf target set = 8 ms total (world generator, long-term); GI/shadow proxy DEFAULT ON;
+god rays moved to a parallel chat.** User set the long-term budget: **8 ms (~125 fps) for the WHOLE
+generator**, with flora/water/erosion/biomes still to fit. Flying frame now ≈9.6 ms (clouds on, proxy
+on): mesh floor ~4 ms, SDFGI-on-proxy ~2.9 ms (intrinsic cascade cost — proxy already removed the
+geometry part), clouds ~2 ms. Defaulted the GI/shadow proxy ON (user's call; fidelity eye-check still
+owed). Remaining levers to 8 ms — **CDLOD terrain LOD (#1, also cuts SDFGI+shadow), SDFGI config (#2),
+cloud cost (#3) — are ALL eye-gated and PARKED** because the user can't do visual checks right now.
+**God rays are being refactored in another chat** → don't touch `GodRays.cs`/`shaders/godray*` here.
+
 **2026-06-19 — Perf: in-motion profiling correction + GI/shadow PROXY mesh (user push, "code not
 settings").** The user reported 30–120 fps flying at 1440p; static `--profile` showed 130–230 and
 hid it. Root cause: **static profiling lets SDFGI converge** — added `--profmove` (orbit during

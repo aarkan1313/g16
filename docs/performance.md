@@ -32,7 +32,8 @@ frame as the camera translates. Resolution barely matters (4K ≈ 1440p) → the
 and explains the 30–120 swing (slow look ≈ 120, fast fly ≈ 30 — the SDFGI revoxelization signature).
 
 **Fix landed — GI/shadow PROXY mesh** (`TerrainLab.SetGiProxy`; toggle "GI/shadow proxy (perf)" on
-the Debug tab + `--giproxy=0/1`, **default OFF** pending the user's eye-gate on GI/shadow fidelity):
+the Debug tab + `--giproxy=0/1`, **DEFAULT ON since 2026-06-19** — user approved enabling it; its
+GI/shadow *fidelity* eye-check in motion is still owed but it's the active default):
 a coarse 256² (~65k-vert) copy of the *same* heightfield feeds SDFGI (`GIMode Static`) + casts
 shadows (`ShadowsOnly`, invisible in colour); the 4M-vert detail mesh renders the view only
 (`GIMode Disabled`, `CastShadow Off`). GI/shadows are low-frequency → they need terrain *shape*, not
@@ -43,10 +44,29 @@ fine verts. SDFGI/shadow passes process ~60× less geometry.
 | clouds off | 55 fps (18.3 ms) | **131 fps (7.6 ms)** |
 | clouds on  | 49 fps (20.5 ms) | **101 fps (9.9 ms)** |
 
-GI is **retained, not dropped**: proxy-on SDFGI still costs ~1.7 ms (vs ~12 ms full mesh, ~0 fully
-off). Reuses `_mat` so GI bounce colour stays accurate. Static A/B shots identical (no z-fight, proxy
-not visible). ⚠ **Look eye-gate owed:** confirm GI/shadow fidelity in motion before defaulting ON.
-Next perf lever after this is the same mesh's raster/vertex floor → the CDLOD terrain-LOD arc.
+GI is **retained, not dropped**. Reuses `_mat` so GI bounce colour stays accurate. Static A/B shots
+identical (no z-fight, proxy not visible). ⚠ **Look eye-gate still owed** (GI/shadow fidelity in
+motion) — default-on was the user's call regardless; revert via the toggle if the eye dislikes it.
+
+### Post-proxy in-motion decomposition (1440p, proxy ON = default) — the path to the 8 ms target
+
+**Long-term TOTAL budget for the world generator = 8 ms (~125 fps)**, and flora + water + erosion +
+more biomes STILL have to fit inside it. Current flying frame (clouds on) = **9.6 ms** — already over,
+before those features. Where the 9.6 ms goes:
+
+| Component (in motion) | ms | Lever |
+|---|---|---|
+| **Mesh raster + fragment floor** | ~4.0 | **CDLOD terrain LOD** (fewer verts far/culled) — also shrinks SDFGI+shadow further. BIGGEST lever. Eye-gated (pop-free). |
+| **SDFGI (on proxy)** | ~2.9 | Largely *intrinsic cascade cost* now (proxy already removed the geometry part). Lever: fewer cascades / larger cell / update throttle, or cheaper GI. Quality/eye call. |
+| **Clouds** | ~2.0 | Temporal amortization / dome res / march steps (cloud arc). |
+| Shadows (on proxy) | ~0.6 | Done (proxy fixed it). |
+| AR / SSAO | ~free | Done. |
+
+**Ranked path to 8 ms (all eye-gated → parked until the user can do visual checks):**
+1. **CDLOD terrain LOD** — the mesh floor is the dominant resolution-independent cost AND it inflates
+   SDFGI/shadow; LOD attacks all three. The single highest-leverage perf work. (`specs/2026-06-18-terrain-lod-roadmap-design.md`.)
+2. **SDFGI config / cheaper GI** — ~2.9 ms intrinsic; cascade/cell/update tuning behind toggles.
+3. **Cloud cost** — temporal + dome res + steps.
 
 ## Results so far (terrain-filling view, STATIC — see in-motion section above for the real flying cost)
 
