@@ -25,7 +25,7 @@
     },
     {
       "name": "Stormy",
-      "values": { "cloud_coverage": 0.75, "cloud_density": 1.8, "cloud_type": 0.85, "cloud_size": 1.2, "cloud_edge": 0.5, "cloud_detail": 0.65, "cloud_opacity": 2.0, "cloud_brightness": 0.6, "cloud_ambient": 0.5, "cloud_altitude": 1000, "cloud_thickness": 2400, "cloud_drift_speed": 16.0, "cloud_drift_dir": 220 }
+      "values": { "cloud_coverage": 0.78, "cloud_density": 2.0, "cloud_type": 0.85, "cloud_size": 1.2, "cloud_edge": 0.5, "cloud_detail": 0.65, "cloud_opacity": 2.4, "cloud_brightness": 0.42, "cloud_ambient": 0.38, "cloud_altitude": 1000, "cloud_thickness": 2400, "cloud_drift_speed": 16.0, "cloud_drift_dir": 220 }
     }
   ]
 }
