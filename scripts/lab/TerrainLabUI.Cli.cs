@@ -31,6 +31,7 @@ public partial class TerrainLabUI : Control
     private int _terrainArCli = -1;
     private int _terrainDetailCli = -1;
     private int _groundRulesCli = -1;
+    private int _giProxyCli = -1;
 
     private void ParseCli()
     {
@@ -63,6 +64,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--detail=")) { _terrainDetailCli = a.Substring("--detail=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--groundrules=")) { _groundRulesCli = a.Substring("--groundrules=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--giproxy=")) { _giProxyCli = a.Substring("--giproxy=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
             else if (a == "--profmove") { _profMove = true; }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
@@ -118,6 +120,7 @@ public partial class TerrainLabUI : Control
         if (_terrainArCli >= 0) { _terrain.SetBool("ar_on", _terrainArCli == 1); }
         if (_terrainDetailCli >= 0) { _terrain.SetBool("detail_on", _terrainDetailCli == 1); }
         if (_groundRulesCli >= 0) { _terrain.RuleBased = _groundRulesCli == 1; _terrain.RebakeSplat(); }
+        if (_giProxyCli >= 0) { _terrain.SetGiProxy(_giProxyCli == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
     }
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)

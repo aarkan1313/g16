@@ -18,6 +18,8 @@ public partial class TerrainLab : MeshInstance3D
     private const float AabbMarginM = 8f;
 
     private SplatCompute? _splat;
+    private MeshInstance3D? _giProxy;   // coarse GI/shadow proxy (perf)
+    public bool UseGiProxy = false;     // default off = current look (detail mesh feeds GI+shadows)
     // Splat bake params the UI can tweak before a rebake (Lever 1).
     public float MixScaleM = 26f, MixBias = 0.5f, EdgeNoiseM = 80f, EdgeNoiseAmp = 0.30f, MacroM = 480f;
     public int SplatMaskMode = 2;
@@ -57,11 +59,37 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter("region_size", p.RegionSizeM);
         _mat.SetShaderParameter("texel_world", p.Spacing);
 
+        // --- GI/shadow PROXY (perf): a coarse copy of the SAME heightfield. The render
+        // mesh has ~4M verts for displacement detail, but SDFGI revoxelization + shadow
+        // casting are LOW-FREQUENCY — they need the terrain's shape, not its fine verts.
+        // So a ~256² proxy (≈65k verts) can feed GI + cast shadows ~60× cheaper, while the
+        // detail mesh renders the view. Created inert; SetGiProxy(true) flips the roles.
+        // Reuses _mat so it displaces by the same heightmap (vertex()); ShadowsOnly => never
+        // drawn in the colour pass. Default OFF = current behaviour (detail mesh feeds both).
+        if (_giProxy == null)
+        {
+            _giProxy = new MeshInstance3D
+            {
+                Mesh = new PlaneMesh
+                {
+                    Size = new Vector2(p.RegionSizeM, p.RegionSizeM),
+                    SubdivideWidth = 255,
+                    SubdivideDepth = 255,
+                },
+                MaterialOverride = _mat,
+                GIMode = GeometryInstance3D.GIModeEnum.Disabled,         // inert until toggled on
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            };
+            AddChild(_giProxy);
+        }
+
         _minBase = float.MaxValue; _maxBase = float.MinValue;
         for (int i = 0; i < heights.Length; i++) { _minBase = Mathf.Min(_minBase, heights[i]); _maxBase = Mathf.Max(_maxBase, heights[i]); }
         CustomAabb = new Aabb(
             new Vector3(-_regionSize * 0.5f, _minBase - AabbMarginM, -_regionSize * 0.5f),
             new Vector3(_regionSize, (_maxBase - _minBase) + 2f * AabbMarginM, _regionSize));
+        if (_giProxy != null) { _giProxy.CustomAabb = CustomAabb; }
+        SetGiProxy(UseGiProxy);   // apply the current toggle state to both meshes
         GD.Print($"TerrainLab: built {p.HeightmapRes}x{p.HeightmapRes} (h {_minBase:F0}..{_maxBase:F0} m)");
         // Splat bake + sec-zone push are driven by the UI's ApplyAll() right after
         // Build(), once the final registry params are set — so we don't bake here
@@ -101,6 +129,30 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter($"z{zone}_alb", LoadOr(b, "albedo"));
         _mat.SetShaderParameter($"z{zone}_nrm", LoadOr(b, "normal"));
         _mat.SetShaderParameter($"z{zone}_rgh", LoadOr(b, "roughness"));
+    }
+
+    /// Toggle the GI/shadow proxy. ON: the coarse proxy feeds SDFGI + casts shadows; the
+    /// detail mesh renders the view only (no GI/shadow). OFF: current behaviour (detail mesh
+    /// feeds both; proxy inert). Cuts SDFGI revoxelization + shadow raster ~60× in motion.
+    public void SetGiProxy(bool on)
+    {
+        UseGiProxy = on;
+        if (_giProxy == null) { return; }
+        if (on)
+        {
+            GIMode = GeometryInstance3D.GIModeEnum.Disabled;            // detail: view only
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+            _giProxy.GIMode = GeometryInstance3D.GIModeEnum.Static;     // proxy: GI + shadows
+            _giProxy.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+        }
+        else
+        {
+            GIMode = GeometryInstance3D.GIModeEnum.Static;              // detail: GI + shadows (current)
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
+            _giProxy.GIMode = GeometryInstance3D.GIModeEnum.Disabled;   // proxy: inert
+            _giProxy.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        }
+        GD.Print($"TerrainLab: GI/shadow proxy {(on ? "ON (coarse proxy feeds GI+shadows)" : "off (detail mesh feeds GI+shadows)")}");
     }
 
     public void SetMaskMode(int mode) => _mat.SetShaderParameter("mask_mode", mode);

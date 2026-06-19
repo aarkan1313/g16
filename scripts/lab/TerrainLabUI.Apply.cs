@@ -79,6 +79,7 @@ public partial class TerrainLabUI : Control
     private void SetTerrainBoolField(string field, bool v)
     {
         if (field == "RuleBased") { _terrain.RuleBased = v; }
+        else if (field == "UseGiProxy") { _terrain.SetGiProxy(v); }
     }
 
     private void ApplyScene(string? target, bool on)
