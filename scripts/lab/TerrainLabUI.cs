@@ -56,8 +56,7 @@ public partial class TerrainLabUI : Control
         // setup during _Ready ("parent busy setting up children"), so both the
         // AddChild and the Attach must run after the current frame's setup.
         _cloud = new CloudVolume { Name = "CloudVolume" };
-        _godrays = new GodRaysVolumetric { Name = "GodRaysVolumetric" };   // canonical sun-shadowed volumetric god rays (soft base)
-        _godraysScreen = new GodRaysScreen { Name = "GodRaysScreen" };     // screen-space radial scatter (crisp beam layer)
+        _godraysScreen = new GodRaysScreen { Name = "GodRaysScreen" };     // screen-space radial scatter — THE god-ray layer
         CallDeferred(nameof(AttachClouds));
 
         ParseCli();
@@ -94,32 +93,19 @@ public partial class TerrainLabUI : Control
             // _Process turns it on once _cloud.ComputeReady.
             _terrain.SetBool("cloud_shadow_on", false);
         }
-        // GOD RAYS (canonical rebuild 2026-06-19, Option C) — a WORLD FogVolume samples the cloud
-        // shadow map per-froxel (ground-projected along the sun ray) so the DirectionalLight's real
-        // shadowed in-scatter makes 3D cloud-shaped shafts that ALIGN with the ground cloud-shadows.
-        // Consumes the SAME cloud shadow map + region + ground reference + the scene sun.
-        if (_godrays != null)
-        {
-            GetNode("/root/TerrainLabRoot").AddChild(_godrays);
-            _godrays.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
-                            GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
-            _godrays.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
-            _godrays.SetGroundHeight(_terrain.MidHeight);   // cloud-bake ground reference for the per-froxel unshift
-        }
-        // SCREEN-SPACE god rays (crisp beam layer). Task 1: force-on to experiment whether the
-        // captured frame contains the sky/sun/clouds (TEMP — Task 3 swaps this for a control).
+        // GOD RAYS (2026-06-19): screen-space radial scatter (GPU Gems 3) is THE god-ray layer. The
+        // froxel-fog approach was dropped — it read as a washy fog, not crisp beams (3 attempts).
+        // Driven by the Clouds-tab "god rays" toggle + "god ray strength"; default OFF.
         if (_godraysScreen != null)
         {
             GetNode("/root/TerrainLabRoot").AddChild(_godraysScreen);
             _godraysScreen.Attach(GetNode<Camera3D>("/root/TerrainLabRoot/Camera"),
                                   GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
-            _godraysScreen.SetEnabled(true);   // TEMP: force-on for the Task-1 experiment
         }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
         if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
-        if (_presetCli >= 0) { ApplyCloudPreset(_presetCli); }   // before coverage so --coverage can still override for testing
         if (_temporalCli > 0) { _cloud.SetKnobInt("temporal_frames", _temporalCli); }   // roadmap #4 amortization
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
         if (_perDeckCli >= 0f) { _cloud.SetPerDeck(_perDeckCli); }
@@ -149,11 +135,14 @@ public partial class TerrainLabUI : Control
         // cloud's sky/sun pushes no-opped (material/env null). Re-apply now that _cloud
         // is live, so clouds track the spawn mood/sun instead of CloudParams defaults.
         if (_currentMood >= 0) { ApplyMood(_currentMood); }
+        // --preset AFTER the spawn mood: a preset may set its own sun (sun_angle/azimuth) + cloud knobs,
+        // and the mood re-apply above would otherwise stomp them (the showcase's low sun was lost this way).
+        if (_presetCli >= 0) { ApplyCloudPreset(_presetCli); }
+        if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }   // --coverage still overrides the preset
         PushSunToCloud(GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
-        // --godrays AFTER the sun is pushed (audit G): SetEnabled makes the WORLD FogVolume visible,
-        // so sun_dir must already be the real sun (not the (0,1,0) shader default → unshift=0 → wrong
-        // projection) before the first rendered frame.
-        if (_godraysOnCli >= 0) { _godrays?.SetEnabled(_godraysOnCli == 1); }
+        // --godrays drives the screen-space beam layer (GodRaysScreen reads the sun per-frame).
+        if (_godraysOnCli >= 0) { _godraysScreen?.SetEnabled(_godraysOnCli == 1); }
+        if (_godrayDbgCli != 0) { _godraysScreen?.SetDebug(_godrayDbgCli); }   // --godraydbg=N diagnostic
     }
 
     public override void _ExitTree() => _fc?.Dispose();

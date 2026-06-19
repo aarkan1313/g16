@@ -90,8 +90,8 @@ public partial class TerrainLabUI : Control
         env.FogHeight = F(m, "fog_height", -200f);
         env.FogHeightDensity = F(m, "fog_heightd", 0.04f) * 0.3f;
         env.FogSunScatter = F(m, "fog_sun_scatter", 0.2f) * 0.25f;
-        // Volumetric fog OFF by default (it was the main 'can't see anything' culprit). The
-        // rebuilt god-ray system (GodRaysVolumetric) owns turning it on while active.
+        // Volumetric fog OFF (it was the main 'can't see anything' culprit). God rays are now a
+        // screen-space post-process (GodRaysScreen) that does NOT use volumetric fog at all.
         env.VolumetricFogEnabled = false;
 
         env.TonemapExposure = F(m, "exposure", 1.0f);

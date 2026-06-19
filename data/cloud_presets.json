@@ -29,7 +29,7 @@
     },
     {
       "name": "God Ray Showcase",
-      "_comment": "Self-contained showcase for the canonical god rays (per-froxel cloud-shadow in global volfog; sun-shadowed in-scatter). Tuned for MAXIMUM shaft visibility: broken cumulus (~0.55 cover = bold cloud shadows + clear gaps), DENSE/OPAQUE clouds so the shadow map has strong gap/cloud contrast (the contrast IS the shaft), a LOW sun (~14°) for a long dramatic rake across the valley, and god rays ON at high strength (drives the sun's volumetric fog energy = shaft brightness). Unlike the weather presets, this also sets the SUN (sun_angle/azimuth/energy) + the god-ray toggle+strength via their control ids, so ONE pick gives perfect conditions. Pair the camera looking roughly toward the sun (azimuth 120°).",
+      "_comment": "Self-contained showcase for the screen-space god rays (GPU Gems 3 radial scatter). Tuned for the crisp beam look: broken cumulus (~0.55 cover) so clouds cross in front of the sun and BREAK the beams into shafts, a LOW sun (~14°) sitting near the horizon for a dramatic fan, and god rays ON. Unlike the weather presets, this also sets the SUN (sun_angle/azimuth/energy) + the god-ray toggle+strength via their control ids, so ONE pick gives good conditions. IMPORTANT: screen-space rays are view-dependent — point the camera toward the sun (azimuth 120°) to see the fan; they fade as the sun leaves the screen.",
       "values": {
         "cloud_coverage": 0.55, "cloud_density": 1.6, "cloud_type": 0.7, "cloud_size": 1.0,
         "cloud_edge": 0.45, "cloud_detail": 0.6, "cloud_opacity": 1.8, "cloud_brightness": 0.95,

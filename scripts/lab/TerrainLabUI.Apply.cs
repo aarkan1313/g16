@@ -133,7 +133,7 @@ public partial class TerrainLabUI : Control
         _cloud?.SetSun(toSun, sun.LightColor, sun.LightEnergy);
         // the visible disc uses the BASE (un-dimmed) energy — overcast must not dim the sun in a gap.
         _cloud?.SetSunDiscEnergy(_baseSunEnergy);
-        _godrays?.SetSunDir(toSun);   // per-froxel cloud-shadow projection follows the sun
+        // (screen-space god rays read the sun themselves each frame in GodRaysScreen._Process.)
     }
 
     /// After a mood sets the scene, update the Light-tab slider widgets so they show
