@@ -25,6 +25,8 @@ public sealed class SplatCompute : IDisposable
         public float MixScaleM, MixBias;
         public uint MaskMode;
         public float EdgeNoiseM, EdgeNoiseAmp, MacroM;
+        public uint RuleBased;   // 0 legacy bands | 1 rule engine
+        public float CurvK;      // curvature scale (m)
     }
 
     public SplatCompute()
@@ -91,7 +93,7 @@ public sealed class SplatCompute : IDisposable
 
     private static byte[] BuildParams(Params p)
     {
-        // 17 fields, std430 scalar layout (all 4-byte) → pad to 16-byte multiple (80B).
+        // 19 fields, std430 scalar layout (all 4-byte) → pad to 16-byte multiple (80B).
         var b = new byte[80];
         int o = 0;
         void U(uint v) { BitConverter.GetBytes(v).CopyTo(b, o); o += 4; }
@@ -101,6 +103,7 @@ public sealed class SplatCompute : IDisposable
         F(p.SlopeCliffLo); F(p.SlopeCliffHi); F(p.BandSoftnessM);
         F(p.MixScaleM); F(p.MixBias);
         U(p.MaskMode); F(p.EdgeNoiseM); F(p.EdgeNoiseAmp); F(p.MacroM);
+        U(p.RuleBased); F(p.CurvK);
         return b;
     }
 

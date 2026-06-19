@@ -51,6 +51,8 @@ layout(set = 0, binding = 2, std430) restrict readonly buffer ParamsBuf {
     float edge_noise_m;
     float edge_noise_amp;
     float macro_m;
+    uint  rule_based;      // 0 = legacy bands (zone_weights) | 1 = rule engine (role_weights)
+    float curv_k;          // curvature scale (m) separating convex ridges from concave hollows
 };
 
 float fetch(int x, int z){
@@ -102,6 +104,38 @@ void zone_weights(out float w[7], float hh, float slope, float curv, vec2 wxz){
     if(sum>1e-4) for(int i=0;i<7;i++) w[i]/=sum;
 }
 
+// G1 rule engine: assign a weight per surface ROLE from terrain signals (altitude,
+// slope, SIGNED curvature). Reuses the 7 slots as roles with the CURRENT materials:
+//   0 valley/meadow · 1 valley->slope · 2 slope · 3 slope->cliff · 4 cliff/rock ·
+//   5 high alpine · 6 snow. Curvature splits convex breaks (scree/exposed rock) from
+//   concave hollows (where soil/grass collects) — meaning the bands alone can't give.
+// Aspect + moisture rules come in G3; palette in G2. Same out-array shape as zone_weights.
+// Pure function of LOCAL signals (no world position) -> tiles across infinite chunks.
+void role_weights(out float w[7], float hh, float slope, float curv){
+    for(int i=0;i<7;i++) w[i]=0.0;
+    float soft = band_softness_m;
+    float aLow  = 1.0 - smoothstep(h_valley-soft, h_valley+soft, hh);  // low ground
+    float aHigh = smoothstep(h_high-soft,  h_high+soft,  hh);          // high ground
+    float aMid  = clamp(1.0 - aLow - aHigh, 0.0, 1.0);                 // slopes between
+    float aSnow = smoothstep(h_peak-soft,  h_peak+soft,  hh);          // snow band
+    float rock  = smoothstep(slope_cliff_lo, slope_cliff_hi, slope);   // steep -> rock/scree
+    float ground= 1.0 - rock;
+    float k = max(curv_k, 1e-3);
+    float convex  = smoothstep(0.0, k, -curv);                         // ridges / breaks
+    float concave = smoothstep(0.0, k,  curv);                         // hollows
+
+    w[0] = aLow  * ground * (0.5 + 0.5*concave);                       // meadow/valley (collects in hollows)
+    w[1] = aMid  * ground * (1.0 - aHigh) * 0.6;                       // valley->slope transition
+    w[2] = aMid  * (0.5*ground + 0.5*rock) * (0.4 + 0.6*convex);       // slope scree on breaks
+    w[3] = mix(aMid, aHigh, 0.5) * rock * (0.3 + 0.7*convex) * (1.0 - aSnow); // loose scree below cliffs
+    w[4] = rock  * (0.6 + 0.4*convex);                                 // cliff/rock (steep, any altitude)
+    w[5] = aHigh * ground * (1.0 - aSnow);                             // high alpine
+    w[6] = aSnow * ground;                                             // snow (sheds off steep faces)
+
+    float s=0.0; for(int i=0;i<7;i++) s+=w[i];
+    if(s>1e-4) for(int i=0;i<7;i++) w[i]/=s;
+}
+
 void main(){
     ivec2 id = ivec2(gl_GlobalInvocationID.xy);
     if (id.x >= int(res) || id.y >= int(res)) return;
@@ -116,7 +150,8 @@ void main(){
     vec2 wxz = (vec2(id) * texel_world) - vec2(region_size*0.5);
 
     float w[7];
-    zone_weights(w, hh, slope, curv, wxz);
+    if (rule_based == 1u) { role_weights(w, hh, slope, curv); }
+    else                  { zone_weights(w, hh, slope, curv, wxz); }
 
     // find the two strongest zones (dominant + runner-up) → smooth boundaries
     int d0=0; float m0=-1.0;
@@ -136,8 +171,11 @@ void main(){
     int companion = clamp(d0 - 1, 0, 6);
     if (d0 == 0) companion = 1; // valley mixes up toward its transition
 
-    // Pack: prefer the boundary's runner-up when near an edge, else the companion.
+    // Secondary material. Rule engine: ALWAYS the runner-up ROLE (d1) — spatially
+    // meaningful, the whole point of G1. Legacy: the old index-adjacency companion.
     // R dominant, G secondary, B intra-zone mix amount, A boundary blend.
-    float secondary = (boundary > mix_amt) ? float(d1) : float(companion);
+    float secondary = (rule_based == 1u)
+        ? float(d1)
+        : ((boundary > mix_amt) ? float(d1) : float(companion));
     splat[id.y*int(res)+id.x] = vec4(float(d0), secondary, mix_amt, boundary);
 }
