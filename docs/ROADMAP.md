@@ -62,6 +62,21 @@ Last updated: 2026-06-17.
 - [ ] **E4 — coarse global pre-solve + streaming** (true-infinite). LATER — biggest infra,
   needs chunks. Build E1 → judge GREAT → E2 → E3 → E4, each its own plan, each eye-gated.
 
+## ⛰ Planned arc — TERRAIN LOD (CDLOD) — spec'd 2026-06-18, not yet scheduled
+> The terrain is ONE 2048² PlaneMesh (4M verts, NO LOD) = the ~3.8 ms perf "floor" (perf pass
+> 2026-06-18) + a ×4 shadow-cascade redraw, and it's the keystone streaming/erosion E4/world-
+> editing/flora all need. **Clipmap killed WG1-15** via ELEVATION + QUALITY POPS — so the whole
+> arc is built around POP-FREE CONTINUOUS LOD (geomorphing + detail cross-fade), proven in motion
+> before any infra. Chosen: **CDLOD (quadtree + per-vertex geomorph)** — the AAA heightfield
+> standard, whose purpose IS killing LOD pops; stable world-XZ tiles fit WG16's per-region systems
+> (clipmap's moving rings don't). Spec: `specs/2026-06-18-terrain-lod-roadmap-design.md`. Memory:
+> `terrain-clipmap-killed-wg1-15`.
+- [ ] **T1 — pop-free continuous LOD on the current fixed 8 km region.** THE GATE: geomorph +
+  cross-fade, ZERO elevation/quality pop in motion. Fixes the floor + shadow redraw. No streaming.
+- [ ] **T2 — stable world tiles** (per-tile LOD + edge stitch + cull; per-region bakes → per-tile). LATER.
+- [ ] **T3 — streaming** (load/unload tiles → true-infinite; erosion E4 / world-editing / flora consume). LATER.
+  Anti-WG1-15 discipline: T1 must be eye-approved pop-free BEFORE T2/T3 (no infra before the core).
+
 ## 🌍 Parallel (isolated build chats — no project access → return LIBRARY code to integrate)
 - **Procedural flora** — trees/grass/forests/shrubs; GPU-instanced scatter, LOD/impostors,
   wind. Returns drop-in units + interfaces (no demo).
