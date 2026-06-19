@@ -122,7 +122,10 @@ public partial class CloudVolume : Node
     public float Overcast()
     {
         if (!_enabled) { return 0f; }
-        return Mathf.Pow(Mathf.Clamp(_p.Coverage, 0f, 1f), 1.8f) * _overcastStrength;
+        // Steep curve (pow 3): partly-cloudy skies (Clear/Scattered/Broken) stay a clean blue —
+        // the grey gloom only engages near genuine overcast. Reality: you need heavy cover to grey
+        // the sky; a few clouds don't. × the tunable strength.
+        return Mathf.Pow(Mathf.Clamp(_p.Coverage, 0f, 1f), 3.0f) * _overcastStrength;
     }
 
     private void BuildSkyMaterial()

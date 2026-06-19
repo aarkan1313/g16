@@ -58,7 +58,7 @@
       "sun_angle": 42, "sun_az": 50, "sun_energy": 1.4,
       "sun_color": [1.0, 0.95, 0.86], "shadow_soft": 1.2,
       "ambient": 0.45, "ambient_sky": 0.95,
-      "sky_top": [0.34, 0.55, 0.86], "sky_horizon": [0.72, 0.80, 0.88], "sky_ground": [0.28, 0.28, 0.26],
+      "sky_top": [0.48, 0.65, 0.92], "sky_horizon": [0.78, 0.85, 0.92], "sky_ground": [0.28, 0.28, 0.26],
       "fog_color": [0.74, 0.81, 0.90], "fog_density": 0.0006, "fog_aerial": 0.85,
       "fog_height": -200, "fog_heightd": 0.035, "fog_sun_scatter": 0.25,
       "exposure": 1.0, "glow": 0.3, "white": 6.0
