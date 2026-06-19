@@ -75,7 +75,11 @@ From the code audit (4 read-only subagents, 2026-06-18) — ranked, quality-pres
 - **Cache per-frame `GetNode("/root/...")`** in `TerrainLabUI._Process`/`UpdateOvercast` (string-path
   tree walks every frame; resolve to fields once in `AttachClouds`).
 - **macro `rgb2hsv→hsv2rgb` roundtrip** per pixel — value/saturation drift can be done in RGB.
-- **MSAA 2× → off** (`project.godot`) — sub-pixel-dense triangles get ~nothing from MSAA (eye-check).
+- **⚠ MSAA — REVIEW NEEDED (user eye, in motion).** Was 4× (`msaa_3d=2`), set to **2× (`msaa_3d=1`)** as
+  the safe no-regret call (still real edge AA, banks ~0.7 ms, no new artifact class). Fully OFF saved
+  ~1.4 ms but risks motion crawl/specular shimmer that needs the user's eye to clear. To evaluate when
+  the user can judge motion: **off** (cheapest), **FXAA** (`screen_space_aa=1`, cheap, slightly blurry),
+  or **TAA** (`use_taa=true`, kills shimmer+crawl, temporally stable, but may GHOST the drifting clouds).
 - **Cloud temporal default 1 → 3** (validated look) — near-linear dome-march reduction; a knob/preset call.
 
 ## Cloud quality preset (perf lever, not a code fix)
