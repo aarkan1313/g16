@@ -54,6 +54,10 @@ public partial class CloudVolume : Node
     // cloud-shadow map (Stage 5): a second compute writes a top-down sun-transmittance
     // map over the terrain; the terrain light() samples it to attenuate the sun.
     private Rid _shadowShader, _shadowPipeline, _shadowTex, _shadowParamBuf;
+    // Cached uniform sets, built once and reused every frame (the bound RIDs are stable; only
+    // buffer contents change via BufferUpdate). Avoids per-frame UniformSetCreate/FreeRid churn.
+    private Rid _cloudSet, _shadowSet;
+    private bool _setsBuilt;
     private Texture2Drd? _shadowRd;
     private float _shadowStrength = 0.45f;   // was 0.7 — clouds are sparse; subtler ground shadow
     private bool _computeReady;
@@ -243,6 +247,26 @@ public partial class CloudVolume : Node
         return rid;
     }
 
+    // Build the two compute uniform sets once (lazy, after InitCompute made the RIDs live).
+    private void EnsureUniformSets()
+    {
+        if (_setsBuilt) { return; }
+        var uOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; uOut.AddId(_outTex);
+        var uShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; uShape.AddId(_sampler); uShape.AddId(_shapeTex);
+        var uDetail = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; uDetail.AddId(_sampler); uDetail.AddId(_detailTex);
+        var uWeather = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 3 }; uWeather.AddId(_sampler); uWeather.AddId(_weatherTex);
+        var uParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; uParam.AddId(_paramBuf);
+        _cloudSet = _rd.UniformSetCreate(new Array<RDUniform> { uOut, uShape, uDetail, uWeather, uParam }, _shader, 0);
+
+        var sOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; sOut.AddId(_shadowTex);
+        var sShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; sShape.AddId(_sampler); sShape.AddId(_shapeTex);
+        var sDetail = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; sDetail.AddId(_sampler); sDetail.AddId(_detailTex);
+        var sWeather = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 3 }; sWeather.AddId(_sampler); sWeather.AddId(_weatherTex);
+        var sParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; sParam.AddId(_shadowParamBuf);
+        _shadowSet = _rd.UniformSetCreate(new Array<RDUniform> { sOut, sShape, sDetail, sWeather, sParam }, _shadowShader, 0);
+        _setsBuilt = true;
+    }
+
     private void RenderProcess()
     {
         if (!_computeReady) { return; }
@@ -264,35 +288,26 @@ public partial class CloudVolume : Node
         byte[] pb = BuildParams(p, now, offset, stride);
         _rd.BufferUpdate(_paramBuf, 0, (uint)pb.Length, pb);
 
-        var uOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; uOut.AddId(_outTex);
-        var uShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; uShape.AddId(_sampler); uShape.AddId(_shapeTex);
-        var uDetail = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; uDetail.AddId(_sampler); uDetail.AddId(_detailTex);
-        var uWeather = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 3 }; uWeather.AddId(_sampler); uWeather.AddId(_weatherTex);
-        var uParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; uParam.AddId(_paramBuf);
-        Rid set = _rd.UniformSetCreate(new Array<RDUniform> { uOut, uShape, uDetail, uWeather, uParam }, _shader, 0);
+        // Build the two uniform sets ONCE and reuse them: all bound RIDs (textures, sampler,
+        // param buffers) are stable after InitCompute — only the buffer CONTENTS change, via the
+        // in-place BufferUpdate above. Recreating the sets every frame (the old code) churned 10
+        // RDUniform + 2 Array allocations + UniformSetCreate/FreeRid per frame for no reason.
+        EnsureUniformSets();
 
         long list = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(list, _pipeline);
-        _rd.ComputeListBindUniformSet(list, set, 0);
+        _rd.ComputeListBindUniformSet(list, _cloudSet, 0);
         _rd.ComputeListDispatch(list, (uint)((TexW + 7) / 8), (uint)((TexH + 7) / 8), 1);
         _rd.ComputeListEnd();
-        _rd.FreeRid(set);
 
         // --- cloud-shadow map dispatch (same density field, top-down toward sun) ---
-        byte[] spb = BuildShadowParams(p, (float)Time.GetTicksMsec() / 1000.0f);
+        byte[] spb = BuildShadowParams(p, now);
         _rd.BufferUpdate(_shadowParamBuf, 0, (uint)spb.Length, spb);
-        var sOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; sOut.AddId(_shadowTex);
-        var sShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; sShape.AddId(_sampler); sShape.AddId(_shapeTex);
-        var sDetail = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; sDetail.AddId(_sampler); sDetail.AddId(_detailTex);
-        var sWeather = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 3 }; sWeather.AddId(_sampler); sWeather.AddId(_weatherTex);
-        var sParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; sParam.AddId(_shadowParamBuf);
-        Rid sset = _rd.UniformSetCreate(new Array<RDUniform> { sOut, sShape, sDetail, sWeather, sParam }, _shadowShader, 0);
         long slist = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(slist, _shadowPipeline);
-        _rd.ComputeListBindUniformSet(slist, sset, 0);
+        _rd.ComputeListBindUniformSet(slist, _shadowSet, 0);
         _rd.ComputeListDispatch(slist, (uint)((ShadowRes + 7) / 8), (uint)((ShadowRes + 7) / 8), 1);
         _rd.ComputeListEnd();
-        _rd.FreeRid(sset);
 
         if (_statsCountdown > 0 && --_statsCountdown == 0) { DumpDomeStats(p); }
     }
@@ -518,6 +533,7 @@ public partial class CloudVolume : Node
         {
             RenderingServer.CallOnRenderThread(Callable.From(() =>
             {
+                if (_setsBuilt) { _rd.FreeRid(_cloudSet); _rd.FreeRid(_shadowSet); }
                 _rd.FreeRid(_sampler); _rd.FreeRid(_paramBuf);
                 _rd.FreeRid(_outTex); _rd.FreeRid(_shapeTex); _rd.FreeRid(_detailTex); _rd.FreeRid(_weatherTex);
                 _rd.FreeRid(_pipeline); _rd.FreeRid(_shader);

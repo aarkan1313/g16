@@ -16,14 +16,25 @@ namespace WG16.Lab;
 /// member alignment is the element's alignment (caller uses Vec4 per array element).
 public sealed class Std430Writer
 {
-    private readonly List<byte> _b = new(256);
+    // Backing store is a reusable byte[] written via BitConverter.TryWriteBytes — NO per-float
+    // allocation (the old List<byte> + AddRange(GetBytes()) churned a 4-byte array per float,
+    // ~hundreds per frame on the cloud param buffers → GC stutter). Grows by doubling.
+    private byte[] _buf = new byte[256];
+    private int _len;
 
+    private void Ensure(int extra)
+    {
+        if (_len + extra <= _buf.Length) { return; }
+        int cap = _buf.Length * 2;
+        while (cap < _len + extra) { cap *= 2; }
+        Array.Resize(ref _buf, cap);
+    }
     private void Align(int a)
     {
-        int rem = _b.Count % a;
-        if (rem != 0) { for (int i = 0; i < a - rem; i++) { _b.Add(0); } }
+        int rem = _len % a;
+        if (rem != 0) { int pad = a - rem; Ensure(pad); for (int i = 0; i < pad; i++) { _buf[_len++] = 0; } }
     }
-    private void Raw(float v) { _b.AddRange(BitConverter.GetBytes(v)); }
+    private void Raw(float v) { Ensure(4); BitConverter.TryWriteBytes(_buf.AsSpan(_len), v); _len += 4; }
 
     public Std430Writer F(float v)   { Align(4); Raw(v); return this; }
     public Std430Writer Vec2(float x, float y) { Align(8); Raw(x); Raw(y); return this; }
@@ -45,6 +56,8 @@ public sealed class Std430Writer
     public byte[] ToArray()
     {
         Align(16);
-        return _b.ToArray();
+        var r = new byte[_len];
+        Array.Copy(_buf, r, _len);
+        return r;
     }
 }
