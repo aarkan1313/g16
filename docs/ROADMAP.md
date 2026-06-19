@@ -113,10 +113,13 @@ Last updated: 2026-06-19.
   Anti-WG1-15 discipline: T1 must be eye-approved pop-free BEFORE T2/T3 (no infra before the core).
 
 ## 🌍 Parallel (other chats — coordinate, don't double-work)
-- **God rays — REFACTOR IN ANOTHER CHAT (2026-06-19).** The god-ray thread is being reworked in a
-  separate chat. **Do NOT touch `GodRays.cs` / `shaders/godray*.gdshader` / the cloud god-ray in-march
-  here** — expect returning changes to integrate. (Was: Component A built + paused; in-march in-scatter,
-  default off. See `godray-redesign-spec.md`.)
+- **God rays — DONE (2026-06-19): screen-space radial scatter.** Shipped `GodRaysScreen.cs` +
+  `shaders/godray_screen.gdshader` (GPU Gems 3 Ch.13). The 3 old approaches (FogVolume, in-march,
+  uniform-fog) were all stripped — they read as washy fog, never beams. New = fullscreen-quad radial
+  blur of a HYBRID occlusion buffer (terrain depth + clouds via local-to-sun luminance) from the sun's
+  screen position → real crepuscular shafts where clouds occlude the sun. Clouds-tab "god rays
+  (screen-space)" toggle + 5 tunable sliders; presets Showcase/Subtle/Dramatic; test scene
+  `scenes/godray_test.tscn`. Default off. User approved; thorough visual review pending.
 - **Procedural flora** — trees/grass/forests/shrubs; GPU-instanced scatter, LOD/impostors,
   wind. Returns drop-in units + interfaces (no demo).
 - **World editing / terrain deformation** — brush system (raise/lower/flatten/smooth/noise/

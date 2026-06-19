@@ -29,14 +29,41 @@
     },
     {
       "name": "God Ray Showcase",
-      "_comment": "Self-contained showcase for the screen-space god rays (GPU Gems 3 radial scatter). Tuned for the crisp beam look: broken cumulus (~0.55 cover) so clouds cross in front of the sun and BREAK the beams into shafts, a LOW sun (~14°) sitting near the horizon for a dramatic fan, and god rays ON. Unlike the weather presets, this also sets the SUN (sun_angle/azimuth/energy) + the god-ray toggle+strength via their control ids, so ONE pick gives good conditions. IMPORTANT: screen-space rays are view-dependent — point the camera toward the sun (azimuth 120°) to see the fan; they fade as the sun leaves the screen.",
+      "_comment": "Self-contained showcase for the screen-space god rays (GPU Gems 3 radial scatter). Broken cumulus (~0.55 cover) so clouds cross the sun and BREAK the beams into shafts; LOW sun (~14°) near the horizon for a dramatic fan; god rays ON, balanced strength. Also sets the SUN + all god-ray tunables via control ids, so ONE pick gives good conditions. IMPORTANT: screen-space rays are view-dependent — point the camera toward the sun (azimuth 120°) to see the fan; they fade as the sun leaves the screen.",
       "values": {
         "cloud_coverage": 0.55, "cloud_density": 1.6, "cloud_type": 0.7, "cloud_size": 1.0,
         "cloud_edge": 0.45, "cloud_detail": 0.6, "cloud_opacity": 1.8, "cloud_brightness": 0.95,
         "cloud_ambient": 0.6, "cloud_altitude": 1600, "cloud_thickness": 1500,
         "cloud_drift_speed": 8.0, "cloud_drift_dir": 120,
         "sun_angle": 14.0, "sun_azimuth": 120.0, "sun_energy": 1.6,
-        "cloud_godrays": 1, "cloud_godray_strength": 7.0
+        "cloud_godrays": 1, "cloud_godray_strength": 6.0, "cloud_godray_length": 0.45,
+        "cloud_godray_decay": 0.97, "cloud_godray_cloud_radius": 0.6, "cloud_godray_cloud_lum": 0.78
+      }
+    },
+    {
+      "name": "God Rays — Subtle",
+      "_comment": "Gentle god rays: thin scattered cloud, higher sun, soft low-strength shafts. A tasteful atmospheric accent rather than drama. Point the camera near the sun.",
+      "values": {
+        "cloud_coverage": 0.42, "cloud_density": 1.0, "cloud_type": 0.6, "cloud_size": 1.1,
+        "cloud_edge": 0.55, "cloud_detail": 0.5, "cloud_opacity": 1.1, "cloud_brightness": 1.05,
+        "cloud_ambient": 0.8, "cloud_altitude": 2200, "cloud_thickness": 1000,
+        "cloud_drift_speed": 7.0, "cloud_drift_dir": 90,
+        "sun_angle": 32.0, "sun_azimuth": 110.0, "sun_energy": 1.4,
+        "cloud_godrays": 1, "cloud_godray_strength": 3.0, "cloud_godray_length": 0.55,
+        "cloud_godray_decay": 0.95, "cloud_godray_cloud_radius": 0.5, "cloud_godray_cloud_lum": 0.82
+      }
+    },
+    {
+      "name": "God Rays — Dramatic",
+      "_comment": "Maximal crepuscular drama: heavy broken cloud, very low sun, long bright shafts. The 'sun bursting through a storm break' look. Point the camera toward the low sun.",
+      "values": {
+        "cloud_coverage": 0.68, "cloud_density": 2.0, "cloud_type": 0.8, "cloud_size": 1.0,
+        "cloud_edge": 0.4, "cloud_detail": 0.65, "cloud_opacity": 2.2, "cloud_brightness": 0.7,
+        "cloud_ambient": 0.5, "cloud_altitude": 1400, "cloud_thickness": 1800,
+        "cloud_drift_speed": 11.0, "cloud_drift_dir": 130,
+        "sun_angle": 9.0, "sun_azimuth": 125.0, "sun_energy": 1.7,
+        "cloud_godrays": 1, "cloud_godray_strength": 9.0, "cloud_godray_length": 0.35,
+        "cloud_godray_decay": 0.985, "cloud_godray_cloud_radius": 0.75, "cloud_godray_cloud_lum": 0.74
       }
     }
   ]

@@ -68,19 +68,25 @@ public partial class GodRaysScreen : Node3D
         }
         _mat.SetShaderParameter("sun_screen_uv", uv);
         _mat.SetShaderParameter("sun_gate", gate);
-
-        // DIAGNOSTIC: print the real values once/sec so we see why the gate is on/off (remove after debug).
-        _dbgAccum += delta;
-        if (_dbgAccum >= 1.0) { _dbgAccum = 0.0;
-            GD.Print($"[godrayscreen] toSun={toSun} align={align:F2} behind={_cam.IsPositionBehind(sunWorld)} uv={uv} gate={gate:F2}"); }
     }
-    private double _dbgAccum;
 
     public void SetEnabled(bool on) { _on = on; _quad.Visible = on; }
     public bool On => _on;
 
-    /// UI "screen ray strength" → the GPU Gems `exposure` (overall beam intensity).
+    // ---- Tunables (all driven by Clouds-tab controls; see lab_controls.json + ApplyCloudFloat). ----
+
+    /// UI "god ray strength" → the GPU Gems `exposure` (overall beam intensity).
     public void SetStrength(float s) => _mat.SetShaderParameter("exposure", Mathf.Clamp(s * 0.1f, 0f, 2f));
+    /// Beam length / reach: LOWER density = longer beams (shorter sample steps).
+    public void SetDensity(float v) => _mat.SetShaderParameter("density", Mathf.Clamp(v, 0.05f, 1.0f));
+    /// Per-step attenuation: →1 = longer shafts.
+    public void SetDecay(float v) => _mat.SetShaderParameter("decay", Mathf.Clamp(v, 0.5f, 1.0f));
+    /// Cloud detection radius around the sun (UV): how far from the sun darkness counts as cloud.
+    public void SetCloudRadius(float v) => _mat.SetShaderParameter("cloud_radius", Mathf.Clamp(v, 0.05f, 1.5f));
+    /// Cloud luminance threshold: sky brighter than this = open (lit); darker = cloud occluder.
+    public void SetCloudLum(float v) => _mat.SetShaderParameter("cloud_lum", Mathf.Clamp(v, 0.0f, 2.0f));
+    /// Warm/cool tint of the beams.
+    public void SetTint(Color c) => _mat.SetShaderParameter("ray_tint", c);
 
     /// DEBUG: 0 = normal, 1 = show occlusion mask, 2 = mark sun screen-UV + gate. (--godraydbg=N)
     public void SetDebug(int mode) => _mat.SetShaderParameter("debug_mode", mode);

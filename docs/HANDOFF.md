@@ -95,7 +95,14 @@ Run a scene (always `--rendering-driver vulkan`):
 > **⚠ THE USER CANNOT DO VISUAL CHECKS RIGHT NOW (2026-06-19).** Everything whose gate is the live eye
 > is parked: ground G1 (placement coherence), GI-proxy fidelity, CDLOD pops, SDFGI/cloud quality tuning.
 > Do mechanical/measured work + capture for their review; don't build eye-gated quality changes blind.
-> **God rays are being refactored in ANOTHER CHAT — do not touch `GodRays.cs`/`shaders/godray*`.**
+> **GOD RAYS (REBUILT 2026-06-19): screen-space radial scatter — WORKING.** `GodRaysScreen.cs` +
+> `shaders/godray_screen.gdshader`. The 3 old approaches (FogVolume `GodRays.cs`, in-march in-scatter,
+> uniform-fog) were stripped — all read as washy fog, never crisp beams. New = GPU Gems 3 Ch.13
+> fullscreen-quad radial blur of a HYBRID occlusion buffer (terrain via depth + clouds via
+> local-to-sun luminance) from the sun's screen position. Clouds occluding the sun → real crepuscular
+> shafts. Clouds-tab "god rays (screen-space)" toggle + strength/length/decay/cloud-reach/cloud-threshold
+> sliders; presets "God Ray Showcase / Subtle / Dramatic". Test harness: `scenes/godray_test.tscn`.
+> Default OFF. **User approved the look; a thorough visual review is still pending.**
 >
 
 > **Status:** base field proven (no bake); LIGHTING "really good"; CLOUDS reworked + reviewed good.

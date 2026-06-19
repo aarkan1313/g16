@@ -16,9 +16,16 @@ public partial class TerrainLabUI : Control
     private GodRaysScreen? _godraysScreen;   // screen-space radial scatter (GPU Gems 3) — THE god-ray layer
     private void ApplyCloudFloat(string knob, float v)
     {
-        // "god ray strength" → the screen-space beam intensity. (The froxel-fog layer was dropped
-        // 2026-06-19 — user found it a washy fog, not beams; screen-space is the crisp AAA look.)
-        if (knob == "godray_strength") { _godraysScreen?.SetStrength(v); return; }
+        // Screen-space god-ray tunables (GPU Gems radial scatter). The froxel-fog layer was dropped
+        // 2026-06-19 — it read as a washy fog; screen-space is the crisp AAA look.
+        switch (knob)
+        {
+            case "godray_strength":     _godraysScreen?.SetStrength(v); return;     // beam intensity
+            case "godray_length":       _godraysScreen?.SetDensity(v); return;      // LOWER density = longer beams
+            case "godray_decay":        _godraysScreen?.SetDecay(v); return;        // shaft falloff
+            case "godray_cloud_radius": _godraysScreen?.SetCloudRadius(v); return;  // cloud-detect radius around sun
+            case "godray_cloud_lum":    _godraysScreen?.SetCloudLum(v); return;     // cloud darkness threshold
+        }
         _cloud?.SetKnob(knob, v);
     }
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
