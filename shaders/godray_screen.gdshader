@@ -38,6 +38,17 @@ uniform float decay     : hint_range(0.0, 1.0) = 0.97; // per-step attenuation (
 uniform float weight    : hint_range(0.0, 0.3) = 0.05; // per-sample intensity (small — summed NUM_SAMPLES times)
 uniform float exposure  : hint_range(0.0, 2.0) = 0.5;  // overall strength (UI "god ray strength")
 uniform float dither    : hint_range(0.0, 1.0) = 1.0;  // sample-start jitter to break banding
+// Where the beams are DRAWN: god rays belong in the SKY (cloud gaps carve the contrast = beams). The same
+// scatter smeared over the TERRAIN has no contrast → a uniform "fog" veil. So attenuate the added scatter
+// on solid geometry. 0 = perfectly clean terrain (sky-only beams); raise for an optional faint land rake.
+uniform float terrain_ray_strength : hint_range(0.0, 1.0) = 0.0;
+// SUN-CLOUD GATE (the AAA fix for the open-sky veil/blast): radial scatter over a CLEAR sky is a large
+// uniform "DC" term (~0.86 additive at exposure 0.6) → a milky veil over the scene + a central blast,
+// with NO beam structure (beams are the scatter's spatial VARIATION, which needs cloud crossing the sun).
+// Physically, god rays ARE cloud-shadows across the sun: no cloud over the sun ⇒ no rays, just the real
+// sun disc. So scale the whole effect by how much cloud sits over/around the sun (from the SAME cloud
+// shadow map as occ_mode 3). Clear sun → ~0 (no veil/blast); broken cloud → full beams. Mood-independent.
+uniform float cloud_gate_soft : hint_range(0.05, 1.0) = 0.5;  // cloud-presence needed for full-strength rays
 // occ_mode: 0 = depth only (terrain/solid geometry; used by the synthetic test scene),
 //           2 = HYBRID (real scene): depth (terrain) OR cloud. Clouds are drawn in the sky at
 //               far-plane depth so depth can't see them; instead, a sky pixel that is DARKER than the
@@ -94,6 +105,20 @@ float occlusion(vec2 uv) {
 // cheap per-pixel hash for dither.
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
+// How much cloud sits over/around the sun → the god-ray master gate. 1 = sun well behind broken cloud
+// (full beams), 0 = clear sun (no rays, just the natural disc — kills the open-sky veil/blast). Averages
+// the cloud-shadow transmittance in a small ring around the sun so a single gap doesn't flicker it off.
+// Only active for the real-scene cloud path (occ_mode 3); the test scene / luminance fallback isn't gated.
+float sun_cloud_gate() {
+	if (occ_mode != 3 || !cloud_shadow_on) { return 1.0; }
+	const float r = 0.05;   // sample ring radius (UV) around the sun
+	float open = occlusion(sun_screen_uv)
+		+ occlusion(sun_screen_uv + vec2( r, 0.0)) + occlusion(sun_screen_uv + vec2(-r, 0.0))
+		+ occlusion(sun_screen_uv + vec2(0.0, r)) + occlusion(sun_screen_uv + vec2(0.0, -r));
+	open *= 0.2;            // mean transmittance near the sun (1 = all open sky)
+	return smoothstep(0.0, cloud_gate_soft, 1.0 - open);   // cloud presence → ray strength
+}
+
 void fragment() {
 	vec2 uv = SCREEN_UV;
 	vec3 scene = texture(screen_tex, uv).rgb;
@@ -110,9 +135,15 @@ void fragment() {
 		coord -= delta;
 	}
 	scatter *= exposure * sun_gate;
+	// Master gate: no cloud over the sun ⇒ no rays (the open-sky scatter is a uniform veil/blast, not
+	// beams). Only the real cloud crossing the sun earns the effect; clear sky shows just the sun disc.
+	scatter *= sun_cloud_gate();
 
-	// normal output: scene + ONLY the scattered contribution (don't re-add scene — avoids blow-out).
-	vec3 outc = scene + ray_tint * scatter;
+	// Draw the beams in the SKY, not over the ground: attenuate the added scatter on solid geometry so the
+	// terrain stops fogging (the beams the eye likes are the sky's cloud-gap contrast, not a ground veil).
+	float d_here = texture(depth_tex, uv).r;                              // Reverse-Z: sky/far ≈ 0.0
+	float sky_mask = (d_here < 0.0005) ? 1.0 : terrain_ray_strength;
+	vec3 outc = scene + ray_tint * scatter * sky_mask;
 
 	// DEBUG overlays (no early-return — GDShader forbids it; select with mix/step instead).
 	if (debug_mode == 1) {

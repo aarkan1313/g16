@@ -24,7 +24,10 @@ public partial class GodRaysScreen : Node3D
     {
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/godray_screen.gdshader") };
         _mat.RenderPriority = 127;   // draw after the scene's transparent objects
-        _mat.SetShaderParameter("occ_mode", 3);   // cloud-field occlusion (shadow map); mood-independent
+        // occ_mode 2 = LUMINANCE occlusion (on-screen cloud silhouettes) — gives crisp crepuscular BEAMS.
+        // occ_mode 3 (cloud shadow map) was tried for mood-independence but reads as a soft "filter", not
+        // beams (soft top-down transmittance has no sharp edges) — kept as a dormant option, NOT default.
+        _mat.SetShaderParameter("occ_mode", 2);
         _quad = new MeshInstance3D
         {
             Name = "GodRayScreenQuad",
@@ -60,11 +63,14 @@ public partial class GodRaysScreen : Node3D
             Vector2 px = _cam.UnprojectPosition(sunWorld);
             Vector2 vp = _cam.GetViewport().GetVisibleRect().Size;
             uv = px / vp;
-            // Smooth fade as the sun nears/exits the screen edges (no hard pop), × view alignment.
-            const float edge = 0.15f;
-            float fx = Mathf.Clamp(Mathf.Min(uv.X, 1f - uv.X) / edge, 0f, 1f);
-            float fy = Mathf.Clamp(Mathf.Min(uv.Y, 1f - uv.Y) / edge, 0f, 1f);
-            gate = fx * fy * Mathf.Clamp(align, 0f, 1f);
+            // GRADUAL onset (no sudden "lens-flare" pop as you turn toward the sun): a WIDE smoothstep
+            // edge-fade + an eased alignment ramp so the beams build in smoothly as the sun nears center.
+            const float edge = 0.32f;   // wider margin → fades in well before the sun reaches mid-screen
+            float fx = Mathf.SmoothStep(0f, 1f, Mathf.Min(uv.X, 1f - uv.X) / edge);
+            float fy = Mathf.SmoothStep(0f, 1f, Mathf.Min(uv.Y, 1f - uv.Y) / edge);
+            // ease alignment from a threshold: ~0 until the view is fairly toward the sun, then ramps up.
+            float a = Mathf.SmoothStep(0.15f, 0.85f, Mathf.Clamp(align, 0f, 1f));
+            gate = fx * fy * a;
         }
         _mat.SetShaderParameter("sun_screen_uv", uv);
         _mat.SetShaderParameter("sun_gate", gate);
