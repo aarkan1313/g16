@@ -2,7 +2,7 @@
 
 Living view of what's done, in-flight, and queued. Newest status at the top of each
 section. Pairs with HANDOFF.md (orientation) and DECISIONS.md (the why, per decision).
-Last updated: 2026-06-17.
+Last updated: 2026-06-19.
 
 **Pillars:** quality = performance = AAA-ish = best-long-term — regardless of time cost.
 
@@ -31,18 +31,37 @@ Last updated: 2026-06-17.
 4. **H1 BRDF check** — clouds-off terrain vs the approved look (custom `light()` = Burley+GGX);
    still wants an eye-confirm of no regression.
 
-## 🔨 Active arc — GROUND PRESENTATION rebuild (6 units)
-> Ground texturing is "functional but bad"; the presentation layer was never built out.
-> Spec: `specs/2026-06-17-ground-presentation-arc-design.md`. Build order = impact; each
-> eye-gated before the next. Shared seams: `ar_sample_wp` / `distanceWeight` /
-> `groundData`+`breakup_tex`.
-- [x] **Unit 1 — anti-repetition** (texture bombing). BUILT; awaiting live verify.
-- [ ] **Unit 2 — distance detail** (near detail ⊕ far macro). PLANNED.
+## 🔨 Active arc — GROUND rebuild: FOUNDATION first, then detail (REORDERED 2026-06-19)
+> Live judging proved the ground "doesn't look good enough to judge detail" — it's "random
+> ground" because material PLACEMENT (companion = `dominant−1` by index) + PALETTE (grey subset)
+> were never designed; the original arc wrongly deferred them to the end as polish. **Reordered:
+> build the placement+palette FOUNDATION first** (rule-based splatting), THEN the detail units on
+> top. Foundation spec: `specs/2026-06-19-ground-foundation-splatting-design.md` (supersedes the
+> 2026-06-17 arc's ORDER). Scope (user): make THIS region really good FIRST → chunks → infinite →
+> biomes last. Baked-once → fragment flat → protects the 160+ fps target. Shared seams:
+> `ar_sample_wp` / `distanceWeight` / the baked splat (now rule-driven) + `ground_palette.json`.
+>
+> **FOUNDATION (rule-based splatting — the gate; each eye-gated):**
+- [ ] **G1 — signals + rule engine in the bake.** Replace altitude/slope bands with a signal set
+  (altitude, slope, signed curvature, aspect, moisture/flow proxy, cavity) + role placement rules;
+  reuse the 7 slots as ROLES, current materials. Gate: placement COHERENT (right material right place).
+- [ ] **G2 — curated palette.** `data/ground_palette.json` + per-role dropdowns; contrast-rich picks
+  chosen live. Gate: reads photoreal, not drab.
+- [ ] **G3 — aspect + moisture/flow rules** (snow-by-aspect, green-follows-drainage, sediment in
+  channels) + cavity→contact. Gate: reads like real terrain follows water + exposure.
+>
+> **DETAIL (resume on top of the good foundation):**
+- [x] **Unit 1 — anti-repetition** (texture bombing). BUILT + APPROVED.
+- [~] **Unit 2 — distance detail** (near detail ⊕ far macro). **BUILT 2026-06-19, default OFF, SHELVED**
+  until the foundation reads good (only added a near-band albedo tweak on an unready base). Plan:
+  `plans/2026-06-17-ground-unit2-distance-detail.md` (built w/ 2 deviations: perf-pass preserved,
+  toggle default off).
 - [ ] **Unit 3 — surface depth** (parallax-occlusion + AO/normal/rough → BRDF). PLANNED.
-- [ ] **Unit 4 — procedural breakup** (GPU-compute slope/curv/cavity/aspect masks). PLANNED.
-- [ ] **Unit 5 — color/value** (replace washed macro tint; survive GI+AgX). PLANNED.
-- [ ] **Unit 6 — "and more"** (scatter hooks/wetness/snow-by-aspect/hi-Q triplanar). PLANNED.
-  Plans: `plans/2026-06-17-ground-unit{1..6}-*.md`. Don't build 2+ until Unit 1 verified.
+- [ ] **Unit 5 — color/value tint** (hue/value break that survives GI+AgX — the macro-tint layer,
+  distinct from G2's base palette). PLANNED.
+- [ ] **Unit 6 — "and more"** (scatter hooks / wetness / hi-Q triplanar). PLANNED.
+  Note: old Unit 4 (breakup masks) + the palette half of old Unit 5 are now folded into the FOUNDATION
+  (G1/G3 + G2). Old plans `plans/2026-06-17-ground-unit{3..6}-*.md` stay valid for the detail units.
 
 ## 🌊 Active arc — EROSION (re-introduced fresh; WG15's graveyard, done differently)
 > WG15 had ~19 erosion versions + 5 water systems, all bad — root cause was a STACK of

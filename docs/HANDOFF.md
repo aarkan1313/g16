@@ -79,11 +79,18 @@ Run a scene (always `--rendering-driver vulkan`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-19)
+> ### ⮕ START HERE (2026-06-19, refreshed — GROUND FOUNDATION pivot)
 > **Status:** base field proven (no bake); LIGHTING "really good"; CLOUDS reworked + reviewed good.
-> Last sessions did a **god-ray redesign (paused)**, a **performance pass (big terrain/cloud wins)**,
-> and **spec'd the terrain-LOD roadmap**. **⮕ NEXT = back to GROUND TEXTURES (the ground-presentation
-> arc, Unit 2 — distance detail).**
+> Recent: god-ray redesign (paused), performance pass (big wins), terrain-LOD roadmap spec'd.
+> **This session: built ground Unit 2 (distance detail), then live judging exposed the real problem —
+> the ground baseline is "random / drab" because material PLACEMENT + PALETTE were never designed.**
+> So we **reordered the ground arc: build the placement+palette FOUNDATION first** (rule-based
+> splatting), then resume the detail units on top. Unit 2 is **BUILT, default OFF, SHELVED** until the
+> foundation reads good.
+> **⮕ NEXT = GROUND FOUNDATION G1** (signals + rule engine in the splat bake). Spec:
+> `docs/superpowers/specs/2026-06-19-ground-foundation-splatting-design.md`; plan (when written):
+> `docs/superpowers/plans/2026-06-19-ground-foundation-g1-*.md`. Perf target the user set: **160+ fps
+> final**; baseline this session (lab window) clouds-off 227 fps/4.4 ms, clouds-on 156 fps/6.4 ms.
 >
 > **PERFORMANCE PASS (2026-06-19; see `docs/performance.md`):** profiled + decomposed the frame, then
 > landed CODE-efficiency wins (NOT quality cuts): branched triplanar (skip ~0 triplanar planes),
@@ -121,16 +128,26 @@ Run a scene (always `--rendering-driver vulkan`):
 >    bit-near-identical, but an eye-confirm is owed).
 > 3. **God rays** (when un-paused) — the soft volumetric base, then Component B for crisp shafts.
 >
-> **ACTIVE WORK = the GROUND-PRESENTATION ARC** (the current focus; see DECISIONS 2026-06-17
-> + `docs/superpowers/specs/2026-06-17-ground-presentation-arc-design.md`). 6-unit rebuild
-> of ground texturing, shared shader seams (`ar_sample_wp` fetch / `distanceWeight` LOD /
-> `groundData`+`breakup_tex` baked masks). **Unit 1 (anti-repetition) BUILT** —
-> `ar_sample_wp` stochastic bombing on the default `tp_*` splat path (which had NO anti-tile
-> before — root cause of the wallpaper look). **Units 2-6 PLANNED, not built** (one plan each
-> in docs/superpowers/plans/2026-06-17-ground-unit{2..6}-*.md): 2 distance-detail, 3 surface-
-> depth (parallax), 4 procedural-breakup (GPU-compute slope/curv/cavity/aspect masks — the
-> prime compute unit), 5 color/value, 6 "and more". Build order = that order, eye-gated;
-> don't build 2+ until Unit 1 is verified live.
+> **ACTIVE WORK = the GROUND rebuild, REORDERED 2026-06-19: FOUNDATION first, then detail.**
+> Live judging proved the ground reads "random / drab" because material PLACEMENT (the baked
+> splat's companion = `dominant−1` BY ARRAY INDEX, not by meaning) + PALETTE (a near-monochrome
+> grey 7-zone subset) were never designed — the original 6-unit arc wrongly deferred those to the
+> end as polish. **New order (foundation spec
+> `docs/superpowers/specs/2026-06-19-ground-foundation-splatting-design.md`, supersedes the
+> 2026-06-17 arc's ORDER):**
+> - **FOUNDATION = rule-based splatting (the gate):** GPU-bake a real signal set (altitude, slope,
+>   signed curvature, aspect→sun-exposure, moisture/flow proxy, cavity) + role placement rules +
+>   curated palette, all baked-once (fragment stays flat → protects 160+ fps). Reuse the 7 slots as
+>   ROLES; data-driven `data/ground_palette.json`. **G1** signals+rules (prove placement coherent w/
+>   current palette) → **G2** curated palette (photoreal) → **G3** aspect+moisture rules.
+> - **DETAIL (resume on the good foundation):** Unit 1 anti-repetition (`ar_sample_wp` bombing on
+>   the `tp_*` splat path) BUILT + APPROVED. **Unit 2 distance-detail BUILT this session, default
+>   OFF, SHELVED** (`detail_on` toggle / `--detail=1`; built with 2 deviations — perf pass preserved,
+>   toggle default off — see its commits). Units 3 (surface-depth/POM), 5 (color/value tint), 6 ("and
+>   more") still PLANNED (`plans/2026-06-17-ground-unit{3..6}-*.md`). Old Unit 4 (breakup masks) +
+>   the palette half of old Unit 5 are now FOLDED INTO the foundation.
+> Scope (user): make THIS region really good FIRST → chunks → infinite → biomes last. Each unit
+> eye-gated live at close/mid/far; build behind a toggle defaulting to the current look.
 >
 > **PARALLEL (isolated chats, no project access — will return LIBRARY code to integrate
 > here later, not review):** (a) procedural FLORA (trees/grass/forests); (b) WORLD EDITING /

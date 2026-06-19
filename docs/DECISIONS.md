@@ -6,6 +6,29 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-19 — Ground-presentation arc REORDERED: build the placement+palette FOUNDATION first
+(user direction, live).** Flying the lab, the user judged the ground "doesn't look good enough to
+even judge detail" — "it's just random ground, never had real setup/masks/shaders other than the
+anti-tiling." Diagnosis confirmed in code: the splat machinery exists but does ARBITRARY things —
+the companion material is `clamp(dominant−1,0,6)` (previous zone *by array index*, not by meaning),
+the 7-zone palette is a near-monochrome grey subset, and placement is altitude+slope bands only (no
+aspect/flow/curvature). So the arc's *order* was wrong: it deferred material PLACEMENT (Unit 4) and
+PALETTE (part of Unit 5) to the end as "polish," when they are the FOUNDATION. **Decision: pull them
+forward as a rule-based splatting foundation** — GPU-bake a real signal set (altitude, slope, signed
+curvature, aspect→sun-exposure, moisture/flow proxy, cavity) and assign materials by MEANING via
+placement rules, with a curated contrast-rich palette, all baked-once so the fragment cost stays flat
+(protects the 160+ fps target the user set). Reuse the 7 slots as ROLES (no sampler churn); data-driven
+palette/rules (`data/ground_palette.json`). **Scope (user's roadmap): make THIS region really good /
+basically done FIRST, then chunks → infinite/procedural → more biomes last.** Build order G1 (signals+
+rules, current palette → prove placement coherent) → G2 (curated palette → photoreal) → G3 (aspect+
+moisture rules → follows water/exposure); THEN resume detail Units 2/3/5 on top. **Unit 2 (distance
+detail) is BUILT this session, default OFF, shelved** until the foundation reads good (it only added a
+near-band albedo tweak on a base that wasn't ready). Couplings: erosion E2 drainage later feeds the
+moisture proxy; biome field later selects the palette/ruleset. Spec:
+`specs/2026-06-19-ground-foundation-splatting-design.md` (supersedes the build ORDER of the
+2026-06-17 ground-presentation arc spec). Perf baseline recorded: lab window clouds-off 227 fps/4.4 ms,
+clouds-on 156 fps/6.4 ms (real-res lower; fragment-bound; mesh floor is the terrain-LOD arc's job).
+
 **2026-06-19 — Terrain LOD roadmap SPEC'd (CDLOD), built around the WG1-15 clipmap post-mortem.**
 The terrain is one 2048² PlaneMesh (4M verts, no LOD) = the ~3.8 ms perf floor + ×4 shadow redraw, and
 the keystone streaming/erosion-E4/world-editing/flora need. PARKED for a roadmap because **clipmap

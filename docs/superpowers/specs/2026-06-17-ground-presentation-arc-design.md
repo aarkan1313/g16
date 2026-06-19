@@ -1,6 +1,13 @@
 # Ground Presentation — Arc Design (the AAA ground-texturing rebuild)
 
-Date: 2026-06-17 · Status: awaiting user review · Lane: surface/look (Presenter shader + a compute mask bake)
+> **⚠ BUILD ORDER SUPERSEDED 2026-06-19** by
+> `2026-06-19-ground-foundation-splatting-design.md`. Live judging showed material PLACEMENT
+> (old Unit 4) + PALETTE (part of old Unit 5) are the FOUNDATION, not late polish — they were
+> pulled forward as a rule-based splatting foundation (G1/G2/G3) that runs BEFORE the detail units.
+> This doc's *techniques* (Units 1/2/3/5/6) remain valid; only the ORDER changed (foundation first).
+> Unit 1 built+approved; Unit 2 built+shelved. See DECISIONS 2026-06-19 + ROADMAP "GROUND rebuild".
+
+Date: 2026-06-17 · Status: build order superseded (see banner) · Lane: surface/look (Presenter shader + a compute mask bake)
 
 ## Why
 
