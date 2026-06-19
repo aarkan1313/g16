@@ -90,9 +90,10 @@ public partial class TerrainLabUI : Control
         env.FogHeight = F(m, "fog_height", -200f);
         env.FogHeightDensity = F(m, "fog_heightd", 0.04f) * 0.3f;
         env.FogSunScatter = F(m, "fog_sun_scatter", 0.2f) * 0.25f;
-        // Volumetric fog OFF by default (it was the main 'can't see anything' culprit).
-        // Available as an opt-in toggle in the Light tab for those who want godrays.
-        env.VolumetricFogEnabled = false;
+        // Volumetric fog OFF by default (it was the main 'can't see anything' culprit) —
+        // UNLESS god rays are on, which REQUIRE the froxel grid. The god-ray system owns
+        // volfog while active; moods must not stomp it off (it runs after SetEnabled at startup).
+        env.VolumetricFogEnabled = _godrays != null && _godrays.On;
 
         env.TonemapExposure = F(m, "exposure", 1.0f);
         env.TonemapWhite = F(m, "white", 6.0f);

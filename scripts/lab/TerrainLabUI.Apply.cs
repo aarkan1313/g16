@@ -101,7 +101,8 @@ public partial class TerrainLabUI : Control
             case "fog_heightd":     env.FogHeightDensity = v; break;
             case "exposure":        env.TonemapExposure = v; break;
             case "volfog_d":        env.VolumetricFogDensity = v; break;
-            case "godray":          sun.LightVolumetricFogEnergy = v; break;
+            // (Light-tab "godray power" retired 2026-06-18 — god rays are now the unified
+            //  cloud-occluded FogVolume system in the Clouds tab; see godray-redesign-spec.md)
         }
     }
     private void OrientSun(DirectionalLight3D sun)
@@ -120,6 +121,7 @@ public partial class TerrainLabUI : Control
         _cloud?.SetSun(toSun, sun.LightColor, sun.LightEnergy);
         // the visible disc uses the BASE (un-dimmed) energy — overcast must not dim the sun in a gap.
         _cloud?.SetSunDiscEnergy(_baseSunEnergy);
+        _godrays?.SetSun(toSun, sun.LightColor);   // volumetric shafts track the same sun
     }
 
     /// After a mood sets the scene, update the Light-tab slider widgets so they show

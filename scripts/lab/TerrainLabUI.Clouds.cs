@@ -13,11 +13,19 @@ public partial class TerrainLabUI : Control
     //      only the public knob setters). _cloud is wired in Stage 3; null = no-op,
     //      so the Clouds tab is inert (but present + tunable in state) until then. --
     private CloudVolume? _cloud;
-    private void ApplyCloudFloat(string knob, float v) => _cloud?.SetKnob(knob, v);
+    private GodRays? _godrays;   // Component A: in-scene cloud-occluded volumetric shafts (consumes _cloud's shadow map)
+    private void ApplyCloudFloat(string knob, float v)
+    {
+        // god rays are their own subsystem now (FogVolume), NOT the old in-cloud in-scatter.
+        if (knob == "godray_strength") { _godrays?.SetStrength(v); return; }
+        _cloud?.SetKnob(knob, v);
+    }
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
     private void ApplyCloudBool(string knob, bool on)
     {
-        if (knob == "godrays") { _cloud?.SetGodraysEnabled(on); OvercastDirty(); return; }
+        // "god rays" toggle now drives the volumetric FogVolume system (redesign 2026-06-18),
+        // unifying what used to be two knobs (Light-tab uniform fog + in-cloud in-scatter).
+        if (knob == "godrays") { _godrays?.SetEnabled(on); return; }
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)
         _cloud?.SetKnobBool(knob, on);
         // clouds-enabled also gates the ground-shadow sampling in the terrain light()
