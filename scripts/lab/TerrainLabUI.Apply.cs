@@ -38,7 +38,8 @@ public partial class TerrainLabUI : Control
                 if (c.Cloud != null) { ApplyCloudBool(c.Cloud, c.Value.AsBool()); }
                 break;
             case "toggle":
-                if (c.Param != null) { _terrain.SetBool(c.Param, c.Value.AsBool()); }
+                if (c.Field != null) { SetTerrainBoolField(c.Field, c.Value.AsBool()); }
+                else if (c.Param != null) { _terrain.SetBool(c.Param, c.Value.AsBool()); }
                 break;
             case "enum":
                 int iv = c.Value.AsInt32();
@@ -66,6 +67,18 @@ public partial class TerrainLabUI : Control
     {
         if (field == "MixScaleM") { _terrain.MixScaleM = v; }
         else if (field == "MixBias") { _terrain.MixBias = v; }
+        else if (field == "CurvK") { _terrain.CurvK = v; }
+        else if (field == "HValley") { _terrain.HValley = v; }
+        else if (field == "HHigh") { _terrain.HHigh = v; }
+        else if (field == "HPeak") { _terrain.HPeak = v; }
+        else if (field == "SlopeCliffLo") { _terrain.SlopeCliffLo = v; }
+        else if (field == "SlopeCliffHi") { _terrain.SlopeCliffHi = v; }
+        else if (field == "BandSoftnessM") { _terrain.BandSoftnessM = v; }
+    }
+
+    private void SetTerrainBoolField(string field, bool v)
+    {
+        if (field == "RuleBased") { _terrain.RuleBased = v; }
     }
 
     private void ApplyScene(string? target, bool on)
