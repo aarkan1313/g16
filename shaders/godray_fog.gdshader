@@ -22,10 +22,19 @@ uniform float shadow_plane_y = 0.0;     // terrain mid height — the plane the 
 uniform vec3 sun_dir = vec3(0.0, 1.0, 0.0);   // direction TOWARD the sun (normalized, world)
 uniform vec3 sun_color : source_color = vec3(1.0, 0.96, 0.9);
 uniform float strength = 1.0;           // master intensity (UI: god ray strength)
+uniform vec3 cam_pos = vec3(0.0);       // camera world pos (per-frame) → view dir for phase
 
 uniform float haze = 0.001;             // base medium density (LOW — must see terrain through it; only shafts glow)
 uniform float height_base = 200.0;      // altitude where haze is densest (~terrain mid)
 uniform float height_falloff = 450.0;   // metres over which haze thins to nothing upward (hug the valley)
+uniform float forward_g = 0.76;         // Henyey-Greenstein forward bias — shafts BLAZE toward the sun
+
+// Henyey-Greenstein phase: strong forward peak at g→1. This is what makes a hazy medium
+// read as god-ray BEAMS (bright looking toward the sun) instead of flat uniform fog.
+float hg(float cosA, float g) {
+	float g2 = g * g;
+	return (1.0 - g2) / (4.0 * PI * pow(max(1.0 + g2 - 2.0 * g * cosA, 1e-4), 1.5));
+}
 
 void fog() {
 	// Thin haze that's densest low and fades with altitude — the medium light scatters in.
@@ -49,7 +58,14 @@ void fog() {
 	vec2 uv = onPlane.xz / shadow_region + 0.5;
 	float sunVis = texture(cloud_shadow_tex, uv).r;   // 1 = sun reaches, 0 = under cloud
 
-	// The air glows where the sun reaches it, weighted by the haze profile so the glow
-	// lives in the same layer as the medium. EMISSION is added in the light pass.
-	EMISSION = sun_color * (strength * sunVis * h);
+	// Forward-scatter phase: the lit haze is FAR brighter when we look toward the sun
+	// (view dir aligned with the sun) and fades away from it. This is what turns a uniform
+	// glow into god-ray BEAMS. cosA = how aligned this froxel's view ray is with the sun.
+	vec3 viewDir = normalize(WORLD_POSITION - cam_pos);
+	float cosA = dot(viewDir, toSun);
+	float phase = hg(cosA, forward_g);
+
+	// The air glows where the sun reaches it (sunVis), weighted by the haze profile (h) and
+	// the forward phase (beams toward the sun). EMISSION is added in the light pass.
+	EMISSION = sun_color * (strength * sunVis * h * phase);
 }

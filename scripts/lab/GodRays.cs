@@ -19,6 +19,7 @@ public partial class GodRays : Node3D
     private FogVolume _vol = null!;
     private ShaderMaterial _mat = null!;
     private Godot.Environment? _env;
+    private Camera3D? _cam;   // for the forward-scatter phase (view→sun angle) + box follow
 
     // saved env volumetric-fog state, restored when god rays are disabled, so toggling
     // god rays never permanently changes the Light-tab volumetric fog settings.
@@ -51,8 +52,17 @@ public partial class GodRays : Node3D
         AddChild(_vol);
     }
 
-    /// Borrow the Environment so we can ensure volumetric fog is live while god rays are on.
-    public void Attach(Godot.Environment env) { _env = env; }
+    /// Borrow the Environment (to keep volfog live while on) + the camera (for the
+    /// forward-scatter phase + keeping the box centered on the viewer).
+    public void Attach(Godot.Environment env, Camera3D cam) { _env = env; _cam = cam; }
+
+    public override void _Process(double delta)
+    {
+        if (!_on || _cam == null) { return; }
+        Vector3 cp = _cam.GlobalPosition;
+        _mat.SetShaderParameter("cam_pos", cp);            // view dir per froxel → forward-scatter phase
+        if (_vol != null) { _vol.GlobalPosition = new Vector3(cp.X, 500f, cp.Z); }   // follow viewer in XZ
+    }
 
     /// Bind the cloud shadow map (Texture2Drd from CloudVolume) + its world footprint.
     public void SetShadowTexture(Texture2D? tex, float region)

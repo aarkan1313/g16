@@ -101,7 +101,8 @@ public partial class TerrainLabUI : Control
         if (_godrays != null)
         {
             GetNode("/root/TerrainLabRoot").AddChild(_godrays);
-            _godrays.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment);
+            _godrays.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
+                            GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
             _godrays.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
             _godrays.SetGroundHeight(_terrain.MidHeight);
         }
