@@ -58,6 +58,22 @@ public partial class TerrainLabUI : Control
     private bool _shadowEnabledOnce;
     public override void _Process(double delta)
     {
+        // --profmove: orbit the camera during a profile so the MOTION costs (SDFGI cascade
+        // re-rasterization, shadow-frustum updates, cloud temporal reprojection, AR distance)
+        // are paid every frame — a static --profile lets them converge and understates flying.
+        if (_profMove && _profileT >= 0.0)
+        {
+            var pcam = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+            float t = (float)_profileT;
+            float ang = t * 0.6f;                                   // ~0.6 rad/s orbit
+            var center = new Vector3(0f, 120f, 0f);
+            var pos = center + new Vector3(Mathf.Cos(ang) * 700f,
+                                           140f + 60f * Mathf.Sin(t * 0.3f),
+                                           Mathf.Sin(ang) * 700f);
+            pcam.GlobalPosition = pos;
+            pcam.LookAt(center, Vector3.Up);
+        }
+
         if (_ready) { UpdateOvercast(); }
         // push camera world pos for the ground anti-repetition distance LOD (Unit 1)
         // AND the world-space cloud raymarch (rays start at the camera so clouds + the
@@ -121,5 +137,6 @@ public partial class TerrainLabUI : Control
         }
     }
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum = 0, _profWorst = 0;
+    private bool _profMove = false;   // --profmove: orbit camera during profile (motion cost)
     private int _profFrames = 0;
 }

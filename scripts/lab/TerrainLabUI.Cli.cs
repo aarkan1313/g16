@@ -64,6 +64,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--detail=")) { _terrainDetailCli = a.Substring("--detail=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--groundrules=")) { _groundRulesCli = a.Substring("--groundrules=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
+            else if (a == "--profmove") { _profMove = true; }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }
             else if (a == "--cloudstats") { _cloudStatsCli = true; }
