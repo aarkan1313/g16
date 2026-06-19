@@ -13,7 +13,8 @@ public partial class TerrainLabUI : Control
     //      only the public knob setters). _cloud is wired in Stage 3; null = no-op,
     //      so the Clouds tab is inert (but present + tunable in state) until then. --
     private CloudVolume? _cloud;
-    private GodRaysVolumetric? _godrays;   // canonical volumetric god rays (per-froxel cloud-shadow in volfog)
+    private GodRaysVolumetric? _godrays;   // canonical volumetric god rays (per-froxel cloud-shadow in volfog) — soft base
+    private GodRaysScreen? _godraysScreen;   // screen-space radial scatter (GPU Gems 3) — crisp beam layer
     private void ApplyCloudFloat(string knob, float v)
     {
         if (knob == "godray_strength") { _godrays?.SetStrength(v); return; }   // shaft albedo contrast

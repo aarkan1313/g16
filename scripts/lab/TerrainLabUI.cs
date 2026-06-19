@@ -56,7 +56,8 @@ public partial class TerrainLabUI : Control
         // setup during _Ready ("parent busy setting up children"), so both the
         // AddChild and the Attach must run after the current frame's setup.
         _cloud = new CloudVolume { Name = "CloudVolume" };
-        _godrays = new GodRaysVolumetric { Name = "GodRaysVolumetric" };   // canonical sun-shadowed volumetric god rays
+        _godrays = new GodRaysVolumetric { Name = "GodRaysVolumetric" };   // canonical sun-shadowed volumetric god rays (soft base)
+        _godraysScreen = new GodRaysScreen { Name = "GodRaysScreen" };     // screen-space radial scatter (crisp beam layer)
         CallDeferred(nameof(AttachClouds));
 
         ParseCli();
@@ -104,6 +105,15 @@ public partial class TerrainLabUI : Control
                             GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
             _godrays.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
             _godrays.SetGroundHeight(_terrain.MidHeight);   // cloud-bake ground reference for the per-froxel unshift
+        }
+        // SCREEN-SPACE god rays (crisp beam layer). Task 1: force-on to experiment whether the
+        // captured frame contains the sky/sun/clouds (TEMP — Task 3 swaps this for a control).
+        if (_godraysScreen != null)
+        {
+            GetNode("/root/TerrainLabRoot").AddChild(_godraysScreen);
+            _godraysScreen.Attach(GetNode<Camera3D>("/root/TerrainLabRoot/Camera"),
+                                  GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
+            _godraysScreen.SetEnabled(true);   // TEMP: force-on for the Task-1 experiment
         }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
