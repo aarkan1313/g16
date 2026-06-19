@@ -65,13 +65,15 @@ visibility-range mesh LOD, simpler uniform-but-smaller) against those failure mo
 ## Remaining safe backlog (no terrain geometry; not yet done)
 
 From the code audit (4 read-only subagents, 2026-06-18) — ranked, quality-preserving:
-- **Cheap sun light-march** (`cloud_raymarch.glsl`) — `light_optical_depth` re-walks the FULL density
-  recipe (domain warp + 2-octave detail erosion) 7× per lit view-sample. A coarse density for the
-  light ray (skip detail/warp, coarser mip) is standard (Nubis) and visually negligible → ~2–3× fewer
-  fetches in the hottest loop. **Biggest remaining cloud win.**
-- **16-bit noise volumes** — shape/detail 3D volumes are `R32G32B32A32` (32-bit) for [0,1] noise;
-  `R16`/`R8` halves/quarters the bandwidth on the hottest fetches.
-- **Shadow-map dirty-flag** — re-marched every frame even when sun + clouds + wind are static.
+- **✅ 16-bit noise volumes — DONE.** Was `R32G32B32A32`; now `R16G16B16A16` half-float (cloudstats
+  byte-identical). Halved bandwidth on the density taps.
+- **✗ Cheap sun light-march — TRIED & REVERTED (do not re-attempt as-is).** Skipping the 2-octave detail
+  erosion in `light_optical_depth` gave only ~0.1 ms (noise): the detail volume is 32³ (~256 KB at
+  16-bit) = **cache-resident**, so its taps cost ~no bandwidth — the audit counted taps, not cache
+  behavior. It also darkened clouds ~6% (meanCloudLuma 0.618→0.579). Net loss. If ever revisited, target
+  the 96³ SHAPE volume (not cache-resident) — but that changes the density math (coupling).
+- **Shadow-map amortization** — re-marched every frame; could stride like the dome, but risks the ground
+  shadow lagging the cloud overhead during motion (coupling) → needs care + eye-check.
 - **Cache per-frame `GetNode("/root/...")`** in `TerrainLabUI._Process`/`UpdateOvercast` (string-path
   tree walks every frame; resolve to fields once in `AttachClouds`).
 - **macro `rgb2hsv→hsv2rgb` roundtrip** per pixel — value/saturation drift can be done in RGB.
