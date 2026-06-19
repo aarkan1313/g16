@@ -8,7 +8,14 @@ toggle table), memory `cloud-look-real-rootcauses` (why the clouds read good now
 
 ---
 
-## A. Feature-by-feature review (DO THIS FIRST — user's eye, in motion)
+## REVIEW STATUS (2026-06-18, in progress)
+Done & accepted: per-deck lighting (#1); presets (all 5 — Clear sky brightened, Stormy darkened);
+sun-disc dimming bug fixed; overcast reworked into its own knob that greys the sky; dome
+res→1024×256 + softened sample (zenith pixelation + motion crawl SOLVED → view-space rewrite no
+longer needed). Still to review with the user: **god rays**, **temporal amortization**,
+**randomize** (+ decide picker-jitter). Then the eye-gated items below (§C/§E + sun pass).
+
+## A. Feature-by-feature review (user's eye, in motion)
 
 Each feature ships behind a toggle that defaults to the validated baseline, so review one at a
 time. For each: launch, flip the toggle, judge in motion (never a still). Likely tuning levers
@@ -40,7 +47,15 @@ it — don't grind. Per-feature toggles make it cheap to ship one and shelve ano
 
 ---
 
-## B. The texture / view-space decision (the deferred BIG item)
+## B. The texture / view-space decision — RESOLVED (view-space NOT needed)
+
+Outcome of the review: at 512×128 the lat-long dome was pixelly looking up (zenith) and showed
+crawling squares on moving edges. Both were fixed CHEAPLY — a softened 5-tap dome sample in
+`cloud_sky.gdshader` (no temporal history → no ghosting) + default res raised to 1024×256. User:
+"a lot better." **So the view-space half-res march + TAA rewrite is NOT being done** — revisit only
+if a future scene/perf case re-opens it. The analysis below is kept for that scenario.
+
+### (archived) The texture / view-space analysis
 
 **Current:** the march writes a **lat-long dome texture** (az×el, 512×128 default), and
 `cloud_sky.gdshader` samples it by EYEDIR. Decouples cloud cost from screen res; compresses

@@ -6,6 +6,21 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-18 — Cloud feature-by-feature review pass (live, user-driven).** Outcomes:
+(1) **Dome res / texel crawl** — 512×128 was pixelly looking up (zenith) + crawling squares on
+moving edges. Fixed CHEAPLY (no view-space rewrite): a 5-tap softened dome sample in
+`cloud_sky.gdshader` + default res → 1024×256. **The view-space half-res march rewrite is NO
+LONGER needed** unless a future case demands it. (2) **Sun disc** decoupled from the overcast
+dimming (`sun_disc_energy`) — coverage was dimming the visible sun even in a clear gap. (3)
+**Overcast** is now its own tunable knob (`overcast_strength` / `cloud_overcast`) on a smooth
+`pow(coverage,3)` curve (was a hard `smoothstep(0.55,0.9)`), and it greys the SKY + cloud ambient
+(was terrain/fog only → invisible looking up). (4) **Presets reviewed** — distributions good;
+brightened the Clear-Alpine mood sky (deep navy → luminous blue) and darkened Stormy.
+(5) **Lighting-model clarification (don't re-litigate):** clouds make the GROUND *darker* (overcast
+dim + shadow map), and make the SKY *look* brighter only because white cloud out-luminates blue sky
+— so "Clear sky darker than Scattered" is correct/physical, NOT a bug. See `docs/cloud-next-steps.md`,
+`docs/cloud-system-overview.md`, memory `cloud-lighting-model`.
+
 **2026-06-18 — Cloud polish: the audit's "already fixed" lighting was BUGGY; fixed the
 real root causes, then finished the roadmap behind toggles.** The 2026-06-18 external
 audit said lighting/macro/stepping were done. They weren't: (1) `cloud_sky.gdshader`

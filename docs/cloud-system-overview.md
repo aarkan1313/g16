@@ -57,7 +57,8 @@ All toggles default to the validated look (so the base is stable); flip one at a
 | Coherent randomize | Clouds-tab Randomize | — | logs "applied preset '…' (jittered)" — always a sane sky |
 | God rays | `cloud_godrays` + `cloud_godray_strength` / `--godrays=1` | off | brightening/shafts toward sun through gaps; no black wedges |
 | Temporal amortization | `cloud_temporal` / `--temporal=N` | 1 (off) | cheaper frame (`--profile`); watch for drift shimmer |
-| Dome resolution | `--cloudtex=H` (launch only) | 512×128 | sharper horizon at 1024×256 (`--cloudtex=256`) |
+| Overcast gloom | `cloud_overcast` (overcast_strength) | 0.7 | greys sky + cloud ambient at high coverage (pow³ curve) |
+| Dome resolution | `--cloudtex=H` (launch only) | **1024×256** | + softened 5-tap sky sample → clean in motion (512×128 was pixelly at zenith) |
 | Raymarch steps | `cloud_steps` / `--cloudsteps=` | 128 | perf vs quality |
 
 Diagnostics: `--shadowcheck` (coupling), `--lightcheck` (per-deck lighting delta),
@@ -85,10 +86,20 @@ The earlier audit claimed lighting/macro/stepping were done; they had real bugs.
 | + temporal stride 4 | 10.2 ms | amortizes (helps most at hi-res) |
 | 1024×256 | 13.3 ms | +2.6 ms (pair with temporal) |
 
+## Lighting model (don't re-litigate — clarified during review)
+
+Clouds make the **ground darker** (overcast dim in `UpdateOvercast` + the cloud shadow map cut
+direct sun), and make the **sky LOOK brighter** only because white cloud out-luminates blue sky.
+So a clear blue sky is genuinely lower-luminance than a cloud-filled one — "Clear darker than
+Scattered" is correct/physical, not a bug. Sky color is mood-driven (`lighting_moods.json`),
+shared across cloud presets; overcast greys it toward flat grey at high coverage.
+
 ## Not done (eye-gated — needs the user's review in motion)
 
-- View-space half-res march + TAA (the "real" #5; `--cloudtex` is the stopgap). Big architectural
-  change — brainstorm → spec before building.
+- View-space half-res march + TAA — **NO LONGER NEEDED** (the softened sky sample + 1024×256 fixed
+  the zenith pixelation + motion crawl that would have justified it). Revisit only if a future
+  case demands it.
+- Deck VERTICAL structure / meteorological realism (decks are flat slabs) — research item, §E.
+- Sun FULL pass (cool sun shader) — §C; the disc is a stopgap.
 - Horizon / distant-sky handling (cloud band cutoff at the horizon).
-- Sun-disc shader polish (flat bright circle today).
 - Snapshot cloud settings into the mood/time-of-day presets.

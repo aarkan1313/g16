@@ -95,9 +95,12 @@ Run a scene (always `--rendering-driver vulkan`):
 > coherent randomize, temporal amortization, configurable dome res (`--cloudtex`), in-march god
 > rays. Coupling PROVEN via `--shadowcheck` (PASS at every density change). New diagnostics:
 > `--cloudstats` (dome readback), `--lightcheck`, `--auto-shot` self-screenshots. Cloud render
-> ~1.3 ms (512×128). **The lab menu is complete + correctly linked (no dead controls).** ⮕ NEXT:
-> the user reviews each cloud feature in motion (see `docs/cloud-next-steps.md` §"feature review")
-> and the eye-gated items (view-space march rewrite, horizon/sun-disc) get tackled after.
+> ~1.3 ms (512×128 base; default raised to 1024×256 + softened sky sample after review). **Lab menu
+> complete + correctly linked.** REVIEW IN PROGRESS (2026-06-18): per-deck, presets (Clear sky
+> brightened, Stormy darkened), sun-disc dimming bug, overcast (now its own knob that greys the sky)
+> all done; **view-space rewrite NO LONGER needed** (softening fixed zenith pixelation + motion crawl).
+> ⮕ NEXT review items: god rays, temporal, randomize. See `docs/cloud-next-steps.md` (REVIEW STATUS)
+> + memory `cloud-lighting-model` (clouds dim ground / brighten sky — physical, not a bug).
 > **Infra lessons (memory):** `cloud-look-real-rootcauses` (THE root causes + the diagnostics),
 > `std430-packing-helper`, `cloud-look-audit-findings`, `wg16-launch-absolute-path`.
 >
