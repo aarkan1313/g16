@@ -127,6 +127,7 @@ public partial class CloudVolume : Node
         _skyMat.SetShaderParameter("cloud_rd_tex", _cloudTex);
         _skyMat.SetShaderParameter("cloud_enabled", _enabled);
         _skyMat.SetShaderParameter("cloud_debug", _debug);
+        _skyMat.SetShaderParameter("sun_disc_energy", _sunDiscEnergy);
         _cloudSky = new Sky { SkyMaterial = _skyMat, ProcessMode = Sky.ProcessModeEnum.Realtime, RadianceSize = Sky.RadianceSizeEnum.Size256 };
     }
 
@@ -404,6 +405,12 @@ public partial class CloudVolume : Node
     public void SetDeckDebug(bool on) { _dbgDeck = on ? 1f : 0f; }
 
     public void SetSun(Vector3 dir, Color color, float energy) { _sunDir = dir.Normalized(); _sunColor = color; _sunEnergy = energy; }
+
+    // The visible sun-disc brightness = the BASE (un-dimmed) sun energy, so raising coverage
+    // (which dims the directional light via the overcast proxy) does NOT dim the disc — only an
+    // actual cloud in front occludes it (dome composite). Pushed from TerrainLabUI._baseSunEnergy.
+    private float _sunDiscEnergy = 1.3f;
+    public void SetSunDiscEnergy(float e) { _sunDiscEnergy = e; _skyMat?.SetShaderParameter("sun_disc_energy", e); }
 
     /// Mood sky colors → cloud ambient/scatter (compute) + the sky-shader background
     /// gradient, so clouds + the sky behind them track the chosen mood/time-of-day.

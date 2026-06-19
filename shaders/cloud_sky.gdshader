@@ -12,6 +12,11 @@ uniform sampler2D cloud_rd_tex : filter_linear, repeat_enable;
 uniform bool cloud_enabled = true;
 uniform int cloud_debug = 0;   // 0 normal | 1 show raw cloud tex
 
+// Sun-disc brightness, decoupled from LIGHT0_ENERGY: the overcast proxy dims the directional
+// light's energy globally (terrain gloom), but the VISIBLE sun disc must stay bright — a cloud
+// in front occludes it via the dome composite, total coverage elsewhere must NOT dim it.
+uniform float sun_disc_energy = 1.3;
+
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
 uniform vec3 ground_color : source_color = vec3(0.22, 0.26, 0.22);
@@ -47,7 +52,7 @@ void sky(){
         // tight disc + wider soft glow toward the sun
         float disc = smoothstep(0.9994, 0.9998, cosSun);          // ~0.6° disc
         float glow = pow(max(cosSun, 0.0), 220.0) * 0.5;          // halo
-        vec3 sunRGB = LIGHT0_COLOR * LIGHT0_ENERGY;
+        vec3 sunRGB = LIGHT0_COLOR * sun_disc_energy;   // base brightness, NOT overcast-dimmed
         bg += sunRGB * (disc * 12.0 + glow);
     }
 

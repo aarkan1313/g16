@@ -75,8 +75,15 @@ density field + lighting stay identical (reuse). Coupling guarantee unchanged (s
   `rd.y` cutoffs in both the march and the sky shader; no density fade-to-haze, no convincing
   clear-sky falloff). Wants: soften the horizon cutoff + a believable non-cloud sky gradient so a
   sparse sky doesn't look truncated. Surfaced in the cloud refactor review; do as a focused pass.
-- **Sun-disc polish** — `cloud_sky.gdshader` draws a flat bright circle + tight glow. Wants a
-  more convincing disc/limb + atmospheric glow (and it must keep occluding behind clouds).
+- **Sun — FULL PASS (user-flagged 2026-06-18, wants it "look better + a cool shader").** Today
+  `cloud_sky.gdshader` draws a flat bright circle + a tight `cos^220` glow, and (now) at the base
+  un-dimmed brightness so coverage doesn't dim it. That's a stopgap; the sun deserves its own pass.
+  Candidate "cool sun" features (its own brainstorm → spec): soft limb/disc with slight limb
+  darkening; a proper multi-falloff atmospheric glow/corona (Mie-ish, wider warm halo near horizon);
+  HDR bloom tuned so only the disc blooms (not the whole sky); sun-position-driven SKY tint
+  (warm horizon at low sun = golden hour); optional lens flare/ghosts on a toggle; god-ray anchor
+  (the in-march shafts should emanate from it); must keep occluding correctly behind clouds (dome
+  composite) AND stay decoupled from the overcast dimming. Pairs with the future time-of-day system.
 - **Snapshot cloud settings into the MOOD / time-of-day presets** — so the curated moods carry a
   matching cloud look (the moods already drive cloud sky-color; this would bind the full knob set).
 - **Cloud-presence coherence** — overcast dim + aerial tint + reflections + mood cloud color, now

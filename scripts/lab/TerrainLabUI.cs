@@ -652,6 +652,8 @@ public partial class TerrainLabUI : Control
     {
         Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();   // -(-Z forward) = +Z
         _cloud?.SetSun(toSun, sun.LightColor, sun.LightEnergy);
+        // the visible disc uses the BASE (un-dimmed) energy — overcast must not dim the sun in a gap.
+        _cloud?.SetSunDiscEnergy(_baseSunEnergy);
     }
 
     // ---- cloud knobs → CloudVolume (separation: UI never touches cloud internals,
