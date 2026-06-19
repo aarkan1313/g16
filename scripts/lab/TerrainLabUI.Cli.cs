@@ -17,6 +17,7 @@ public partial class TerrainLabUI : Control
     private string? _camArg;
     private float _texScale = -1f;
     private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
+    private int _probeSdfgi = -1;   // --sdfgi=0/1: isolate the real-time GI cost (perf pass)
     private float _probeRoughFloor = -1f, _probeMixStr = -1f;
 
     private float _covOverride = -1f;
@@ -44,6 +45,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
             else if (a.StartsWith("--ssao=")) { _probeSsao = a.Substring("--ssao=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--sdfgi=")) { _probeSdfgi = a.Substring("--sdfgi=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadow=")) { _probeShadow = a.Substring("--shadow=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--roughfloor=")) { if (float.TryParse(a.Substring("--roughfloor=".Length), out float rf)) _probeRoughFloor = rf; }
             else if (a.StartsWith("--mixstr=")) { if (float.TryParse(a.Substring("--mixstr=".Length), out float ms)) _probeMixStr = ms; }
@@ -99,6 +101,11 @@ public partial class TerrainLabUI : Control
         {
             var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
             sun.ShadowEnabled = _probeShadow == 1;
+        }
+        if (_probeSdfgi >= 0)
+        {
+            var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
+            env.Environment.SdfgiEnabled = _probeSdfgi == 1;
         }
         if (_probeRoughFloor >= 0f) { _terrain.SetFloat("rough_floor", _probeRoughFloor); }
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
