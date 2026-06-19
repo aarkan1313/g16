@@ -4,7 +4,12 @@
 
 **Goal:** Replace the splat bake's altitude/slope *band* logic with a signal-driven **role placement rule engine** (altitude + slope + signed curvature → a weight per surface ROLE → top-2), and route the *meaningful* baked secondary into the fragment — so the ground's material placement reads as coherent (right material in the right place) instead of "random." Behind a `rule_based` toggle defaulting to the current look.
 
-**Architecture:** All new logic lives in the **bake** (`splat_weights.glsl` + `SplatCompute.cs` + `TerrainLab.RebakeSplat`). The compute shader gains a `role_weights()` function selected by a `rule_based` param (the legacy `zone_weights()` stays for A/B). The runner-up role (already computed as `d1`) becomes the baked secondary (`splat.g`). The fragment gains one `splat_rule_based` bool uniform so it reads the baked secondary (`splat.g`) instead of the fixed `sec_zone[dom]` lookup. Reuses the current 7 materials and the existing breakpoints — palette (G2) and aspect/moisture signals (G3) come later. Baked once → fragment cost unchanged.
+**Architecture:** All new logic lives in the **bake** (`splat_weights.glsl` + `SplatCompute.cs` + `TerrainLab.RebakeSplat`). The compute shader gains a `role_weights()` function selected by a `rule_based` param (the legacy `zone_weights()` stays for A/B). The runner-up role (already computed as `d1`) becomes the baked secondary (`splat.g`). The fragment gains one `splat_rule_based` bool uniform so it reads the baked secondary (`splat.g`) instead of the fixed `sec_zone[dom]` lookup. Reuses the current 7 materials — palette (G2) and aspect/moisture signals (G3) come later. The placement breakpoints (currently hardcoded in `RebakeSplat`) are **promoted to live re-bake UI sliders** so placement is tunable without code. Baked once → fragment cost unchanged.
+
+**Separation of concerns & infinite-world notes (design intent — keep these true):**
+- The bake is a **pure deterministic function** of `(heightfield, rule params)` — same seed → same heights → identical bake, recomputable anywhere. `role_weights()` uses only **local** signals (altitude/slope/curvature) + world-space-continuous noise → **position-independent, no global state** → tiles seamlessly across future infinite chunks (per-chunk bake on demand). Do NOT introduce dependence on absolute chunk identity or a global bake.
+- **Separation:** the rule ENGINE (`role_weights` in `splat_weights.glsl`) is isolated from PALETTE (which material fills a role — G2, `ground_palette.json`) and from the COMPOSITING (fragment blend). G1 touches only the engine + its tunable params + the secondary routing. Rule params live as a dedicated group on `TerrainLab` (not mixed into the legacy fragment uniforms).
+- **Tunability:** every placement breakpoint is a live re-bake slider on the Splat tab → the user dials placement in by eye, no recompile.
 
 **Tech Stack:** Godot 4.6 mono; GLSL compute (`shaders/splat_weights.glsl`) baked via local RenderingDevice + readback (`SplatCompute.cs`); GLSL spatial shader (`shaders/terrain_lab.gdshader`); C# (`scripts/lab/TerrainLab.cs`, `scripts/lab/TerrainLabUI.Apply.cs`, `scripts/lab/TerrainLabUI.Cli.cs`); data-driven controls (`data/lab_controls.json`).
 
@@ -198,7 +203,7 @@ git commit -m "Ground G1: SplatCompute.Params + BuildParams add RuleBased + Curv
 **Files:** Modify `scripts/lab/TerrainLab.cs`.
 
 **Interfaces:**
-- Produces: public fields `bool RuleBased` (default false), `float CurvK` (default 3f) on `TerrainLab`; `RebakeSplat()` passes them into `Params` AND sets the `splat_rule_based` shader uniform so the bake + fragment stay consistent.
+- Produces: public fields on `TerrainLab` — `bool RuleBased` (false), `float CurvK` (3f), and the placement breakpoints `HValley/HSlope/HHigh/HPeak/SlopeCliffLo/SlopeCliffHi/BandSoftnessM` (defaults = the old hardcoded values). `RebakeSplat()` reads them all into `Params` AND sets the `splat_rule_based` shader uniform so the bake + fragment stay consistent.
 - Consumes: `Params.RuleBased`/`CurvK` (Task 2); fragment `uniform bool splat_rule_based` (Task 4).
 
 - [ ] **Step 1: Add the public fields** beside the existing splat-bake fields (after the `SplatMaskMode` line ~23):
@@ -208,11 +213,18 @@ git commit -m "Ground G1: SplatCompute.Params + BuildParams add RuleBased + Curv
     // G1 rule engine: meaningful, signal-driven material placement (vs legacy bands).
     public bool RuleBased = false;   // default off = current approved look
     public float CurvK = 3.0f;       // curvature scale (m): convex ridge vs concave hollow split
+    // Placement breakpoints — promoted from hardcoded so they're live re-bake UI knobs.
+    // Defaults preserve the previous hardcoded bake values exactly.
+    public float HValley = 100f, HSlope = 350f, HHigh = 700f, HPeak = 950f;
+    public float SlopeCliffLo = 0.30f, SlopeCliffHi = 0.55f, BandSoftnessM = 120f;
 ```
 
-- [ ] **Step 2: Pass them into `Params` + set the fragment flag** in `RebakeSplat()`. Replace:
+- [ ] **Step 2: Read the fields into `Params` + set the fragment flag** in `RebakeSplat()`. Replace:
 
 ```csharp
+            HValley = 100f, HSlope = 350f, HHigh = 700f, HPeak = 950f,
+            SlopeCliffLo = 0.30f, SlopeCliffHi = 0.55f, BandSoftnessM = 120f,
+            MixScaleM = MixScaleM, MixBias = MixBias,
             MaskMode = (uint)SplatMaskMode,
             EdgeNoiseM = EdgeNoiseM, EdgeNoiseAmp = EdgeNoiseAmp, MacroM = MacroM,
         };
@@ -222,6 +234,9 @@ git commit -m "Ground G1: SplatCompute.Params + BuildParams add RuleBased + Curv
 ```
 with:
 ```csharp
+            HValley = HValley, HSlope = HSlope, HHigh = HHigh, HPeak = HPeak,
+            SlopeCliffLo = SlopeCliffLo, SlopeCliffHi = SlopeCliffHi, BandSoftnessM = BandSoftnessM,
+            MixScaleM = MixScaleM, MixBias = MixBias,
             MaskMode = (uint)SplatMaskMode,
             EdgeNoiseM = EdgeNoiseM, EdgeNoiseAmp = EdgeNoiseAmp, MacroM = MacroM,
             RuleBased = RuleBased ? 1u : 0u, CurvK = CurvK,
@@ -231,7 +246,7 @@ with:
         // Fragment must read the baked secondary (splat.g) when the rule engine is on;
         // keep it in lockstep with the bake so the two never disagree.
         _mat.SetShaderParameter("splat_rule_based", RuleBased);
-        GD.Print($"TerrainLab: splat baked (rule {(RuleBased ? 1 : 0)}, curvK {CurvK:F1}, mixScale {MixScaleM:F0}, mask {SplatMaskMode})");
+        GD.Print($"TerrainLab: splat baked (rule {(RuleBased ? 1 : 0)}, curvK {CurvK:F1}, snow {HPeak:F0}, mask {SplatMaskMode})");
 ```
 
 - [ ] **Step 3: Build.** Run: `dotnet build WG16.csproj`. Expected: 0 errors.
@@ -306,7 +321,7 @@ with:
                 break;
 ```
 
-- [ ] **Step 2: Add the `CurvK` case + the new bool-field setter.** Replace:
+- [ ] **Step 2: Add the new field cases + the bool-field setter.** Replace:
 
 ```csharp
     private void SetTerrainField(string field, float v)
@@ -322,6 +337,12 @@ with:
         if (field == "MixScaleM") { _terrain.MixScaleM = v; }
         else if (field == "MixBias") { _terrain.MixBias = v; }
         else if (field == "CurvK") { _terrain.CurvK = v; }
+        else if (field == "HValley") { _terrain.HValley = v; }
+        else if (field == "HHigh") { _terrain.HHigh = v; }
+        else if (field == "HPeak") { _terrain.HPeak = v; }
+        else if (field == "SlopeCliffLo") { _terrain.SlopeCliffLo = v; }
+        else if (field == "SlopeCliffHi") { _terrain.SlopeCliffHi = v; }
+        else if (field == "BandSoftnessM") { _terrain.BandSoftnessM = v; }
     }
 
     private void SetTerrainBoolField(string field, bool v)
@@ -330,11 +351,23 @@ with:
     }
 ```
 
-- [ ] **Step 3: Add the two rows to `data/lab_controls.json`** on the **Splat** tab. Insert after the `band_soft_mult` row (the last Splat block; find `"id": "band_soft_mult"` and add after its closing `},`):
+- [ ] **Step 3: Add the rule-engine control group to `data/lab_controls.json`** on the **Splat** tab. Insert after the `band_soft_mult` row (find `"id": "band_soft_mult"` and add after its closing `},`):
 
 ```json
     { "id": "rule_based", "label": "rule placement", "tab": "Splat", "type": "toggle",
       "field": "RuleBased", "default": false, "rand": false, "rebake": true },
+    { "id": "rule_valley", "label": "valley line (m)", "tab": "Splat", "type": "slider",
+      "field": "HValley", "min": 0, "max": 600, "default": 100, "rand": false, "rebake": true },
+    { "id": "rule_high", "label": "alpine line (m)", "tab": "Splat", "type": "slider",
+      "field": "HHigh", "min": 300, "max": 1200, "default": 700, "rand": false, "rebake": true },
+    { "id": "rule_peak", "label": "snow line (m)", "tab": "Splat", "type": "slider",
+      "field": "HPeak", "min": 500, "max": 1500, "default": 950, "rand": false, "rebake": true },
+    { "id": "rule_slopelo", "label": "rock slope lo", "tab": "Splat", "type": "slider",
+      "field": "SlopeCliffLo", "min": 0.05, "max": 0.6, "default": 0.30, "rand": false, "rebake": true },
+    { "id": "rule_slopehi", "label": "rock slope hi", "tab": "Splat", "type": "slider",
+      "field": "SlopeCliffHi", "min": 0.2, "max": 0.9, "default": 0.55, "rand": false, "rebake": true },
+    { "id": "rule_bandsoft", "label": "band soft (m)", "tab": "Splat", "type": "slider",
+      "field": "BandSoftnessM", "min": 20, "max": 300, "default": 120, "rand": false, "rebake": true },
     { "id": "curv_k", "label": "curve split (m)", "tab": "Splat", "type": "slider",
       "field": "CurvK", "min": 0.5, "max": 12, "default": 3, "rand": false, "rebake": true },
 ```
