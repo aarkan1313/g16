@@ -143,6 +143,15 @@ public partial class TerrainLabUI : Control
         // --godrays drives the screen-space beam layer (GodRaysScreen reads the sun per-frame).
         if (_godraysOnCli >= 0) { _godraysScreen?.SetEnabled(_godraysOnCli == 1); }
         if (_godrayDbgCli != 0) { _godraysScreen?.SetDebug(_godrayDbgCli); }   // --godraydbg=N diagnostic
+        // --lookatsun: aim the camera straight at the sun (for god-ray verification — removes the
+        // guesswork of matching --cam yaw to the sun azimuth).
+        if (_lookAtSunCli)
+        {
+            var sunN = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+            var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+            Vector3 toSun = sunN.GlobalTransform.Basis.Z.Normalized();   // +Basis.Z = toward sun
+            camN.LookAt(camN.GlobalPosition + toSun, Vector3.Up);
+        }
     }
 
     public override void _ExitTree() => _fc?.Dispose();

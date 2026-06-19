@@ -21,16 +21,26 @@ uniform sampler2D depth_tex  : hint_depth_texture;
 uniform vec2  sun_screen_uv = vec2(0.5, 0.5);          // sun's projected screen position (UV), from C#
 uniform float sun_gate : hint_range(0.0, 1.0) = 0.0;   // 0 = sun off-screen/behind camera, 1 = on-screen & ahead
 uniform vec3  ray_tint : source_color = vec3(1.0, 0.95, 0.85);   // warm beam color
-uniform float density   : hint_range(0.0, 1.0) = 0.9;  // sample spread (lower = rays reach further across screen)
-uniform float decay     : hint_range(0.0, 1.0) = 0.96; // per-step attenuation (→1 = longer shafts)
-uniform float weight    : hint_range(0.0, 0.3) = 0.06; // per-sample intensity (small — summed NUM_SAMPLES times)
-uniform float exposure  : hint_range(0.0, 2.0) = 0.4;  // overall strength (UI "god ray strength")
+// Tuned for SHAFTS, not a glow (research 2026-06-19): high decay (long reach) + LOW density (short
+// steps so rays don't all dredge the bright disc) + modest weight/exposure. High density + high
+// exposure = the "flashlight blob". Shafts only appear where occluders carve the rays.
+uniform float density   : hint_range(0.0, 1.0) = 0.45; // sample spread / step length (LOWER = longer beams)
+uniform float decay     : hint_range(0.0, 1.0) = 0.97; // per-step attenuation (→1 = longer shafts)
+uniform float weight    : hint_range(0.0, 0.3) = 0.05; // per-sample intensity (small — summed NUM_SAMPLES times)
+uniform float exposure  : hint_range(0.0, 2.0) = 0.5;  // overall strength (UI "god ray strength")
 uniform float dither    : hint_range(0.0, 1.0) = 1.0;  // sample-start jitter to break banding
-uniform int   occ_mode = 0;            // 0 = depth occlusion (robust), 1 = luminance (legacy A/B)
-uniform float lum_threshold : hint_range(0.0, 2.0) = 0.7;   // (occ_mode 1) brightness above which = light/sky
+// occ_mode: 0 = depth only (terrain/solid geometry; used by the synthetic test scene),
+//           2 = HYBRID (real scene): depth (terrain) OR cloud. Clouds are drawn in the sky at
+//               far-plane depth so depth can't see them; instead, a sky pixel that is DARKER than the
+//               bright sky AND lies near the sun's screen position is treated as cloud occlusion.
+//               Restricting the luminance test to the sun's vicinity avoids the global luminance
+//               fragility (bright snow/terrain elsewhere can't seed false rays).
+uniform int   occ_mode = 0;
+uniform float cloud_lum : hint_range(0.0, 2.0) = 0.78;   // sky brighter than this = open sky; below = cloud
+uniform float cloud_radius : hint_range(0.05, 1.5) = 0.6; // only treat darkness as cloud within this UV radius of the sun
 uniform int   debug_mode = 0;          // 0 = normal; 1 = show occlusion mask; 2 = mark sun_screen_uv + gate
 
-const int NUM_SAMPLES = 48;   // 32–64 real-time; GPU Gems uses 100
+const int NUM_SAMPLES = 64;   // more samples → smooth continuous beams (GPU Gems uses 100)
 
 void vertex() {
 	// Clip-space fullscreen quad (ignore camera transform). z=1 = far plane under Reverse-Z; harmless
@@ -38,16 +48,22 @@ void vertex() {
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
 }
 
-// 1.0 = light reaches here (sky / far plane), 0.0 = occluder (near geometry).
+// 1.0 = light reaches here (open sky), 0.0 = occluder (terrain, or cloud near the sun).
 float occlusion(vec2 uv) {
-	if (occ_mode == 1) {
-		vec3 c = texture(screen_tex, uv).rgb;
-		float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
-		return smoothstep(lum_threshold, lum_threshold + 0.3, lum);
-	}
-	// depth mode: Reverse-Z → sky/far ≈ 0.0. Treat depth below a small epsilon as sky (light passes).
+	// Terrain / solid geometry: Reverse-Z → sky/far ≈ 0.0. Near geometry (d above epsilon) = occluder.
 	float d = texture(depth_tex, uv).r;
-	return (d < 0.0005) ? 1.0 : 0.0;
+	if (d >= 0.0005) { return 0.0; }       // solid occluder in front of the sky
+	if (occ_mode != 2) { return 1.0; }     // depth-only mode (test scene): open sky = light
+
+	// HYBRID cloud term (real scene): this is sky (far plane). A sky pixel DARKER than open sky, and
+	// within cloud_radius of the sun, is cloud → occluder. Far from the sun we don't judge (avoids the
+	// global luminance trap). smoothstep gives soft cloud edges.
+	float distToSun = distance(uv, sun_screen_uv);
+	if (distToSun > cloud_radius) { return 1.0; }
+	vec3 c = texture(screen_tex, uv).rgb;
+	float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+	float lit = smoothstep(cloud_lum - 0.12, cloud_lum, lum);   // 1 = open sky (lit), 0 = dark cloud
+	return lit;
 }
 
 // cheap per-pixel hash for dither.

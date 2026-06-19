@@ -25,7 +25,8 @@ public partial class GodRayTest : Node3D
     private const float SunElevationDeg = 18f;  // low-ish
 
     private int _debug;
-    private float _exposure = 0.5f, _threshold = 0.6f, _decay = 0.96f, _density = 0.9f, _weight = 0.06f;
+    // Beam tuning (research 2026-06-19): LOW density (long beams), high decay, modest exposure.
+    private float _exposure = 0.6f, _threshold = 0.6f, _decay = 0.97f, _density = 0.45f, _weight = 0.05f;
 
     public override void _Ready()
     {
@@ -56,26 +57,27 @@ public partial class GodRayTest : Node3D
         _sun.GlobalTransform = SunTransformFromAim(SunAzimuthDeg, SunElevationDeg);
         AddChild(_sun);
 
-        // ---- Occluders: solid dark slabs between the camera start (origin-ish) and the sun, at a
-        // height where they cross the view-to-sun line. These are the guaranteed dark occluders that
-        // carve the beams (stand in for clouds). Spread a few across the sky-ward direction.
-        var occMat = new StandardMaterial3D { AlbedoColor = new Color(0.05f, 0.05f, 0.06f), Roughness = 1f };
-        Vector3 toSun = (-_sun.GlobalTransform.Basis.Z).Normalized();   // NOTE verify sign at runtime via HUD
-        toSun = _sun.GlobalTransform.Basis.Z.Normalized();              // +Basis.Z convention (matches GodRaysScreen)
-        for (int i = 0; i < 5; i++)
+        // ---- Occluder: a LARGE wall directly on the camera→sun line, covering MOST of the sun disc,
+        // punctured by a few NARROW vertical slots. Shafts = the wall's shadow; the bright streaks are
+        // the sun leaking through the slots (the classic crepuscular look). Research 2026-06-19: a few
+        // thin slabs in open sky give a glow, NOT shafts — the sun must be mostly occluded with gaps.
+        // Built as solid panels with gaps between them, centered on the sun's screen position.
+        var occMat = new StandardMaterial3D { AlbedoColor = new Color(0.03f, 0.03f, 0.04f), Roughness = 1f };
+        // The sun sits ~screen-center; camera at (0,35,40) looking -Z pitched up 18°. A wall ~120m out,
+        // centered at the sun's apparent height (~y 74), spanning wide, with 3 narrow slots.
+        // Panels: wide segments separated by thin gaps → the gaps are the shafts.
+        float wallZ = -120f, wallY = 78f;
+        float[] panelCenters = { -34f, -10f, 14f, 38f };   // 4 panels
+        foreach (float cx in panelCenters)
         {
-            var slab = new MeshInstance3D
+            var panel = new MeshInstance3D
             {
-                Name = $"Occluder{i}",
-                Mesh = new BoxMesh { Size = new Vector3(18, 10, 2) },
+                Name = $"Wall{cx}",
+                Mesh = new BoxMesh { Size = new Vector3(20f, 60f, 3f) },   // tall+wide → mostly covers sky around sun
                 MaterialOverride = occMat,
             };
-            // place them out toward the sun, fanned horizontally, at mid height so they sit between
-            // the camera and the sun disc.
-            float along = 60f + i * 22f;
-            float side = (i - 2) * 14f;
-            slab.Position = new Vector3(side, 40f + i * 6f, -along);   // -Z = toward the sun (azimuth 0)
-            AddChild(slab);
+            panel.Position = new Vector3(cx, wallY, wallZ);   // ~4m gaps between 20m panels = narrow slots
+            AddChild(panel);
         }
 
         // ---- Camera: start looking toward the sun (-Z), pitched up to the sun elevation. Simple

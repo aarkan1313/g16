@@ -29,6 +29,7 @@ public partial class TerrainLabUI : Control
     private int _temporalCli = 0;          // --temporal=N: temporal amortization stride (roadmap #4)
     private int _godraysOnCli = -1;
     private int _godrayDbgCli = 0;   // --godraydbg=N → GodRaysScreen debug_mode (1=mask, 2=sun pos)
+    private bool _lookAtSunCli = false;   // --lookatsun → aim camera at the sun on startup (god-ray verify)
     private int _terrainArCli = -1;
     private int _terrainDetailCli = -1;
     private int _groundRulesCli = -1;
@@ -63,6 +64,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--deckdbg=")) { _deckDbgCli = a.Substring("--deckdbg=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--godrays=")) { _godraysOnCli = a.Substring("--godrays=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--godraydbg=")) { int.TryParse(a.Substring("--godraydbg=".Length), out _godrayDbgCli); }
+            else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--detail=")) { _terrainDetailCli = a.Substring("--detail=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--groundrules=")) { _groundRulesCli = a.Substring("--groundrules=".Length) == "1" ? 1 : 0; }

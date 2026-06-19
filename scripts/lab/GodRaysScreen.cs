@@ -24,6 +24,7 @@ public partial class GodRaysScreen : Node3D
     {
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/godray_screen.gdshader") };
         _mat.RenderPriority = 127;   // draw after the scene's transparent objects
+        _mat.SetShaderParameter("occ_mode", 2);   // HYBRID: terrain (depth) + clouds (local-to-sun luminance)
         _quad = new MeshInstance3D
         {
             Name = "GodRayScreenQuad",
