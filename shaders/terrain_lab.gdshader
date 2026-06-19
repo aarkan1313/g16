@@ -126,6 +126,7 @@ uniform float snow_dust_h : hint_range(0.0, 900.0) = 560.0;  // height where dus
 // would interpolate them into wrong fractional indices at boundaries.
 uniform sampler2D splat_tex : filter_nearest, repeat_disable, hint_default_black;
 uniform bool splat_on = false;
+uniform bool splat_rule_based = false;   // G1: read baked secondary (splat.g) vs fixed sec_zone[dom]
 uniform float mix_strength : hint_range(0.0, 1.0) = 0.6;   // live: how strongly secondary shows
 uniform int splat_debug = 0;   // 0 off | 1 show dominant zone as color | 2 show mix amount
 
@@ -587,7 +588,9 @@ void fragment(){
         // made tile-seam squares. Detail stays crisp (real mipmapped texture taps).
         vec4 sp = texture(splat_tex, v_uv);
         int dom = int(sp.r + 0.5);
-        int sec = clamp(sec_zone[dom], 0, 6);   // per-zone companion (UI-controlled, live)
+        // G1: the rule engine bakes a spatially-meaningful runner-up role into splat.g;
+        // use it. Legacy path keeps the fixed per-dom companion lookup.
+        int sec = splat_rule_based ? clamp(int(sp.g + 0.5), 0, 6) : clamp(sec_zone[dom], 0, 6);
         float t = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);
 
         float rD = trip_rgh_by(dom, wp, nr);

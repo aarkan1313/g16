@@ -21,6 +21,13 @@ public partial class TerrainLab : MeshInstance3D
     // Splat bake params the UI can tweak before a rebake (Lever 1).
     public float MixScaleM = 26f, MixBias = 0.5f, EdgeNoiseM = 80f, EdgeNoiseAmp = 0.30f, MacroM = 480f;
     public int SplatMaskMode = 2;
+    // G1 rule engine: meaningful, signal-driven material placement (vs legacy bands).
+    public bool RuleBased = false;   // default off = current approved look
+    public float CurvK = 3.0f;       // curvature scale (m): convex ridge vs concave hollow split
+    // Placement breakpoints — promoted from hardcoded so they're live re-bake UI knobs.
+    // Defaults preserve the previous hardcoded bake values exactly.
+    public float HValley = 100f, HSlope = 350f, HHigh = 700f, HPeak = 950f;
+    public float SlopeCliffLo = 0.30f, SlopeCliffHi = 0.55f, BandSoftnessM = 120f;
 
     public void Build(FieldCompute fc, FieldParams p)
     {
@@ -72,15 +79,19 @@ public partial class TerrainLab : MeshInstance3D
             Res = (uint)_res,
             TexelWorld = _spacing,
             RegionSize = _regionSize,
-            HValley = 100f, HSlope = 350f, HHigh = 700f, HPeak = 950f,
-            SlopeCliffLo = 0.30f, SlopeCliffHi = 0.55f, BandSoftnessM = 120f,
+            HValley = HValley, HSlope = HSlope, HHigh = HHigh, HPeak = HPeak,
+            SlopeCliffLo = SlopeCliffLo, SlopeCliffHi = SlopeCliffHi, BandSoftnessM = BandSoftnessM,
             MixScaleM = MixScaleM, MixBias = MixBias,
             MaskMode = (uint)SplatMaskMode,
             EdgeNoiseM = EdgeNoiseM, EdgeNoiseAmp = EdgeNoiseAmp, MacroM = MacroM,
+            RuleBased = RuleBased ? 1u : 0u, CurvK = CurvK,
         };
         var tex = _splat.Bake(_heights, _res, sp);
         _mat.SetShaderParameter("splat_tex", tex);
-        GD.Print($"TerrainLab: splat baked (mixScale {MixScaleM:F0}, bias {MixBias:F2}, mask {SplatMaskMode})");
+        // Fragment must read the baked secondary (splat.g) when the rule engine is on;
+        // keep it in lockstep with the bake so the two never disagree.
+        _mat.SetShaderParameter("splat_rule_based", RuleBased);
+        GD.Print($"TerrainLab: splat baked (rule {(RuleBased ? 1 : 0)}, curvK {CurvK:F1}, snow {HPeak:F0}, mask {SplatMaskMode})");
     }
 
     /// Assign a material (by folder name under res://assets/materials/) to a zone 0..6.
