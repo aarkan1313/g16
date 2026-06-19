@@ -238,6 +238,10 @@ float distanceWeight(vec3 wp){
 }
 
 vec3 tri_w(vec3 nr){ vec3 bw=pow(abs(nr),vec3(tri_sharpness)); return bw/(bw.x+bw.y+bw.z); }
+// Branched-triplanar skip threshold: with tri_sharpness=8 a plane below this contributes
+// <~0.4% (under 8-bit quantization), so skipping its texture taps is visually free. On flat
+// ground the Y plane dominates → 1 sampled plane instead of 3 (perf pass 2026-06-18).
+const float TRI_EPS = 0.004;
 
 // Unit 1: histogram-preserving stochastic bombing. 3 hash-jittered + per-tile-rotated
 // taps on a triangle grid, variance-preserving blend (keeps contrast — the old 50/50
@@ -422,17 +426,20 @@ float rgh_by(int z, vec3 wp, vec3 nr){
 // the splat path: smooth (no per-pixel plane-pick grain) and cheap (no hex/IQ).
 vec3 tp_alb(sampler2D t, vec3 wp, vec3 nr){
     vec3 bw=tri_w(nr);
-    vec2 ux=wp.zy/tex_scale_m, uy=wp.xz/tex_scale_m, uz=wp.xy/tex_scale_m;
-    return ar_sample_wp(t,ux,wp).rgb*bw.x
-         + ar_sample_wp(t,uy,wp).rgb*bw.y
-         + ar_sample_wp(t,uz,wp).rgb*bw.z;
+    vec3 c=vec3(0.0);
+    // branched triplanar: only sample planes with meaningful weight (see TRI_EPS).
+    if(bw.x>TRI_EPS) c+=ar_sample_wp(t,wp.zy/tex_scale_m,wp).rgb*bw.x;
+    if(bw.y>TRI_EPS) c+=ar_sample_wp(t,wp.xz/tex_scale_m,wp).rgb*bw.y;
+    if(bw.z>TRI_EPS) c+=ar_sample_wp(t,wp.xy/tex_scale_m,wp).rgb*bw.z;
+    return c;
 }
 float tp_rgh(sampler2D t, vec3 wp, vec3 nr){
     vec3 bw=tri_w(nr);
-    vec2 ux=wp.zy/tex_scale_m, uy=wp.xz/tex_scale_m, uz=wp.xy/tex_scale_m;
-    return ar_sample_wp(t,ux,wp).r*bw.x
-         + ar_sample_wp(t,uy,wp).r*bw.y
-         + ar_sample_wp(t,uz,wp).r*bw.z;
+    float r=0.0;
+    if(bw.x>TRI_EPS) r+=ar_sample_wp(t,wp.zy/tex_scale_m,wp).r*bw.x;
+    if(bw.y>TRI_EPS) r+=ar_sample_wp(t,wp.xz/tex_scale_m,wp).r*bw.y;
+    if(bw.z>TRI_EPS) r+=ar_sample_wp(t,wp.xy/tex_scale_m,wp).r*bw.z;
+    return r;
 }
 vec3 trip_alb_by(int z, vec3 wp, vec3 nr){
     if(z==0) return tp_alb(z0_alb,wp,nr); if(z==1) return tp_alb(z1_alb,wp,nr);
