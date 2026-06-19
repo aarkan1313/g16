@@ -29,6 +29,7 @@ public partial class TerrainLabUI : Control
     private int _temporalCli = 0;          // --temporal=N: temporal amortization stride (roadmap #4)
     private int _godraysOnCli = -1;
     private int _terrainArCli = -1;
+    private int _terrainDetailCli = -1;
 
     private void ParseCli()
     {
@@ -59,6 +60,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--deckdbg=")) { _deckDbgCli = a.Substring("--deckdbg=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--godrays=")) { _godraysOnCli = a.Substring("--godrays=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--detail=")) { _terrainDetailCli = a.Substring("--detail=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }
@@ -111,6 +113,7 @@ public partial class TerrainLabUI : Control
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
         if (_terrainArCli >= 0) { _terrain.SetBool("ar_on", _terrainArCli == 1); }
+        if (_terrainDetailCli >= 0) { _terrain.SetBool("detail_on", _terrainDetailCli == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
     }
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)
