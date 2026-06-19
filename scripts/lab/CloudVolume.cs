@@ -222,16 +222,32 @@ public partial class CloudVolume : Node
         GD.Print("CloudVolume: compute initialized on render thread (clouds + shadow map)");
     }
 
+    // Noise/weather volumes are [0,1]-ish — 16-bit half is ample (10-bit mantissa) and HALVES
+    // the bandwidth on the hottest fetches (the density taps). The shaders sample as normalized
+    // floats, so storage precision is invisible to them. Convert float32→half once at load.
+    private static byte[] ToHalf(byte[] f32)
+    {
+        int n = f32.Length / 4;
+        var outb = new byte[n * 2];
+        for (int i = 0; i < n; i++)
+        {
+            short bits = BitConverter.HalfToInt16Bits((Half)BitConverter.ToSingle(f32, i * 4));
+            outb[i * 2] = (byte)(bits & 0xFF);
+            outb[i * 2 + 1] = (byte)((bits >> 8) & 0xFF);
+        }
+        return outb;
+    }
+
     private Rid Create3D(int res, byte[] rgbaf)
     {
         var tf = new RDTextureFormat
         {
             Width = (uint)res, Height = (uint)res, Depth = (uint)res, TextureType = RenderingDevice.TextureType.Type3D,
-            Format = RenderingDevice.DataFormat.R32G32B32A32Sfloat,
+            Format = RenderingDevice.DataFormat.R16G16B16A16Sfloat,
             UsageBits = RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanUpdateBit,
         };
         Rid rid = _rd.TextureCreate(tf, new RDTextureView());
-        _rd.TextureUpdate(rid, 0, rgbaf);
+        _rd.TextureUpdate(rid, 0, ToHalf(rgbaf));
         return rid;
     }
 
@@ -239,11 +255,11 @@ public partial class CloudVolume : Node
     {
         var tf = new RDTextureFormat
         {
-            Width = (uint)w, Height = (uint)h, Format = RenderingDevice.DataFormat.R32G32B32A32Sfloat,
+            Width = (uint)w, Height = (uint)h, Format = RenderingDevice.DataFormat.R16G16B16A16Sfloat,
             UsageBits = RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanUpdateBit,
         };
         Rid rid = _rd.TextureCreate(tf, new RDTextureView());
-        _rd.TextureUpdate(rid, 0, rgbaf);
+        _rd.TextureUpdate(rid, 0, ToHalf(rgbaf));
         return rid;
     }
 
