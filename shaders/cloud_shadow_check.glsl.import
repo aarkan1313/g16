@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://cdw3sjng131xf"
+path="res://.godot/imported/cloud_shadow_check.glsl-9280e679a617414cb3459b2ff209ee07.res"
+
+[deps]
+
+source_file="res://shaders/cloud_shadow_check.glsl"
+dest_files=["res://.godot/imported/cloud_shadow_check.glsl-9280e679a617414cb3459b2ff209ee07.res"]
+
+[params]
+

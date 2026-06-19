@@ -56,7 +56,6 @@ public partial class TerrainLabUI : Control
         // setup during _Ready ("parent busy setting up children"), so both the
         // AddChild and the Attach must run after the current frame's setup.
         _cloud = new CloudVolume { Name = "CloudVolume" };
-        _godrays = new GodRays { Name = "GodRays" };   // Component A: volumetric shafts (consumes the cloud shadow map)
         CallDeferred(nameof(AttachClouds));
 
         ParseCli();
@@ -93,22 +92,6 @@ public partial class TerrainLabUI : Control
             // _Process turns it on once _cloud.ComputeReady.
             _terrain.SetBool("cloud_shadow_on", false);
         }
-        // GOD RAYS (redesign 2026-06-18) — Component A: a FogVolume that samples the SAME
-        // cloud shadow map by world-XZ, so the air glows in shafts through cloud gaps. It
-        // CONSUMES _cloud's shadow texture/region/ground/sun; it does not touch cloud internals.
-        // (This is NOT the old gap-aligned FogVolume that fought the directional light's
-        // volumetric shadow — the occlusion here is additive emission from a sampled texture.)
-        if (_godrays != null)
-        {
-            GetNode("/root/TerrainLabRoot").AddChild(_godrays);
-            _godrays.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
-                            GetNode<Camera3D>("/root/TerrainLabRoot/Camera"),
-                            GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
-            _godrays.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
-            // shafts project cloud gaps from the cloud deck altitude (terrain mid + cloud base height).
-            _godrays.SetCloudHeight(_terrain.MidHeight + _cloud.Params.AltitudeM);
-        }
-
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
@@ -119,7 +102,6 @@ public partial class TerrainLabUI : Control
         if (_perDeckCli >= 0f) { _cloud.SetPerDeck(_perDeckCli); }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
-        if (_godraysOnCli >= 0) { _godrays?.SetEnabled(_godraysOnCli == 1); }   // --godrays drives the volumetric shafts now
         if (_shadowDbgCli == 1) { _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
         if (_shadowCheckCli)   // numeric proof: correlate shadow vs cloud-overhead, print PASS/FAIL
         {

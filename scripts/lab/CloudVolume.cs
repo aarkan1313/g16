@@ -76,13 +76,6 @@ public partial class CloudVolume : Node
     // silently if field_params.json changed).
     private float RegionM = 8192f;
 
-    // God rays are rebuilt as in-march in-scatter (refactor T7) — no FogVolume. This
-    // flag is read into the raymarch param buffer (0/1 multiply on the in-scatter term).
-    private bool _godraysOn = false;   // OFF by default
-
-    public bool GodraysOn => _godraysOn;
-    public void SetGodraysEnabled(bool on) { _godraysOn = on; }
-    private float _godrayStrength = 1.0f;
     private float _cellScale = 1.6f;   // clump-scale knob: higher = smaller/more clumps (anti-slab). >1 = tighter than the old fixed look.
     private System.Collections.Generic.List<CloudLayer> _layers = new();
     private int _layerCount;
@@ -434,8 +427,6 @@ public partial class CloudVolume : Node
             .F(p.RaymarchSteps)
             .F(_perDeck)                                // 0 = global lighting (A), 1 = per-deck (B)
             .F(_dbgDeck)                                // >0.5 = deck-ID overlay
-            .F(_godraysOn ? 1f : 0f)                    // god-ray in-scatter enable (roadmap #6)
-            .F(_godrayStrength)
             .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
             .Vec4Array(layerData)                       // layers[40] (5 vec4/layer)
             .ToArray();
@@ -530,7 +521,6 @@ public partial class CloudVolume : Node
             case "ambient":         _p = _p with { Ambient = v }; break;
             case "shadow_strength": _shadowStrength = v; break;   // ground-shadow darkness (Stage 5)
             case "cell_scale":      _cellScale = v; break;        // clump scale (anti-slab; higher = smaller clumps)
-            case "godray_strength": _godrayStrength = v; break;
             case "perdeck":         _perDeck = Mathf.Clamp(v, 0f, 1f); break;   // 0=global lighting, 1=per-deck
             case "overcast_strength": _overcastStrength = Mathf.Max(0f, v); break;   // overcast gloom dial
         }
