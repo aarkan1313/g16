@@ -1,0 +1,83 @@
+# WG16 Performance — profiling + optimization pass (2026-06-18)
+
+The reference for "where the frame goes" and what's been optimized. Numbers are RTX 5090
+laptop, **uncapped** (`--profile=N` disables vsync + uncaps fps), so absolute ms are dev-machine
+values — the **relative costs and before/after deltas** are the takeaway. Scale ~2.5–4× for a
+mid-range GPU on this fragment/compute-bound work.
+
+How to reproduce: `scenes/terrain_lab.tscn --rendering-driver vulkan -- --profile=4 --cam=0,350,0,-25,40 [flags]`.
+Profiling probes: `--clouds=0/1`, `--godrays=0/1`, `--temporal=N`, `--cloudtex=H`, `--ssao/--shadow/--sdfgi/--ar/--hb=0/1`.
+Caveat: the laptop GPU thermally throttles after many back-to-back runs — space runs out / trust
+reproduced numbers, and treat single wild outliers as hitches.
+
+## Results so far (terrain-filling view)
+
+| State | Before | After | Δ |
+|---|---|---|---|
+| Clouds OFF (baseline) | 9.7 ms | **5.6 ms** | −42% |
+| Clouds ON (1024 dome default) | ~12.4 ms | **8.6 ms** | −31% |
+
+All from **code efficiency, zero quality reduction**.
+
+## What landed (committed)
+
+1. **Branched triplanar** (`terrain_lab.gdshader`) — `tri_w` (sharpness 8) makes one plane dominate
+   on flat/moderate terrain; the others are <0.4% (under 8-bit quantization). `tp_alb`/`tp_rgh` now
+   skip sub-`TRI_EPS` planes instead of always sampling 3 → ~3× fewer texture fetches on flat ground.
+   **−2.3 ms**. Bit-near-identical.
+2. **Anti-repetition on albedo only** — the histogram-preserving multi-tap bombing hides *color*
+   tiling; normal/roughness tiling under the matte ground BRDF is imperceptible (and averaging
+   normals flattens detail). Normal/rough now use plain branched triplanar (1 tap/plane, not 4).
+   **−1.4 ms**. Took the measured anti-repetition cost ~3.4 → ~1.4 ms.
+3. **`light()` `(1-x)^5` via 5 muls** instead of `pow()` (×3 per lit pixel) — bit-identical ALU win.
+4. **Cloud compute GC** (`CloudVolume.cs`, `Std430.cs`) — cache the two compute uniform sets once
+   (was 10 `RDUniform` + 2 `UniformSetCreate`/`FreeRid` **per frame**); `Std430Writer` writes into a
+   reusable `byte[]` via `TryWriteBytes` (was ~400 short-lived 4-byte arrays/frame). Stutter/smoothness
+   win (shows in worst-frame / GC, not avg). Verified clouds render + `--cloudstats` packing intact.
+5. **`--sdfgi=0/1` profiling probe** added.
+
+## Cost decomposition (measured, for targeting future work)
+
+**Baseline ~9.7 ms (pre-opt, terrain-filling), decomposed:**
+| Item | Cost | Status |
+|---|---|---|
+| Anti-repetition (Ground Unit 1) | ~3.4 ms | ✅ cut to ~1.4 ms (branched triplanar + albedo-only) |
+| **Terrain mesh** (4.19M-vert single PlaneMesh, NO LOD) | part of the ~3.8 ms floor | ⛔ PARKED — needs terrain roadmap |
+| Sun shadow map (re-draws the 4M-vert mesh ×4 PSSM cascades) | ~2.0 ms | ⛔ tied to mesh — parked |
+| SDFGI (real-time GI) | ~0.4 ms | already cheap (surprise) |
+| SSAO | ~0.1 ms | ~free |
+| Heightblend, splat-toggle | ~0 ms | free |
+
+**Clouds (add-on):** 1024 dome +3.2 ms, 512 dome +1.5 ms, 512+temporal +1.0 ms. **God rays +0.2 ms (≈free).**
+Raymarch step count (64–160) is NOT a cost lever (early-exit march). Coverage drives cost (denser = more samples hit cloud).
+
+## PARKED — the terrain floor (do NOT touch without a plan)
+
+The ~3.8 ms floor is dominated by the terrain being a **single 2048² PlaneMesh = ~4.19M verts with
+no LOD**, drawn full-cost at every distance AND again ×4 in the sun shadow cascades. It is reducible
+(LOD), **but**: every prior project iteration (WG1–15) **fell apart at the terrain clipmap** — it is
+the recurring failure point (memory `terrain-clipmap-killed-wg1-15`). So the mesh/floor + shadow-pass
+optimization is **deferred to a dedicated terrain roadmap** that must OPEN with a post-mortem of why
+clipmap failed before, then weigh alternatives (chunked quadtree, GPU tessellation, Godot
+visibility-range mesh LOD, simpler uniform-but-smaller) against those failure modes — not against
+"most AAA." Do not unilaterally add a clipmap.
+
+## Remaining safe backlog (no terrain geometry; not yet done)
+
+From the code audit (4 read-only subagents, 2026-06-18) — ranked, quality-preserving:
+- **Cheap sun light-march** (`cloud_raymarch.glsl`) — `light_optical_depth` re-walks the FULL density
+  recipe (domain warp + 2-octave detail erosion) 7× per lit view-sample. A coarse density for the
+  light ray (skip detail/warp, coarser mip) is standard (Nubis) and visually negligible → ~2–3× fewer
+  fetches in the hottest loop. **Biggest remaining cloud win.**
+- **16-bit noise volumes** — shape/detail 3D volumes are `R32G32B32A32` (32-bit) for [0,1] noise;
+  `R16`/`R8` halves/quarters the bandwidth on the hottest fetches.
+- **Shadow-map dirty-flag** — re-marched every frame even when sun + clouds + wind are static.
+- **Cache per-frame `GetNode("/root/...")`** in `TerrainLabUI._Process`/`UpdateOvercast` (string-path
+  tree walks every frame; resolve to fields once in `AttachClouds`).
+- **macro `rgb2hsv→hsv2rgb` roundtrip** per pixel — value/saturation drift can be done in RGB.
+- **MSAA 2× → off** (`project.godot`) — sub-pixel-dense triangles get ~nothing from MSAA (eye-check).
+- **Cloud temporal default 1 → 3** (validated look) — near-linear dome-march reduction; a knob/preset call.
+
+## Cloud quality preset (perf lever, not a code fix)
+Ship **512 + temporal** as the mid-range default, **1024** for High/Ultra — 512+temporal is ~+1 ms
+cloud cost vs +3.2 ms at 1024. God rays ride along free.

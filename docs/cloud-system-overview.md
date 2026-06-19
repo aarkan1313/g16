@@ -76,15 +76,21 @@ The earlier audit claimed lighting/macro/stepping were done; they had real bugs.
 4. **Scale** — SHAPE_SCALE 1/9000 + cellScale 0.35 → giant blobs. Now 1/6000 + 0.7 → many clouds.
 5. Gradient (Perlin) base noise; multi-scatter direct+fill (dark cores = form); 2-octave erosion.
 
-## Performance (RTX 5090; relative cost scales to mid-range)
+## Performance (RTX 5090 laptop; relative cost scales to mid-range)
 
-| config | frame | cloud cost |
-|---|---|---|
-| clouds off | 9.4 ms | — |
-| default (512×128) | 10.7 ms | ~1.3 ms (cheap, ship-ready) |
-| + god rays | 11.7 ms | +1.0 ms |
-| + temporal stride 4 | 10.2 ms | amortizes (helps most at hi-res) |
-| 1024×256 | 13.3 ms | +2.6 ms (pair with temporal) |
+See `docs/performance.md` for the full profiling pass (2026-06-18) — methodology, baseline
+decomposition, optimizations landed, and the remaining backlog. Cloud cost summary:
+
+| config | cloud cost vs baseline |
+|---|---|
+| default (1024×256 dome) | +3.2 ms |
+| 512×128 dome | +1.5 ms |
+| 512 + temporal 3 | +1.0 ms (recommended mid-range default) |
+| god rays (volumetric) | +0.2 ms (≈free) |
+
+NOTE: the earlier "~1.3 ms" figure was stale (pre-1024-default). Raymarch step count is NOT a
+cost lever (early-exit march). Biggest remaining cloud win: a cheap density path for the sun
+light-march (see performance.md backlog).
 
 ## Lighting model (don't re-litigate — clarified during review)
 
