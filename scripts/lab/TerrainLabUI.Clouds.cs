@@ -13,16 +13,16 @@ public partial class TerrainLabUI : Control
     //      only the public knob setters). _cloud is wired in Stage 3; null = no-op,
     //      so the Clouds tab is inert (but present + tunable in state) until then. --
     private CloudVolume? _cloud;
-    private GodRaysVolumetric? _godrays;   // canonical volumetric god-ray base (sun shadow + cloud caster)
+    private GodRaysVolumetric? _godrays;   // canonical volumetric god rays (per-froxel cloud-shadow in volfog)
     private void ApplyCloudFloat(string knob, float v)
     {
-        if (knob == "godray_strength") { _godrays?.SetStrength(v); return; }   // canonical god-ray caster cut
+        if (knob == "godray_strength") { _godrays?.SetStrength(v); return; }   // shaft albedo contrast
         _cloud?.SetKnob(knob, v);
     }
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
     private void ApplyCloudBool(string knob, bool on)
     {
-        if (knob == "godrays") { _godrays?.SetEnabled(on); return; }   // sun-shadow + cloud-caster volumetric base
+        if (knob == "godrays") { _godrays?.SetEnabled(on); return; }   // sun-shadowed volumetric shafts (per-froxel cloud gate)
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)
         _cloud?.SetKnobBool(knob, on);
         // clouds-enabled also gates the ground-shadow sampling in the terrain light()

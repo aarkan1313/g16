@@ -56,7 +56,7 @@ public partial class TerrainLabUI : Control
         // setup during _Ready ("parent busy setting up children"), so both the
         // AddChild and the Attach must run after the current frame's setup.
         _cloud = new CloudVolume { Name = "CloudVolume" };
-        _godrays = new GodRaysVolumetric { Name = "GodRaysVolumetric" };   // canonical sun-shadow + cloud-caster god rays
+        _godrays = new GodRaysVolumetric { Name = "GodRaysVolumetric" };   // canonical sun-shadowed volumetric god rays
         CallDeferred(nameof(AttachClouds));
 
         ParseCli();
@@ -93,15 +93,17 @@ public partial class TerrainLabUI : Control
             // _Process turns it on once _cloud.ComputeReady.
             _terrain.SetBool("cloud_shadow_on", false);
         }
-        // GOD RAYS (canonical rebuild 2026-06-19) — a cloud-shadow-caster quad puts the cloud shapes
-        // into the DirectionalLight's shadow atlas; global volfog lit by that real shadow makes 3D
-        // cloud-shaped shafts on terrain + fog. Consumes the SAME cloud shadow map + the scene sun.
+        // GOD RAYS (canonical rebuild 2026-06-19, Option C) — a WORLD FogVolume samples the cloud
+        // shadow map per-froxel (ground-projected along the sun ray) so the DirectionalLight's real
+        // shadowed in-scatter makes 3D cloud-shaped shafts that ALIGN with the ground cloud-shadows.
+        // Consumes the SAME cloud shadow map + region + ground reference + the scene sun.
         if (_godrays != null)
         {
             GetNode("/root/TerrainLabRoot").AddChild(_godrays);
             _godrays.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
                             GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
             _godrays.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
+            _godrays.SetGroundHeight(_terrain.MidHeight);   // cloud-bake ground reference for the per-froxel unshift
         }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
@@ -113,7 +115,6 @@ public partial class TerrainLabUI : Control
         if (_perDeckCli >= 0f) { _cloud.SetPerDeck(_perDeckCli); }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
-        if (_godraysOnCli >= 0) { _godrays?.SetEnabled(_godraysOnCli == 1); }   // --godrays drives the canonical volumetric base
         if (_shadowDbgCli == 1) { _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
         if (_shadowCheckCli)   // numeric proof: correlate shadow vs cloud-overhead, print PASS/FAIL
         {
@@ -139,6 +140,10 @@ public partial class TerrainLabUI : Control
         // is live, so clouds track the spawn mood/sun instead of CloudParams defaults.
         if (_currentMood >= 0) { ApplyMood(_currentMood); }
         PushSunToCloud(GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
+        // --godrays AFTER the sun is pushed (audit G): SetEnabled makes the WORLD FogVolume visible,
+        // so sun_dir must already be the real sun (not the (0,1,0) shader default → unshift=0 → wrong
+        // projection) before the first rendered frame.
+        if (_godraysOnCli >= 0) { _godrays?.SetEnabled(_godraysOnCli == 1); }
     }
 
     public override void _ExitTree() => _fc?.Dispose();

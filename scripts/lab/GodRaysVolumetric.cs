@@ -2,21 +2,27 @@ using Godot;
 
 namespace WG16.Lab;
 
-/// God rays — CANONICAL volumetric base (rebuild 2026-06-19). Shafts are the DirectionalLight's
-/// REAL shadow scattering through global volumetric fog. The clouds occlude the sun via a
-/// shadow-casting quad (cloud_shadow_caster.gdshader) alpha-cut by the cloud transmittance map, so
-/// cloud gaps become bright shafts and cloud bodies cast shadow on BOTH terrain and fog. NO custom
-/// fog-emission shader, NO FogVolume-as-light. See memory godray-emission-vs-albedo-rootcause.
+/// God rays — CANONICAL volumetric base (rebuild 2026-06-19, Option C: per-froxel cloud-shadow).
+/// Shafts are the DirectionalLight's REAL shadowed in-scatter through global volumetric fog, GATED
+/// per-froxel by the cloud transmittance map (sampled ground-projected along the sun ray). Cloud
+/// gaps → bright shafts, cloud bodies → dim air; aligned with the terrain's ground cloud-shadows at
+/// every altitude because it uses the SAME map + slant. See memory godray-emission-vs-albedo-rootcause.
 ///
-/// Owns: the caster MeshInstance3D (a quad oriented ⟂ to the sun, high up, cast_shadow=ShadowsOnly
-/// so it's invisible to the camera). Configures the Environment volfog (low density, forward
-/// anisotropy, no ambient inject) + the sun (shadow ON, high volumetric_fog_energy) while active,
-/// restoring prior values on disable. Consumes the cloud shadow texture + region + sun from the UI;
-/// never touches cloud internals.
+/// Owns ONE WORLD-shape FogVolume running shaders/godray_fog.gdshader (the WORLD shape fills the env
+/// froxel grid automatically — no Box, no camera-follow, so the viewer is never inside a uniform slab).
+/// Configures the Environment volfog (low density base, forward anisotropy, no ambient inject) + the
+/// sun (shadow ON, high volumetric_fog_energy) while active, restoring prior values on disable.
+/// Consumes the cloud shadow texture + region + ground height + sun dir from the UI; never touches
+/// cloud internals.
+///
+/// NOTE on the earlier caster-quad approach (deleted): a flat shadow-caster quad could only inject ONE
+/// altitude slice of the cloud shadow and, for a top-down ground-referenced map, floated the shadow
+/// ~10 km off the ground cloud-shadows at low sun (2026-06-19 audit). Per-froxel sampling here is the
+/// geometrically correct fix — the shadow is computed at every froxel's own altitude.
 public partial class GodRaysVolumetric : Node3D
 {
-    private MeshInstance3D _caster = null!;
-    private ShaderMaterial _casterMat = null!;
+    private FogVolume _vol = null!;
+    private ShaderMaterial _mat = null!;
     private Godot.Environment? _env;
     private DirectionalLight3D? _sun;
 
@@ -27,67 +33,66 @@ public partial class GodRaysVolumetric : Node3D
     private Color _savedAlbedo;
 
     // Canonical outdoor tuning (memory godray-emission-vs-albedo-rootcause):
-    private const float EnvDensity = 0.02f;        // LOW — thin medium, see through it; only shafts pop
-    private const float EnvLength = 3000f;         // froxel range; tighter = sharper near shafts
+    private const float EnvDensity = 0.0f;         // the WORLD FogVolume supplies the medium; env base off
+    private static readonly Color EnvAlbedo = new Color(0f, 0f, 0f);   // env base scatters nothing on its own
+    // Froxel range. Godot spreads a fixed froxel-depth count over this length, so LONGER = coarser
+    // slices = mushier/banded shafts (2026-06-19 audit). 2000 m keeps slices fine while reaching valley
+    // distance; well inside the scene's 8000 m directional shadow cascade.
+    private const float EnvLength = 2000f;
     private const float EnvAnisotropy = 0.85f;     // forward scatter → air blazes toward the sun
-    private const float EnvAmbientInject = 0.0f;   // keep lit/shadow contrast (no ambient fill)
-    private static readonly Color EnvAlbedo = new Color(1f, 0.97f, 0.92f);  // warm single-scatter
-    private const float SunVolEnergy = 48f;        // shaft brightness = this × the thin medium
-    private const float CasterAltitude = 2500f;    // quad height above terrain mid (above cloud base)
-    private const float CasterSize = 16000f;       // covers the whole shadow region with sun-angle slack
+    private const float EnvAmbientInject = 0.0f;   // keep lit/shadow contrast (no ambient fill → shafts read)
+    // Shaft BRIGHTNESS = the sun's light_volumetric_fog_energy = UI strength × this (a LINEAR engine
+    // multiplier on the in-scatter). Driving brightness HERE — not via a clamped ALBEDO multiply —
+    // keeps the gap/shadow contrast intact at any strength (the earlier ALBEDO-clamp bug killed it).
+    private const float EnergyPerStrength = 12f;   // strength 4 (default) → energy 48; strength 12 → 144
+    private float _strength = 4f;                  // UI "god ray strength" (lab_controls default)
 
     public GodRaysVolumetric()
     {
-        _casterMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/cloud_shadow_caster.gdshader") };
-        var mesh = new PlaneMesh { Size = new Vector2(CasterSize, CasterSize) };
-        _caster = new MeshInstance3D
+        _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/godray_fog.gdshader") };
+        _vol = new FogVolume
         {
-            Name = "CloudShadowCaster",
-            Mesh = mesh,
-            MaterialOverride = _casterMat,
-            // SHADOWS_ONLY: never drawn to the camera, only writes the directional shadow atlas.
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly,
+            Name = "GodRayFog",
+            // WORLD shape: the shader runs over the WHOLE env froxel grid automatically — no Box, no
+            // camera-follow. (The old camera-centered Box put the viewer inside a uniform slab = flat haze.)
+            Shape = RenderingServer.FogVolumeShape.World,
+            Material = _mat,
             Visible = false,   // default OFF
         };
-        AddChild(_caster);
+        AddChild(_vol);
     }
 
     public void Attach(Godot.Environment env, DirectionalLight3D sun) { _env = env; _sun = sun; }
 
+    /// Bind the cloud shadow map (Texture2Drd from CloudVolume) + its world footprint.
     public void SetShadowTexture(Texture2D? tex, float region)
     {
-        if (tex != null) { _casterMat.SetShaderParameter("cloud_shadow_tex", tex); }
-        _casterMat.SetShaderParameter("shadow_region", region);
+        if (tex != null) { _mat.SetShaderParameter("cloud_shadow_tex", tex); }
+        _mat.SetShaderParameter("shadow_region", region);
     }
 
-    /// Orient the caster quad perpendicular to the sun and position it high along the sun ray, so
-    /// its cloud-cut shadow projects straight down the sun direction onto terrain + fog.
-    public void SetSunDir(Vector3 toSun)
+    /// The cloud-bake ground reference (CloudVolume._groundHeight = terrain mid). The per-froxel
+    /// shadow projection unshifts by (froxel.y − ground_y) along the sun ray to this plane.
+    public void SetGroundHeight(float y) => _mat.SetShaderParameter("ground_y", y);
+
+    /// dir = direction TOWARD the sun (same +Basis.Z convention as CloudVolume.SetSun). Drives the
+    /// per-froxel ground-projection. Just a material param — no node transform, no in-tree requirement.
+    public void SetSunDir(Vector3 toSun) { if (toSun.LengthSquared() > 1e-4f) { _mat.SetShaderParameter("sun_dir", toSun.Normalized()); } }
+
+    /// UI "god ray strength" → shaft BRIGHTNESS via the sun's volumetric fog energy (linear, no
+    /// contrast clipping). Live-applies if god rays are on and the sun is bound.
+    public void SetStrength(float s)
     {
-        if (toSun.LengthSquared() < 1e-4f) { return; }
-        toSun = toSun.Normalized();
-        _caster.GlobalPosition = new Vector3(0f, CasterAltitude, 0f);
-        // PlaneMesh normal is +Y; rotate so +Y points toward the sun (quad faces down the sun ray).
-        Vector3 up = Vector3.Up;
-        if (Mathf.Abs(up.Dot(toSun)) > 0.999f) { _caster.GlobalRotation = Vector3.Zero; }
-        else
-        {
-            Vector3 axis = up.Cross(toSun).Normalized();
-            float ang = Mathf.Acos(Mathf.Clamp(up.Dot(toSun), -1f, 1f));
-            _caster.GlobalTransform = new Transform3D(new Basis(axis, ang), _caster.GlobalPosition);
-        }
+        _strength = Mathf.Max(0f, s);
+        if (_on && _sun != null) { _sun.LightVolumetricFogEnergy = _strength * EnergyPerStrength; }
     }
-
-    /// UI "god ray strength" → the caster cut threshold. Higher strength → lower threshold → more of
-    /// the sky casts shadow (denser, more dramatic shafts). Clamped to a sane band.
-    public void SetStrength(float s) => _casterMat.SetShaderParameter("cut_threshold", Mathf.Clamp(0.5f + (s - 4f) * 0.05f, 0.05f, 0.95f));
 
     public bool On => _on;
 
     public void SetEnabled(bool on)
     {
         _on = on;
-        _caster.Visible = on;
+        _vol.Visible = on;
         if (_env == null) { return; }
         if (on)
         {
@@ -102,13 +107,17 @@ public partial class GodRaysVolumetric : Node3D
                 if (_sun != null) { _savedSunShadow = _sun.ShadowEnabled; _savedSunVolEnergy = _sun.LightVolumetricFogEnergy; }
                 _stateSaved = true;
             }
+            // Env froxel grid: ON, tight length (sharper), base density/albedo OFF (the WORLD FogVolume
+            // supplies the medium), forward anisotropy + no ambient inject (preserve shaft contrast).
             _env.VolumetricFogEnabled = true;
             _env.VolumetricFogLength = EnvLength;
             _env.VolumetricFogDensity = EnvDensity;
             _env.VolumetricFogAlbedo = EnvAlbedo;
             _env.VolumetricFogAnisotropy = EnvAnisotropy;
             _env.VolumetricFogAmbientInject = EnvAmbientInject;
-            if (_sun != null) { _sun.ShadowEnabled = true; _sun.LightVolumetricFogEnergy = SunVolEnergy; }
+            // THE SUN: shafts ARE its shadowed in-scatter. Shadow ON (no shadow → no shaft) + set its
+            // fog scatter energy from the UI strength (linear shaft brightness) so the gaps blaze.
+            if (_sun != null) { _sun.ShadowEnabled = true; _sun.LightVolumetricFogEnergy = _strength * EnergyPerStrength; }
         }
         else if (_stateSaved)
         {

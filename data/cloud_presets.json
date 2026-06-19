@@ -26,6 +26,18 @@
     {
       "name": "Stormy",
       "values": { "cloud_coverage": 0.78, "cloud_density": 2.0, "cloud_type": 0.85, "cloud_size": 1.2, "cloud_edge": 0.5, "cloud_detail": 0.65, "cloud_opacity": 2.4, "cloud_brightness": 0.42, "cloud_ambient": 0.38, "cloud_altitude": 1000, "cloud_thickness": 2400, "cloud_drift_speed": 16.0, "cloud_drift_dir": 220 }
+    },
+    {
+      "name": "God Ray Showcase",
+      "_comment": "Self-contained showcase for the canonical god rays (per-froxel cloud-shadow in global volfog; sun-shadowed in-scatter). Tuned for MAXIMUM shaft visibility: broken cumulus (~0.55 cover = bold cloud shadows + clear gaps), DENSE/OPAQUE clouds so the shadow map has strong gap/cloud contrast (the contrast IS the shaft), a LOW sun (~14°) for a long dramatic rake across the valley, and god rays ON at high strength (drives the sun's volumetric fog energy = shaft brightness). Unlike the weather presets, this also sets the SUN (sun_angle/azimuth/energy) + the god-ray toggle+strength via their control ids, so ONE pick gives perfect conditions. Pair the camera looking roughly toward the sun (azimuth 120°).",
+      "values": {
+        "cloud_coverage": 0.55, "cloud_density": 1.6, "cloud_type": 0.7, "cloud_size": 1.0,
+        "cloud_edge": 0.45, "cloud_detail": 0.6, "cloud_opacity": 1.8, "cloud_brightness": 0.95,
+        "cloud_ambient": 0.6, "cloud_altitude": 1600, "cloud_thickness": 1500,
+        "cloud_drift_speed": 8.0, "cloud_drift_dir": 120,
+        "sun_angle": 14.0, "sun_azimuth": 120.0, "sun_energy": 1.6,
+        "cloud_godrays": 1, "cloud_godray_strength": 7.0
+      }
     }
   ]
 }
