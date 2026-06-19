@@ -39,8 +39,14 @@ public partial class CloudVolume : Node
     private Vector3 _camWorld = Vector3.Zero;
     public void SetCameraWorld(Vector3 p) { _camWorld = p; }
     // mood sky colors → cloud ambient/background (set by TerrainLabUI.ApplyMood)
+    // _sky*Base = the mood sky colors (input); _sky* = after the overcast grey-shift (what the
+    // shaders see). Overcast greys BOTH the sky background AND the cloud ambient fill (the raymarch
+    // ambient samples mix(_skyHorizon,_skyTop)), so the overcast knob is VISIBLE in the sky/clouds.
     private Color _skyTop = new Color(0.30f, 0.48f, 0.74f);
     private Color _skyHorizon = new Color(0.68f, 0.74f, 0.80f);
+    private Color _skyTopBase = new Color(0.30f, 0.48f, 0.74f);
+    private Color _skyHorizonBase = new Color(0.68f, 0.74f, 0.80f);
+    private Color _groundBase = new Color(0.22f, 0.26f, 0.22f);
 
     // render-thread compute resources (created in InitCompute on the render thread)
     private RenderingDevice _rd = null!;
@@ -145,6 +151,7 @@ public partial class CloudVolume : Node
         // install the cloud sky only once the render-thread RID is live (avoids the
         // empty-Texture2Drd uniform-set error). _computeReady is set in InitCompute.
         if (_computeReady && !_skyInstalled) { InstallCloudSky(); _skyInstalled = true; }
+        ApplyOvercastSky();   // track the overcast knob/coverage live (greys sky + cloud ambient)
         RenderingServer.CallOnRenderThread(Callable.From(RenderProcess));
     }
 
@@ -416,9 +423,24 @@ public partial class CloudVolume : Node
     /// gradient, so clouds + the sky behind them track the chosen mood/time-of-day.
     public void SetSkyColors(Color top, Color horizon, Color ground)
     {
-        _skyTop = top; _skyHorizon = horizon;
-        _skyMat?.SetShaderParameter("sky_top", top);
-        _skyMat?.SetShaderParameter("sky_horizon", horizon);
+        _skyTopBase = top; _skyHorizonBase = horizon; _groundBase = ground;
+        ApplyOvercastSky();
+    }
+
+    // Flat overcast sky = a dull desaturated light grey (a touch lighter at the horizon). Lerp the
+    // mood sky colors toward it by the overcast amount → the `overcast gloom` knob visibly greys
+    // the sky AND flattens the cloud ambient. Called per-frame so the knob/coverage track live.
+    private static readonly Color OvercastTop = new Color(0.55f, 0.58f, 0.62f);
+    private static readonly Color OvercastHorizon = new Color(0.66f, 0.68f, 0.70f);
+    private static readonly Color OvercastGround = new Color(0.32f, 0.34f, 0.34f);
+    private void ApplyOvercastSky()
+    {
+        float oc = Overcast();
+        _skyTop = _skyTopBase.Lerp(OvercastTop, oc);
+        _skyHorizon = _skyHorizonBase.Lerp(OvercastHorizon, oc);
+        Color ground = _groundBase.Lerp(OvercastGround, oc);
+        _skyMat?.SetShaderParameter("sky_top", _skyTop);
+        _skyMat?.SetShaderParameter("sky_horizon", _skyHorizon);
         _skyMat?.SetShaderParameter("ground_color", ground);
     }
 
