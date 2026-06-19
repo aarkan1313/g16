@@ -18,6 +18,15 @@ render_mode unshaded, cull_disabled, depth_test_disabled, depth_draw_never;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D depth_tex  : hint_depth_texture;
 
+// Cloud occlusion from the REAL cloud field (mood-independent): sample the cloud shadow map
+// (top-down sun transmittance over world XZ) at this pixel's world position. occ_mode==3.
+uniform sampler2D cloud_shadow_tex : filter_linear, repeat_disable, hint_default_white;
+uniform float cloud_shadow_region = 8192.0;   // CloudVolume.RegionSize
+uniform bool  cloud_shadow_on = false;         // false until CloudVolume.ComputeReady (RID live)
+uniform mat4  inv_view_proj;                    // inverse(projection*view), for depth→world reconstruction
+uniform vec3  cam_world = vec3(0.0);            // camera world pos (for the sky view-ray origin)
+uniform float cloud_altitude = 1850.0;          // cloud-deck height to project sky view-rays to (world Y)
+
 uniform vec2  sun_screen_uv = vec2(0.5, 0.5);          // sun's projected screen position (UV), from C#
 uniform float sun_gate : hint_range(0.0, 1.0) = 0.0;   // 0 = sun off-screen/behind camera, 1 = on-screen & ahead
 uniform vec3  ray_tint : source_color = vec3(1.0, 0.95, 0.85);   // warm beam color
@@ -48,22 +57,38 @@ void vertex() {
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
 }
 
-// 1.0 = light reaches here (open sky), 0.0 = occluder (terrain, or cloud near the sun).
-float occlusion(vec2 uv) {
-	// Terrain / solid geometry: Reverse-Z → sky/far ≈ 0.0. Near geometry (d above epsilon) = occluder.
-	float d = texture(depth_tex, uv).r;
-	if (d >= 0.0005) { return 0.0; }       // solid occluder in front of the sky
-	if (occ_mode != 2) { return 1.0; }     // depth-only mode (test scene): open sky = light
+// Reconstruct world position from a screen UV + its depth (Reverse-Z: far/sky ≈ 0.0).
+vec3 world_from_depth(vec2 uv, float depth) {
+	vec4 ndc = vec4(uv * 2.0 - 1.0, depth, 1.0);
+	vec4 wp = inv_view_proj * ndc;
+	return wp.xyz / wp.w;
+}
 
-	// HYBRID cloud term (real scene): this is sky (far plane). A sky pixel DARKER than open sky, and
-	// within cloud_radius of the sun, is cloud → occluder. Far from the sun we don't judge (avoids the
-	// global luminance trap). smoothstep gives soft cloud edges.
+// 1.0 = light reaches here (open sky), 0.0 = occluder (terrain, or cloud).
+float occlusion(vec2 uv) {
+	float d = texture(depth_tex, uv).r;
+	bool isSky = d < 0.0005;            // Reverse-Z: sky/far ≈ 0.0
+	if (!isSky) { return 0.0; }         // solid geometry in front of the sky = hard occluder
+	if (occ_mode == 0) { return 1.0; }  // depth-only (test scene): open sky = light
+
+	if (occ_mode == 3 && cloud_shadow_on) {
+		// CLOUD FIELD occlusion: find this sky pixel's world-XZ on the cloud deck (where its view ray
+		// pierces cloud_altitude), sample the shadow map's sun transmittance there. 1=open gap, 0=cloud.
+		vec3 dir = normalize(world_from_depth(uv, 0.5) - cam_world);   // view dir for this pixel
+		float t = (dir.y > 1e-3) ? (cloud_altitude - cam_world.y) / dir.y : -1.0;
+		if (t <= 0.0) { return 1.0; }   // ray doesn't reach the deck (looking down/parallel) → open
+		vec2 hitXz = (cam_world + dir * t).xz;
+		vec2 suv = hitXz / cloud_shadow_region + 0.5;
+		if (any(lessThan(suv, vec2(0.0))) || any(greaterThan(suv, vec2(1.0)))) { return 1.0; } // off-map → open
+		return texture(cloud_shadow_tex, suv).r;   // transmittance: 1 open, 0 cloud-occluded
+	}
+
+	// occ_mode == 1/2 fallback: luminance heuristic near the sun (legacy / test scene).
 	float distToSun = distance(uv, sun_screen_uv);
 	if (distToSun > cloud_radius) { return 1.0; }
 	vec3 c = texture(screen_tex, uv).rgb;
 	float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
-	float lit = smoothstep(cloud_lum - 0.12, cloud_lum, lum);   // 1 = open sky (lit), 0 = dark cloud
-	return lit;
+	return smoothstep(cloud_lum - 0.12, cloud_lum, lum);
 }
 
 // cheap per-pixel hash for dither.

@@ -101,6 +101,9 @@ public partial class TerrainLabUI : Control
             GetNode("/root/TerrainLabRoot").AddChild(_godraysScreen);
             _godraysScreen.Attach(GetNode<Camera3D>("/root/TerrainLabRoot/Camera"),
                                   GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
+            // cloud-field occlusion: same shadow map the terrain samples, projected to the cloud deck.
+            _godraysScreen.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
+            _godraysScreen.SetCloudAltitude(_terrain.MidHeight + _cloud.Params.AltitudeM);
         }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }

@@ -78,6 +78,7 @@ public partial class TerrainLabUI : Control
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)
         {
             _terrain.SetBool("cloud_shadow_on", true);
+            _godraysScreen?.SetCloudOcclusionReady(true);   // god-ray cloud sampling: same frame the RID goes live
             _shadowEnabledOnce = true;
         }
 
