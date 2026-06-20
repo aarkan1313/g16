@@ -502,10 +502,15 @@ public partial class CloudVolume : Node
     {
         if (knob == "enabled")
         {
+            // Toggle clouds via the shader uniform ONLY — never swap env.Sky back and forth.
+            // Each env.Sky assignment queues an async sky/radiance rebuild on the render thread
+            // that transiently builds a uniform set against a not-yet-valid Texture2Drd (binding 1
+            // = cloud_rd_tex; binding 34 = a dependent material) → the "Texture not valid" error
+            // burst. cloud_sky.gdshader branches on `cloud_enabled`: when off it renders the
+            // clear-sky gradient + sun disc (this lane's sky), so no resource swap is needed. The
+            // cloud sky installs exactly once, in _Process, after the RID lands.
             _enabled = on;
             _skyMat?.SetShaderParameter("cloud_enabled", on);
-            if (on) { if (_computeReady) { InstallCloudSky(); _skyInstalled = true; } }
-            else { RestoreOrigSky(); _skyInstalled = false; }
         }
     }
 
@@ -552,6 +557,12 @@ public partial class CloudVolume : Node
     public Texture2Drd? ShadowTexture => _shadowRd;
     public float RegionSize => RegionM;
 
+    // NOTE: a benign 3-line "Texture (binding 1/34) not valid" burst can print at app QUIT only:
+    // freeing the cloud RIDs here (render thread) races the compositor building one last frame's
+    // sky/terrain uniform sets. Exit-only, harmless, and NOT the mid-session preset-switch burst
+    // (that was the env.Sky swap on cloud toggle — removed; clouds now toggle via the uniform only).
+    // Left as-is: hardening teardown (detach sky + null the Texture2Drd RIDs before freeing) adds
+    // its own main-vs-render-thread ordering risk for zero in-session benefit.
     public override void _ExitTree()
     {
         _noise?.Dispose();
