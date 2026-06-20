@@ -34,6 +34,8 @@ public partial class TerrainLabUI : Control
     private int _glowCli = -1;   // --glow=0/1 → force env glow off/on (isolate post-processing effects)
     private bool _lookAtSunCli = false;   // --lookatsun → aim camera at the sun on startup (god-ray verify)
     private float _timeCli = -1f;   // --time=H → drive the decoupled Time axis (sun arc + day color script)
+    private bool _nightGate;        // --nightgate=1 → review keys 1-9 jump to data/review_night.json states (Stage 3a)
+    private float _nightDarkCli = -1f;   // --nightdark=N → set night_darkness (night brightness lever) at startup for A/B
     private int _terrainArCli = -1;
     private int _terrainDetailCli = -1;
     private int _groundRulesCli = -1;
@@ -44,7 +46,20 @@ public partial class TerrainLabUI : Control
     {
         foreach (string a in OS.GetCmdlineUserArgs())
         {
-            if (a.StartsWith("--auto-shot=")) { _autoShotPath = a.Substring("--auto-shot=".Length); _autoShotT = 0.0; }
+            if (a.StartsWith("--histcheck"))
+            {
+                // Bake one material's albedo histogram LUTs and print the T⁻¹(T(v)) round-trip error, then quit.
+                string mat = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "13_sun_baked_clay";
+                string hp = ProjectSettings.GlobalizePath($"res://assets/materials/{mat}/albedo.png");
+                if (!System.IO.File.Exists(hp)) { GD.Print($"[histcheck] no albedo for {mat}"); GetTree().Quit(); return; }
+                var himg = Image.LoadFromFile(hp);
+                var luts = HistogramCompute.ComputeLuts(himg);
+                var (maxe, meane) = HistogramCompute.RoundTripError(luts, himg);
+                GD.Print($"[histcheck] {mat}: roundtrip maxErr={maxe * 255f:F2}/255 meanErr={meane * 255f:F2}/255  -> {(maxe < 4f / 255f ? "PASS" : "FAIL")}");
+                GetTree().Quit();
+                return;
+            }
+            else if (a.StartsWith("--auto-shot=")) { _autoShotPath = a.Substring("--auto-shot=".Length); _autoShotT = 0.0; }
             else if (a.StartsWith("--blend=")) { int.TryParse(a.Substring("--blend=".Length), out _overrideBlend); }
             else if (a.StartsWith("--mask=")) { int.TryParse(a.Substring("--mask=".Length), out _overrideMask); }
             else if (a.StartsWith("--tile=")) { int.TryParse(a.Substring("--tile=".Length), out _overrideTile); }
@@ -74,6 +89,8 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--glow=")) { _glowCli = a.Substring("--glow=".Length) == "1" ? 1 : 0; }
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a.StartsWith("--time=")) { float.TryParse(a.Substring("--time=".Length), out _timeCli); }
+            else if (a.StartsWith("--nightgate=")) { _nightGate = a.Substring("--nightgate=".Length) == "1"; }
+            else if (a.StartsWith("--nightdark=")) { float.TryParse(a.Substring("--nightdark=".Length), out _nightDarkCli); }
             else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--detail=")) { _terrainDetailCli = a.Substring("--detail=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--groundrules=")) { _groundRulesCli = a.Substring("--groundrules=".Length) == "1" ? 1 : 0; }

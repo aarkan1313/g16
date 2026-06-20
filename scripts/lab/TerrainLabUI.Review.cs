@@ -38,6 +38,7 @@ public partial class TerrainLabUI : Control
     private void ApplyReview(int n)
     {
         if (_reviewLabel == null) BuildReviewLabel();
+        if (_nightGate) { ApplyReviewNight(n); return; }   // --nightgate=1: keys read data/review_night.json
         string title, judge;
         switch (n)
         {
@@ -111,6 +112,44 @@ public partial class TerrainLabUI : Control
         _reviewLabel.Text = $"REVIEW   {title}\n{judge}";
         GD.Print($"[review] {title}");
         _lastPreset = n;
+    }
+
+    // --- Stage 3a NIGHT gate (data-driven from data/review_night.json) --------
+    private List<Godot.Collections.Dictionary> _nightStates;
+
+    private void ApplyReviewNight(int n)
+    {
+        LoadNightStates();   // reload each press so live edits to review_night.json take effect immediately
+        int i = n - 1;
+        if (_nightStates == null || i < 0 || i >= _nightStates.Count)
+        {
+            _reviewLabel.Text = $"NIGHT GATE   key {n}: no state (edit data/review_night.json)";
+            return;
+        }
+        var s = _nightStates[i];
+        float NF(string k, float d) => s.ContainsKey(k) ? (float)s[k].AsDouble() : d;
+        ApplyMood(s.ContainsKey("mood") ? (int)s["mood"].AsInt32() : 5);
+        Set("cloud_enabled", s.ContainsKey("clouds") && s["clouds"].AsBool());
+        Set("cloud_coverage", NF("coverage", 0.3f));
+        Set("night_darkness", NF("darkness", 1.0f));
+        Set("night_ambient_floor", NF("floor", 0.02f));
+        Set("time_of_day", NF("time", 12.0f));   // last: DriveTime re-applies with the darkness/floor above
+        string label = s.ContainsKey("label") ? s["label"].AsString() : $"night state {n}";
+        _reviewLabel.Text = $"NIGHT GATE   {label}\nFly in motion. Light tab: 'time of day' / 'night darkness' / 'night ambient floor' to fine-tune. (no moon/stars yet = 3b+)";
+        GD.Print($"[review-night] {label}");
+        _lastPreset = n;
+    }
+
+    private void LoadNightStates()
+    {
+        _nightStates = new List<Godot.Collections.Dictionary>();
+        using var f = Godot.FileAccess.Open("res://data/review_night.json", Godot.FileAccess.ModeFlags.Read);
+        if (f == null) { GD.PushWarning("[review-night] data/review_night.json not found"); return; }
+        var parsed = Json.ParseString(f.GetAsText());
+        if (parsed.VariantType != Variant.Type.Dictionary) return;
+        var root = parsed.AsGodotDictionary();
+        if (!root.ContainsKey("states")) return;
+        foreach (Variant v in root["states"].AsGodotArray()) { _nightStates.Add(v.AsGodotDictionary()); }
     }
 
     // --- helpers -------------------------------------------------------------

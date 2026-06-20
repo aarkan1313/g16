@@ -1,0 +1,14 @@
+{
+  "_comment": "Stage 3a NIGHT eye-gate quick-states. Launch review.tscn with --nightgate=1; then number keys 1-9 jump to these (banner shows what to judge). EDIT FREELY — fields: label (banner text), time (time_of_day 0-24), darkness (night_darkness 0-2: <1 dark-scary, >1 moonlit-bright), floor (night_ambient_floor 0-0.4), mood (0-5 lighting mood index for the non-time look), clouds (true/false), coverage (0-1). Order applied: mood -> clouds -> darkness/floor -> time, so time wins the sun arc.",
+  "states": [
+    { "label": "1 · Noon (DAYLIGHT regression — should look unchanged)", "time": 12.0, "darkness": 1.0, "floor": 0.02, "mood": 5, "clouds": true, "coverage": 0.40 },
+    { "label": "2 · Golden sunset (~18h) — warm low sun", "time": 18.0, "darkness": 1.0, "floor": 0.02, "mood": 5, "clouds": true, "coverage": 0.40 },
+    { "label": "3 · DUSK (~19.5h) — sun dropping below horizon (watch it vanish cleanly)", "time": 19.5, "darkness": 1.0, "floor": 0.02, "mood": 5, "clouds": false, "coverage": 0.30 },
+    { "label": "4 · Early night (~21h)", "time": 21.0, "darkness": 1.0, "floor": 0.02, "mood": 5, "clouds": false, "coverage": 0.30 },
+    { "label": "5 · DEEP NIGHT (~23h) — physical default (no tuning)", "time": 23.0, "darkness": 1.0, "floor": 0.02, "mood": 5, "clouds": false, "coverage": 0.30 },
+    { "label": "6 · Midnight (0h)", "time": 0.0, "darkness": 1.0, "floor": 0.02, "mood": 5, "clouds": false, "coverage": 0.30 },
+    { "label": "7 · Pre-dawn (~4.5h) — brightening before sunrise", "time": 4.5, "darkness": 1.0, "floor": 0.02, "mood": 5, "clouds": false, "coverage": 0.30 },
+    { "label": "8 · Night DARK-SCARY (23h, darkness 0.2, floor 0)", "time": 23.0, "darkness": 0.2, "floor": 0.0, "mood": 5, "clouds": false, "coverage": 0.30 },
+    { "label": "9 · Night MOONLIT-BRIGHT (23h, darkness 1.8, floor 0.2)", "time": 23.0, "darkness": 1.8, "floor": 0.20, "mood": 5, "clouds": false, "coverage": 0.30 }
+  ]
+}
