@@ -1,0 +1,6 @@
+{
+  "_comment": "WEATHER axis presets for the decoupled Sun & Light system (Stage 2). Each = a cloud preset (by cloud_presets.json name; \"\" = leave current) + depth fog. Independent of time. Task 3 fills this from the 6 moods' fog + a matching cloud preset.",
+  "weather": [
+    { "name": "Clear", "cloud_preset": "Clear", "fog_color": [0.74, 0.81, 0.90], "fog_density": 0.0006, "fog_aerial": 0.85, "fog_height": -200, "fog_heightd": 0.035, "fog_sun_scatter": 0.25 }
+  ]
+}

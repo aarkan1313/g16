@@ -1,0 +1,6 @@
+{
+  "_comment": "TIME axis presets for the decoupled Sun & Light system (Stage 2). Each = a sun day-arc: time_of_day (h), the daylight window (sunrise/sunset), peak sun elevation at noon, and the sunrise→sunset azimuth sweep. The SKY/sun-color/ambient are produced by the GPU-compute atmosphere (not stored here). Task 3 fills this from the 6 moods' sun positions.",
+  "time": [
+    { "name": "Midday", "time_of_day": 12.0, "sunrise": 6.0, "sunset": 18.0, "peak_elev": 60.0, "az_start": 90.0, "az_end": 270.0 }
+  ]
+}

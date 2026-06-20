@@ -1,0 +1,6 @@
+{
+  "_comment": "GRADE axis presets for the decoupled Sun & Light system (Stage 2). Each = the artistic treatment (tonemap exposure/white, bloom, contrast/saturation/brightness, color tint). Independent of time + weather. Task 3 fills this from the 6 moods' grade values.",
+  "grade": [
+    { "name": "Neutral", "exposure": 1.0, "white": 6.0, "glow": 0.3, "contrast": 1.08, "saturation": 1.12, "brightness": 1.0, "tint": [1.0, 1.0, 1.0] }
+  ]
+}
