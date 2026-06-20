@@ -101,6 +101,10 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
   `2026-06-20-sun-surface-shader-and-presets-design.md`.
 
 #### ☀️🌙 FINISH THE FULL SKY SYSTEM (user's call 2026-06-20: "plan it all, make a roadmap, lets do it")
+> **⏸ SKY LANE PAUSED 2026-06-20** at the Night & Celestial **spec** (written, NOT built) — user paused to
+> let the Ground/Texture chat work. Daylight is shipped+gated. Resume: review the Night spec → writing-plans
+> → build 3a. Kickoff for the ground chat: `handoffs/2026-06-20-ground-texture-lane-prompt.md`.
+
 Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
 Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
 1. **Night & Celestial (Stage 3)** — sun below horizon + **darkening night sky** (tunable dark↔bright,
