@@ -6,6 +6,27 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — DOC-SET RESET + both active lanes PAUSED at a combined eye-gate (user direction).**
+An audit found WG16 had grown **20 specs + 23 plans + 4 handoffs in five days** (~100k words vs
+~7.4k lines of code) — the exact "process outran the results" sprawl the project was founded to
+avoid (cf. 2026-06-15 "low plans") — and that **both active lanes had built three phases past their
+last passed eye-gate** while the user couldn't be at a screen: GROUND built GM1+GM2+GM3-A unjudged;
+SUN & LIGHT built Stage 1 + the Stage 2 decouple/time-of-day unjudged (and had spec'd a GPU-compute
+Hillaire atmosphere + night/celestial/fantasy stages on top). **Decision: finish the in-flight work
+to a clean, default-off/approved-look stopping point, then PAUSE both lanes for one combined
+eye-gate, then re-roadmap from the results.** Concretely: (1) set every new GM + sun feature
+default-off / approved-era look so it's opt-in and reversible; (2) **archive the sprawl** —
+`docs/archive/` now holds all 23 plans, 14 superseded/not-scheduled specs (incl. the erosion and
+terrain-LOD future-arc designs, pointer-linked), the 4 handoffs, and transient prompt docs (git mv,
+history intact); (3) keep a **thin active set** — the 2 lane roadmaps + the 4 built-but-unapproved
+specs + `NEEDS_REVIEW`/`DECISIONS`/`HANDOFF`/`TECH_STACK`/`performance` + the cloud/godray reference
+overviews; (4) rewrite `ROADMAP.md` fresh around the NOW eye-gate session and a re-stated
+**discipline rule: a lane builds at most ONE phase ahead of the last PASSED eye-gate; thin docs, not
+a plan-per-lane.** The deferred GPU atmosphere must be re-spec'd around the CloudVolume render-thread
+`Texture2Drd` seam (a local-RD texture can't be sampled by a material), not the FieldCompute pattern.
+Gate order = light → base shading → ground → sky → whole-scene AA (upstream first so judgments aren't
+contaminated). Nothing proven was dropped; nothing deleted.
+
 **2026-06-20 — RE-SEQUENCE the GROUND arc: material foundation first; Unit 4 breakup PARKED (user, live).**
 Unit 4 (procedural breakup) was built (T1–T6) and failed its live eye-gate: hard square edges + "barely
 does anything." Deep root-cause (systematic-debugging): three compounding causes, one wrong premise —
