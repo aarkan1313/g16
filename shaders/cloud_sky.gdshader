@@ -18,7 +18,7 @@ uniform int cloud_debug = 0;   // 0 normal | 1 show raw cloud tex
 uniform float sun_disc_energy = 1.3;
 uniform float night_factor = 0.0;   // 0 day .. 1 deep night (drives sun horizon-gate; moon/star fade later)
 uniform float sun_size = 0.6;    // angular disc radius in DEGREES (visible sun size)
-uniform float sun_limb = 0.55;   // limb darkening: 0 = flat disc, 1 = strong center→rim falloff
+uniform float sun_limb = 0.70;   // limb darkening: 0 = flat disc, 1 = strong center→rim falloff (polish: more spherical)
 uniform float sun_corona_size : hint_range(40.0, 6000.0) = 1200.0;  // tight inner bloom (higher = tighter)
 uniform float sun_corona_energy = 2.0;
 uniform float sun_halo_size : hint_range(8.0, 400.0) = 90.0;        // wide soft glow (lower = wider)
@@ -53,6 +53,15 @@ uniform float moon_surf_contrast : hint_range(0.0, 1.0) = 0.5;
 uniform float moon_surf_spots : hint_range(0.0, 1.0) = 0.4;
 uniform float moon_surf_churn : hint_range(0.0, 1.0) = 0.0;
 
+// --- STARS + MILKY WAY (Stage 3d): procedural, faded in at night, on a slowly-rotating celestial sphere ---
+uniform float star_brightness = 1.0;
+uniform float star_density : hint_range(0.0, 1.0) = 0.5;
+uniform float star_twinkle : hint_range(0.0, 1.0) = 0.5;
+uniform float star_rotation = 0.003;     // celestial rotation speed (rad/s)
+uniform float mw_brightness : hint_range(0.0, 2.0) = 0.25;
+uniform float mw_width : hint_range(0.02, 0.4) = 0.10;
+uniform float mw_tilt = 0.6;             // galactic-plane tilt
+
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
 uniform vec3 ground_color : source_color = vec3(0.22, 0.26, 0.22);
@@ -76,6 +85,7 @@ vec2 dir_to_uv(vec3 d){
 }
 
 float sun_hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float hash13(vec3 p3){ p3 = fract(p3 * 0.1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
 float sun_vnoise(vec2 p){
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -220,10 +230,46 @@ vec3 moon_layers(vec3 rd) {
     return moon_disc_energy * vis * (core + glow);
 }
 
+// STARS + MILKY WAY (Stage 3d): procedural points on a slowly-rotating celestial sphere + a tilted
+// great-circle band, faded in by night_factor and above the horizon. Direction-only (EYEDIR), so they
+// stay locked to the sky as the camera moves (no crawl); twinkle is a smooth TIME phase.
+vec3 stars_layer(vec3 rd){
+    if (night_factor <= 0.001) { return vec3(0.0); }
+    vec3 sr = normalize(rd);
+    float a = TIME * star_rotation;                       // celestial rotation about the vertical axis
+    float ca = cos(a), sa = sin(a);
+    sr = vec3(ca * sr.x - sa * sr.z, sr.y, sa * sr.x + ca * sr.z);
+
+    // STARS: sparse soft points from a 3D hash grid.
+    float scale = 250.0;
+    vec3 cell = floor(sr * scale);
+    vec3 f = fract(sr * scale) - 0.5;
+    float h = hash13(cell);
+    float present = step(1.0 - star_density * 0.09, h);   // top fraction of cells get a star
+    vec3 jit = (vec3(hash13(cell + 1.7), hash13(cell + 4.3), hash13(cell + 8.1)) - 0.5) * 0.7;
+    float d = length(f - jit);
+    float pt = present * smoothstep(0.16, 0.0, d);
+    float tw = mix(1.0, 0.5 + 0.5 * sin(TIME * 3.0 + h * 62.8), star_twinkle);   // temporally smooth twinkle
+    float mag = mix(0.35, 1.0, hash13(cell + 12.0));      // per-star brightness variety
+    vec3 star = vec3(pt * tw * mag) * star_brightness;
+
+    // MILKY WAY: a tilted great-circle band broken up by fbm into wispy clumps (not a solid beam).
+    vec3 planeN = normalize(vec3(sin(mw_tilt), 0.35, cos(mw_tilt)));
+    float band = smoothstep(mw_width, 0.0, abs(dot(sr, planeN)));
+    float s1 = sun_fbm(sr.xy * 5.0 + vec2(sr.z * 4.0));
+    float s2 = sun_fbm(sr.xy * 11.0 + vec2(sr.z * 7.0 + 3.0));
+    float structure = smoothstep(0.30, 0.85, s1 * 0.7 + s2 * 0.4);   // gaps + dust lanes, not uniform
+    vec3 mw = vec3(0.62, 0.70, 0.92) * band * structure * mw_brightness;
+
+    float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
+    return (star + mw) * fade;
+}
+
 void sky(){
     vec3 rd = EYEDIR;
     vec3 bg = background(rd);
 
+    bg += stars_layer(rd);     // behind the sun/moon/clouds (they composite over)
     bg += sun_layers(rd);
     bg += moon_layers(rd);
 

@@ -15,6 +15,7 @@ public partial class TerrainLabUI : Control
     private WeatherState _weather = new();
     private GradeState _grade = new();
     private MoonState _moon = new();
+    private StarsState _stars = new();
     private Vector3 _lastMoonDir = Vector3.Zero;   // last composed moon direction (for --lookatmoon)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
@@ -32,7 +33,7 @@ public partial class TerrainLabUI : Control
         _time.SkyGround = m.ContainsKey("sky_ground") ? Col(m["sky_ground"]) : new Color(0.22f, 0.26f, 0.22f);
 
         _sunDisc.ShadowSoft = F(m, "shadow_soft", 1.0f); _sunDisc.DiscAngular = F(m, "sun_disc", 0.6f);
-        _sunDisc.Size = F(m, "sun_size", 0.6f); _sunDisc.Limb = F(m, "sun_limb", 0.55f);
+        _sunDisc.Size = F(m, "sun_size", 0.6f); _sunDisc.Limb = F(m, "sun_limb", 0.70f);   // polish: more spherical default
         _sunDisc.CoronaSize = F(m, "sun_corona_size", 1200f); _sunDisc.CoronaEnergy = F(m, "sun_corona_energy", 2.0f);
         _sunDisc.HaloSize = F(m, "sun_halo_size", 90f); _sunDisc.HaloEnergy = F(m, "sun_halo_energy", 0.4f);
         _sunDisc.Redden = F(m, "sun_redden", 1.0f); _sunDisc.ReddenOnset = F(m, "sun_redden_onset", 0.25f);
@@ -108,6 +109,10 @@ public partial class TerrainLabUI : Control
             _moonLight.LightColor = _moon.LightColor;
             _moonLight.LightEnergy = mEnergy;
             _moonLight.Visible = mEnergy > 0.001f;                              // invisible = no shadow/cost in day
+
+            // ── STARS + MILKY WAY (Stage 3d): procedural, faded in at night by the sky shader. ──
+            _cloud.SetStars(_stars.Brightness, _stars.Density, _stars.Twinkle, _stars.Rotation);
+            _cloud.SetMilkyWay(_stars.MwBrightness, _stars.MwWidth, _stars.MwTilt);
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by

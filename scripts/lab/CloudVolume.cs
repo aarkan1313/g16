@@ -497,6 +497,21 @@ public partial class CloudVolume : Node
         _skyMat?.SetShaderParameter("moon_surf_churn", Mathf.Clamp(churn, 0f, 1f));
     }
 
+    // --- STARS + MILKY WAY (Stage 3d) ---
+    public void SetStars(float bright, float density, float twinkle, float rotation)
+    {
+        _skyMat?.SetShaderParameter("star_brightness", Mathf.Max(bright, 0f));
+        _skyMat?.SetShaderParameter("star_density", Mathf.Clamp(density, 0f, 1f));
+        _skyMat?.SetShaderParameter("star_twinkle", Mathf.Clamp(twinkle, 0f, 1f));
+        _skyMat?.SetShaderParameter("star_rotation", rotation);
+    }
+    public void SetMilkyWay(float bright, float width, float tilt)
+    {
+        _skyMat?.SetShaderParameter("mw_brightness", Mathf.Clamp(bright, 0f, 2f));
+        _skyMat?.SetShaderParameter("mw_width", Mathf.Clamp(width, 0.02f, 0.4f));
+        _skyMat?.SetShaderParameter("mw_tilt", tilt);
+    }
+
     // --- sun SURFACE (procedural granulation) — material-uniform setters ---
     public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }
     public void SetSunSurfaceCells(float v)   { _skyMat?.SetShaderParameter("sun_surface_cells", v); }

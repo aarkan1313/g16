@@ -77,6 +77,15 @@ public sealed class MoonState
     public MoonState Clone() => (MoonState)MemberwiseClone();
 }
 
+/// CELESTIAL — STARS + MILKY WAY (Stage 3d). Pure data; procedural field rendered in cloud_sky.gdshader,
+/// faded in at night. No real constellations (user's call).
+public sealed class StarsState
+{
+    public float Brightness = 1.0f, Density = 0.5f, Twinkle = 0.5f, Rotation = 0.003f;
+    public float MwBrightness = 0.25f, MwWidth = 0.10f, MwTilt = 0.6f;
+    public StarsState Clone() => (StarsState)MemberwiseClone();
+}
+
 /// WEATHER axis: clouds (by preset id) + depth fog. Re-homes the existing cloud/fog systems unchanged.
 public sealed class WeatherState
 {

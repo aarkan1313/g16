@@ -133,6 +133,13 @@ public partial class TerrainLabUI : Control
             case "moon_elev_off":       _moon.ElevOffset = v; ComposeLighting(); break;
             case "moon_az_off":         _moon.AzOffset = v; ComposeLighting(); break;
             case "moonlight_energy":    _moon.LightEnergy = v; ComposeLighting(); break;
+            case "star_brightness":     _stars.Brightness = v; ComposeLighting(); break;
+            case "star_density":        _stars.Density = v; ComposeLighting(); break;
+            case "star_twinkle":        _stars.Twinkle = v; ComposeLighting(); break;
+            case "star_rotation":       _stars.Rotation = v; ComposeLighting(); break;
+            case "mw_brightness":       _stars.MwBrightness = v; ComposeLighting(); break;
+            case "mw_width":            _stars.MwWidth = v; ComposeLighting(); break;
+            case "mw_tilt":             _stars.MwTilt = v; ComposeLighting(); break;
             case "inspect_energy":      _inspectEnergy = v; if (_inspectLight != null) { _inspectLight.LightEnergy = v; } break;
             case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
             case "ssao_intensity":  env.SsaoIntensity = v; break;
