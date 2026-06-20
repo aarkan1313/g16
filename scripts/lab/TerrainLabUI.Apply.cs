@@ -74,6 +74,10 @@ public partial class TerrainLabUI : Control
         else if (field == "SlopeCliffLo") { _terrain.SlopeCliffLo = v; }
         else if (field == "SlopeCliffHi") { _terrain.SlopeCliffHi = v; }
         else if (field == "BandSoftnessM") { _terrain.BandSoftnessM = v; }
+        else if (field == "BkCurvScale")  { _terrain.BkCurvScale = v; }
+        else if (field == "BkCavityGain") { _terrain.BkCavityGain = v; }
+        else if (field == "BkSunAzimuth") { _terrain.BkSunAzimuth = v; }
+        else if (field == "BkFlowIters")  { _terrain.BkFlowIters = Mathf.RoundToInt(v); }
     }
 
     private void SetTerrainBoolField(string field, bool v)
