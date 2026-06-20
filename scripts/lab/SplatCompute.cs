@@ -27,6 +27,9 @@ public sealed class SplatCompute : IDisposable
         public float EdgeNoiseM, EdgeNoiseAmp, MacroM;
         public uint RuleBased;   // 0 legacy bands | 1 rule engine
         public float CurvK;      // curvature scale (m)
+        // --- Unit 4: breakup-mask shaping ---
+        public float BkSlopeLo, BkSlopeHi, BkCurvScale, BkCavityGain, BkSunAzimuth;
+        public uint  BkFlowIters;
     }
 
     public SplatCompute()
@@ -47,7 +50,7 @@ public sealed class SplatCompute : IDisposable
     }
 
     /// Result of one bake: the legacy index map (splat_tex) + the two Phase-A weightmaps.
-    public readonly record struct BakeResult(ImageTexture Splat, ImageTexture WeightsA, ImageTexture WeightsB);
+    public readonly record struct BakeResult(ImageTexture Splat, ImageTexture WeightsA, ImageTexture WeightsB, ImageTexture Breakup);
 
     /// (Re)bake the mask from a heightfield page → an ImageTexture (RGBAF) to bind
     /// as sampler2D on the terrain material. Safe to call repeatedly (rebake).
@@ -81,7 +84,12 @@ public sealed class SplatCompute : IDisposable
         var wbU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 };
         wbU.AddId(wbBuf);
 
-        Rid set = _rd.UniformSetCreate(new Godot.Collections.Array<RDUniform> { hU, oU, pU, waU, wbU }, _shader, 0);
+        // Unit 4 breakup masks: one packed uint (Rgba8) per cell (binding 5)
+        Rid bBuf = _rd.StorageBufferCreate((uint)(cells * sizeof(uint)));
+        var bU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 5 };
+        bU.AddId(bBuf);
+
+        Rid set = _rd.UniformSetCreate(new Godot.Collections.Array<RDUniform> { hU, oU, pU, waU, wbU, bU }, _shader, 0);
 
         long list = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(list, _pipeline);
@@ -95,26 +103,30 @@ public sealed class SplatCompute : IDisposable
         byte[] outBytes = _rd.BufferGetData(oBuf);
         byte[] waBytes = _rd.BufferGetData(waBuf);   // packed Rgba8, little-endian: R=w0,G=w1,B=w2,A=w3
         byte[] wbBytes = _rd.BufferGetData(wbBuf);
+        byte[] bkBytes = _rd.BufferGetData(bBuf);    // packed Rgba8: R=slope,G=curv,B=cavity,A=wear
         _rd.FreeRid(set);
         _rd.FreeRid(hBuf);
         _rd.FreeRid(oBuf);
         _rd.FreeRid(pBuf);
         _rd.FreeRid(waBuf);
         _rd.FreeRid(wbBuf);
+        _rd.FreeRid(bBuf);
 
         Image splatImg = Image.CreateFromData(res, res, false, Image.Format.Rgbaf, outBytes);
         Image waImg = Image.CreateFromData(res, res, false, Image.Format.Rgba8, waBytes);
         Image wbImg = Image.CreateFromData(res, res, false, Image.Format.Rgba8, wbBytes);
+        Image bkImg = Image.CreateFromData(res, res, false, Image.Format.Rgba8, bkBytes);
         return new BakeResult(
             ImageTexture.CreateFromImage(splatImg),
             ImageTexture.CreateFromImage(waImg),
-            ImageTexture.CreateFromImage(wbImg));
+            ImageTexture.CreateFromImage(wbImg),
+            ImageTexture.CreateFromImage(bkImg));
     }
 
     private static byte[] BuildParams(Params p)
     {
-        // 19 fields, std430 scalar layout (all 4-byte) → pad to 16-byte multiple (80B).
-        var b = new byte[80];
+        // 18 base + 6 Unit-4 = 24 fields, std430 scalar layout (all 4-byte) → 96B (16-byte multiple).
+        var b = new byte[96];
         int o = 0;
         void U(uint v) { BitConverter.GetBytes(v).CopyTo(b, o); o += 4; }
         void F(float v) { BitConverter.GetBytes(v).CopyTo(b, o); o += 4; }
@@ -124,6 +136,8 @@ public sealed class SplatCompute : IDisposable
         F(p.MixScaleM); F(p.MixBias);
         U(p.MaskMode); F(p.EdgeNoiseM); F(p.EdgeNoiseAmp); F(p.MacroM);
         U(p.RuleBased); F(p.CurvK);
+        F(p.BkSlopeLo); F(p.BkSlopeHi); F(p.BkCurvScale); F(p.BkCavityGain); F(p.BkSunAzimuth);
+        U(p.BkFlowIters);
         return b;
     }
 
