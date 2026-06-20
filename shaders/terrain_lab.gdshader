@@ -154,7 +154,7 @@ uniform float splat_warp_wl : hint_range(10.0, 200.0) = 55.0;  // warp noise wav
 uniform float mix_strength : hint_range(0.0, 1.0) = 0.6;   // live: how strongly secondary shows
 uniform int splat_debug = 0;   // 0 off | 1 show dominant zone as color | 2 show mix amount
 // Phase A: smooth weight-blend path. 0 = legacy index path (current look) | 1 = weightmaps.
-uniform int splat_blend_mode = 0;
+uniform int splat_blend_mode = 1;
 // Derived material-height channel (the new "height" interface). true = 1-roughness
 // (rough grit protrudes) | false = albedo luma. Real height maps: bind z*_hgt, sample there.
 uniform bool height_from_rough = true;
