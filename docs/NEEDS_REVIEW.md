@@ -29,14 +29,21 @@ Last updated: 2026-06-19.
   POM is binary — it only reads with **real height maps** (spec ceiling seam #1). Decision (user): if we do
   height maps + POM later, **defer** now (seam kept, zero runtime cost). → see ROADMAP "height maps" arc.
 
-### 0b. GI/SDFGI — under review (user flagged, 2026-06-19)
-- **Symptom:** user sees "weird shadows occasionally" + big blocky rectangular patches, and toggling
-  SDFGI / GI-proxy "doesn't seem to do much." Hypothesis: SDFGI adds marginal visible benefit on open
-  sky-lit terrain (env ambient+SSAO+SSIL already cover most), while costing ~2.9 ms in motion, and the
-  coarse 512² GI/shadow proxy likely causes the blocky patches.
-- **Targeted A/B owed (user, live):** in a **shadowed valley / north slope in shade**, toggle Debug `sdfgi`
-  off/on (do shaded areas go flat → GI earns it, retune; or look the same → purge candidate) and toggle
-  `GI/shadow proxy (perf)` watching the blocky patches. **Purge would also help the 8 ms target.**
+### 0b. GI/SDFGI — INVESTIGATED 2026-06-19; decision handed to the LIGHT/SUN chat (don't change here)
+- **⚠ Another chat owns light/sun (scene WorldEnvironment) — do NOT change `sdfgi_enabled`/ambient/GI
+  proxy from a material chat; coordinate.** This is the investigation result for them to act on.
+- **Finding (objective, `--sdfgi=`/`--giproxy=` A/B + pixel-diff, cam 0,120,0,-22,0, clouds off):**
+  toggling SDFGI changes the rendered image by **0.002–0.003 / 255** (invisible) — confirmed the user's
+  "does nothing." It is **NOT misconfigured/broken:** tested SDFGI on the full detail mesh (proxy off) →
+  still ~0.003; and a custom `light()` does not block engine GI. It's **functioning but redundant on
+  smooth open sky-lit terrain** (nothing to bounce/occlude; sky-ambient+SSAO already cover it).
+- **Cost (in-motion `--profmove`, clouds off):** SDFGI on+proxy on **5.2 ms** · SDFGI **off**+proxy on
+  **2.8 ms** (−2.4 ms) · SDFGI off+proxy **off** (sharp detail-mesh shadows) **4.7 ms**. So SDFGI costs
+  ~2.4 ms for zero visible benefit *now*.
+- **Recommendation (PARK, don't purge):** default SDFGI off + GI proxy off (sharp shadows, no blocky
+  patches, ~4.7 ms, fully reversible toggles) → big step toward the 8 ms target with no visible loss.
+  **Re-evaluate GI when flora / erosion canyons / day-night+moonlight land** — those add the occluding/
+  enclosed geometry that makes GI earn its cost. Don't delete it.
 
 ### 1. Ground G1 — rule-based placement engine ✅ APPROVED 2026-06-19
 - **Verdict (user, live):** "rule placement does work, it's basic, will want a lot more in the future but this proves the basics work." Gate PASSED — the engine + tunable knobs are in; richer rules grow via G3 + future expansion.
