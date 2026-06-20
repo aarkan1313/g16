@@ -26,6 +26,7 @@ public partial class TerrainLabUI : Control
             case "godray_cloud_radius": _godraysScreen?.SetCloudRadius(v); return;  // cloud-detect radius around sun
             case "godray_cloud_lum":    _godraysScreen?.SetCloudLum(v); return;     // cloud darkness threshold
         }
+        if (knob.StartsWith("cirrus_")) { _cloud?.SetCirrus(knob, v); return; }   // CO-2 cirrus sky-layer uniforms
         _cloud?.SetKnob(knob, v);
     }
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
@@ -34,6 +35,7 @@ public partial class TerrainLabUI : Control
         if (knob == "godrays") { _godraysScreen?.SetEnabled(on); return; }   // screen-space radial beams
         if (knob == "godray_backlit") { _godraysScreen?.SetCloudInvert(on); return; }   // occluder polarity (sun behind cloud)
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)
+        if (knob == "cirrus_on") { _cloud?.SetCirrusOn(on); return; }     // CO-2 cirrus sky-layer toggle
         _cloud?.SetKnobBool(knob, on);
         // clouds-enabled also gates the ground-shadow sampling in the terrain light()
         if (knob == "enabled") { _terrain.SetBool("cloud_shadow_on", on); }

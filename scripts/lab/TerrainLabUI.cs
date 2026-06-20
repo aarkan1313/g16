@@ -125,6 +125,7 @@ public partial class TerrainLabUI : Control
             GD.Print($"[cloudprofile] CO-1 vertical profile ON ({_cloudProfileCli})");
         }
         if (_stratusCli >= 0f) { _cloud.SetKnob("shape_mode", _stratusCli); GD.Print($"[stratus] shape_mode={_stratusCli}"); }
+        if (_cirrusCli >= 0f) { _cloud.SetCirrusOn(true); _cloud.SetCirrus("cirrus_coverage", _cirrusCli); GD.Print($"[cirrus] on cov={_cirrusCli}"); }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
         if (_shadowDbgCli == 1) { _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground

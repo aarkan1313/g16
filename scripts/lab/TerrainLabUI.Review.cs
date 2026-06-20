@@ -18,6 +18,7 @@ public partial class TerrainLabUI : Control
     private Label _reviewLabel;
     private int _lastPreset = -1;
     private bool _co1ProfileOn;   // CO-1 vertical-profile A/B state (review key 6 toggles it)
+    private int _co2Type;         // CO-2 type on review key 6: 0 cumulus · 1 stratus · 2 cirrus
     private List<string> _palNames;
     private Dictionary<string, string[]> _palRoles;
     private int _palIdx;
@@ -83,19 +84,33 @@ public partial class TerrainLabUI : Control
                 title = "5 · GM3-A within-area variation";
                 judge = "On a uniform slope: stops reading uniform — drier-lighter-rougher vs damper-darker-smoother patches, organic, no squares/shimmer? Far ~unchanged. Toggle 'within-area variation' (Color tab).";
                 break;
-            case 6: // Clouds #2 · CO-1 vertical-profile A/B (NEEDS_REVIEW 9). Press 6 again to toggle profile ON/OFF.
-                if (_lastPreset == 6) { _co1ProfileOn = !_co1ProfileOn; }
-                else
+            case 6: // Clouds CO-1/CO-2 types — press 6 to cycle: cumulus(profile off→on) → stratus → cirrus
+                if (_lastPreset != 6)
                 {
                     ApplyMood(5);                                  // neutral midday
                     Set("cloud_enabled", true); Set("cloud_coverage", 0.55f);
                     Set("cloud_profile_bottom", 0.15f); Set("cloud_profile_top", 0.6f); Set("cloud_anvil", 0.0f);
                     LookUpAtClouds();
-                    _co1ProfileOn = false;                         // start from the approved slab look
+                    _co2Type = 0; _co1ProfileOn = false;           // start at the approved slab look
                 }
-                Set("cloud_profile_on", _co1ProfileOn);
-                title = $"6 · Clouds CO-1 vertical profile — {(_co1ProfileOn ? "ON (3D volume)" : "OFF (approved slab)")}  (press 6 to A/B)";
-                judge = "Fly UNDER and up at a deck. ON: reads as a 3D volume (flat base, rounded/anvil top), not a slab? OFF: approved cumulus look reproduces? No shimmer/horizon artifact? Tune 'profile: base round / top fade / anvil' on the Clouds tab. NOTE: profile ON thins clouds — raise 'density' to compensate.";
+                else if (_co2Type == 0 && !_co1ProfileOn) { _co1ProfileOn = true; }   // cumulus: flip profile ON
+                else { _co2Type = (_co2Type + 1) % 3; _co1ProfileOn = false; }         // then advance the type
+                // reset all type levers, enable the selected one
+                Set("cloud_shape_mode", _co2Type == 1 ? 1.0f : 0.0f);
+                Set("cloud_cirrus_on", _co2Type == 2);
+                Set("cloud_profile_on", _co2Type == 0 && _co1ProfileOn);
+                title = _co2Type switch
+                {
+                    1 => "6 · Clouds CO-2: STRATUS sheet  (press 6 → cirrus)",
+                    2 => "6 · Clouds CO-2: CIRRUS layer  (press 6 → cumulus)",
+                    _ => $"6 · Clouds CO-1: cumulus vertical profile {(_co1ProfileOn ? "ON (3D)" : "OFF (slab)")}  (press 6 → {(_co1ProfileOn ? "stratus" : "profile ON")})"
+                };
+                judge = _co2Type switch
+                {
+                    1 => "Stratus: a flat connected overcast SHEET (not cumulus clumps)? Tune Clouds 'type: cumulus↔stratus' + coverage/density.",
+                    2 => "Cirrus: believable high WIND-STREAKED filaments, thin/semi-transparent, fading at the horizon, warm near the sun? Tune Clouds 'cirrus: *'. Cumulus still composites over it.",
+                    _ => "Cumulus vertical profile (CO-1): ON reads as a 3D volume, OFF = approved slab. Press 6 to cycle on → stratus → cirrus. NOTE: profile ON thins clouds — raise 'density'."
+                };
                 break;
             case 7: // God rays — final pass (3)
                 ApplyMood(0);                                   // low sun

@@ -525,6 +525,21 @@ public partial class CloudVolume : Node
         _skyMat?.SetShaderParameter("mw_tilt", tilt);
     }
 
+    // --- CIRRUS (CO-2): 2D sky-layer uniforms (default off) ---
+    public void SetCirrusOn(bool on) { _skyMat?.SetShaderParameter("cirrus_on", on); }
+    public void SetCirrus(string knob, float v)
+    {
+        switch (knob)
+        {
+            case "cirrus_coverage":  _skyMat?.SetShaderParameter("cirrus_coverage", Mathf.Clamp(v, 0f, 1f)); break;
+            case "cirrus_density":   _skyMat?.SetShaderParameter("cirrus_density", Mathf.Clamp(v, 0f, 1f)); break;
+            case "cirrus_wind_deg":  _skyMat?.SetShaderParameter("cirrus_wind_deg", v); break;
+            case "cirrus_speed":     _skyMat?.SetShaderParameter("cirrus_speed", v); break;
+            case "cirrus_scale":     _skyMat?.SetShaderParameter("cirrus_scale", Mathf.Max(0.1f, v)); break;
+            case "cirrus_sharpness": _skyMat?.SetShaderParameter("cirrus_sharpness", Mathf.Clamp(v, 0f, 1f)); break;
+        }
+    }
+
     // --- sun SURFACE (procedural granulation) — material-uniform setters ---
     public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }
     public void SetSunSurfaceCells(float v)   { _skyMat?.SetShaderParameter("sun_surface_cells", v); }
