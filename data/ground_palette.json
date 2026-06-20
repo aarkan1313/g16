@@ -1,6 +1,6 @@
 {
   "_comment": "Curated ground palettes. 'active' selects which palette's 7 role materials load as the zone_mat dropdown defaults (valley=0 .. peak/snow=6). roles[] entries are material NAMES from data/material_library.json. Per-role live tuning is via the Zones-tab dropdowns; this is the starting point. A name missing from the library warns + clamps (see ZoneDefaultMaterialIndex). Add palettes freely; switch by editing 'active' and relaunching.",
-  "active": "alpine_stone",
+  "active": "alpine_green",
   "palettes": {
     "alpine_stone": {
       "label": "Alpine Stone",

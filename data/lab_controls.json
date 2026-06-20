@@ -41,7 +41,7 @@
     { "id": "macro_scale2", "label": "macro scl2", "tab": "Color", "type": "slider",
       "param": "macro_scale2", "min": 60, "max": 400, "default": 170, "rand": true },
 
-    { "id": "variation_on", "label": "within-area variation", "tab": "Color", "type": "toggle", "param": "variation_on", "default": true, "rand": false },
+    { "id": "variation_on", "label": "within-area variation", "tab": "Color", "type": "toggle", "param": "variation_on", "default": false, "rand": false },
     { "id": "variation_amt", "label": "variation amt", "tab": "Color", "type": "slider", "param": "variation_amt", "min": 0, "max": 2, "default": 1.0, "rand": true },
     { "id": "var_rough", "label": "var roughness", "tab": "Color", "type": "slider", "param": "var_rough", "min": 0, "max": 0.6, "default": 0.15, "rand": true },
     { "id": "var_val", "label": "var value", "tab": "Color", "type": "slider", "param": "var_val", "min": 0, "max": 0.5, "default": 0.12, "rand": true },

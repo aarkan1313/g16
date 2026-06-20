@@ -124,7 +124,7 @@ uniform float macro_sat_amp : hint_range(0.0, 0.6) = 0.18;   // saturation drift
 uniform float macro_scale2 : hint_range(60.0, 400.0) = 170.0; // 2nd (medium) octave wavelength
 
 // --- GM3-A: within-area variation (multi-scale world-pos material-property modulation) -------
-uniform bool  variation_on = true;
+uniform bool  variation_on = false;   // default-off (approved baseline); opt-in for the eye-gate
 uniform float variation_amt   : hint_range(0.0, 2.0) = 1.0;     // master
 uniform float var_val   : hint_range(0.0, 0.5)  = 0.12;   // ± brightness (drier patches lighter)
 uniform float var_sat   : hint_range(0.0, 0.5)  = 0.10;   // ± saturation
