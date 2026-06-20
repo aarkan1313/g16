@@ -65,6 +65,19 @@
         "cloud_godrays": 1, "cloud_godray_strength": 9.0, "cloud_godray_length": 0.35,
         "cloud_godray_decay": 0.985, "cloud_godray_cloud_radius": 0.75, "cloud_godray_cloud_lum": 0.74
       }
+    },
+    {
+      "name": "Golden Hour Sun",
+      "_comment": "Sun disc showcase: warm low sun near the horizon with a light scattering of cumulus. Demonstrates sun reddening, horizon grow, and corona/halo at their showcase values. Point the camera toward the sun (azimuth 110°) for the full warm disc + halo.",
+      "values": {
+        "cloud_coverage": 0.35, "cloud_density": 1.0, "cloud_type": 0.6, "cloud_size": 1.1,
+        "cloud_edge": 0.55, "cloud_detail": 0.5, "cloud_opacity": 1.0, "cloud_brightness": 1.05,
+        "cloud_ambient": 0.75, "cloud_altitude": 2000, "cloud_thickness": 900,
+        "cloud_drift_speed": 6.0, "cloud_drift_dir": 110,
+        "sun_angle": 8.0, "sun_azimuth": 110.0, "sun_energy": 1.5,
+        "sun_redden": 1.3, "sun_horizon_grow": 1.0, "sun_corona_energy": 2.5,
+        "sun_halo_energy": 0.6, "sun_halo_size": 120.0, "sun_limb": 0.65
+      }
     }
   ]
 }

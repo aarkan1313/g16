@@ -443,16 +443,26 @@ public partial class CloudVolume : Node
     // actual cloud in front occludes it (dome composite). Pushed from TerrainLabUI._baseSunEnergy.
     private float _sunDiscEnergy = 1.3f;
     public void SetSunDiscEnergy(float e) { _sunDiscEnergy = e; _skyMat?.SetShaderParameter("sun_disc_energy", e); }
-    public void SetSunSize(float deg) { _skyMat?.SetShaderParameter("sun_size", Mathf.Clamp(deg, 0.05f, 8f)); }
-    public void SetSunLimb(float v)   { _skyMat?.SetShaderParameter("sun_limb", Mathf.Clamp(v, 0f, 1f)); }
-    public void SetSunCoronaSize(float v)   { _skyMat?.SetShaderParameter("sun_corona_size", Mathf.Clamp(v, 40f, 6000f)); }
-    public void SetSunCoronaEnergy(float v) { _skyMat?.SetShaderParameter("sun_corona_energy", Mathf.Max(v, 0f)); }
-    public void SetSunHaloSize(float v)     { _skyMat?.SetShaderParameter("sun_halo_size", Mathf.Clamp(v, 8f, 400f)); }
-    public void SetSunHaloEnergy(float v)   { _skyMat?.SetShaderParameter("sun_halo_energy", Mathf.Max(v, 0f)); }
-    public void SetSunCloudRedden(float v) { _skyMat?.SetShaderParameter("sun_cloud_redden", Mathf.Clamp(v, 0f, 2f)); }
-    public void SetSunRedden(float v)      { _skyMat?.SetShaderParameter("sun_redden", Mathf.Clamp(v, 0f, 2f)); }
-    public void SetSunReddenOnset(float v) { _skyMat?.SetShaderParameter("sun_redden_onset", Mathf.Clamp(v, 0.02f, 0.8f)); }
-    public void SetSunHorizonGrow(float v) { _skyMat?.SetShaderParameter("sun_horizon_grow", Mathf.Clamp(v, 0f, 3f)); }
+    private float _sunSize = 0.6f;          public float SunSize          => _sunSize;
+    private float _sunLimb = 0.55f;         public float SunLimb          => _sunLimb;
+    private float _sunCoronaSize = 1200f;   public float SunCoronaSize    => _sunCoronaSize;
+    private float _sunCoronaEnergy = 2.0f;  public float SunCoronaEnergy  => _sunCoronaEnergy;
+    private float _sunHaloSize = 90f;       public float SunHaloSize      => _sunHaloSize;
+    private float _sunHaloEnergy = 0.4f;    public float SunHaloEnergy    => _sunHaloEnergy;
+    private float _sunRedden = 1.0f;        public float SunRedden        => _sunRedden;
+    private float _sunReddenOnset = 0.25f;  public float SunReddenOnset   => _sunReddenOnset;
+    private float _sunHorizonGrow = 0.6f;   public float SunHorizonGrow   => _sunHorizonGrow;
+    private float _sunCloudRedden = 0.8f;   public float SunCloudRedden   => _sunCloudRedden;
+    public void SetSunSize(float deg) { _sunSize = Mathf.Clamp(deg, 0.05f, 8f); _skyMat?.SetShaderParameter("sun_size", _sunSize); }
+    public void SetSunLimb(float v)   { _sunLimb = Mathf.Clamp(v, 0f, 1f); _skyMat?.SetShaderParameter("sun_limb", _sunLimb); }
+    public void SetSunCoronaSize(float v)   { _sunCoronaSize = Mathf.Clamp(v, 40f, 6000f); _skyMat?.SetShaderParameter("sun_corona_size", _sunCoronaSize); }
+    public void SetSunCoronaEnergy(float v) { _sunCoronaEnergy = Mathf.Max(v, 0f); _skyMat?.SetShaderParameter("sun_corona_energy", _sunCoronaEnergy); }
+    public void SetSunHaloSize(float v)     { _sunHaloSize = Mathf.Clamp(v, 8f, 400f); _skyMat?.SetShaderParameter("sun_halo_size", _sunHaloSize); }
+    public void SetSunHaloEnergy(float v)   { _sunHaloEnergy = Mathf.Max(v, 0f); _skyMat?.SetShaderParameter("sun_halo_energy", _sunHaloEnergy); }
+    public void SetSunCloudRedden(float v) { _sunCloudRedden = Mathf.Clamp(v, 0f, 2f); _skyMat?.SetShaderParameter("sun_cloud_redden", _sunCloudRedden); }
+    public void SetSunRedden(float v)      { _sunRedden = Mathf.Clamp(v, 0f, 2f); _skyMat?.SetShaderParameter("sun_redden", _sunRedden); }
+    public void SetSunReddenOnset(float v) { _sunReddenOnset = Mathf.Clamp(v, 0.02f, 0.8f); _skyMat?.SetShaderParameter("sun_redden_onset", _sunReddenOnset); }
+    public void SetSunHorizonGrow(float v) { _sunHorizonGrow = Mathf.Clamp(v, 0f, 3f); _skyMat?.SetShaderParameter("sun_horizon_grow", _sunHorizonGrow); }
 
     /// Mood sky colors → cloud ambient/scatter (compute) + the sky-shader background
     /// gradient, so clouds + the sky behind them track the chosen mood/time-of-day.

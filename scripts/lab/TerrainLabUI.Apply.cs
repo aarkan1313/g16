@@ -162,6 +162,18 @@ public partial class TerrainLabUI : Control
         Set("ssao_i", env.SsaoIntensity); Set("ssao_r", env.SsaoRadius);
         Set("fog_d", env.FogDensity); Set("fog_aerial", env.FogAerialPerspective);
         Set("fog_heightd", env.FogHeightDensity); Set("exposure", env.TonemapExposure);
+        // Sync the 10 sun disc/optical sliders from the CloudVolume backing fields
+        // (these uniforms live only on _skyMat, not on scene objects, so we read getters).
+        Set("sun_size",          _cloud?.SunSize          ?? 0.6f);
+        Set("sun_limb",          _cloud?.SunLimb          ?? 0.55f);
+        Set("sun_corona_size",   _cloud?.SunCoronaSize    ?? 1200f);
+        Set("sun_corona_energy", _cloud?.SunCoronaEnergy  ?? 2.0f);
+        Set("sun_halo_size",     _cloud?.SunHaloSize      ?? 90f);
+        Set("sun_halo_energy",   _cloud?.SunHaloEnergy    ?? 0.4f);
+        Set("sun_redden",        _cloud?.SunRedden        ?? 1.0f);
+        Set("sun_redden_onset",  _cloud?.SunReddenOnset   ?? 0.25f);
+        Set("sun_horizon_grow",  _cloud?.SunHorizonGrow   ?? 0.6f);
+        Set("sun_cloud_redden",  _cloud?.SunCloudRedden   ?? 0.8f);
         PushSunToCloud(sun);   // clouds track the mood's sun
     }
 

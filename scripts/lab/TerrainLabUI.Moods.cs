@@ -77,6 +77,18 @@ public partial class TerrainLabUI : Control
             Color hor = m.ContainsKey("sky_horizon") ? Col(m["sky_horizon"]) : new Color(0.68f, 0.74f, 0.80f);
             Color grd = m.ContainsKey("sky_ground") ? Col(m["sky_ground"]) : new Color(0.22f, 0.26f, 0.22f);
             _cloud.SetSkyColors(top, hor, grd);
+            // Push all 10 sun disc/optical uniforms with physical defaults so switching
+            // moods resets the sun look; any mood that omits a key gets the default.
+            _cloud.SetSunSize(F(m, "sun_size", 0.6f));
+            _cloud.SetSunLimb(F(m, "sun_limb", 0.55f));
+            _cloud.SetSunCoronaSize(F(m, "sun_corona_size", 1200f));
+            _cloud.SetSunCoronaEnergy(F(m, "sun_corona_energy", 2.0f));
+            _cloud.SetSunHaloSize(F(m, "sun_halo_size", 90f));
+            _cloud.SetSunHaloEnergy(F(m, "sun_halo_energy", 0.4f));
+            _cloud.SetSunRedden(F(m, "sun_redden", 1.0f));
+            _cloud.SetSunReddenOnset(F(m, "sun_redden_onset", 0.25f));
+            _cloud.SetSunHorizonGrow(F(m, "sun_horizon_grow", 0.6f));
+            _cloud.SetSunCloudRedden(F(m, "sun_cloud_redden", 0.8f));
         }
 
         // Fog: the mood JSON values were authored too thick (washed the terrain into
