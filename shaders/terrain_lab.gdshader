@@ -144,6 +144,21 @@ uniform sampler2D splat_tex : filter_nearest, repeat_disable, hint_default_black
 // splat_wa = {0,1,2,3}, splat_wb = {4,5,6, spare}. Read by splat_blend_mode==1.
 uniform sampler2D splat_wa : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D splat_wb : filter_linear, repeat_disable, hint_default_black;
+
+// --- Unit 4: GPU-baked BREAKUP masks (3rd SplatCompute output) ---------------
+// R=slope01, G=curv01 (0.5=flat), B=cavity01, A=wear (max aspect-shade/flow-streak).
+uniform sampler2D breakup_tex : filter_linear, repeat_disable, hint_default_black;
+uniform bool breakup_on = true;   // provisional default-on for the T7 eye-gate; flip if rejected
+uniform int  breakup_debug = 0;   // 0 off |1 slope |2 curv |3 cavity |4 wear |5 composite
+uniform float bk_dirt_amt  : hint_range(0.0, 1.0) = 0.65;  // soil-role boost in cavities
+uniform float bk_rock_amt  : hint_range(0.0, 1.0) = 0.8;   // rock-role boost on steep faces
+uniform float bk_debris_amt: hint_range(0.0, 1.0) = 0.5;   // gritty shelf tint (post-blend)
+uniform float bk_wear_amt  : hint_range(0.0, 1.0) = 0.4;   // aspect/flow weathering tint
+uniform float bk_slope_lo  : hint_range(0.0, 1.0) = 0.30;  // fragment-side rock ramp
+uniform float bk_slope_hi  : hint_range(0.0, 1.0) = 0.62;
+uniform int   bk_rock_role = 4;   // role index used as "exposed rock"
+uniform int   bk_dirt_role = 1;   // role index used as "settled soil"
+uniform float bk_far_fade  : hint_range(0.0, 1.0) = 1.0;
 uniform bool splat_on = false;
 uniform bool splat_rule_based = false;   // G1: read baked secondary (splat.g) vs fixed sec_zone[dom]
 // Splat de-blocking: domain-warp the splat lookup by world-space noise so material
@@ -697,6 +712,19 @@ vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, vec3 wp, vec3 nr, vec3 vdir, o
     return off * seam;
 }
 
+// Unit 4: read the baked breakup masks, with distance-aware fade of fine detail.
+struct Breakup { float slope; float curv; float cavity; float wear; };
+Breakup groundBreakup(vec2 uv, vec3 wp){
+    vec4 b = texture(breakup_tex, uv);
+    float far = distanceWeight(wp) * bk_far_fade;
+    Breakup r;
+    r.slope  = b.r;                       // slope survives at distance
+    r.curv   = mix(b.g, 0.5, far);        // fade to flat
+    r.cavity = b.b * (1.0 - far);         // fade fine pockets far away
+    r.wear   = mix(b.a, 0.0, far);
+    return r;
+}
+
 void fragment(){
     vec3 wp=v_world; vec3 nr=v_normal;
 
@@ -815,6 +843,16 @@ void fragment(){
         ZONE(4,z4_alb,z4_nrm,z4_rgh,z4_ao)
         ZONE(5,z5_alb,z5_nrm,z5_rgh,z5_ao)
         ZONE(6,z6_alb,z6_nrm,z6_rgh,z6_ao)
+    }
+
+    // Unit 4: per-mask debug views (raw breakup color, mirrors splat_debug).
+    if (breakup_debug != 0){
+        Breakup bkv = groundBreakup(v_uv, wp);
+        if (breakup_debug == 1){ dbg=1; dbg_col=vec3(bkv.slope); }
+        else if (breakup_debug == 2){ dbg=1; dbg_col=vec3(bkv.curv); }
+        else if (breakup_debug == 3){ dbg=1; dbg_col=vec3(0.4,0.25,0.12)*bkv.cavity; }
+        else if (breakup_debug == 4){ dbg=1; dbg_col=vec3(bkv.wear); }
+        else if (breakup_debug == 5){ dbg=1; dbg_col=vec3(bkv.slope,bkv.cavity,bkv.wear); }
     }
 
     // Lever 2: macro color variation (multi-octave LF value/hue/sat drift).
