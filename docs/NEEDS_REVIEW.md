@@ -122,8 +122,9 @@ fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin)
 
 ## 🟨 P3 — built earlier, eye-gate still owed
 
-### 3. God rays — FINAL PASS (rebuilt in a parallel chat — coordinate there)
-- **Status:** mostly finished (screen-space rework, in another chat). Needs a final visual pass.
+### 3. God rays — ✅ PASS 2026-06-20 (eye-gate, live, review key 7)
+- **Verdict (user, live):** "all good." Screen-space sun-through-cloud shafts read believable. Gate PASSED.
+- **Status (orig):** mostly finished (screen-space rework, in another chat). Needs a final visual pass.
 - **See it:** Clouds tab → **`god rays`** toggle (or `--godrays=1`), clouds on, sun toward camera through cloud gaps.
 - **Judge:** Do the shafts read as believable sun-through-cloud light (crisp where wanted, not uniform fog, not washing the scene)? Tune to taste with the god-ray chat's knobs.
 - **Note:** god-ray files are owned by the other chat — coordinate; don't edit `GodRays*`/`shaders/godray*` from this thread.
@@ -208,12 +209,14 @@ fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin)
 - **Judge:** Up close, real micro-detail vs flat? Any **swimming/crawling** of the derived normal in motion, or a fade **pop** at mid range? Far should be unchanged.
 - **Unblocks:** only worth judging **after G1+G2 make the base good** — it's polish on the foundation. Plan `plans/2026-06-17-ground-unit2-distance-detail.md`.
 
-### 5. Clouds — feature-by-feature visual review
+### 5. Clouds — ✅ PASS 2026-06-20 (eye-gate, live, review key 6)
+- **Verdict (user, live):** "all good." Cloud shape/lighting/motion read good across the Clouds-tab features. Gate PASSED (cloud system signed off).
 - **See it:** Clouds tab (coverage/density/type/decks/presets/temporal/etc.), `--clouds=1`, `--preset=N`.
 - **Judge:** the per-feature checklist in `docs/cloud-next-steps.md` (+ `cloud-system-overview.md`). Distant-sky/horizon handling + sun-disc polish are the known soft spots.
 - **Unblocks:** signs off the cloud system as "reviewed good."
 
-### 6. H1 — BRDF regression check
+### 6. H1 — BRDF regression check — ✅ PASS 2026-06-20 (eye-gate, live, review key 9)
+- **Verdict (user, live):** "all good." Custom `light()` (Burley+GGX + cloud-shadow hook) shows no regression on clouds-off terrain. Gate PASSED.
 - **See it:** clouds OFF terrain. Compare against the approved look.
 - **Judge:** the custom `light()` (Burley+GGX replica + cloud-shadow hook) shows no regression vs the engine default it replaced (the perf pass touched this shader — all bit-near-identical, but an eye-confirm is owed).
 
