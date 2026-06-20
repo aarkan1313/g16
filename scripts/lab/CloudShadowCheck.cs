@@ -16,7 +16,7 @@ namespace WG16.Lab;
 /// One job: prove/refute shadow accuracy and print PASS/FAIL + r. No scene, no visuals.
 public static class CloudShadowCheck
 {
-    public static void Run(CloudParams p, Vector3 sunDir, float regionM, float groundHeight, Vector2 windOffset)
+    public static void Run(CloudParams p, Vector3 sunDir, float regionM, float groundHeight, Vector2 windOffset, float[] layerData, int layerCount)
     {
         const int Grid = 96;   // 96² sample points — plenty for a correlation
         RenderingDevice rd = RenderingServer.CreateLocalRenderingDevice();
@@ -43,7 +43,7 @@ public static class CloudShadowCheck
             RepeatU = RenderingDevice.SamplerRepeatMode.Repeat, RepeatV = RenderingDevice.SamplerRepeatMode.Repeat, RepeatW = RenderingDevice.SamplerRepeatMode.Repeat });
 
         Rid outBuf = rd.StorageBufferCreate((uint)(Grid * Grid * 4 * sizeof(float)));
-        byte[] pb = BuildParams(p, sunDir.Normalized(), regionM, groundHeight, windOffset, Grid);
+        byte[] pb = BuildParams(p, sunDir.Normalized(), regionM, groundHeight, windOffset, Grid, layerData, layerCount);
         Rid paramBuf = rd.StorageBufferCreate((uint)pb.Length, pb);
 
         var uOut = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 0 }; uOut.AddId(outBuf);
@@ -125,18 +125,11 @@ public static class CloudShadowCheck
         return rid;
     }
 
-    private static byte[] BuildParams(CloudParams p, Vector3 sun, float regionM, float groundH, Vector2 wind, int grid)
+    private static byte[] BuildParams(CloudParams p, Vector3 sun, float regionM, float groundH, Vector2 wind, int grid, float[] layerData, int count)
     {
         // Field order MUST match cloud_shadow_check.glsl's ParamsBuf; Std430Writer aligns.
-        // layer 0 = flat knobs (same as CloudVolume.PackLayers) so the check tests the real stack.
-        var layers = CloudLayers.Load();
-        if (layers.Count == 0) { layers.Add(default); }
-        var l0 = layers[0];
-        layers[0] = l0 with {
-            Altitude = p.AltitudeM, Thickness = p.ThicknessM, Size = p.Size, CellScale = 1.6f,
-            CoverageWeight = 1f, Density = p.Density, Opacity = p.Opacity, Type = p.CloudType,
-            Edge = p.Edge, Detail = p.Detail, DetailSize = p.DetailSize, NoiseId = 0, Enabled = true };
-        float[] layerData = CloudLayers.Pack(layers, out int count);
+        // layerData is the EXACT production-packed stack (CloudVolume.PackedLayers) — layer-0 override
+        // incl. profile/shape/anti-repeat applied — so the check tests the ACTIVE config, not a rebuild.
         return new Std430Writer()
             .Vec4(sun, 0f)                              // sun_dir
             .Vec2(grid, grid)                           // grid
@@ -147,7 +140,7 @@ public static class CloudShadowCheck
             .F(0.45f).F(groundH)                        // strength, ground_height
             .Vec2(wind)                                 // wind_offset
             .Vec4(0f, 0f, 0f, count)                    // tail (w = layer_count)
-            .Vec4Array(layerData)                       // layers[24]
+            .Vec4Array(layerData)                       // layers[48] (6 vec4/layer)
             .ToArray();
     }
 }

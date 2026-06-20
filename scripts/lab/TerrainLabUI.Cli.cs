@@ -25,6 +25,7 @@ public partial class TerrainLabUI : Control
     private string _cloudProfileCli = "";   // --cloudprofile=b,t,a: enable CO-1 vertical profile + set bottom/top/anvil
     private float _stratusCli = -1f;         // --stratus[=v]: CO-2 stratus shape-mode (0..1); bare flag = 1
     private float _cirrusCli = -1f;          // --cirrus[=cov]: CO-2 enable cirrus + set coverage; bare flag = 0.5
+    private float _antiRepeatCli = -1f;      // --antirepeat[=v]: CO-3 cumulus macro variety (0..1); bare flag = 1
     private bool _lightCheckCli = false;   // --lightcheck: print per-deck lighting difference math
     private int _deckDbgCli = -1;          // --deckdbg=1: deck-ID overlay (flat color per deck)
     private bool _cloudStatsCli = false;   // --cloudstats: read back dome, print coverage/brightness
@@ -90,8 +91,9 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--coverage=")) { float.TryParse(a.Substring("--coverage=".Length), out _covOverride); }
             else if (a.StartsWith("--perdeck=")) { if (float.TryParse(a.Substring("--perdeck=".Length), out float pd)) _perDeckCli = pd; }
             else if (a.StartsWith("--cloudprofile=")) { _cloudProfileCli = a.Substring("--cloudprofile=".Length); }
-            else if (a.StartsWith("--stratus")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; float.TryParse(s, out _stratusCli); }
-            else if (a.StartsWith("--cirrus")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "0.5"; float.TryParse(s, out _cirrusCli); }
+            else if (a.StartsWith("--stratus")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; if (float.TryParse(s, out float sv)) { _stratusCli = sv; } }
+            else if (a.StartsWith("--cirrus")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "0.5"; if (float.TryParse(s, out float cv)) { _cirrusCli = cv; } }
+            else if (a.StartsWith("--antirepeat")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; if (float.TryParse(s, out float av)) { _antiRepeatCli = av; } }
             else if (a.StartsWith("--deckdbg=")) { _deckDbgCli = a.Substring("--deckdbg=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--godrays=")) { _godraysOnCli = a.Substring("--godrays=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--godraydbg=")) { int.TryParse(a.Substring("--godraydbg=".Length), out _godrayDbgCli); }

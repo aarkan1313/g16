@@ -220,6 +220,7 @@
     { "id": "cloud_profile_top", "label": "  profile: top fade", "tab": "Clouds", "type": "cloudf", "cloud": "profile_top", "min": 0.2, "max": 1.0, "default": 0.6, "rand": false },
     { "id": "cloud_anvil", "label": "  profile: anvil (Cb)", "tab": "Clouds", "type": "cloudf", "cloud": "anvil", "min": 0.0, "max": 1.0, "default": 0.0, "rand": false },
     { "id": "cloud_shape_mode", "label": "type: cumulus↔stratus (CO-2)", "tab": "Clouds", "type": "cloudf", "cloud": "shape_mode", "min": 0.0, "max": 1.0, "default": 0.0, "rand": false },
+    { "id": "cloud_anti_repeat", "label": "macro variety (CO-3)", "tab": "Clouds", "type": "cloudf", "cloud": "anti_repeat", "min": 0.0, "max": 1.0, "default": 0.0, "rand": false },
     { "id": "cloud_cirrus_on", "label": "cirrus layer (CO-2)", "tab": "Clouds", "type": "cloud", "cloud": "cirrus_on", "default": false, "rand": false },
     { "id": "cloud_cirrus_cov", "label": "  cirrus: coverage", "tab": "Clouds", "type": "cloudf", "cloud": "cirrus_coverage", "min": 0.0, "max": 1.0, "default": 0.6, "rand": false },
     { "id": "cloud_cirrus_den", "label": "  cirrus: density", "tab": "Clouds", "type": "cloudf", "cloud": "cirrus_density", "min": 0.0, "max": 1.0, "default": 0.7, "rand": false },

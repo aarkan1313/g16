@@ -309,6 +309,7 @@ float cfbm(vec3 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 3; i++){ s += a 
 // it all (0 = uniform). EARLY-OUT in gap regions skips the expensive streak noise (keeps it cheap).
 float cirrus_band(vec3 rd, float alt, float scaleMul, float angOff, float densMul){
     float t = (alt - cam_world.y) / max(rd.y, 0.05);
+    if (t <= 0.0) { return 0.0; }                              // camera at/above the sheet → ray never reaches it
     vec2 wpos = cam_world.xz + rd.xz * t;                       // world XZ where the ray pierces this band
     vec2 muv = wpos * 0.00003;                                  // macro coords (~33 km regions)
     float vary = cirrus_variety;

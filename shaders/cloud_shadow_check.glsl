@@ -62,7 +62,7 @@ vec2 ray_sphere(vec3 ro, vec3 rd, float R){
 float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
                     float lsize, float lcell, float ldens, float ltype,
                     float ledge, float ldetail, float ldetsize, float covW,
-                    float pBottom, float pTop, float anvil, float shapeMode){
+                    float pBottom, float pTop, float anvil, float shapeMode, float antiRep){
     float r = length(p);
     float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
     vec3 lp = vec3(p.x, r - baseR, p.z);
@@ -71,6 +71,15 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     float coverage = clamp(P.coverage * covW + (w.r - 0.5) * 0.7, 0.0, 1.0);
     float type     = clamp(ltype + (w.g - 0.5) * 0.4, 0.0, 1.0);
     float densBias = mix(0.7, 1.3, w.b);
+    // MACRO VARIETY (CO-3 anti-repetition): a mid-scale (~11 km) weather tap clusters cumulus into
+    // varying-size groups with clearer gaps, breaking the uniform same-size-puff repetition. antiRep=0
+    // → unchanged (gated, so zero cost for default cumulus). MUST stay byte-identical across shaders.
+    if (antiRep > 0.0){
+        vec2 mmuv = lp.xz * (1.0/11000.0) + windOff * (1.0/11000.0);
+        vec4 wm = texture(weather_tex, mmuv);
+        coverage = clamp(coverage * mix(1.0, smoothstep(0.2, 0.8, wm.r) * 1.5, antiRep), 0.0, 1.0);
+        lsize *= mix(1.0, mix(0.6, 1.7, wm.g), antiRep);   // per-region clump size variety
+    }
     vec2 wShape  = windOff;
     vec2 wCell   = windOff * 0.55 + vec2(-windOff.y, windOff.x) * 0.18;
     vec2 wDetail = windOff * 1.7  + vec2(windOff.y, -windOff.x) * 0.35;
@@ -113,7 +122,7 @@ float density_all(vec3 p, vec2 windOff){
         if (r < baseR || r > topR) continue;
         total += layer_density(p, baseR, topR, windOff,
             LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4),
-            LF(i,19), LF(i,20), LF(i,21), LF(i,22));
+            LF(i,19), LF(i,20), LF(i,21), LF(i,22), LF(i,23));
     }
     return total;
 }

@@ -126,6 +126,7 @@ public partial class TerrainLabUI : Control
         }
         if (_stratusCli >= 0f) { _cloud.SetKnob("shape_mode", _stratusCli); GD.Print($"[stratus] shape_mode={_stratusCli}"); }
         if (_cirrusCli >= 0f) { _cloud.SetCirrusOn(true); _cloud.SetCirrus("cirrus_coverage", _cirrusCli); GD.Print($"[cirrus] on cov={_cirrusCli}"); }
+        if (_antiRepeatCli >= 0f) { _cloud.SetKnob("anti_repeat", _antiRepeatCli); GD.Print($"[antirepeat] {_antiRepeatCli}"); }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
         if (_shadowDbgCli == 1) { _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
@@ -135,7 +136,8 @@ public partial class TerrainLabUI : Control
             // use the SAME "to sun" convention as PushSunToCloud (+Basis.Z), or the check
             // feeds a downward sun and the shadow march bails everywhere (false FAIL).
             Vector3 toSun = sunNode.GlobalTransform.Basis.Z.Normalized();
-            CloudShadowCheck.Run(_cloud.Params, toSun, _cloud.RegionSize, _terrain.MidHeight, Vector2.Zero);
+            float[] checkLayers = _cloud.PackedLayers(out int checkCount);   // production layer stack (profile/shape/anti applied)
+            CloudShadowCheck.Run(_cloud.Params, toSun, _cloud.RegionSize, _terrain.MidHeight, Vector2.Zero, checkLayers, checkCount);
         }
         if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
         {

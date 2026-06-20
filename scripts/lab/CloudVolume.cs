@@ -84,6 +84,7 @@ public partial class CloudVolume : Node
     private float _profileTop = 0.6f;
     private float _anvil = 0f;
     private float _shapeMode = 0f;   // CO-2: 0 cumulus (default) .. 1 stratus sheet (drives layer 0)
+    private float _antiRepeat = 0f;  // CO-3: 0 off (default) .. 1 macro coverage/size variety (drives layer 0)
     private System.Collections.Generic.List<CloudLayer> _layers = new();
     private int _layerCount;
 
@@ -378,7 +379,7 @@ public partial class CloudVolume : Node
             .F(_shadowStrength)
             .F(_groundHeight)                           // terrain mid-elevation
             .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
-            .Vec4Array(layerData)                       // layers[40] (5 vec4/layer; shadow uses 0-11)
+            .Vec4Array(layerData)                       // layers[48] (6 vec4/layer; shadow uses density 0-11 + profile/shape/anti 19-23)
             .ToArray();
     }
     private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
@@ -405,6 +406,10 @@ public partial class CloudVolume : Node
         _layers[i] = _layers[i] with { CoverageWeight = Mathf.Max(0f, w) };
     }
 
+    /// The exact packed layer buffer production renders (layer-0 override incl. profile/shape/anti-repeat
+    /// applied). Used by CloudShadowCheck so the diagnostic tests the ACTIVE config, not a rebuilt neutral one.
+    public float[] PackedLayers(out int count) => PackLayers(out count);
+
     // Layer 0's deck params come from the legacy flat knobs (_p / _cellScale) so the single-
     // layer look + the existing UI keep working; layers 1+ are the JSON data verbatim.
     private float[] PackLayers(out int count)
@@ -420,7 +425,7 @@ public partial class CloudVolume : Node
             Altitude = _p.AltitudeM, Thickness = _p.ThicknessM, Size = _p.Size, CellScale = _cellScale,
             CoverageWeight = 1f, Density = _p.Density, Opacity = _p.Opacity, Type = _p.CloudType,
             Edge = _p.Edge, Detail = _p.Detail, DetailSize = _p.DetailSize,
-            ProfileBottom = pb, ProfileTop = pt, Anvil = av, ShapeMode = _shapeMode, NoiseId = 0, Enabled = true });
+            ProfileBottom = pb, ProfileTop = pt, Anvil = av, ShapeMode = _shapeMode, AntiRepeat = _antiRepeat, NoiseId = 0, Enabled = true });
         return CloudLayers.Pack(eff, out count);
     }
 
@@ -447,7 +452,7 @@ public partial class CloudVolume : Node
             .F(_perDeck)                                // 0 = global lighting (A), 1 = per-deck (B)
             .F(_dbgDeck)                                // >0.5 = deck-ID overlay
             .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
-            .Vec4Array(layerData)                       // layers[40] (5 vec4/layer)
+            .Vec4Array(layerData)                       // layers[48] (6 vec4/layer)
             .ToArray();
     }
     private float _perDeck = 1f;   // per-deck phase/albedo/tint ON by default; --perdeck toggles
@@ -640,6 +645,7 @@ public partial class CloudVolume : Node
             case "profile_top":     _profileTop = Mathf.Clamp(v, 0.2f, 1f); break;      // CO-1 top fade onset
             case "anvil":           _anvil = Mathf.Clamp(v, 0f, 1f); break;             // CO-1 cumulonimbus top spread
             case "shape_mode":      _shapeMode = Mathf.Clamp(v, 0f, 1f); break;          // CO-2 cumulus↔stratus sheet
+            case "anti_repeat":     _antiRepeat = Mathf.Clamp(v, 0f, 1f); break;         // CO-3 macro coverage/size variety
         }
     }
 
