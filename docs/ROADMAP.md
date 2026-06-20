@@ -47,7 +47,19 @@ Last updated: 2026-06-19.
 4. **H1 BRDF check** — clouds-off terrain vs the approved look (custom `light()` = Burley+GGX);
    still wants an eye-confirm of no regression.
 
-## 🔨 Active arc — GROUND rebuild: FOUNDATION first, then detail (REORDERED 2026-06-19)
+## 🔨 Active arc — GROUND: build the MATERIAL SYSTEM properly (reframed 2026-06-19, eve)
+> **⮕ CURRENT DIRECTION (supersedes the framing below):** live review showed the ground is "only
+> frameworked" — **blocky** (splat blends nearest dom/sec on a grid) + **flat** (no relief). The roadmap
+> below planned most layers but **never had a plan for the blend/compositing QUALITY layer — the gap.**
+> Approved: build the standard AAA **weight-blended material pipeline** as a real system, **compositing-
+> core first** (Blend quality: smooth weights + height-map interlock + organic breakup; + Surface relief:
+> parallax + real normals), then breakup (Unit 4), then color (Unit 5). G1 placement APPROVED, feeds it.
+> Ceiling seams deferred: real height maps (derive first) + RVT caching (infinite-world perf; needs
+> chunks). Spec `specs/2026-06-19-terrain-material-system-design.md`; handoff
+> `handoffs/2026-06-19-terrain-material-system.md`. Perf: top-2 blend · POM LOD-gated near · masks baked ·
+> profile in-motion. **Continuing in a new chat.** The unit/foundation framing below is the input plan-set.
+>
+> ── prior framing (units/foundation — still the layer plan-set the system reuses) ──
 > Live judging proved the ground "doesn't look good enough to judge detail" — it's "random
 > ground" because material PLACEMENT (companion = `dominant−1` by index) + PALETTE (grey subset)
 > were never designed; the original arc wrongly deferred them to the end as polish. **Reordered:

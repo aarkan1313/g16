@@ -79,7 +79,20 @@ Run a scene (always `--rendering-driver vulkan`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-19, refreshed — GROUND FOUNDATION pivot + PERF win)
+> ### ⮕ START HERE (2026-06-19, refreshed — TERRAIN MATERIAL SYSTEM is the active work)
+> **⮕ ACTIVE: build the TERRAIN MATERIAL SYSTEM properly (not tweaks).** Live verdict: the ground was
+> "only frameworked, no real work done" — it reads **blocky** (splat blends nearest dom/sec on a grid)
+> and **flat** (no relief). Approved design = the standard AAA **weight-blended material pipeline**;
+> **build order = compositing-core first (Blend quality + Surface relief), then breakup, then color.**
+> Two ceiling seams designed-for/deferred: real **height maps** (derive first) + **RVT caching** (infinite
+> world; needs chunks). Spec: `docs/superpowers/specs/2026-06-19-terrain-material-system-design.md`.
+> **NEW-CHAT HANDOFF: `docs/superpowers/handoffs/2026-06-19-terrain-material-system.md`** (read it first
+> → writing-plans for the compositing core → build, eye-gated, profile in-motion).
+> Ground arc status: **G1 placement APPROVED** ("basics work"); palette/splat-warp were stopgaps (the
+> blend-quality LAYER is the real gap — no prior plan had it). User CAN do visual checks (review live).
+> ⚠ **Another chat owns god rays in this same tree — don't touch `GodRays*`/`shaders/godray*`; some of
+> this session's terrain code is uncommitted + intermingled with theirs (see the handoff doc).**
+>
 > **PERF (2026-06-19, user push "code not settings") — TARGET 8 ms total (world generator, long-term;
 > flora/water/erosion must still fit).** Static `--profile` was hiding the flying cost. Added
 > **`--profmove`** (orbit during profile) → **SDFGI ≈12 ms IN MOTION** (≈0 static): re-voxelizes the
@@ -92,9 +105,9 @@ Run a scene (always `--rendering-driver vulkan`):
 > config #2, clouds #3) are ALL eye-gated → PARKED until the user can do visual checks.** ALWAYS profile
 > with `--profmove`. Details: `docs/performance.md`.
 >
-> **⚠ THE USER CANNOT DO VISUAL CHECKS RIGHT NOW (2026-06-19).** Everything whose gate is the live eye
-> is parked: ground G1 (placement coherence), GI-proxy fidelity, CDLOD pops, SDFGI/cloud quality tuning.
-> Do mechanical/measured work + capture for their review; don't build eye-gated quality changes blind.
+> **Eye-gate (updated):** the user DOES review live in focused sessions — G1 placement + the GI-proxy
+> were eye-gated and PASSED this session. Build the material-system layers eye-gated at close/mid/far,
+> and DRIVE the changes yourself (the user judges; don't make them click dropdowns).
 > **GOD RAYS (REBUILT 2026-06-19): screen-space radial scatter — WORKING.** `GodRaysScreen.cs` +
 > `shaders/godray_screen.gdshader`. The 3 old approaches (FogVolume `GodRays.cs`, in-march in-scatter,
 > uniform-fog) were stripped — all read as washy fog, never crisp beams. New = GPU Gems 3 Ch.13

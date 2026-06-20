@@ -6,6 +6,25 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-19 — Build the TERRAIN MATERIAL SYSTEM properly (weight-blended pipeline), not tweaks (user,
+live).** Reviewing the ground live, the user judged it "only frameworked, no real work done" and "small
+tunes instead of building a system." Diagnosis (close-up shots): it reads **blocky** (splat bakes
+per-texel dom/sec INDICES sampled filter_nearest on the 4 m grid + a roughness-proxy heightblend hack →
+stair-stepped patches) and **flat/painted** (no parallax relief, weak normals). Key finding: the roadmap
+planned most layers as units (anti-repeat, distance-detail, surface-depth, breakup, color) but **never
+had a plan for the blend/compositing QUALITY layer** — it assumed the splat framework blends fine. That
+hole is why it feels frameworked. **Decision: build the standard AAA weight-blended material pipeline as
+a real system; build order = compositing-core first** (Blend quality = smooth weights + height-map
+interlocking + organic breakup; + Surface relief = parallax-occlusion + real normals), then breakup
+(Unit 4), then color (Unit 5); placement (G1, approved) feeds it. **Validated against pillars** as the
+proper AAA/performant/quality/best-long-term setup, with TWO ceiling upgrades designed-for but deferred:
+real **height maps** (derive from albedo-luma/roughness first) and **RVT/virtual-texture caching** (the
+infinite-world 8 ms answer; caches this same pipeline; needs chunks → build pipeline first). Perf rules:
+top-2 blend, POM LOD-gated near, masks baked once, profile in-motion. Spec
+`specs/2026-06-19-terrain-material-system-design.md`; handoff
+`handoffs/2026-06-19-terrain-material-system.md`. Continuing in a NEW chat. G1 approved live; palette +
+splat-warp this session were stopgaps (the blend LAYER is the real fix).
+
 **2026-06-19 — Perf target set = 8 ms total (world generator, long-term); GI/shadow proxy DEFAULT ON;
 god rays moved to a parallel chat.** User set the long-term budget: **8 ms (~125 fps) for the WHOLE
 generator**, with flora/water/erosion/biomes still to fit. Flying frame now ≈9.6 ms (clouds on, proxy
