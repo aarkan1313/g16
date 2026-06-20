@@ -811,6 +811,16 @@ void fragment(){
                        + 0.5 * (vec2(vnoise(wp.xz + vec2(5.0,99.0), splat_warp_wl*0.4),
                                      vnoise(wp.xz + vec2(61.0,7.0), splat_warp_wl*0.4)) - 0.5);
             float sw[7]; splat_weights7(sw, v_uv + swarp * (splat_warp_m / region_size));
+            // Unit 4: nudge role weights by the breakup masks BEFORE top-2 selection so
+            // the Phase-A interlock then renders them (rock pokes through on steep faces,
+            // soil settles in cavities). No renormalize needed — top-2 uses m1/(m0+m1).
+            Breakup bkm = groundBreakup(v_uv, wp);
+            if (breakup_on){
+                float rockw = smoothstep(bk_slope_lo, bk_slope_hi, bkm.slope) * bk_rock_amt;
+                float dirtw = bkm.cavity * bk_dirt_amt * (1.0 - rockw);   // rock wins on faces
+                sw[clamp(bk_rock_role,0,6)] += rockw;                     // expose rock on steep
+                sw[clamp(bk_dirt_role,0,6)] += dirtw;                     // soil collects in pockets
+            }
             int d0=0; float m0=-1.0; for(int i=0;i<7;i++){ if(sw[i]>m0){ m0=sw[i]; d0=i; } }
             int d1=d0; float m1=-1.0; for(int i=0;i<7;i++){ if(i!=d0 && sw[i]>m1){ m1=sw[i]; d1=i; } }
             float t = clamp(m1 / max(m0+m1, 1e-5), 0.0, 1.0);   // 0 deep in d0 .. ~0.5 at boundary
@@ -831,6 +841,16 @@ void fragment(){
                 rgh = mix(trip_rgh_by(d0,wp,nr), trip_rgh_by(d1,wp,nr), m);
                 ao = mix(ao_by(d0,wp,nr), ao_by(d1,wp,nr), m);
             } else { rgh = 0.9; }
+            // Unit 4: cheap post-blend tints — gritty scree on shelves, damping on shade/flow.
+            if (breakup_on){
+                float shelf = smoothstep(0.5,0.75,bkm.curv) * smoothstep(0.15,bk_slope_hi,bkm.slope);
+                float debris = shelf * bk_debris_amt;
+                alb = mix(alb, alb*vec3(0.78,0.74,0.70), debris);       // gritty scree
+                rgh = mix(rgh, 1.0, debris*0.6);
+                float wear = bkm.wear * bk_wear_amt;
+                alb = mix(alb, alb*vec3(0.85,0.88,0.92), wear);         // shade/flow weathering
+                rgh = mix(rgh, 0.85, wear*0.5);
+            }
         }
     } else {
         // accumulate weighted PBR across all 7 zones (soft masks)
@@ -860,7 +880,8 @@ void fragment(){
     alb = macro_color(alb, wp);
 
     // Lever 4: contact & wear shading. v_curv>0 = concave (fold/crease).
-    if (contact_on){
+    // Unit 4 supersedes this primitive pass — keep it only as the breakup-off fallback.
+    if (contact_on && !breakup_on){
         float fold = smoothstep(0.3, crevice_range, v_curv);   // how deep a fold
         alb *= (1.0 - fold * crevice_amp);                     // darken crevices
         rgh = mix(rgh, 1.0, smoothstep(slope_cliff_lo, slope_cliff_hi, v_slope) * slope_wear_amp); // steep=rougher
