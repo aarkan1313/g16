@@ -192,16 +192,22 @@ Last updated: 2026-06-19.
   distance/horizon treatment: cloud density fade-to-haze near the horizon + a believable
   non-cloud sky gradient in the distance so a sparse sky doesn't look cut off. Surfaced in the
   T-checkpoint review; deferred to a focused pass after the cloud core is judged good.
-- **Sun disc shader polish** (2026-06-17) — the sun now renders (cloud sky shader draws a
-  LIGHT0-based disc + glow, clouds occlude it) but it's just a flat bright circle. Wants a real
-  sun shader: limb darkening, corona/bloom, atmospheric scatter halo, sun-near-horizon
-  reddening, so it reads "sunny" not "white dot." Smallish focused pass; do near-term (it's
-  visible whenever clouds are on).
+## ☀️ ACTIVE arc — SUN & LIGHT (started 2026-06-19; user pulled it forward after the god-ray work)
+> Brainstormed into a 3-stage arc. Target: **full-range tunable** (physical default, every knob
+> exposed → stylized → fantasy). Whole arc handoff: `docs/superpowers/handoffs/2026-06-19-sun-light-arc-handoff.md`.
+- **Stage 1 — Sun disc polish — SPEC'd + PLANNED, ready to implement (2026-06-19).** The sun is a flat
+  white dot (`cloud_sky.gdshader`: smoothstep disc + one `pow` glow). Replace with limb-darkened disc +
+  corona + warm atmospheric halo + horizon reddening/growth + soft optical-depth cloud occlusion, all in
+  `sky()`, all tunable + per-mood + presets. Spec `docs/superpowers/specs/2026-06-19-sun-disc-polish-design.md`,
+  plan `docs/superpowers/plans/2026-06-19-sun-disc-polish.md` (6 tasks). NEXT: execute the plan.
+- **Stage 2 — Time-of-day driver** — one `time_of_day` param moves the sun + drives whole-sky color + light
+  energy/color + fog/ambient together (this IS the "overall light feel"). 6 moods fold in (open fork:
+  keyframes vs. style axis). Its own spec when reached.
+- **Stage 3 — Night & celestial** — folds into the day/night arc below.
 
-## 🌌 Future arc — DAY/NIGHT + CELESTIAL BODIES (near the end; big, its own spec)
-> User vision (2026-06-17): a full sky-time system. Sequenced LATE — after clouds/ground/
-> erosion cores are solid — because it's a large coordinated arc touching lighting, sky, and
-> mood. Captured now so it's not lost.
+## 🌌 Future arc — DAY/NIGHT + CELESTIAL BODIES (now Stages 2–3 of the Sun & Light arc above)
+> User vision (2026-06-17): a full sky-time system. Pulled forward 2026-06-19 (Stage 1 underway).
+> Stage 2 = day/night cycle + variable sun; Stage 3 = moons/stars/fantasy. Large coordinated arc.
 - **Day/night cycle** — sun travels, time-of-day drives sky color + light energy + shadows;
   dawn/dusk/golden-hour transitions; sun peeking over / setting behind mountains.
 - **Variable sun coverage / position** — sun height/azimuth as part of the cycle, not a fixed
