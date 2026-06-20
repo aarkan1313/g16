@@ -41,6 +41,16 @@
     { "id": "macro_scale2", "label": "macro scl2", "tab": "Color", "type": "slider",
       "param": "macro_scale2", "min": 60, "max": 400, "default": 170, "rand": true },
 
+    { "id": "variation_on", "label": "within-area variation", "tab": "Color", "type": "toggle", "param": "variation_on", "default": true, "rand": false },
+    { "id": "variation_amt", "label": "variation amt", "tab": "Color", "type": "slider", "param": "variation_amt", "min": 0, "max": 2, "default": 1.0, "rand": true },
+    { "id": "var_rough", "label": "var roughness", "tab": "Color", "type": "slider", "param": "var_rough", "min": 0, "max": 0.6, "default": 0.15, "rand": true },
+    { "id": "var_val", "label": "var value", "tab": "Color", "type": "slider", "param": "var_val", "min": 0, "max": 0.5, "default": 0.12, "rand": true },
+    { "id": "var_sat", "label": "var sat", "tab": "Color", "type": "slider", "param": "var_sat", "min": 0, "max": 0.5, "default": 0.10, "rand": true },
+    { "id": "var_nrm", "label": "var relief", "tab": "Color", "type": "slider", "param": "var_nrm", "min": 0, "max": 1, "default": 0.25, "rand": true },
+    { "id": "var_scale_macro", "label": "var scale macro m", "tab": "Color", "type": "slider", "param": "var_scale_macro", "min": 15, "max": 160, "default": 55, "rand": true },
+    { "id": "var_scale_meso", "label": "var scale meso m", "tab": "Color", "type": "slider", "param": "var_scale_meso", "min": 4, "max": 40, "default": 12, "rand": true },
+    { "id": "var_far_keep", "label": "var far keep", "tab": "Color", "type": "slider", "param": "var_far_keep", "min": 0, "max": 1, "default": 0.3, "rand": false },
+
     { "id": "contact_on", "label": "contact shade", "tab": "Detail", "type": "toggle",
       "param": "contact_on", "default": true, "rand": true },
     { "id": "crevice_amp", "label": "crevice", "tab": "Detail", "type": "slider",
