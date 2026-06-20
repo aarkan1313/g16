@@ -115,6 +115,15 @@ public partial class TerrainLabUI : Control
         if (_temporalCli > 0) { _cloud.SetKnobInt("temporal_frames", _temporalCli); }   // roadmap #4 amortization
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
         if (_perDeckCli >= 0f) { _cloud.SetPerDeck(_perDeckCli); }
+        if (_cloudProfileCli.Length > 0)   // --cloudprofile=b,t,a → enable CO-1 vertical profile + set values
+        {
+            var pp = _cloudProfileCli.Split(',');
+            _cloud.SetKnobBool("profile_on", true);
+            if (pp.Length > 0 && float.TryParse(pp[0], out float pb)) { _cloud.SetKnob("profile_bottom", pb); }
+            if (pp.Length > 1 && float.TryParse(pp[1], out float pt)) { _cloud.SetKnob("profile_top", pt); }
+            if (pp.Length > 2 && float.TryParse(pp[2], out float pa)) { _cloud.SetKnob("anvil", pa); }
+            GD.Print($"[cloudprofile] CO-1 vertical profile ON ({_cloudProfileCli})");
+        }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
         if (_shadowDbgCli == 1) { _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground

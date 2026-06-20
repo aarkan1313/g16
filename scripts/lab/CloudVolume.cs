@@ -77,6 +77,12 @@ public partial class CloudVolume : Node
     private float RegionM = 8192f;
 
     private float _cellScale = 1.6f;   // clump-scale knob: higher = smaller/more clumps (anti-slab). >1 = tighter than the old fixed look.
+    // CO-1 vertical profile (drives layer 0, the knob cumulus deck). Default OFF = approved
+    // slab look; toggle on + tune to make decks read as 3D volumes (eye-gate).
+    private bool _profileOn = false;
+    private float _profileBottom = 0.15f;   // believable cumulus starting point (applied only when _profileOn)
+    private float _profileTop = 0.6f;
+    private float _anvil = 0f;
     private System.Collections.Generic.List<CloudLayer> _layers = new();
     private int _layerCount;
 
@@ -404,10 +410,16 @@ public partial class CloudVolume : Node
     {
         var eff = new System.Collections.Generic.List<CloudLayer>(_layers);
         var l0 = eff[0];
+        // CO-1: when the profile is off, force neutral (0,1,0) = no-op so layer 0 reproduces
+        // the approved slab look exactly; when on, the knobs drive the cumulus deck's profile.
+        float pb = _profileOn ? _profileBottom : 0f;
+        float pt = _profileOn ? _profileTop : 1f;
+        float av = _profileOn ? _anvil : 0f;
         eff[0] = CloudLayers.WithCumulusLighting(l0 with {
             Altitude = _p.AltitudeM, Thickness = _p.ThicknessM, Size = _p.Size, CellScale = _cellScale,
             CoverageWeight = 1f, Density = _p.Density, Opacity = _p.Opacity, Type = _p.CloudType,
-            Edge = _p.Edge, Detail = _p.Detail, DetailSize = _p.DetailSize, NoiseId = 0, Enabled = true });
+            Edge = _p.Edge, Detail = _p.Detail, DetailSize = _p.DetailSize,
+            ProfileBottom = pb, ProfileTop = pt, Anvil = av, NoiseId = 0, Enabled = true });
         return CloudLayers.Pack(eff, out count);
     }
 
@@ -569,6 +581,7 @@ public partial class CloudVolume : Node
             _enabled = on;
             _skyMat?.SetShaderParameter("cloud_enabled", on);
         }
+        if (knob == "profile_on") { _profileOn = on; }   // CO-1 vertical-profile gate (default off = slab look)
     }
 
     public void SetKnobInt(string knob, int v)
@@ -605,6 +618,9 @@ public partial class CloudVolume : Node
             case "cell_scale":      _cellScale = v; break;        // clump scale (anti-slab; higher = smaller clumps)
             case "perdeck":         _perDeck = Mathf.Clamp(v, 0f, 1f); break;   // 0=global lighting, 1=per-deck
             case "overcast_strength": _overcastStrength = Mathf.Max(0f, v); break;   // overcast gloom dial
+            case "profile_bottom":  _profileBottom = Mathf.Clamp(v, 0f, 0.6f); break;   // CO-1 base round-up height
+            case "profile_top":     _profileTop = Mathf.Clamp(v, 0.2f, 1f); break;      // CO-1 top fade onset
+            case "anvil":           _anvil = Mathf.Clamp(v, 0f, 1f); break;             // CO-1 cumulonimbus top spread
         }
     }
 
