@@ -1,0 +1,18 @@
+{
+  "_comment": "Curated ground palettes. 'active' selects which palette's 7 role materials load as the zone_mat dropdown defaults (valley=0 .. peak/snow=6). roles[] entries are material NAMES from data/material_library.json. Per-role live tuning is via the Zones-tab dropdowns; this is the starting point. A name missing from the library warns + clamps (see ZoneDefaultMaterialIndex). Add palettes freely; switch by editing 'active' and relaunching.",
+  "active": "alpine_stone",
+  "palettes": {
+    "alpine_stone": {
+      "label": "Alpine Stone",
+      "roles": ["13_sun_baked_clay", "01_fine_sand", "13_dry_loose_scree", "02_coarse_talus", "01_columnar_basalt_face", "04_arctic_rock_with_orange_lichen", "01_fresh_powder"]
+    },
+    "alpine_green": {
+      "label": "Alpine Green (prior default)",
+      "roles": ["m8_grass_calm", "dirt", "16_glacial_till", "02_coarse_talus", "01_dark_slate", "m14_tundra_moss", "01_fresh_powder"]
+    },
+    "arid": {
+      "label": "Arid",
+      "roles": ["13_sun_baked_clay", "05_granite_desert", "01_weathered_sandstone", "13_dry_loose_scree", "01_columnar_basalt_face", "12_dry_lichen_carpet", "01_fine_sand"]
+    }
+  }
+}
