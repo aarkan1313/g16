@@ -138,6 +138,15 @@ uniform float splat_warp_m : hint_range(0.0, 120.0) = 24.0;    // warp distance 
 uniform float splat_warp_wl : hint_range(10.0, 200.0) = 55.0;  // warp noise wavelength (m)
 uniform float mix_strength : hint_range(0.0, 1.0) = 0.6;   // live: how strongly secondary shows
 uniform int splat_debug = 0;   // 0 off | 1 show dominant zone as color | 2 show mix amount
+// Phase A: smooth weight-blend path. 0 = legacy index path (current look) | 1 = weightmaps.
+uniform int splat_blend_mode = 0;
+// Derived material-height channel (the new "height" interface). true = 1-roughness
+// (rough grit protrudes) | false = albedo luma. Real height maps: bind z*_hgt, sample there.
+uniform bool height_from_rough = true;
+// Height-interlock band: smaller = sharper relief-driven boundary; larger = softer crossfade.
+uniform float interlock_sharp : hint_range(0.05, 0.9) = 0.35;
+// How strongly the height channel drives the boundary (0 = pure weight crossfade).
+uniform float interlock_height_amp : hint_range(0.0, 1.0) = 1.0;
 
 // --- Height-blended transitions (AAA seamless multi-texture) -----------------
 // Blend two materials by their RELIEF instead of a flat crossfade: the one whose
@@ -325,6 +334,43 @@ vec3 s_nrm(sampler2D t, vec3 wp, vec3 nr){
 float s_rgh(sampler2D t, vec3 wp, vec3 nr){
     vec3 bw=tri_w(nr);
     return tiled(t,wp.zy/tex_scale_m).r*bw.x + tiled(t,wp.xz/tex_scale_m).r*bw.y + tiled(t,wp.xy/tex_scale_m).r*bw.z;
+}
+
+// --- Phase A/B SHARED material-height channel -------------------------------
+// Derived per-plane (no triplanar) so POM can march it as a true 2D field; inverted
+// roughness matches the existing heightblend intent. Real height maps: bind z*_hgt here.
+float material_height_uv(sampler2D rgh_t, sampler2D alb_t, vec2 uv, vec2 dx, vec2 dy){
+    if (height_from_rough){ return clamp(1.0 - textureGrad(rgh_t, uv, dx, dy).r, 0.0, 1.0); }
+    return clamp(dot(textureGrad(alb_t, uv, dx, dy).rgb, vec3(0.299,0.587,0.114)), 0.0, 1.0);
+}
+float height_by(int z, vec2 uv, vec2 dx, vec2 dy){
+    if(z==0) return material_height_uv(z0_rgh,z0_alb,uv,dx,dy); if(z==1) return material_height_uv(z1_rgh,z1_alb,uv,dx,dy);
+    if(z==2) return material_height_uv(z2_rgh,z2_alb,uv,dx,dy); if(z==3) return material_height_uv(z3_rgh,z3_alb,uv,dx,dy);
+    if(z==4) return material_height_uv(z4_rgh,z4_alb,uv,dx,dy); if(z==5) return material_height_uv(z5_rgh,z5_alb,uv,dx,dy);
+    return material_height_uv(z6_rgh,z6_alb,uv,dx,dy);
+}
+// Dominant-plane triplanar height for interlock (cheap: one plane, the relief boundary
+// only needs a representative height per material at this fragment).
+float material_height(int z, vec3 wp, vec3 nr){
+    vec3 bw=tri_w(nr);
+    vec2 uv = (bw.x>=bw.y && bw.x>=bw.z) ? wp.zy/tex_scale_m : (bw.y>=bw.z ? wp.xz/tex_scale_m : wp.xy/tex_scale_m);
+    return height_by(z, uv, dFdx(uv), dFdy(uv));
+}
+// 7 smooth role weights at uv (linear-filtered weightmaps).
+void splat_weights7(out float w[7], vec2 uv){
+    vec4 a = texture(splat_wa, uv);
+    vec4 b = texture(splat_wb, uv);
+    w[0]=a.r; w[1]=a.g; w[2]=a.b; w[3]=a.a; w[4]=b.r; w[5]=b.g; w[6]=b.b;
+}
+// Relief-aware weight of B in [0,1]. Standard UE/Unity heightlerp WITHOUT the legacy
+// 0.5 wash; the height genuinely drives the boundary, controlled by interlock_sharp.
+float interlock_blend(float hA, float hB, float t, float sharp){
+    float a = hA + (1.0 - t);
+    float b = hB + t;
+    float ma = max(a, b) - max(sharp, 1e-3);
+    float wa2 = max(a - ma, 0.0);
+    float wb2 = max(b - ma, 0.0);
+    return clamp(wb2 / max(wa2 + wb2, 1e-5), 0.0, 1.0);
 }
 
 void vertex(){
@@ -595,31 +641,54 @@ void fragment(){
         // (trip_*). ~18 texture fetches/px (3 planes × 2 materials × 3 maps), 3× under
         // the original ~54 (which had hex × triplanar). NO hex: hex's rotated tiles
         // made tile-seam squares. Detail stays crisp (real mipmapped texture taps).
-        // De-block the splat: domain-warp the lookup with 2 octaves of world-space noise
-        // so boundaries are organic/high-freq, not axis-aligned stair-stepped blocks.
-        vec2 swarp = (vec2(vnoise(wp.xz + vec2(19.0,57.0), splat_warp_wl),
-                           vnoise(wp.xz + vec2(83.0,11.0), splat_warp_wl)) - 0.5)
-                   + 0.5 * (vec2(vnoise(wp.xz + vec2(5.0,99.0), splat_warp_wl*0.4),
-                                 vnoise(wp.xz + vec2(61.0,7.0), splat_warp_wl*0.4)) - 0.5);
-        vec4 sp = texture(splat_tex, v_uv + swarp * (splat_warp_m / region_size));
-        int dom = int(sp.r + 0.5);
-        // G1: the rule engine bakes a spatially-meaningful runner-up role into splat.g;
-        // use it. Legacy path keeps the fixed per-dom companion lookup.
-        int sec = splat_rule_based ? clamp(int(sp.g + 0.5), 0, 6) : clamp(sec_zone[dom], 0, 6);
-        float t = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);
+        if (splat_blend_mode == 0){
+            // ---- LEGACY index path (current approved look). UNCHANGED. ----
+            // De-block the splat: domain-warp the lookup with 2 octaves of world-space noise
+            // so boundaries are organic/high-freq, not axis-aligned stair-stepped blocks.
+            vec2 swarp = (vec2(vnoise(wp.xz + vec2(19.0,57.0), splat_warp_wl),
+                               vnoise(wp.xz + vec2(83.0,11.0), splat_warp_wl)) - 0.5)
+                       + 0.5 * (vec2(vnoise(wp.xz + vec2(5.0,99.0), splat_warp_wl*0.4),
+                                     vnoise(wp.xz + vec2(61.0,7.0), splat_warp_wl*0.4)) - 0.5);
+            vec4 sp = texture(splat_tex, v_uv + swarp * (splat_warp_m / region_size));
+            int dom = int(sp.r + 0.5);
+            // G1: the rule engine bakes a spatially-meaningful runner-up role into splat.g;
+            // use it. Legacy path keeps the fixed per-dom companion lookup.
+            int sec = splat_rule_based ? clamp(int(sp.g + 0.5), 0, 6) : clamp(sec_zone[dom], 0, 6);
+            float t = clamp(max(sp.b, sp.a) * mix_strength, 0.0, 1.0);
 
-        float rD = trip_rgh_by(dom, wp, nr);
-        float rS = trip_rgh_by(sec, wp, nr);
-        float m = heightblend_on ? heightblend_w(rD, rS, t, heightblend_sharp) : t;
+            float rD = trip_rgh_by(dom, wp, nr);
+            float rS = trip_rgh_by(sec, wp, nr);
+            float m = heightblend_on ? heightblend_w(rD, rS, t, heightblend_sharp) : t;
 
-        if (splat_debug == 1){ dbg = 1; dbg_col = mix(zone_color(dom),zone_color(sec),m); }
-        else if (splat_debug == 2){ dbg = 1; dbg_col = vec3(m); }
+            if (splat_debug == 1){ dbg = 1; dbg_col = mix(zone_color(dom),zone_color(sec),m); }
+            else if (splat_debug == 2){ dbg = 1; dbg_col = vec3(m); }
 
-        alb = mix(trip_alb_by(dom,wp,nr), trip_alb_by(sec,wp,nr), m);
-        if (blend_mode>=1){
-            nrm = mix(trip_nrm_by(dom,wp,nr), trip_nrm_by(sec,wp,nr), m)*2.0-1.0;
-            rgh = mix(rD, rS, m);
-        } else { rgh = 0.9; }
+            alb = mix(trip_alb_by(dom,wp,nr), trip_alb_by(sec,wp,nr), m);
+            if (blend_mode>=1){
+                nrm = mix(trip_nrm_by(dom,wp,nr), trip_nrm_by(sec,wp,nr), m)*2.0-1.0;
+                rgh = mix(rD, rS, m);
+            } else { rgh = 0.9; }
+        } else {
+            // ---- Phase A: smooth weightmap top-2 blend (de-blocked) ----
+            // (A3 warps this uv for organic breakup; A2 uses v_uv directly.)
+            float sw[7]; splat_weights7(sw, v_uv);
+            int d0=0; float m0=-1.0; for(int i=0;i<7;i++){ if(sw[i]>m0){ m0=sw[i]; d0=i; } }
+            int d1=d0; float m1=-1.0; for(int i=0;i<7;i++){ if(i!=d0 && sw[i]>m1){ m1=sw[i]; d1=i; } }
+            float t = clamp(m1 / max(m0+m1, 1e-5), 0.0, 1.0);   // 0 deep in d0 .. ~0.5 at boundary
+
+            float hD = material_height(d0, wp, nr) * interlock_height_amp;
+            float hS = material_height(d1, wp, nr) * interlock_height_amp;
+            float m = heightblend_on ? interlock_blend(hD, hS, t, interlock_sharp) : t;
+
+            if (splat_debug == 1){ dbg = 1; dbg_col = mix(zone_color(d0),zone_color(d1),m); }
+            else if (splat_debug == 2){ dbg = 1; dbg_col = vec3(m); }
+
+            alb = mix(trip_alb_by(d0,wp,nr), trip_alb_by(d1,wp,nr), m);
+            if (blend_mode>=1){
+                nrm = mix(trip_nrm_by(d0,wp,nr), trip_nrm_by(d1,wp,nr), m)*2.0-1.0;
+                rgh = mix(trip_rgh_by(d0,wp,nr), trip_rgh_by(d1,wp,nr), m);
+            } else { rgh = 0.9; }
+        }
     } else {
         // accumulate weighted PBR across all 7 zones (soft masks)
         #define ZONE(i,A,N,R) alb+=w[i]*s_alb(A,wp,nr); if(blend_mode>=1){ nrm+=w[i]*(s_nrm(N,wp,nr)*2.0-1.0); rgh+=w[i]*s_rgh(R,wp,nr);} else rgh+=w[i]*0.9;
