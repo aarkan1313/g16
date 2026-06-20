@@ -132,6 +132,9 @@ python tools/copy_materials.py
 ## 8. Git
 
 - Branches: `main` = clean baseline · `experiment/presentation` = current work (HEAD here).
+- **Convention (2026-06-20): commit by default.** Commit finished/coherent units of work to
+  `experiment/presentation` as you go — clean, scoped commits with good messages — without asking each
+  time. Push only when explicitly asked; never touch `main`/force-push unless asked.
 - Remote: `https://github.com/aarkan1313/g16.git` (`main` pushed; push others if asked).
 - Gitignored: `assets/materials/` (2.5 GB), `.godot/`, build output.
 - Restore tags worth knowing: `backup-pre-gi-proxy-2026-06-19`, `backup-clouds-skyshader-2026-06-17`,
