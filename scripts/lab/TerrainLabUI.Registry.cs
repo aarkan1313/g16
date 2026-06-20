@@ -109,6 +109,11 @@ public partial class TerrainLabUI : Control
             if (type == "toggle" || type == "scene" || type == "cloud") { lc.DefBool = d.GetBoolean(); }
             else { lc.Default = d.GetSingle(); }
         }
+        if (type == "scenecolor" && c.TryGetProperty("default", out var dc) && dc.ValueKind == JsonValueKind.Array)
+        {
+            var a = dc.EnumerateArray().Select(e => e.GetSingle()).ToArray();
+            if (a.Length >= 3) { lc.DefColor = new Color(a[0], a[1], a[2]); }
+        }
         return lc;
     }
 
@@ -259,6 +264,15 @@ public partial class TerrainLabUI : Control
                 cb.Toggled += on => { c.Value = on; if (_ready) ApplyControl(c, true); };
                 c.Value = c.DefBool; c.Widget = cb;
                 row.AddChild(cb);
+                break;
+            }
+            case "scenecolor":
+            {
+                var cp = new ColorPickerButton { Color = c.DefColor, CustomMinimumSize = new Vector2(160, 0), EditAlpha = false };
+                cp.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                cp.ColorChanged += col => { c.Value = col; if (_ready) { ApplyControl(c, true); } };
+                c.Value = c.DefColor; c.Widget = cp;
+                row.AddChild(cp);
                 break;
             }
             case "enum":

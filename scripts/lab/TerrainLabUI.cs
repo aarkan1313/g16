@@ -35,6 +35,7 @@ public partial class TerrainLabUI : Control
         public string? Param, Setter, Field, Scene, Cloud;  // shader uniform / mode-setter / TerrainLab field / scene-node target / CloudVolume knob
         public float Min, Max, Default;
         public bool DefBool;
+        public Color DefColor = new(1f, 1f, 1f);   // for type "scenecolor"
         public string[] Options = Array.Empty<string>();
         public bool Rand = true, Rebake;
         public int Zone = -1;                     // for material/companion (0..6), else -1

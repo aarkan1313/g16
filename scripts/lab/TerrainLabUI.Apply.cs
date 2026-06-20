@@ -59,6 +59,9 @@ public partial class TerrainLabUI : Control
             case "scenef":
                 ApplySceneFloat(c.Scene, c.Value.AsSingle());
                 break;
+            case "scenecolor":
+                ApplySceneColor(c.Scene, c.Value.AsColor());
+                break;
         }
         if (rebakeIfNeeded && c.Rebake) { _terrain.RebakeSplat(); }
     }
@@ -84,6 +87,15 @@ public partial class TerrainLabUI : Control
     {
         if (field == "RuleBased") { _terrain.RuleBased = v; }
         else if (field == "UseGiProxy") { _terrain.SetGiProxy(v); }
+    }
+
+    private void ApplySceneColor(string? target, Color col)
+    {
+        switch (target)
+        {
+            case "moon_color":      _moon.Color = col; ComposeLighting(); break;
+            case "moonlight_color": _moon.LightColor = col; ComposeLighting(); break;
+        }
     }
 
     private void ApplyScene(string? target, bool on)
