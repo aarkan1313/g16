@@ -198,6 +198,15 @@ public partial class TerrainLabUI : Control
                 col.AddChild(new HSeparator());
                 col.AddChild(new Label { Text = "fine-tune:" });
             }
+
+            // The Night tab leads with a CELESTIAL preset picker (moon + stars + night looks).
+            if (tabName == "Night")
+            {
+                col.AddChild(new Label { Text = "CELESTIAL PRESET (moon + stars + night)" });
+                BuildCelestialPresetPicker(col);
+                col.AddChild(new HSeparator());
+                col.AddChild(new Label { Text = "fine-tune:" });
+            }
             foreach (LabControl c in _controls.Where(c => c.Tab == tabName)) { BuildRow(col, c); }
         }
 
