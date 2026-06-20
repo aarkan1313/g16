@@ -333,6 +333,14 @@ vec3 tri_w(vec3 nr){ vec3 bw=pow(abs(nr),vec3(tri_sharpness)); return bw/(bw.x+b
 // ground the Y plane dominates → 1 sampled plane instead of 3 (perf pass 2026-06-18).
 const float TRI_EPS = 0.004;
 
+// --- AAA anti-tiling (tile_mode==3): per-zone albedo histogram LUTs (baked by HistogramCompute,
+//     packed by TerrainLab). 256×42 Rf atlas: row zone*6+ch = forward T (value→gaussian),
+//     row zone*6+3+ch = inverse T⁻¹ (gaussian→value). filter_linear matches the C# round-trip.
+uniform sampler2D tile_lut : filter_linear, repeat_disable;
+const float LUT_ROWS = 42.0;   // 7 zones × 6 rows
+float lut_fwd(int zone, int ch, float v){ float row=float(zone*6+ch)+0.5;     return texture(tile_lut, vec2(clamp(v,0.0,1.0), row/LUT_ROWS)).r; }
+float lut_inv(int zone, int ch, float g){ float row=float(zone*6+3+ch)+0.5;   return texture(tile_lut, vec2(clamp(g,0.0,1.0), row/LUT_ROWS)).r; }
+
 // Unit 1: histogram-preserving stochastic bombing. 3 hash-jittered + per-tile-rotated
 // taps on a triangle grid, variance-preserving blend (keeps contrast — the old 50/50
 // blend muddiness was variance loss). LODs to 1 plain tap at distance. No LUT needed.
@@ -362,6 +370,34 @@ vec4 ar_sample_wp(sampler2D tex, vec2 uv, vec3 wp){
     vec4 plain = textureGrad(tex, uv, dx, dy);
     float k = ar_strength * (1.0 - smoothstep(0.7, 0.95, far));
     return mix(plain, bombed, k);
+}
+
+// AAA anti-tiling (Deliot–Heitz): histogram-preserving ALBEDO bombing for one plane. Triangle grid,
+// random TRANSLATION only (NO per-tile rotation = no seam-squares), blend in gaussian space via the
+// per-zone forward/inverse LUT (preserves the exact histogram → no contrast wash). Shares
+// ar_sample_wp's distance LOD (cross-fade to a plain tap far, where 3-tap + LUT mips don't pay).
+vec3 histo_sample_wp(sampler2D tex, vec2 uv, vec3 wp, int zone){
+    vec2 dx = dFdx(uv), dy = dFdy(uv);
+    vec3 plain = textureGrad(tex, uv, dx, dy).rgb;
+    if (!ar_on) return plain;
+    float far = distanceWeight(wp);
+    if (far > 0.95) return plain;
+    float w1,w2,w3; vec2 v1,v2,v3;
+    tri_grid(uv, w1,w2,w3, v1,v2,v3);
+    vec3 t1 = textureGrad(tex, uv + hash2v(v1), dx, dy).rgb;   // translation only
+    vec3 t2 = textureGrad(tex, uv + hash2v(v2), dx, dy).rgb;
+    vec3 t3 = textureGrad(tex, uv + hash2v(v3), dx, dy).rgb;
+    vec3 w = vec3(w1,w2,w3); w *= w; w /= max(w.x+w.y+w.z, 1e-5);
+    vec3 g1 = vec3(lut_fwd(zone,0,t1.r), lut_fwd(zone,1,t1.g), lut_fwd(zone,2,t1.b));
+    vec3 g2 = vec3(lut_fwd(zone,0,t2.r), lut_fwd(zone,1,t2.g), lut_fwd(zone,2,t2.b));
+    vec3 g3 = vec3(lut_fwd(zone,0,t3.r), lut_fwd(zone,1,t3.g), lut_fwd(zone,2,t3.b));
+    vec3 gm = (g1+g2+g3)/3.0;
+    vec3 gb = g1*w.x + g2*w.y + g3*w.z;
+    float vc = inversesqrt(max(dot(w,w),1e-5));                // variance-preserving in gaussian space
+    vec3 g = gm + (gb-gm)*vc;
+    vec3 outc = vec3(lut_inv(zone,0,g.r), lut_inv(zone,1,g.g), lut_inv(zone,2,g.b));
+    float k = ar_strength * (1.0 - smoothstep(0.7, 0.95, far));
+    return mix(plain, outc, k);
 }
 
 vec3 s_alb(sampler2D t, vec3 wp, vec3 nr){
@@ -623,20 +659,21 @@ float tp_rgh_plain(sampler2D t, vec3 wp, vec3 nr){
 // is added as the detail tap's deviation from ITS OWN luma (not a constant 0.5),
 // so it layers high-freq contrast WITHOUT shifting macro brightness for dark/light
 // materials (audit M1). Crossfaded by detailWeight. detail_on=false ⇒ exactly tp_alb.
-vec3 detail_alb(sampler2D t, vec3 wp, vec3 nr){
+vec3 detail_alb(sampler2D t, vec3 wp, vec3 nr, int zone){
     vec3 bw=tri_w(nr);
+    bool histo = (tile_mode == 3);    // AAA anti-tiling: histogram-preserving albedo (no-rotation)
     vec3 macro=vec3(0.0);
-    if(bw.x>TRI_EPS) macro+=ar_sample_wp(t,wp.zy/tex_scale_m,wp).rgb*bw.x;
-    if(bw.y>TRI_EPS) macro+=ar_sample_wp(t,wp.xz/tex_scale_m,wp).rgb*bw.y;
-    if(bw.z>TRI_EPS) macro+=ar_sample_wp(t,wp.xy/tex_scale_m,wp).rgb*bw.z;
+    if(bw.x>TRI_EPS) macro+=(histo? histo_sample_wp(t,wp.zy/tex_scale_m,wp,zone) : ar_sample_wp(t,wp.zy/tex_scale_m,wp).rgb)*bw.x;
+    if(bw.y>TRI_EPS) macro+=(histo? histo_sample_wp(t,wp.xz/tex_scale_m,wp,zone) : ar_sample_wp(t,wp.xz/tex_scale_m,wp).rgb)*bw.y;
+    if(bw.z>TRI_EPS) macro+=(histo? histo_sample_wp(t,wp.xy/tex_scale_m,wp,zone) : ar_sample_wp(t,wp.xy/tex_scale_m,wp).rgb)*bw.z;
     if(!detail_on) return macro;
     float dw=detailWeight(wp);
     if(dw<0.001) return macro;                      // far: skip the extra taps
     float ds=tex_scale_m/max(detail_scale,1e-3);    // finer world->uv scale
     vec3 det=vec3(0.0);
-    if(bw.x>TRI_EPS) det+=ar_sample_wp(t,wp.zy/ds,wp).rgb*bw.x;
-    if(bw.y>TRI_EPS) det+=ar_sample_wp(t,wp.xz/ds,wp).rgb*bw.y;
-    if(bw.z>TRI_EPS) det+=ar_sample_wp(t,wp.xy/ds,wp).rgb*bw.z;
+    if(bw.x>TRI_EPS) det+=(histo? histo_sample_wp(t,wp.zy/ds,wp,zone) : ar_sample_wp(t,wp.zy/ds,wp).rgb)*bw.x;
+    if(bw.y>TRI_EPS) det+=(histo? histo_sample_wp(t,wp.xz/ds,wp,zone) : ar_sample_wp(t,wp.xz/ds,wp).rgb)*bw.y;
+    if(bw.z>TRI_EPS) det+=(histo? histo_sample_wp(t,wp.xy/ds,wp,zone) : ar_sample_wp(t,wp.xy/ds,wp).rgb)*bw.z;
     float detLuma=dot(det,vec3(0.299,0.587,0.114));
     vec3 over=macro+(det-vec3(detLuma))*(detail_strength*dw);
     return clamp(over,0.0,1.0);
@@ -674,10 +711,10 @@ vec3 detail_nrm(sampler2D albT, sampler2D nrmT, vec3 wp, vec3 nr){
 }
 
 vec3 trip_alb_by(int z, vec3 wp, vec3 nr){
-    if(z==0) return detail_alb(z0_alb,wp,nr); if(z==1) return detail_alb(z1_alb,wp,nr);
-    if(z==2) return detail_alb(z2_alb,wp,nr); if(z==3) return detail_alb(z3_alb,wp,nr);
-    if(z==4) return detail_alb(z4_alb,wp,nr); if(z==5) return detail_alb(z5_alb,wp,nr);
-    return detail_alb(z6_alb,wp,nr);
+    if(z==0) return detail_alb(z0_alb,wp,nr,0); if(z==1) return detail_alb(z1_alb,wp,nr,1);
+    if(z==2) return detail_alb(z2_alb,wp,nr,2); if(z==3) return detail_alb(z3_alb,wp,nr,3);
+    if(z==4) return detail_alb(z4_alb,wp,nr,4); if(z==5) return detail_alb(z5_alb,wp,nr,5);
+    return detail_alb(z6_alb,wp,nr,6);
 }
 vec3 trip_nrm_by(int z, vec3 wp, vec3 nr){
     // detail_nrm returns -1..1; re-encode to 0..1 so fragment()'s *2-1 is correct.
