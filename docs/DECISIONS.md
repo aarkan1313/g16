@@ -6,6 +6,20 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — AAA anti-tiling PASSED the live eye-gate → histogram-preserving is the new default.** Built
+the Deliot–Heitz histogram-preserving tiling-and-blending (spec/plan `2026-06-20-ground-anti-tiling-histogram-
+preserving*`): T1 `HistogramCompute` (pure-C# forward/inverse LUT bake, `--histcheck` round-trip PASS on
+clay/basalt/snow/sand, meanErr ~0.01/255), T2 `TerrainLab` `tile_lut` atlas (256×42 Rf, baked per zone-material,
++1 sampler), T3 shader `tile_mode=3` — **re-targeted mid-build** to the ACTIVE albedo path (`detail_alb`→
+`histo_sample_wp`, a no-rotation triangle grid blending in gaussian space via the per-zone LUT), since the
+review renders the splat-weightmap path (NOT `s_alb`/IQ, which is inactive); normal/rough left plain (their
+tiling is imperceptible, documented). Verdict (user, live, Shift+3 IQ↔histogram A/B): **"the new system is
+good!"** PASS, ~6.5 ms (within budget). **Decision: flip `tile_mode` default → 3 (histogram)** in
+`lab_controls.json` + the shader uniform; the surface no longer seams. NEXT: retire the superseded IQ/hex/legacy
+anti-tile paths (user "kill dead code" steer) as a verified follow-up, then re-judge GM1/2/3-A on the fixed
+surface. Also added a **Shift+1–9 ground-lane review bank** (`TerrainLabUI.GroundReview.cs`, own partial via
+`_ShortcutInput`) so ground toggles don't collide with the shared 1–9; Shift+3 = the anti-tiling A/B.
+
 **2026-06-20 — Sun/Light Stage 3a (night sky) eye-gate PASSED (conditional, live) → 3b (moon) unblocked.**
 Drove the night gate via `review.tscn --nightgate=1` (data/review_night.json: keys 1-9 = noon→dusk→deep
 night→pre-dawn + dark-scary/moonlit-bright). User verdict: **"ok for now."** Sun arc 0-24, sun-below-

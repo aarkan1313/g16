@@ -11,7 +11,7 @@
       "options": ["height bands", "height+slope", "noise-broken", "curvature", "steep=cliff", "noise biomes"],
       "default": 2, "rand": true },
     { "id": "tile_mode", "label": "tile mode", "tab": "Surface", "type": "enum", "param": "tile_mode",
-      "options": ["none (sharp)", "IQ 2-tap", "hex-tiling", "histogram"], "default": 1, "rand": false },
+      "options": ["none (sharp)", "IQ 2-tap", "hex-tiling", "histogram"], "default": 3, "rand": false },
     { "id": "tex_scale_m", "label": "tex scale m", "tab": "Surface", "type": "slider",
       "param": "tex_scale_m", "min": 4, "max": 80, "default": 28, "rand": true },
     { "id": "ar_on", "label": "anti-repeat", "tab": "Surface", "type": "toggle",

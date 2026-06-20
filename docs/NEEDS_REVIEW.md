@@ -97,12 +97,13 @@ reproduce the **approved-era look** (palette `alpine_green` = prior set; GM3-A v
 every new feature is **opt-in** and you A/B from a known baseline. **Gate them TOGETHER** (they share the surface):
 fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin) under a **midday/neutral mood**.
 
-> **⚠ GATE IN PROGRESS 2026-06-20 — SURFACE BLOCKER FOUND.** Key 3 (GM1) judged live: **textures OK, the shared
-> ground SURFACE fails** — hard-edged rectangular **tile-chunk seams** + abrupt color/value steps (worst looking
-> straight down, close), visible **texture tiling/repetition**, **salt-pepper speckle** on mid slopes. Confirmed
-> **lighting-independent** (key 3 = mood 2 midday-neutral, POM/height/variation OFF → the approved compositing core
-> itself). Keys 4/5 ride this same surface → **deferred until the surface is root-caused.** Batch gate **OPEN
-> (blocked on the surface, not the palette).** See GM1 verdict below + DECISIONS 2026-06-20.
+> **⚠ GATE IN PROGRESS 2026-06-20 — SURFACE BLOCKER FOUND → anti-tiling FIXED + PASSED.** Key 3 (GM1) judged live:
+> **textures OK, the shared ground SURFACE fails** — hard-edged rectangular **tile-chunk seams** + abrupt
+> color/value steps (worst close), visible **repetition**, **speckle**. Root-caused live: (1) **macro color**
+> (fixed, default off) + (2) **anti-tiling seams** = the per-tile-rotation bombing on albedo. **FIX SHIPPED +
+> PASSED (2026-06-20, live, Shift+3 A/B): AAA histogram-preserving tiling** (`tile_mode=3`, now default) — user:
+> *"the new system is good!"* (spec/plan `2026-06-20-ground-anti-tiling-histogram-preserving*`). **NEXT: re-judge
+> GM2 (key 4) + GM3-A (key 5) on the now-fixed surface.** Batch gate still open on those two. See DECISIONS 2026-06-20.
 
 - **GM1 — data-driven palette** (`61dd605..90c39ef`, `4108ad2`+fix): `data/ground_palette.json` loads on startup,
   warn-on-miss, per-role **Zones-tab dropdowns**. Default `active=alpine_green` (prior look). **Judge:** switch

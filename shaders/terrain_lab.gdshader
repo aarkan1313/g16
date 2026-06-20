@@ -99,7 +99,7 @@ uniform float antitile_mult = 5.3;
 //   1 = IQ 2-tap hash-tiling (cheap, contrast-boosted)         iquilezles.org
 //   2 = hex-tiling (Mikkelsen: 3-tap, per-tile rotation,       JCGT 2022
 //       variance-preserving + contrast restore, textureGrad mip-correct)
-uniform int tile_mode = 1;   // IQ 2-tap default (hex caused tile-seam squares)
+uniform int tile_mode = 3;   // histogram-preserving default (eye-gate PASS 2026-06-20). 0 none·1 IQ·2 hex·3 histogram
 uniform float rough_floor : hint_range(0.04, 1.0) = 0.5;  // ground is matte; low floor = specular sparkle (fuzz)
 
 // --- FUZZ-HUNT master switches: isolate each contributor. dbg_use_normalmap off =
