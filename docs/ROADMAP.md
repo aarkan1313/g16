@@ -101,17 +101,19 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
   `2026-06-20-sun-surface-shader-and-presets-design.md`.
 
 #### ☀️🌙 FINISH THE FULL SKY SYSTEM (user's call 2026-06-20: "plan it all, make a roadmap, lets do it")
-> **⏸ SKY LANE PAUSED 2026-06-20** at the Night & Celestial **spec** (written, NOT built) — user paused to
-> let the Ground/Texture chat work. Daylight is shipped+gated. Resume: review the Night spec → writing-plans
-> → build 3a. Kickoff for the ground chat: `handoffs/2026-06-20-ground-texture-lane-prompt.md`.
+> **SKY LANE: Stage 3 (Night & Celestial) ✅ COMPLETE 2026-06-20** (all 4 sub-phases eye-gated live).
+> Next item below is #2 (Clouds overhaul). Resume: pick #2/#3/#4 → brainstorm→spec→plan→gate.
 
 Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
 Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
-1. **Night & Celestial (Stage 3)** — sun below horizon + **darkening night sky** (tunable dark↔bright,
-   physical default), **full moon** (textured/cratered via the sun-surface system, **phases** +
-   terminator, cool **moonlight** as a 2nd directional light, halo), **stars + Milky Way** (procedural,
-   not real constellations; twinkle/density/rotation/fade — **presets + super-tunable** like the moon).
-   FULLY BRAINSTORMED — spec next. Spec `specs/2026-06-20-night-and-celestial-design.md`.
+1. **Night & Celestial (Stage 3) ✅ DONE + GATED 2026-06-20** — 3a night sky (24h arc, sun-below-horizon,
+   tunable darkness/floor) · 3b moon (textured/cratered, phases + terminator, cool halo, cloud-occluded) ·
+   3c moonlight (2nd cool shadow-casting directional, gated night×moon-up×phase) · 3d stars + Milky Way
+   (procedural 3D-noise, twinkle/rotation/fade). All on a **Night lab tab** (22 knobs) + **6 celestial
+   presets** (`celestial_presets.json` + picker + `--celestial`). Also shipped: fog-wash night-grade,
+   `L` inspection light, sun-disc limb polish. Plan `plans/2026-06-20-night-and-celestial.md`. Spec
+   `specs/2026-06-20-night-and-celestial-design.md`. Owed (minor, await user eye): celestial-preset
+   dropdown live-check; optional live moon/moonlight color pickers.
 2. **Clouds overhaul** — own brainstorm→spec. User asks: **cirrus / wispy-striated "lines" clouds** (not
    represented), **more shapes & types**, **more/higher elevation bands** + **height ranges WITHIN a
    band** (the "decks are flat slabs" vertical-realism gap, memory `cloud-deck-vertical-realism`),

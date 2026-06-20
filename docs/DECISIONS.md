@@ -6,6 +6,19 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light Stage 3 (Night & Celestial) COMPLETE: 3d PASSED + celestial presets shipped.**
+3d (stars + Milky Way) eye-gated live ("give it a pass for now"); Milky Way fixed from blocky → smooth
+(was 2D value-noise projected on a sphere → switched to real 3D fbm `vnoise3/fbm3` sampled on the view
+direction; wispy clumps + dust lanes + wobbling width). Sun-disc polish folded in (limb 0.55→0.70 =
+spherical, not flat). Then, on the user's "do we have good presets/knobs/modularity?" audit, found the one
+real gap: night/celestial had 22 live knobs but **no preset system** while sun/clouds/grade/moods all do.
+Built it: `data/celestial_presets.json` (full_moon_clear, new_moon_dark, crescent, bright_moonlit,
+deep_scary, exotic) + `TerrainLabUI.CelestialPresets` + Night-tab picker + `--celestial=N`, mirroring the
+sun pattern (registry-routed; moon_color/moonlight_color rgb overrides → exotic amber moon). **Stage 3 done
+end-to-end, all eye-gated** (3d self-checked via auto-shots; celestial-preset dropdown awaits the user's
+live eye — user "can't visually check rn"). Minor owed: optional live moon/moonlight color pickers.
+NEXT (user picks): #2 Clouds overhaul · #3 GPU atmosphere · #4 Stage-4 auto day/night. ROADMAP updated.
+
 **2026-06-20 — Sun/Light Stage 3b (moon disc) + 3c (moonlight) eye-gates PASSED (live) → 3d (stars) next.**
 Drove both via `review.tscn --nightgate=1`. **3b PASS** ("looks good"): textured phased moon (disc + limb +
 reused-sun_fbm maria/craters + phase terminator new→half→full + cool halo), per-pixel cloud occlusion,
