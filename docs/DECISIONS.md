@@ -6,6 +6,26 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #2 Clouds overhaul · CO-1 (vertical realism) BUILT + banked, AWAITING the live eye-gate (user can't view rn).**
+Built CO-1 per `plans/2026-06-20-clouds-co1-vertical-realism.md`: a per-deck vertical density profile so decks
+read as 3D volumes (flat-ish base → faded/anvil top) instead of flat slabs. **New per-layer fields**
+`ProfileBottom/ProfileTop/Anvil` (indices 19-21) on the packed cloud-layer buffer — `CloudLayers.Stride`
+20→24, `layers[40]→[48]`, `LF` stride `*5→*6` **in lockstep across all THREE shaders** (raymarch + shadow +
+the `cloud_shadow_check.glsl` diagnostic the plan initially missed). `height_profile(h, bottom, top, anvil)`
+multiplies `layer_density`'s shape byte-identically in raymarch + shadow (so ground shadows track the reshaped
+clouds). **Tunable + modular:** Clouds-tab `vertical profile (CO-1)` toggle (**default OFF = approved slab
+look, opt-in**) + `base round`/`top fade`/`anvil (Cb)` knobs driving layer 0; `--cloudprofile=b,t,a` CLI;
+per-deck JSON fields (`profile_bottom/top`, `anvil`) for future preset authoring (CO-4). **Mechanically
+verified (not eye-gated):** neutral (0,1,0) is a true no-op (terrain pixel-identical to baseline, sky differs
+only by cloud drift); `--shadowcheck` PASS r=0.835 with correct layout decode (alt=1800, count=2); profile-on
+visibly reshapes clouds (sky diff ~0.9 vs ~0.08 drift) AND shifts ground cloud-shadow (lockstep holds in the
+real render); **no perf cost** (3 smoothsteps/tap; profile-on fps ≥ off). **Known tunable behavior to judge:**
+height_profile ≤ 1 so enabling it REDUCES integrated density (thinner clouds) — raise the density knob to
+compensate; an optional density-preserving normalize can be added if the user wants shape-without-thinning.
+**DISCIPLINE: stopped at the CO-1 gate** — last PASSED gate is still Stage 3, so CO-2 (cirrus/stratus types)
+is NOT started (building it would be 2 sub-phases past the last pass = the WG1-15-reset trap). Owed: the live
+CO-1 eye-check (NEEDS_REVIEW). NEXT after PASS: bake approved profile values as defaults → CO-2.
+
 **2026-06-20 — GROUND lane reset to a from-scratch, game-agnostic rendering SYSTEM redesign (master spec).**
 After the anti-tiling win, the GM batch re-judge surfaced more close-up artifacting; user stepped back: *"are
 we building more and more on a bad foundation?"* Honest read: base-field geometry is solid, but the ground

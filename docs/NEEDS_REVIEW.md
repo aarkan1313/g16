@@ -273,6 +273,25 @@ but haven't had your live eye — confirm them whenever:
 - Unblocks: nothing (Stage 3 already gated) — this is just confirming the preset/color UX. Self-checked
   `exotic` renders (amber moon); startup is clean (no add_child spam after the MoonLight deferred-add fix).
 
+### 9. Clouds #2 · CO-1 vertical realism — 🔨 BUILT 2026-06-20, default-off, AWAITING your live eye
+The first sub-phase of the Clouds overhaul: a per-deck **vertical density profile** so cloud decks read as 3D
+volumes (flat-ish base → faded/anvil top) instead of flat slabs. **Built + mechanically verified, NOT eye-gated**
+(user couldn't view). **The lane is HELD here** — CO-2 (cirrus/stratus types) is not started until this passes
+(discipline: one sub-phase past the last pass).
+- **See it:** `"<godot>" --path /c/Wg16/wg-16-project --rendering-driver vulkan scenes/review.tscn -- --clouds=1 --coverage=0.5`
+  → **Clouds tab**, toggle **`vertical profile (CO-1)`** for an instant A/B (OFF = current slab look, ON = profile).
+  Or launch straight into a strong example: append `--cloudprofile=0.2,0.5,0.8` (bottom,top,anvil). **Fly UNDER and
+  up at a deck** — the slab-vs-volume read is clearest looking toward the cloud base, not down from altitude.
+- **Knobs (Clouds tab):** `profile: base round` (flat-base round-up height), `profile: top fade` (where the top
+  tapers), `profile: anvil (Cb)` (0 cumulus taper → spreading cumulonimbus top). Defaults 0.15 / 0.6 / 0.
+- **Judge:** (1) ON → decks read as 3D volumes (flat base, rounded/anvil top), not slabs? (2) OFF → the approved
+  cumulus look reproduces exactly? (3) any motion shimmer or horizon/grazing-angle artifact? (4) cost OK in motion.
+- **Note:** enabling the profile thins clouds (it only ever removes density) — raise the **density** knob to
+  compensate; an optional density-preserving normalize can be added if you want shape-without-thinning.
+- **On PASS:** I bake the approved profile values as defaults (toggle preserved) → then CO-2. Mechanically: neutral
+  no-op verified (terrain pixel-identical), `--shadowcheck` PASS r=0.835, no perf cost. Plan
+  `plans/2026-06-20-clouds-co1-vertical-realism.md`.
+
 ---
 
 ## ⏸ Not "review" — build-when-you-can-see (eye-gated, parked)
