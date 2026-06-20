@@ -15,3 +15,6 @@ Thumbs.db
 # Material texture library — 2.5 GB, re-derivable from D:\assets (see docs/HANDOFF.md).
 # The CHOICES are tracked in data/material_verdicts.json + data/material_library.json.
 assets/materials/
+
+# Claude Code agent state / worktrees
+.claude/
