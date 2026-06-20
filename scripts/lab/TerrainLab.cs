@@ -19,6 +19,11 @@ public partial class TerrainLab : MeshInstance3D
 
     private SplatCompute? _splat;
     private HeightCompute? _height;
+    // AAA anti-tiling: per-zone albedo histogram LUTs packed into one Rf atlas (256 × 42),
+    // rows = zone*6 + {fwd R,G,B | inv R,G,B}. Bound once as tile_lut; baked per zone material.
+    private const int LutRows = 7 * HistogramCompute.RowsPerZone;   // 42
+    private readonly float[] _lutData = new float[HistogramCompute.Bins * LutRows];
+    private ImageTexture? _lutTex;
     // GM2: derive per-material height from normals (modular; behind shader's height_from_maps, default off).
     public bool  BakeHeightMaps = true;     // bake on material-set so height is ready when toggled on
     public int   HeightBakeRes = 512, HeightIters = 64;
@@ -68,6 +73,21 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter("heightmap", tex);
         _mat.SetShaderParameter("region_size", p.RegionSizeM);
         _mat.SetShaderParameter("texel_world", p.Spacing);
+
+        // AAA anti-tiling: seed tile_lut with an IDENTITY transform so the shader's tile_mode==3
+        // path is valid before any zone bakes (forward=value, inverse=value). Once only.
+        if (_lutTex == null)
+        {
+            for (int z = 0; z < 7; z++)
+                for (int c = 0; c < 3; c++)
+                    for (int b = 0; b < HistogramCompute.Bins; b++)
+                    {
+                        float v = b / (float)(HistogramCompute.Bins - 1);
+                        _lutData[(z * HistogramCompute.RowsPerZone + c)     * HistogramCompute.Bins + b] = v; // fwd identity
+                        _lutData[(z * HistogramCompute.RowsPerZone + 3 + c) * HistogramCompute.Bins + b] = v; // inv identity
+                    }
+            PushLutAtlas();
+        }
 
         // --- GI/shadow PROXY (perf): a coarse copy of the SAME heightfield. The render
         // mesh has ~4M verts for displacement detail, but SDFGI revoxelization + shadow
@@ -146,6 +166,32 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter($"z{zone}_rgh", LoadOr(b, "roughness"));
         _mat.SetShaderParameter($"z{zone}_ao", LoadOr(b, "ao"));
         BakeZoneHeight(zone, materialName);
+        BakeZoneHistogram(zone, materialName);
+    }
+
+    /// AAA anti-tiling: bake this material's albedo histogram LUTs into the shared tile_lut atlas.
+    /// Cheap pure-C# reduction, baked once per material; inert until the shader's tile_mode is 3.
+    private void BakeZoneHistogram(int zone, string materialName)
+    {
+        string p = ProjectSettings.GlobalizePath($"res://assets/materials/{materialName}/albedo.png");
+        if (!System.IO.File.Exists(p)) { return; }   // no albedo → leave identity rows (mode-3 == plain for this zone)
+        Image alb = Image.LoadFromFile(p);
+        if (alb == null) { return; }
+        float[] luts = HistogramCompute.ComputeLuts(alb);
+        int baseRow = zone * HistogramCompute.RowsPerZone;
+        System.Buffer.BlockCopy(luts, 0, _lutData, baseRow * HistogramCompute.Bins * sizeof(float), luts.Length * sizeof(float));
+        PushLutAtlas();
+    }
+
+    /// (Re)build the tile_lut Rf atlas texture from _lutData and bind it to the material.
+    private void PushLutAtlas()
+    {
+        var bytes = new byte[_lutData.Length * sizeof(float)];
+        System.Buffer.BlockCopy(_lutData, 0, bytes, 0, bytes.Length);
+        var img = Image.CreateFromData(HistogramCompute.Bins, LutRows, false, Image.Format.Rf, bytes);
+        if (_lutTex == null) { _lutTex = ImageTexture.CreateFromImage(img); }
+        else { _lutTex.Update(img); }
+        _mat.SetShaderParameter("tile_lut", _lutTex);
     }
 
     /// GM2: derive this zone's height map from its normal map and bind z{zone}_hgt.
