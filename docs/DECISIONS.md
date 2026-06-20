@@ -6,6 +6,19 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #2 Clouds · CO-1 + CO-2 PASSED the live eye-gate. CO-3 next.**
+Drove the gate via `review.tscn` (key 6 cycles cumulus→stratus→cirrus). User verdicts (live): CO-1 cumulus
+vertical profile + CO-2 both **"fine / good"**. Iterations done at the gate: **stratus** now leaves occasional
+**gaps** (broken stratus; coverage drives solidity) — user "there are now gaps"; **cirrus** was a view-locked
+dome (didn't parallax when moving) → **world-anchored** to a finite altitude (real parallax + drift), user
+"looks good"; then a **realism pass** (per-region density/orientation/size variety via cheap macro fields +
+early-out + 3-octave noise) — user "good". **Perf caught + fixed at the gate:** the naive variety pass (2 bands
+× 5-octave fbm3) tanked to **10 fps**; reworked to ~free (**133 vs 136 fps** cirrus on/off). **Defaults:** CO-1
+profile stays **opt-in (toggle default-off)** — approved cloud look unchanged; not flipped on without an explicit
+call (user: "if not we can come back later"). Stratus = a selectable type (knob/`--stratus`), cirrus = opt-in
+layer (default off); tuned param defaults baked (cirrus variety 0.7 / speed 0.04 / alt 8000 / cov 0.6 / den 0.7).
+Commits `aba7c25`,`a50ea79`,`17be53a`,`0011615`. NEXT: **CO-3 anti-repetition + horizon** (one phase past the pass).
+
 **2026-06-20 — Sun/Light #2 Clouds overhaul · CO-2 (types: stratus + cirrus) BUILT + banked, AWAITING the live eye-gate.**
 Built CO-2 per `plans/2026-06-20-clouds-co2-types.md`, **ahead of CO-1's gate at the user's explicit direction**
 ("keep going… if modular and tunable it'll be fine") — so everything ships default-off/neutral, cumulus

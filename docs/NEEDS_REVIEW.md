@@ -273,7 +273,11 @@ but haven't had your live eye — confirm them whenever:
 - Unblocks: nothing (Stage 3 already gated) — this is just confirming the preset/color UX. Self-checked
   `exotic` renders (amber moon); startup is clean (no add_child spam after the MoonLight deferred-add fix).
 
-### 9. Clouds #2 · CO-1 vertical realism — 🔨 BUILT 2026-06-20, default-off, AWAITING your live eye
+### 9. Clouds #2 · CO-1 vertical realism — ✅ PASS 2026-06-20 (eye-gate, live)
+- **Verdict (user, live, review key 6):** cumulus vertical profile "fine". Gate PASSED. Kept **opt-in (toggle
+  default-off)** so the approved cloud look is unchanged; default-on is a later call. Knobs/`--cloudprofile` live.
+
+### 9-orig. Clouds #2 · CO-1 vertical realism (detail) — built default-off
 The first sub-phase of the Clouds overhaul: a per-deck **vertical density profile** so cloud decks read as 3D
 volumes (flat-ish base → faded/anvil top) instead of flat slabs. **Built + mechanically verified, NOT eye-gated**
 (user couldn't view). **CO-2 (item 9b) was then built ahead at user direction** — both await your eye; everything
@@ -292,8 +296,11 @@ is default-off so the approved look is untouched.
   no-op verified (terrain pixel-identical), `--shadowcheck` PASS r=0.835, no perf cost. Plan
   `plans/2026-06-20-clouds-co1-vertical-realism.md`.
 
-### 9b. Clouds #2 · CO-2 types (stratus + cirrus) — 🔨 BUILT 2026-06-20, default-off/neutral, AWAITING your live eye
-Two new cloud TYPES, cumulus left byte-unchanged. Built ahead of CO-1's gate at your direction (modular + opt-in).
+### 9b. Clouds #2 · CO-2 types (stratus + cirrus) — ✅ PASS 2026-06-20 (eye-gate, live)
+- **Verdict (user, live):** stratus gaps "good", cirrus parallax "looks good", cirrus variety "good". Gate PASSED.
+  Iterations at the gate: broken-stratus gaps, world-anchored cirrus (parallax+drift), per-region variety; perf
+  bug caught (10 fps naive → 133 fps reworked). Stratus = selectable type, cirrus = opt-in layer (default off).
+- (orig build notes) Two new cloud TYPES, cumulus left byte-unchanged. Built ahead of CO-1's gate at your direction.
 - **Stratus (overcast sheet):** `--clouds=1 --coverage=0.6 --stratus=1`, or Clouds tab **`type: cumulus↔stratus`**
   (0=cumulus, 1=stratus). **Judge:** reads as a flat connected overcast SHEET (not cumulus clumps)? Tune coverage/density.
 - **Cirrus (high wind-streaked layer):** `--clouds=1 --coverage=0.3 --cirrus=0.6`, or Clouds tab **`cirrus layer (CO-2)`**
