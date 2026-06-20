@@ -114,15 +114,20 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
    `L` inspection light, sun-disc limb polish. Plan `plans/2026-06-20-night-and-celestial.md`. Spec
    `specs/2026-06-20-night-and-celestial-design.md`. Owed (minor, await user eye): celestial-preset
    dropdown live-check; optional live moon/moonlight color pickers.
-2. **Clouds overhaul — IN PROGRESS** (`specs/2026-06-20-clouds-overhaul-design.md`, plan
-   `plans/2026-06-20-clouds-co1-vertical-realism.md`). Phased CO-1 vertical realism (height profile in decks)
-   → CO-2 types (cirrus as a 2D layer + stratus shape-mode; cumulus preserved) → CO-3 anti-repetition/horizon
-   → CO-4 presets. **Weather-axis tie-in DEFERRED** (own later stage, user's call).
-   - **CO-1 vertical realism — 🔨 BUILT 2026-06-20, default-off, AWAITING the live eye-gate** (user can't view
-     rn). Per-deck `height_profile` (flat base → faded/anvil top) on new layer fields 19-21, lockstep across
-     raymarch+shadow+check shaders; Clouds-tab toggle + base/top/anvil knobs + `--cloudprofile`. Mechanically
-     verified (neutral no-op, `--shadowcheck` r=0.835, no perf cost). See NEEDS_REVIEW + DECISIONS. **CO-2 NOT
-     started — held at the gate (discipline: one phase past the last pass).**
+2. **Clouds overhaul — IN PROGRESS** (`specs/2026-06-20-clouds-overhaul-design.md`, plans
+   `plans/2026-06-20-clouds-co1-vertical-realism.md` + `plans/2026-06-20-clouds-co2-types.md`). Phased CO-1
+   vertical realism → CO-2 types (cirrus 2D layer + stratus shape-mode; cumulus preserved) → CO-3
+   anti-repetition/horizon → CO-4 presets. **Weather-axis tie-in DEFERRED** (own later stage, user's call).
+   - **CO-1 vertical realism — 🔨 BUILT 2026-06-20, default-off, AWAITING the live eye-gate.** Per-deck
+     `height_profile` (flat base → faded/anvil top), layer fields 19-21, lockstep across raymarch+shadow+check;
+     Clouds-tab toggle + base/top/anvil knobs + `--cloudprofile`. Verified (neutral no-op, `--shadowcheck`
+     r=0.835, no perf cost).
+   - **CO-2 types — 🔨 BUILT 2026-06-20, default-off/neutral, AWAITING the live eye-gate** (built ahead of
+     CO-1's gate at user direction; cumulus byte-unchanged). Stratus shape-mode (field 22, cellGate→sheet,
+     lockstep ×3) + cirrus 2D layer (`cirrus_layer` in cloud_sky, wind-streaked, night-faded). Clouds-tab
+     `cumulus↔stratus` + `cirrus: *` knobs; `--stratus`/`--cirrus`; **review key 6 cycles cumulus→stratus→
+     cirrus**. Verified (cumulus no-op, `--shadowcheck` r=0.811, cirrus appears+night-fades). See NEEDS_REVIEW 9.
+   - **CO-3 / CO-4 NOT started** — held for the CO-1 + CO-2 eye-gates (discipline).
 3. **GPU-compute physical atmosphere — ✅ SPEC'd 2026-06-20** (`specs/2026-06-20-gpu-atmosphere-design.md`).
    Hillaire LUTs on the CloudVolume **`Texture2Drd`/`CallOnRenderThread` seam, NOT FieldCompute** (memory
    `compute-to-material-callonrenderthread`). Toggleable sky-color provider, **default OFF = approved

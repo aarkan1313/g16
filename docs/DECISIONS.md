@@ -6,6 +6,22 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #2 Clouds overhaul · CO-2 (types: stratus + cirrus) BUILT + banked, AWAITING the live eye-gate.**
+Built CO-2 per `plans/2026-06-20-clouds-co2-types.md`, **ahead of CO-1's gate at the user's explicit direction**
+("keep going… if modular and tunable it'll be fine") — so everything ships default-off/neutral, cumulus
+byte-unchanged. Two new cloud TYPES: **(1) Stratus shape-mode** — `ShapeMode` per-layer field **22** (the slot
+reserved in CO-1, so NO stride growth); `layer_density` blends `cellGate→1` + cuts detail erosion for a
+connected overcast sheet, **byte-identical across raymarch+shadow+check**; default 0 = cumulus (verified
+terrain pixel-identical). Clouds-tab `type: cumulus↔stratus` knob + `--stratus`. **(2) Cirrus** — a cheap 2D
+`cirrus_layer(rd)` in `cloud_sky.gdshader`: anisotropic wind-stretched `fbm3` filaments, elevation-gated,
+sun-tinted, night-faded; composited OVER sun/moon and UNDER the cumulus dome (cumulus correctly occludes it).
+`CloudVolume.SetCirrusOn/SetCirrus` push uniforms; Clouds-tab toggle+5 knobs + `--cirrus`; default off →
+sky byte-unchanged. **Review key 6** now cycles cumulus(profile off→on)→stratus→cirrus. **Mechanically
+verified:** cumulus no-op; `--shadowcheck` PASS r=0.811 (stratus render, correct field-22 decode); stratus
+reads as an overcast sheet; cirrus reads as wind-streaked filaments (sky diff 2.0 vs 0.08 drift) and fades at
+night. **NOT eye-gated.** Owed: CO-1 + CO-2 live eye-checks (NEEDS_REVIEW 9). NEXT after they pass: CO-3
+anti-repetition/horizon. CO-2 OUT-of-scope kept deferred: weather-axis tie-in, unified volumetric cirrus.
+
 **2026-06-20 — Sun/Light #2 Clouds overhaul · CO-1 (vertical realism) BUILT + banked, AWAITING the live eye-gate (user can't view rn).**
 Built CO-1 per `plans/2026-06-20-clouds-co1-vertical-realism.md`: a per-deck vertical density profile so decks
 read as 3D volumes (flat-ish base → faded/anvil top) instead of flat slabs. **New per-layer fields**
