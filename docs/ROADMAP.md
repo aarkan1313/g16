@@ -95,18 +95,33 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
   (~2.8 ms vs ~4.7 ms — quality/cost A/B), and an **SSIL re-check** (still on; another view-dependent
   GI term — decide keep/tune/off). Eye-gated like the rest; design-ahead OK, build one phase past the
   last gate. Pairs naturally with the moonlight shadow work in Stage 3.
-- **Built, awaiting the gate (3b/3c):** Stage 1 sun disc; Stage 2 decouple (`ComposeLighting` +
-  Time/Weather/Grade states) + analytic sun arc + keyframed day color (`time_of_day`). Spec
-  `specs/2026-06-20-lighting-decouple-and-time-axis-design.md`.
-- **Then (full scope, user's call — each gated, one phase ahead max):** Stage 3 night + moon
-  (disc/phases/cool moonlight) + star field · the **GPU-compute physical atmosphere** (Hillaire
-  LUTs — re-spec around the CloudVolume render-thread `Texture2Drd` seam, NOT FieldCompute; a
-  local-RD texture can't be sampled by a material) · Stage 4 auto day/night cycle + fantasy/exotic.
-  Designed now is fine; **build the atmosphere/night only after Stage 1+2 daylight is eye-gated.**
+- **Daylight ✅ GATED 2026-06-20 (live):** Stage 1 sun disc (3b), Stage 2 decouple + time-of-day (3c),
+  sun **surface** shader + presets (default `realistic_midday`), BRDF regression (6), clouds review (5),
+  god rays (3). Specs `2026-06-20-lighting-decouple-and-time-axis-design.md`,
+  `2026-06-20-sun-surface-shader-and-presets-design.md`.
 
-### CLOUDS (finish the review)
-Shipped & accepted; owes the feature-by-feature sign-off (gate 5) + god-rays final pass (gate 3).
-Reference: `cloud-system-overview.md`, `cloud-next-steps.md`, `godray-system-overview.md`.
+#### ☀️🌙 FINISH THE FULL SKY SYSTEM (user's call 2026-06-20: "plan it all, make a roadmap, lets do it")
+Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
+Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
+1. **Night & Celestial (Stage 3)** — sun below horizon + **darkening night sky** (tunable dark↔bright,
+   physical default), **full moon** (textured/cratered via the sun-surface system, **phases** +
+   terminator, cool **moonlight** as a 2nd directional light, halo), **stars + Milky Way** (procedural,
+   not real constellations; twinkle/density/rotation/fade — **presets + super-tunable** like the moon).
+   FULLY BRAINSTORMED — spec next. Spec `specs/2026-06-20-night-and-celestial-design.md`.
+2. **Clouds overhaul** — own brainstorm→spec. User asks: **cirrus / wispy-striated "lines" clouds** (not
+   represented), **more shapes & types**, **more/higher elevation bands** + **height ranges WITHIN a
+   band** (the "decks are flat slabs" vertical-realism gap, memory `cloud-deck-vertical-realism`),
+   **weather-axis tie-in**, **stronger anti-repetition** (still tiles sometimes), + presets/tunability.
+   (Broad cloud review passed "all good" 5; this is the next depth pass the deprecated cloud roadmap owed.)
+3. **GPU-compute physical atmosphere** — the unifying sky-color/scattering pass (day+dusk+night, aerial,
+   how clouds are lit) — the "sky pass that relates to everything." Hillaire LUTs on the CloudVolume
+   render-thread **`Texture2Drd` seam (`CallOnRenderThread`), NOT FieldCompute** (a local-RD texture
+   can't be sampled by a material — memory `compute-to-material-callonrenderthread`). Re-spec'd as its
+   own stage.
+4. **Stage 4** — auto day/night cycle (play/pause/speed) + fantasy/exotic (blood/colored/multiple
+   moons+suns, exotic palettes).
+5. **Shadow & Lighting pass** — CSM/cascade tuning, contact + soft (PCSS) shadows, the proxy-on cheap-
+   shadow perf lever (~2.8 vs ~4.7 ms), SSIL re-check. Pairs with Stage-3 moonlight shadows.
 
 ## 🌍 Phase B — make it a WORLD (after Phase A is done)
 Gated by the scale infra; hybrid build (spine first, content designed region-first + stream-aware).
