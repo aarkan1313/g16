@@ -6,6 +6,33 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — GROUND lane reset to a from-scratch, game-agnostic rendering SYSTEM redesign (master spec).**
+After the anti-tiling win, the GM batch re-judge surfaced more close-up artifacting; user stepped back: *"are
+we building more and more on a bad foundation?"* Honest read: base-field geometry is solid, but the ground
+material/**rendering** stack was built one bolted-on Unit at a time, never designed as a whole → we keep
+discovering its quality debt one eye-gate at a time (IQ tiling, 8-bit weights). **Decision: give ground the
+zero-to-100 treatment.** North star = a **game-agnostic, data-driven ground rendering SYSTEM** at a
+**Skyrim/No-Man's-Sky** quality bar (not photoreal-locked) — the tech is the product. **Keepers:** base-field
+geometry · histogram anti-tiling · the zone-placement *concept*. **Out of scope:** erosion/geometry +
+scale/CDLOD (separate arcs). Master design `specs/2026-06-20-ground-rendering-system-master-design.md` — 8
+components with keep/rebuild calls + a **foundation-first** build order (G-1 compositing core → data+depth →
+placement+variation → detail → lighting). Guardrail: holistic design, **incremental gated execution, no
+teardown**. Supersedes the GM1-6 sequence (old roadmap kept for its layer inventory + Unit-4 lesson).
+
+**2026-06-20 — GROUND blocky-blend ROOT-CAUSED + G-1 Task 1 built (half-float weightmaps), AWAITING eye-gate.**
+The close-up "blocky/stair-stepped/smeary" artifact = the **splat BLEND**, isolated decisively live (`tile
+mode=none` → persists, so NOT textures/histogram; `splat debug=zones` → smooth, so NOT placement; `splat
+debug=mix amt` → blocky = the **blend weight**). Cause: weightmaps are **8-bit `Rgba8` at 2048²/8192 m = 4 m
+/texel**; `interlock_blend` uses the quantized low-res `t` as the boundary threshold → stair-steps (8-bit) +
+blocky/smear (4 m). Phase **G-1** (`specs/2026-06-20-ground-g1-compositing-core-design.md`, plan
+`plans/2026-06-20-ground-g1-compositing-core.md`): **T1 DONE** — weightmaps baked **half-float (`Rgbah`)**
+(`packHalf2x16`, no CPU convert; `eb4733d`), placement byte-stable (0.13/255), de-quantizes the blend in the
+**default** path (no toggle). **T2 DONE** — material samplers confirmed `mipmap_anisotropic` (no fuzz, no
+change). **T3 WRITTEN-not-built** — `hq_blend` fragment-resolution AA interlock (boundary from full-res height
++ noise + `fwidth`, weight as bias) for the residual **4 m smear** — build ONLY if T1 isn't enough at the gate.
+**NEXT (owed): user flies key 3 close to a transition + `splat debug=mix amt` → did de-quantizing kill the
+stair-stepping?** Then T3-or-not → Phase G-2.
+
 **2026-06-20 — Sun/Light Stage 3 (Night & Celestial) COMPLETE: 3d PASSED + celestial presets shipped.**
 3d (stars + Milky Way) eye-gated live ("give it a pass for now"); Milky Way fixed from blocky → smooth
 (was 2D value-noise projected on a sphere → switched to real 3D fbm `vnoise3/fbm3` sampled on the view

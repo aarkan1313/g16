@@ -105,6 +105,26 @@ fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin)
 > *"the new system is good!"* (spec/plan `2026-06-20-ground-anti-tiling-histogram-preserving*`). **NEXT: re-judge
 > GM2 (key 4) + GM3-A (key 5) on the now-fixed surface.** Batch gate still open on those two. See DECISIONS 2026-06-20.
 
+> **⮕ SUPERSEDED 2026-06-20 — ground lane RESET to a from-scratch redesign.** The GM2/GM3-A re-judge surfaced
+> *more* close-up artifacting; user called it: stop patching a never-holistically-designed core. New authority:
+> **`specs/2026-06-20-ground-rendering-system-master-design.md`** (game-agnostic rendering SYSTEM, Skyrim/NMS bar;
+> keepers = base field + anti-tiling + placement concept; foundation-first). The GM2/GM3-A built work is
+> **reabsorbed** into the redesign's Phase G-2/G-3 (re-judged/rebuilt there), NOT separately gated here. See §1d.
+
+### ⚑ 1d. GROUND G-1 — Compositing core (half-float weights) — AWAITING eye-gate (built 2026-06-20)
+First phase of the ground redesign — harden the core everything renders through. **The close-up
+blocky/stair-stepped/smeary blend was ROOT-CAUSED** (live isolation): the splat **blend weight**, because the
+weightmaps were **8-bit at 4 m/texel** and the interlock used that quantized low-res weight as the boundary
+threshold. **T1 BUILT (`eb4733d`):** weightmaps now baked **half-float (`Rgbah`)** → de-quantizes the blend in
+the **default** path (no toggle; placement byte-stable). Spec/plan `2026-06-20-ground-g1-compositing-core*`.
+- **How to see:** press `3`, fly **close to a material transition** (where the blocky was); **Splat tab →
+  `splat debug = mix amt`**.
+- **Judge:** is the **stair-stepping gone** (that was the 8-bit quantization)? Placement unchanged?
+- **Unblocks / next:** if the residual **4 m softness/smear** still reads, build **T3 = `hq_blend`**
+  (fragment-resolution AA interlock — boundary from full-res height + noise, weight as bias only; written in the
+  plan, NOT built). PASS → record + **Phase G-2 (material data + surface depth / real height → 3D surfaces)**.
+- **T2 (sampling mip/aniso) ✅ verified clean** (all material samplers `mipmap_anisotropic`, no change).
+
 - **GM1 — data-driven palette** (`61dd605..90c39ef`, `4108ad2`+fix): `data/ground_palette.json` loads on startup,
   warn-on-miss, per-role **Zones-tab dropdowns**. Default `active=alpine_green` (prior look). **Judge:** switch
   `active` to **`alpine_stone`** (the curated candidate) or `arid`, and/or tune per-role dropdowns at close/mid
