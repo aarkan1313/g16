@@ -28,6 +28,75 @@
       "values": { "cloud_coverage": 0.78, "cloud_density": 2.0, "cloud_type": 0.85, "cloud_size": 1.2, "cloud_edge": 0.5, "cloud_detail": 0.65, "cloud_opacity": 2.4, "cloud_brightness": 0.42, "cloud_ambient": 0.38, "cloud_altitude": 1000, "cloud_thickness": 2400, "cloud_drift_speed": 16.0, "cloud_drift_dir": 220 }
     },
     {
+      "name": "Fair Weather Cumulus",
+      "_comment": "CO-4: fluffy 3D cumulus (vertical profile ON) clustered into varying-size groups (macro variety) — the classic blue-sky fair-weather look.",
+      "values": {
+        "cloud_coverage": 0.45, "cloud_density": 1.0, "cloud_type": 0.6, "cloud_size": 1.0, "cloud_cell_scale": 1.6,
+        "cloud_edge": 0.55, "cloud_detail": 0.5, "cloud_opacity": 1.1, "cloud_brightness": 1.1, "cloud_ambient": 0.82,
+        "cloud_altitude": 1900, "cloud_thickness": 1500, "cloud_drift_speed": 8.0, "cloud_drift_dir": 50,
+        "cloud_profile_on": 1, "cloud_profile_bottom": 0.15, "cloud_profile_top": 0.6, "cloud_anvil": 0.0,
+        "cloud_anti_repeat": 0.7, "cloud_shape_mode": 0.0, "cloud_cirrus_on": 0
+      }
+    },
+    {
+      "name": "Cirrus Veil",
+      "_comment": "CO-4: near-clear sky with high wind-streaked cirrus filaments (world-anchored, varied). Little/no cumulus.",
+      "values": {
+        "cloud_coverage": 0.12, "cloud_density": 0.8, "cloud_type": 0.6, "cloud_brightness": 1.1, "cloud_ambient": 0.85,
+        "cloud_altitude": 2400, "cloud_thickness": 700, "cloud_drift_speed": 6.0, "cloud_drift_dir": 40,
+        "cloud_profile_on": 0, "cloud_shape_mode": 0.0, "cloud_anti_repeat": 0.0,
+        "cloud_cirrus_on": 1, "cloud_cirrus_cov": 0.6, "cloud_cirrus_den": 0.55, "cloud_cirrus_wind": 40,
+        "cloud_cirrus_scale": 1.4, "cloud_cirrus_sharp": 0.6, "cloud_cirrus_variety": 0.7, "cloud_cirrus_speed": 0.04, "cloud_cirrus_alt": 9000
+      }
+    },
+    {
+      "name": "Cumulus & Cirrus",
+      "_comment": "CO-4: layered sky — fair-weather 3D cumulus below + a high cirrus veil above (cumulus composites over cirrus).",
+      "values": {
+        "cloud_coverage": 0.4, "cloud_density": 1.0, "cloud_type": 0.6, "cloud_size": 1.0,
+        "cloud_edge": 0.55, "cloud_detail": 0.5, "cloud_opacity": 1.1, "cloud_brightness": 1.08, "cloud_ambient": 0.82,
+        "cloud_altitude": 1900, "cloud_thickness": 1400, "cloud_drift_speed": 8.0, "cloud_drift_dir": 55,
+        "cloud_profile_on": 1, "cloud_profile_bottom": 0.15, "cloud_profile_top": 0.6, "cloud_anvil": 0.0,
+        "cloud_anti_repeat": 0.6, "cloud_shape_mode": 0.0,
+        "cloud_cirrus_on": 1, "cloud_cirrus_cov": 0.45, "cloud_cirrus_den": 0.45, "cloud_cirrus_wind": 60,
+        "cloud_cirrus_scale": 1.6, "cloud_cirrus_sharp": 0.55, "cloud_cirrus_variety": 0.7, "cloud_cirrus_speed": 0.035, "cloud_cirrus_alt": 9000
+      }
+    },
+    {
+      "name": "Overcast Stratus",
+      "_comment": "CO-4: flat connected overcast SHEET (stratus shape-mode) with occasional gaps; dim diffuse light. Raise coverage toward 1 for total overcast.",
+      "values": {
+        "cloud_coverage": 0.9, "cloud_density": 1.4, "cloud_type": 0.25, "cloud_size": 2.0,
+        "cloud_edge": 0.35, "cloud_detail": 0.4, "cloud_opacity": 1.6, "cloud_brightness": 0.9, "cloud_ambient": 1.1,
+        "cloud_altitude": 1400, "cloud_thickness": 1300, "cloud_drift_speed": 6.0, "cloud_drift_dir": 90,
+        "cloud_shape_mode": 1.0, "cloud_profile_on": 0, "cloud_anti_repeat": 0.3, "cloud_cirrus_on": 0
+      }
+    },
+    {
+      "name": "Stormy Anvil",
+      "_comment": "CO-4: towering cumulonimbus with a spreading anvil top (vertical profile + anvil), dark and dense.",
+      "values": {
+        "cloud_coverage": 0.72, "cloud_density": 2.0, "cloud_type": 0.9, "cloud_size": 1.2,
+        "cloud_edge": 0.5, "cloud_detail": 0.65, "cloud_opacity": 2.3, "cloud_brightness": 0.45, "cloud_ambient": 0.4,
+        "cloud_altitude": 1000, "cloud_thickness": 2600, "cloud_drift_speed": 16.0, "cloud_drift_dir": 220,
+        "cloud_profile_on": 1, "cloud_profile_bottom": 0.1, "cloud_profile_top": 0.45, "cloud_anvil": 0.85,
+        "cloud_anti_repeat": 0.5, "cloud_shape_mode": 0.0, "cloud_cirrus_on": 0
+      }
+    },
+    {
+      "name": "Mackerel Sky",
+      "_comment": "CO-4: broken cumulus (clustered) with a high cirrus layer above — a busy, varied mixed sky.",
+      "values": {
+        "cloud_coverage": 0.58, "cloud_density": 1.2, "cloud_type": 0.5, "cloud_size": 0.9,
+        "cloud_edge": 0.5, "cloud_detail": 0.55, "cloud_opacity": 1.3, "cloud_brightness": 1.0, "cloud_ambient": 0.8,
+        "cloud_altitude": 1800, "cloud_thickness": 1400, "cloud_drift_speed": 12.0, "cloud_drift_dir": 70,
+        "cloud_profile_on": 1, "cloud_profile_bottom": 0.15, "cloud_profile_top": 0.6, "cloud_anvil": 0.0,
+        "cloud_anti_repeat": 0.8, "cloud_shape_mode": 0.0,
+        "cloud_cirrus_on": 1, "cloud_cirrus_cov": 0.4, "cloud_cirrus_den": 0.4, "cloud_cirrus_wind": 75,
+        "cloud_cirrus_scale": 1.8, "cloud_cirrus_sharp": 0.7, "cloud_cirrus_variety": 0.8, "cloud_cirrus_speed": 0.04, "cloud_cirrus_alt": 9500
+      }
+    },
+    {
       "name": "God Ray Showcase",
       "_comment": "Self-contained showcase for the screen-space god rays (GPU Gems 3 radial scatter). Broken cumulus (~0.55 cover) so clouds cross the sun and BREAK the beams into shafts; LOW sun (~14°) near the horizon for a dramatic fan; god rays ON, balanced strength. Also sets the SUN + all god-ray tunables via control ids, so ONE pick gives good conditions. IMPORTANT: screen-space rays are view-dependent — point the camera toward the sun (azimuth 120°) to see the fan; they fade as the sun leaves the screen.",
       "values": {

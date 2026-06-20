@@ -80,6 +80,13 @@ public partial class TerrainLabUI : Control
     private void ApplyCloudPreset(int idx, float jitter = 0f)
     {
         if (idx < 0 || idx >= _cloudPresets.Count) { return; }
+        // CO-4: reset the cloud-TYPE levers first so every preset is SELF-CONTAINED — a preset that
+        // doesn't mention cirrus/stratus/profile/macro gets the clean cumulus look, not leftover state
+        // from a previously-selected preset. The preset's own `values` below re-enable what it wants.
+        foreach (var id in new[] { "cloud_profile_on", "cloud_cirrus_on" })
+            if (_byId.TryGetValue(id, out var bc)) { SetWidgetValue(bc, false); }
+        foreach (var id in new[] { "cloud_shape_mode", "cloud_anti_repeat" })
+            if (_byId.TryGetValue(id, out var fc)) { SetWidgetValue(fc, 0.0f); }
         var values = _cloudPresets[idx].values;
         foreach (var key in values.Keys)
         {
