@@ -66,6 +66,16 @@ uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
 uniform vec3 ground_color : source_color = vec3(0.22, 0.26, 0.22);
 
+// --- CIRRUS (CO-2): cheap 2D wind-streaked high layer, composited under the cumulus dome. default off. ---
+uniform bool  cirrus_on = false;
+uniform float cirrus_coverage : hint_range(0.0, 1.0) = 0.5;   // how much sky has streaks
+uniform float cirrus_density : hint_range(0.0, 1.0) = 0.6;    // opacity of the streaks
+uniform float cirrus_wind_deg = 30.0;                          // streak direction (degrees)
+uniform float cirrus_speed = 0.002;                            // drift along the wind
+uniform float cirrus_scale = 1.4;                              // streak frequency
+uniform float cirrus_sharpness : hint_range(0.0, 1.0) = 0.5;  // soft wisps ↔ crisp filaments
+uniform vec3  cirrus_color : source_color = vec3(0.92, 0.94, 1.0);
+
 // PI is a built-in in Godot sky shaders — don't redefine it.
 
 vec3 background(vec3 dir){
@@ -284,6 +294,29 @@ vec3 stars_layer(vec3 rd){
     return (star + mw) * fade;
 }
 
+// CIRRUS (CO-2): anisotropic wind-stretched fbm3 → high thin filaments. Streaks run ALONG the wind
+// (cross-wind varies faster). Gated by elevation (fades at the horizon), tinted warm near the sun,
+// dimmed at night. Cheap: one fbm3 tap. Returns (rgb, alpha) for an over-composite.
+vec4 cirrus_layer(vec3 rd){
+    if (!cirrus_on || rd.y < 0.02) { return vec4(0.0); }
+    float ang = radians(cirrus_wind_deg);
+    vec2 w = vec2(cos(ang), sin(ang));
+    vec2 hv = rd.xz / max(rd.y, 0.15);                 // project the view onto the sky plane
+    float along = dot(hv, w);
+    float cross = dot(hv, vec2(-w.y, w.x));
+    vec3 sp = vec3(along * cirrus_scale + TIME * cirrus_speed, cross * cirrus_scale * 6.0, 0.0);
+    float n = fbm3(sp);
+    float streak = smoothstep(1.0 - cirrus_coverage, 1.0, n);
+    streak = pow(streak, mix(1.0, 4.0, cirrus_sharpness));
+    float band = smoothstep(0.02, 0.18, rd.y) * (1.0 - 0.3 * smoothstep(0.85, 1.0, rd.y));
+    float a = clamp(streak * band * cirrus_density, 0.0, 1.0);
+    // sun tint: warm the streaks near the sun direction (forward scatter)
+    float toSun = max(dot(normalize(rd), LIGHT0_DIRECTION), 0.0);
+    vec3 col = mix(cirrus_color, sun_redden_color, 0.4 * pow(toSun, 8.0)) * mix(0.6, 1.2, LIGHT0_COLOR.r);
+    a *= mix(0.12, 1.0, 1.0 - night_factor);           // mostly fade out at night
+    return vec4(col, a);
+}
+
 void sky(){
     vec3 rd = EYEDIR;
     vec3 bg = background(rd);
@@ -291,6 +324,9 @@ void sky(){
     bg += stars_layer(rd);     // behind the sun/moon/clouds (they composite over)
     bg += sun_layers(rd);
     bg += moon_layers(rd);
+
+    vec4 ci = cirrus_layer(rd);              // CO-2: high thin layer, OVER sun/moon, UNDER cumulus
+    bg = bg * (1.0 - ci.a) + ci.rgb * ci.a;
 
     vec3 outColor = bg;
     if (cloud_enabled && rd.y > 0.0){
