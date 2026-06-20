@@ -109,6 +109,31 @@ public partial class TerrainLabUI : Control
             }
         }
 
+        // --godrayab=<path>: drift-free A/B — capture <path>_on.png (god rays on), toggle them OFF, a few
+        // frames later capture <path>_off.png, quit. Same near-identical frame, so the diff is PURELY the
+        // god-ray pass (no cloud-shadow drift between separate launches confounding it).
+        if (_godrayAbT >= 0.0 && _godrayAbPath != null)
+        {
+            _godrayAbT += delta;
+            if (_godrayAbStage == 0 && _godrayAbT > 1.5)
+            {
+                Engine.TimeScale = 0.0;   // FREEZE the scene (clouds stop evolving) so OFF == ON except the god rays
+                GetViewport().GetTexture().GetImage().SavePng(_godrayAbPath + "_on.png");
+                _godraysScreen?.SetEnabled(false);
+                _godrayAbStage = 1; _godrayAbFrames = 0;
+            }
+            else if (_godrayAbStage == 1)
+            {
+                if (++_godrayAbFrames >= 2)
+                {
+                    GetViewport().GetTexture().GetImage().SavePng(_godrayAbPath + "_off.png");
+                    GD.Print($"TerrainLab: godray A/B -> {_godrayAbPath}_on.png / _off.png (2-frame gap)");
+                    _godrayAbT = -1.0;
+                    GetTree().Quit();
+                }
+            }
+        }
+
         // --profile=<secs>: warm up 1s, then average frame time, print fps + worst, quit
         if (_profileT >= 0.0)
         {
@@ -127,6 +152,7 @@ public partial class TerrainLabUI : Control
             }
         }
     }
+    private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage = 0; private int _godrayAbFrames = 0;
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum = 0, _profWorst = 0;
     private bool _profMove = false;   // --profmove: orbit camera during profile (motion cost)
     private int _profFrames = 0;

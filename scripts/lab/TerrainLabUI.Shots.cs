@@ -44,8 +44,10 @@ public partial class TerrainLabUI : Control
 
     private int ZoneDefaultMaterialIndex(int zone)
     {
-        string[] wanted = { "m8_grass_calm", "12_dry_lichen_carpet", "14_scree_with_lichen",
-                            "13_dry_loose_scree", "01_dark_slate", "wgv3_alpine_scree", "01_fresh_powder" };
+        // Contrast palette (2026-06-19): green valley → brown soil → grey gravel → talus →
+        // dark rock cliffs → green-brown tundra band → white snow. Breaks the grey-mush look.
+        string[] wanted = { "m8_grass_calm", "dirt", "16_glacial_till",
+                            "02_coarse_talus", "rock_dark", "m14_tundra_moss", "01_fresh_powder" };
         int idx = (zone >= 0 && zone < wanted.Length) ? _materials.IndexOf(wanted[zone]) : -1;
         if (idx < 0) { idx = Math.Min(Math.Max(zone, 0), _materials.Count - 1); }
         return Math.Max(idx, 0);

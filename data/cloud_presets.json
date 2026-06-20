@@ -36,7 +36,7 @@
         "cloud_ambient": 0.6, "cloud_altitude": 1600, "cloud_thickness": 1500,
         "cloud_drift_speed": 8.0, "cloud_drift_dir": 120,
         "sun_angle": 14.0, "sun_azimuth": 120.0, "sun_energy": 1.6,
-        "cloud_godrays": 1, "cloud_godray_strength": 2.5, "cloud_godray_length": 0.45,
+        "cloud_godrays": 1, "cloud_godray_strength": 14.0, "cloud_godray_length": 0.45,
         "cloud_godray_decay": 0.97, "cloud_godray_cloud_radius": 0.6, "cloud_godray_cloud_lum": 0.78
       }
     },

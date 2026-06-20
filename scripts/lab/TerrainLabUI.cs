@@ -146,6 +146,8 @@ public partial class TerrainLabUI : Control
         // --godrays drives the screen-space beam layer (GodRaysScreen reads the sun per-frame).
         if (_godraysOnCli >= 0) { _godraysScreen?.SetEnabled(_godraysOnCli == 1); }
         if (_godrayDbgCli != 0) { _godraysScreen?.SetDebug(_godrayDbgCli); }   // --godraydbg=N diagnostic
+        if (_godrayHpCli >= 0f) { _godraysScreen?.SetHighpass(_godrayHpCli); }   // --godrayhp=N A/B the high-pass
+        if (_glowCli >= 0) { GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.GlowEnabled = _glowCli == 1; }   // --glow diagnostic
         // --lookatsun: aim the camera straight at the sun (for god-ray verification — removes the
         // guesswork of matching --cam yaw to the sun azimuth).
         if (_lookAtSunCli)

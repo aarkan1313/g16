@@ -81,6 +81,12 @@ public partial class GodRaysScreen : Node3D
         Projection viewProj = proj * new Projection(camXf.AffineInverse());
         _mat.SetShaderParameter("inv_view_proj", viewProj.Inverse());
         _mat.SetShaderParameter("cam_world", _cam.GlobalPosition);
+
+        // Aspect for the high-pass: the reference rays rotate around the sun in screen space, so they
+        // must be aspect-corrected or the rotation stretches on a wide viewport (anisotropic = uneven
+        // wash removal). Cheap to push each frame; tolerant of window resizes.
+        Vector2 vpSize = _cam.GetViewport().GetVisibleRect().Size;
+        _mat.SetShaderParameter("aspect", vpSize.Y > 0f ? vpSize.X / vpSize.Y : 1.7778f);
     }
 
     /// Bind the cloud shadow map (Texture2Drd) + its world footprint (CloudVolume.ShadowTexture/RegionSize).
@@ -110,9 +116,21 @@ public partial class GodRaysScreen : Node3D
     public void SetCloudRadius(float v) => _mat.SetShaderParameter("cloud_radius", Mathf.Clamp(v, 0.05f, 1.5f));
     /// Cloud luminance threshold: sky brighter than this = open (lit); darker = cloud occluder.
     public void SetCloudLum(float v) => _mat.SetShaderParameter("cloud_lum", Mathf.Clamp(v, 0.0f, 2.0f));
+    /// Occluder polarity (occ_mode 2). false = DAYLIT: the bright cloud is the occluder, clear sky is open
+    /// (shafts in the gaps — the default, no sky veil). true = BACKLIT: dark cloud is the occluder (sun
+    /// behind cloud). Wrong polarity for the scene re-introduces the milky full-sky wash.
+    public void SetCloudInvert(bool backlit) => _mat.SetShaderParameter("cloud_invert", backlit);
     /// Warm/cool tint of the beams.
     public void SetTint(Color c) => _mat.SetShaderParameter("ray_tint", c);
 
-    /// DEBUG: 0 = normal, 1 = show occlusion mask, 2 = mark sun screen-UV + gate. (--godraydbg=N)
+    /// Structure-gate amount: 0 = raw additive (old wash+ring look), 1 = cloud-structure gate (clean
+    /// beams only where clouds carve the sky; no open-sky veil, no ring). Default 1. (--godrayhp=N A/B.)
+    public void SetHighpass(float v) => _mat.SetShaderParameter("highpass", Mathf.Clamp(v, 0f, 1f));
+    /// Tangential offset (UV) of the high-pass mean — roughly half a shaft width. Larger = fills broader
+    /// shafts (but too wide softens thin ones). ~0.02 default.
+    public void SetGateWidth(float v) => _mat.SetShaderParameter("gate_width", Mathf.Clamp(v, 0.004f, 0.08f));
+
+    /// DEBUG (--godraydbg=N): 0 = normal, 1 = occlusion mask, 2 = sun-UV marker + gate, 3 = isSky gate
+    /// (green sky / red geometry), 5 = scatter visualizer (the beam contribution alone).
     public void SetDebug(int mode) => _mat.SetShaderParameter("debug_mode", mode);
 }

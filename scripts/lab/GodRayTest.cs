@@ -144,6 +144,10 @@ public partial class GodRayTest : Node3D
         _mat.SetShaderParameter("density", _density);
         _mat.SetShaderParameter("weight", _weight);
         _mat.SetShaderParameter("debug_mode", _debug);
+        // This is the RAW-algorithm debug harness: keep the unfiltered radial scatter (highpass 0) so it
+        // faithfully shows the GPU Gems core. The tangential high-pass (wash/ring removal) is a real-scene
+        // concern; GodRaysScreen turns it on there (default 1).
+        _mat.SetShaderParameter("highpass", 0f);
     }
 
     public override void _Process(double delta)

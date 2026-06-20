@@ -1,6 +1,77 @@
-# Handoff: God-Ray "filter look" + "ring" — root cause found, fix NOT done
+# Handoff: God-Ray "filter look" + "ring" — FIXED (tangential high-pass)
 
-Date: 2026-06-19. Status: **INCOMPLETE — handed off.** Branch: `experiment/presentation`.
+> ## ⭐ THE ACTUAL ROOT CAUSE (2026-06-19, definitive — supersedes everything below) ⭐
+> The "filter look everywhere / haze / fog / filtered world" that survived EVERY god-ray iteration across
+> ALL sessions was **the Environment's depth fog being applied to the god-ray quad**. The quad is a 3D
+> MeshInstance3D at the far plane; the scene has `fog_enabled = true` (a blue-grey `fog_light_color`), so
+> Godot blended fog onto the quad, and with `blend_add` that fog color was **added uniformly across the
+> whole screen** → a flat haze independent of every god-ray knob (that's the tell the user gave: "every
+> knob up and down, same fog"). **FIX: add `fog_disabled` to the shader's `render_mode`.** Proven: a quad
+> outputting vec3(0) lifted the frame +7/+7/+7 (absdiff 9.39) WITH fog, and **exactly 0.0** with
+> `fog_disabled`. This was masked for hours because SDFGI temporal jitter (~8–20) + deterministic
+> cloud-shadow drift swamped pixel diffs — only `--sdfgi=0 --clouds=0` gave a clean read. The other fixes
+> below (depth gate, blend_add, inverted occlusion, high-pass, strength 14) are all real and needed for
+> the BEAMS, but `fog_disabled` is what finally killed the "filtered world."
+
+
+> **UPDATE 2026-06-19 (FINAL — the real "fog" fix: the occ_mode 2 occlusion was INVERTED).** Looking at
+> the occlusion mask (`--godraydbg=1`) revealed it: in a DAYLIT scene the clouds are BRIGHTER than the
+> blue sky, but the luminance heuristic treated bright=open / dark=occluder — so it marked the white
+> CLOUDS as "open" and the blue SKY as the "occluder." Result: shafts smeared THROUGH the clouds, and the
+> blue sky's own brightness gradient became varying occlusion → a broad milky veil over the whole sky (the
+> "filtered world / fog"). FIX: invert it — bright cloud = occluder, clear sky = open (`cloud_invert`,
+> default false=daylit; true restores dark=cloud for backlit scenes). Now shafts form in the GAPS and
+> uniform sky reads as uniformly-open so the tangential high-pass cancels it to zero → clean blue sky, no
+> veil. With the veil gone there's headroom to drive the beams hard: showcase strength 9 → **14**. Also
+> tried occ_mode 3 (cloud shadow map): clean (no veil) but beams too soft/weak even sharpened — NOT the
+> answer; the inverted occ_mode 2 (sharp luminance silhouettes, correct polarity) is. Diagnostic that
+> cracked it: `--godraydbg=1` (occlusion mask) + `=5` (scatter viz) — the mask showed the inverted polarity
+> at a glance after pixel-diffing got lost in SDFGI/cloud-drift noise. KEY LESSON: for this effect, LOOK at
+> the occlusion/scatter debug views; don't trust pixel diffs (SDFGI temporal + deterministic cloud drift
+> swamp them).
+
+
+> **UPDATE 2026-06-19 (latest): the "FILTERED WORLD" ROOT CAUSE was a broken depth gate — FIXED.**
+> The persistent "filter look everywhere / fog the terrain" across ALL sessions was NOT the scatter — it
+> was the sky-vs-geometry test `depth < 0.0005`. Under Reverse-Z the sky clears to depth EXACTLY 0.0 and
+> ALL geometry is > 0, but distant terrain (mountains km away) has a TINY reverse-Z depth (~1e-6..1e-4,
+> measured via `--godraydbg=4`) — the 0.0005 cutoff was LARGER than that whole range, so it classified
+> distant terrain as SKY and ran god rays over it → the whole world veiled. Fix: threshold → `1e-6`
+> (uniform `sky_depth_eps`). Verify with `--godraydbg=3` (green=sky/allowed, red=geometry/excluded): was
+> all-green over the scene, now terrain is red. Also switched the pass to `blend_add` (output ONLY the
+> beam light; non-beam pixels get +0 so the scene is never re-sampled/round-tripped) and added a
+> drift-free A/B (`--godrayab=<path>`, freezes the scene via TimeScale=0 + a 2-frame gap). GOTCHA that
+> burned hours: the clouds are DETERMINISTIC and DRIFT (preset 5 speed 8) — any across-frame or
+> across-launch terrain comparison is dominated by cloud-shadow drift, NOT the god ray; you MUST freeze
+> the scene to measure the god-ray's terrain effect (which is ~0 once the depth gate is fixed). Diagnostic
+> CLIs added: `--glow=0/1`, `--adjust=0/1`, `--godraydbg=3` (isSky), `=4` (depth buckets), `=5` (scatter),
+> `=9` (force-zero output). Depth gate + blend_add are the real "filtered world" fix; the high-pass below
+> handles the in-sky wash/ring.
+
+
+> **UPDATE 2026-06-19 (later session): RESOLVED — shipped as a TANGENTIAL OCCLUSION HIGH-PASS.**
+> The wash + ring are gone, perf is fine, shafts are smooth. The shipped fix is in `march_beam()` in
+> `godray_screen.gdshader`: while marching toward the sun, at each step subtract the occlusion's
+> TANGENTIAL local mean (`occlusion(coord ± perpendicular*gate_width)`) and accumulate only the positive
+> excess `max(occ − tangmean, 0)`. Over uniform sky occ == mean → 0 (no veil, no ring); alongside a
+> cloud band the open ray exceeds its neighbours → a SMOOTH radial shaft. Because a smooth mean is
+> subtracted (not an edge detected), there is no cloud-edge halo. A 5-tap `near_structure()` pre-check
+> skips the 64-step march on open sky far from cloud → perf. MEASURED (preset 5, --lookatsun, native
+> crops): near-sun brightness == the godrays-OFF baseline (184.5 = 184.5) even at strength 9 → ZERO DC
+> wash; perf 196 fps / +1.1 ms over off (vs the rejected 5-march version's ~5× cost). Uniforms:
+> `highpass` (1 = shafts default, 0 = raw additive for A/B), `gate_width` (~0.02, ≈half a shaft width),
+> `gate_probe` (~0.07, early-out radius), `aspect` (per-frame). CLI A/B: `--godrayhp=0|1`. Showcase
+> preset strength 2.5 → 9.0 (no wash penalty now). `GodRayTest` pinned `highpass=0` (raw harness).
+>
+> **Two approaches tried & rejected EN ROUTE this session (do not retry):** (a) angular-mean high-pass
+> — re-march at ±sep rotations around the sun, subtract: EXPENSIVE (5 marches = 5× cost = the "perf is
+> trash" report) AND left residual fog (rotating around the sun sweeps the reference rays into the
+> surrounding clouds → reference biased low → positive residual veil). (b) structure GATE — multiply the
+> scatter by local tangential occlusion CONTRAST: cheap and kills fog but OUTLINES cloud edges (bright
+> fringes + banding), because multiplying by an edge detector injects edge structure. The winner
+> subtracts a smooth mean instead of multiplying by contrast.
+
+Date: 2026-06-19. Status: **RESOLVED (was: incomplete).** Branch: `experiment/presentation`.
 Companion: plan `docs/superpowers/plans/2026-06-19-godray-cloud-field-occlusion.md`,
 spec `docs/superpowers/specs/2026-06-19-godray-cloud-field-occlusion-design.md`,
 memory `godray-emission-vs-albedo-rootcause`.
