@@ -6,6 +6,16 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light Stage 3a (night sky) eye-gate PASSED (conditional, live) → 3b (moon) unblocked.**
+Drove the night gate via `review.tscn --nightgate=1` (data/review_night.json: keys 1-9 = noon→dusk→deep
+night→pre-dawn + dark-scary/moonlit-bright). User verdict: **"ok for now."** Sun arc 0-24, sun-below-
+horizon vanish, dusk→night→dawn, and the strengthened `night_darkness` lever (real range after the
+black-ambient-color fix) all approved. **BANKED follow-up (user-flagged):** the **depth fog / aerial
+perspective is NOT night-graded**, so it adds bright world-ambient at night and washes out the darkness
+range (8 vs 9 hard to read). Fix later (best folded into 3c moonlight / night-brightness tuning): night-
+grade `FogLightColor`/`FogDensity`/aerial by `nightFactor`. Clean session (only the 3 benign startup
+rebake lines, zero exceptions). Unblocks **3b — moon disc** as the next single gated phase.
+
 **2026-06-20 — Sun/Light Stage 3a (night sky) BUILT; banked key-2 RD errors root-caused as benign.**
 Resumed the Sun & Light lane at Stage 3 (Night & Celestial). Built 3a (behind defaults): `DriveTime` is
 now a continuous 24 h sun arc (removing the day-clamp lets elevation go negative at night), a master
