@@ -44,12 +44,20 @@ public partial class TerrainLabUI : Control
 
     private int ZoneDefaultMaterialIndex(int zone)
     {
-        // Contrast palette (2026-06-19): green valley → brown soil → grey gravel → talus →
-        // dark rock cliffs → green-brown tundra band → white snow. Breaks the grey-mush look.
-        string[] wanted = { "m8_grass_calm", "dirt", "16_glacial_till",
-                            "02_coarse_talus", "rock_dark", "m14_tundra_moss", "01_fresh_powder" };
-        int idx = (zone >= 0 && zone < wanted.Length) ? _materials.IndexOf(wanted[zone]) : -1;
-        if (idx < 0) { idx = Math.Min(Math.Max(zone, 0), _materials.Count - 1); }
+        // GM1: data-driven palette (data/ground_palette.json, loaded into _groundPalette).
+        // Falls back to the prior hardcoded contrast set, then to a clamped index — with a
+        // warning on any miss so a bad name is VISIBLE, not silently arbitrary.
+        string[] fallback = { "m8_grass_calm", "dirt", "16_glacial_till",
+                              "02_coarse_talus", "rock_dark", "m14_tundra_moss", "01_fresh_powder" };
+        string want = (_groundPalette != null && zone >= 0 && zone < _groundPalette.Length)
+                      ? _groundPalette[zone]
+                      : (zone >= 0 && zone < fallback.Length ? fallback[zone] : "");
+        int idx = _materials.IndexOf(want);
+        if (idx < 0)
+        {
+            GD.PushWarning($"[ground_palette] role {zone} material '{want}' not in library → clamped fallback");
+            idx = Math.Min(Math.Max(zone, 0), _materials.Count - 1);
+        }
         return Math.Max(idx, 0);
     }
 }
