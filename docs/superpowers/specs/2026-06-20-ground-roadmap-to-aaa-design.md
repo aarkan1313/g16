@@ -130,6 +130,8 @@ Legend: ✅ done/approved · ◐ partial · 🅿️ built-but-parked · ⬜ not 
 - **Gate:** reads photoreal/varied across the gradient, not drab. (Old G2.)
 
 ### GM2 — Real per-material height maps  *(flat → deep surface)*
+- **📄 Detailed design: `specs/2026-06-20-ground-gm2-real-height-maps-design.md`** (library has NO height →
+  derive from normal via a GPU Poisson solve, baked once; one seam `material_height_uv`; ⚠ eye-gated — alters the approved interlock).
 - **Goal:** genuine surface depth — sharpens the heightblend interlock and revives POM relief
   (both currently derive height from inverted roughness, which is too flat).
 - **Approach:** generate per-material height from normal+albedo (or source better maps); bind
