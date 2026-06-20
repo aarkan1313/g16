@@ -32,6 +32,15 @@ uniform sampler2D z5_rgh : hint_roughness_gray, filter_linear_mipmap_anisotropic
 uniform sampler2D z6_alb : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D z6_nrm : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D z6_rgh : hint_roughness_gray, filter_linear_mipmap_anisotropic, repeat_enable;
+// Phase B: per-zone ambient-occlusion maps (bound from the material library's ao.png).
+uniform sampler2D z0_ao : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z1_ao : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z2_ao : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z3_ao : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z4_ao : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z5_ao : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z6_ao : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform bool ao_on = true;   // Phase B: apply baked material AO to the BRDF
 
 uniform float tex_scale_m = 9.0;
 
@@ -189,6 +198,7 @@ varying vec3 v_normal;
 varying float v_h;
 varying float v_slope;
 varying float v_curv;
+varying float v_ao;   // Phase B: material AO carried to light() for the DIRECT term
 
 float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 float hash2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
@@ -337,6 +347,19 @@ vec3 s_nrm(sampler2D t, vec3 wp, vec3 nr){
 float s_rgh(sampler2D t, vec3 wp, vec3 nr){
     vec3 bw=tri_w(nr);
     return tiled(t,wp.zy/tex_scale_m).r*bw.x + tiled(t,wp.xz/tex_scale_m).r*bw.y + tiled(t,wp.xy/tex_scale_m).r*bw.z;
+}
+// Phase B: AO fetch (single-channel, triplanar, through ar_sample_wp → shares anti-repetition + LOD).
+float s_ao(sampler2D t, vec3 wp, vec3 nr){
+    vec3 bw=tri_w(nr);
+    return ar_sample_wp(t,wp.zy/tex_scale_m,wp).r*bw.x
+         + ar_sample_wp(t,wp.xz/tex_scale_m,wp).r*bw.y
+         + ar_sample_wp(t,wp.xy/tex_scale_m,wp).r*bw.z;
+}
+float ao_by(int z, vec3 wp, vec3 nr){
+    if(z==0) return s_ao(z0_ao,wp,nr); if(z==1) return s_ao(z1_ao,wp,nr);
+    if(z==2) return s_ao(z2_ao,wp,nr); if(z==3) return s_ao(z3_ao,wp,nr);
+    if(z==4) return s_ao(z4_ao,wp,nr); if(z==5) return s_ao(z5_ao,wp,nr);
+    return s_ao(z6_ao,wp,nr);
 }
 
 // --- Phase A/B SHARED material-height channel -------------------------------
@@ -633,7 +656,7 @@ void fragment(){
     vec3 wp=v_world; vec3 nr=v_normal;
     float w[7]; zone_weights(w, v_h, v_slope, v_curv, wp);
 
-    vec3 alb=vec3(0.0); vec3 nrm=vec3(0.0,0.0,1.0); float rgh=0.0;
+    vec3 alb=vec3(0.0); vec3 nrm=vec3(0.0,0.0,1.0); float rgh=0.0; float ao=1.0;
 
     int dbg = 0;            // set when a splat debug view should override final output
     vec3 dbg_col = vec3(0.0);
@@ -670,6 +693,7 @@ void fragment(){
             if (blend_mode>=1){
                 nrm = mix(trip_nrm_by(dom,wp,nr), trip_nrm_by(sec,wp,nr), m)*2.0-1.0;
                 rgh = mix(rD, rS, m);
+                ao = mix(ao_by(dom,wp,nr), ao_by(sec,wp,nr), m);
             } else { rgh = 0.9; }
         } else {
             // ---- Phase A: smooth weightmap top-2 blend (de-blocked) ----
@@ -698,18 +722,20 @@ void fragment(){
             if (blend_mode>=1){
                 nrm = mix(trip_nrm_by(d0,wp,nr), trip_nrm_by(d1,wp,nr), m)*2.0-1.0;
                 rgh = mix(trip_rgh_by(d0,wp,nr), trip_rgh_by(d1,wp,nr), m);
+                ao = mix(ao_by(d0,wp,nr), ao_by(d1,wp,nr), m);
             } else { rgh = 0.9; }
         }
     } else {
         // accumulate weighted PBR across all 7 zones (soft masks)
-        #define ZONE(i,A,N,R) alb+=w[i]*s_alb(A,wp,nr); if(blend_mode>=1){ nrm+=w[i]*(s_nrm(N,wp,nr)*2.0-1.0); rgh+=w[i]*s_rgh(R,wp,nr);} else rgh+=w[i]*0.9;
-        ZONE(0,z0_alb,z0_nrm,z0_rgh)
-        ZONE(1,z1_alb,z1_nrm,z1_rgh)
-        ZONE(2,z2_alb,z2_nrm,z2_rgh)
-        ZONE(3,z3_alb,z3_nrm,z3_rgh)
-        ZONE(4,z4_alb,z4_nrm,z4_rgh)
-        ZONE(5,z5_alb,z5_nrm,z5_rgh)
-        ZONE(6,z6_alb,z6_nrm,z6_rgh)
+        ao = 0.0;   // accumulate AO from 0 (weights sum to 1 → weighted average)
+        #define ZONE(i,A,N,R,O) alb+=w[i]*s_alb(A,wp,nr); if(blend_mode>=1){ nrm+=w[i]*(s_nrm(N,wp,nr)*2.0-1.0); rgh+=w[i]*s_rgh(R,wp,nr); ao+=w[i]*s_ao(O,wp,nr);} else { rgh+=w[i]*0.9; ao+=w[i]; }
+        ZONE(0,z0_alb,z0_nrm,z0_rgh,z0_ao)
+        ZONE(1,z1_alb,z1_nrm,z1_rgh,z1_ao)
+        ZONE(2,z2_alb,z2_nrm,z2_rgh,z2_ao)
+        ZONE(3,z3_alb,z3_nrm,z3_rgh,z3_ao)
+        ZONE(4,z4_alb,z4_nrm,z4_rgh,z4_ao)
+        ZONE(5,z5_alb,z5_nrm,z5_rgh,z5_ao)
+        ZONE(6,z6_alb,z6_nrm,z6_rgh,z6_ao)
     }
 
     // Lever 2: macro color variation (multi-octave LF value/hue/sat drift).
@@ -744,6 +770,12 @@ void fragment(){
         ALBEDO = vec3(sv);
     }
     ROUGHNESS = dbg_fullrough ? 1.0 : clamp(rgh, rough_floor, 1.0);
+    // Phase B: material AO. AO/AO_LIGHT_AFFECT only reach engine ambient/GI under a custom
+    // light(); the DIRECT term is darkened in light() via v_ao below (M4).
+    ao = ao_on ? clamp(ao, 0.0, 1.0) : 1.0;
+    AO = ao;
+    AO_LIGHT_AFFECT = 1.0;
+    v_ao = ao;
     // Normal: detailed normal-map (specular-shimmer suspect) only when enabled AND
     // blend_mode supports it. Otherwise the flat geometric normal.
     if (blend_mode>=1 && dbg_use_normalmap){
@@ -798,7 +830,7 @@ void light() {
     float lightScatter = 1.0 + (fd90 - 1.0) * pow5(1.0 - NoL);
     float viewScatter  = 1.0 + (fd90 - 1.0) * pow5(1.0 - NoV);
     float burley = lightScatter * viewScatter * (1.0 / 3.14159265);
-    DIFFUSE_LIGHT += ALBEDO * radiance * burley;
+    DIFFUSE_LIGHT += ALBEDO * radiance * burley * v_ao;
 
     // --- GGX specular: D (Trowbridge-Reitz) * V (correlated Smith) * F (Schlick) ---
     float d = NoH * NoH * (a2 - 1.0) + 1.0;
@@ -810,5 +842,5 @@ void light() {
     // dielectric F0 ~0.04 (terrain is non-metal); Schlick Fresnel
     vec3 f0 = vec3(0.04);
     vec3 F = f0 + (vec3(1.0) - f0) * pow5(1.0 - LoH);
-    SPECULAR_LIGHT += radiance * (D * Vis) * F;
+    SPECULAR_LIGHT += radiance * (D * Vis) * F * v_ao;
 }

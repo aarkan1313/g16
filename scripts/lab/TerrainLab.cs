@@ -132,6 +132,7 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter($"z{zone}_alb", LoadOr(b, "albedo"));
         _mat.SetShaderParameter($"z{zone}_nrm", LoadOr(b, "normal"));
         _mat.SetShaderParameter($"z{zone}_rgh", LoadOr(b, "roughness"));
+        _mat.SetShaderParameter($"z{zone}_ao", LoadOr(b, "ao"));
     }
 
     /// Toggle the GI/shadow proxy. ON: the coarse proxy feeds SDFGI + casts shadows; the
