@@ -65,13 +65,14 @@ cost is small. Re-baked on startup and whenever a zone material changes.
 
 ## Architecture
 
-### Component 1 — `HistogramCompute.cs` + `shaders/tile_histogram.glsl` (the bake)
-Mirrors `HeightCompute.cs`/`SplatCompute.cs` (same windowed local-RD pattern — **will NOT run under
-`--headless`**, per the project gotcha; bake windowed). Input: the 7 bound albedo textures. Output:
-the forward+inverse LUTs. To avoid a sampler explosion, **all LUTs pack into ONE small atlas
-texture** `tile_lut` (rows = material × channel × {T, T⁻¹}, width = 256) — one extra sampler, not
-~28. Bound to the terrain material as `tile_lut`. Driven from `TerrainLab.cs` at startup and on
-`SetZoneMaterial`.
+### Component 1 — `HistogramCompute.cs` (the bake, pure C#)
+A histogram is a single linear reduction over pixels, so — unlike `HeightCompute`'s iterative Poisson
+solve — it needs **no GPU compute shader**: plain C# reading `Image.GetData()` is fast for a one-time,
+7-material bake and **runs fine headless** (no local-RD gotcha). Input: a bound albedo `Image`. Output:
+that material's per-channel forward `T` + inverse `T⁻¹` LUTs (256 entries each, R/G/B). To avoid a
+sampler explosion, **all materials' LUTs pack into ONE small atlas** `tile_lut` (rows = zone × channel
+× {T, T⁻¹} = 7×3×2 = 42 rows, width 256, `Rf`) — **one extra sampler total.** `TerrainLab.cs` owns the
+atlas, writes the zone's rows on `SetZoneMaterial`, and binds `tile_lut` once.
 
 ### Component 2 — unified `sampleMaterial` seam in `terrain_lab.gdshader` (the structural fix)
 Today sampling is fragmented: albedo/normal/rough → `tiled()`/IQ (blocky); AO → `ar_sample_wp`
@@ -110,8 +111,8 @@ single plain tap. Gate on `--profmove` vs 8 ms; if near-cliff (3-plane) is too h
 LOD band first. The forward/inverse LUT taps are 1D and cheap.
 
 ## Risks / unknowns (verify early in the plan)
-- **Sampler bind count:** ~+8 (one `tile_lut` atlas; originals already bound). Confirm against
-  Godot's Vulkan limit before building wide.
+- **Sampler bind count:** **+1** (one `tile_lut` atlas; originals already bound) — low risk, but
+  confirm the final render binds cleanly.
 - **Mip prefiltering** of a Gaussianized signal is approximate at extreme distance — we LOD to a
   plain tap there, so it's a non-issue now; flagged if it ever shows (Deliot-Heitz "blend toward the
   mean at high mip" is the later fix).
@@ -122,10 +123,11 @@ LOD band first. The forward/inverse LUT taps are 1D and cheap.
   material A/B vs plain sample) before trusting the look.
 
 ## Files
-- New: `scripts/lab/HistogramCompute.cs`, `shaders/tile_histogram.glsl`.
+- New: `scripts/lab/HistogramCompute.cs` (pure C# LUT bake — no compute shader).
 - Edit: `shaders/terrain_lab.gdshader` (unified `sampleMaterial`, `tile_mode==3`, `tile_lut`
-  uniform), `scripts/lab/TerrainLab.cs` (drive the bake on bind/zone-change), `data/lab_controls.json`
-  (Surface `tile mode` enum +option 3 — small, additive). No edits to cloud/lighting files.
+  uniform + LUT helpers), `scripts/lab/TerrainLab.cs` (own the LUT atlas, bake on bind/zone-change,
+  bind `tile_lut`), `data/lab_controls.json` (Surface `tile mode` enum +option 3 — small, additive).
+  No edits to cloud/lighting files.
 
 ## Gate
 Live eye-gate via `scenes/review.tscn` (extend key 3/9 baseline, or a dedicated A/B): toggle
