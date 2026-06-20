@@ -147,10 +147,11 @@ public partial class CloudVolume : Node
     private bool _skyInstalled;
     public override void _Process(double delta)
     {
-        if (!_enabled) { return; }
-        // install the cloud sky only once the render-thread RID is live (avoids the
-        // empty-Texture2Drd uniform-set error). _computeReady is set in InitCompute.
+        // Install the cloud sky once the render-thread RID is live (avoids the empty-Texture2Drd
+        // uniform-set error) — do this even when clouds are DISABLED, so the clouds-off look still
+        // uses cloud_sky (clear gradient + sun disc/surface), not the legacy procedural sky.
         if (_computeReady && !_skyInstalled) { InstallCloudSky(); _skyInstalled = true; }
+        if (!_enabled) { return; }
         ApplyOvercastSky();   // track the overcast knob/coverage live (greys sky + cloud ambient)
         RenderingServer.CallOnRenderThread(Callable.From(RenderProcess));
     }

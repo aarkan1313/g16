@@ -100,17 +100,30 @@ vec3 sun_layers(vec3 rd, float aSun) {
         vec3 T = normalize(cross(upv, S));
         vec3 Bt = cross(S, T);
         float rad = max(sin(radians(sun_size * grow)), 1e-4);
-        vec2 pSurf = vec2(dot(rd, T), dot(rd, Bt)) / rad;          // ~unit-disc coords
-        vec2 q = pSurf * sun_surface_cells + vec2(TIME * sun_surface_churn);
-        float surf = sun_fbm(q);                                    // granulation, 0..1
-        float spotField = sun_fbm(q * 0.5 + vec2(7.3, 2.1));
-        float spot = smoothstep(0.55, 0.35, spotField);            // low field = dark spot
-        float bright = mix(1.0 - sun_surface_contrast, 1.0 + sun_surface_contrast, surf);
-        bright *= (1.0 - sun_surface_spots * spot);
-        disc *= max(bright, 0.0);
-        sunCol *= mix(vec3(1.0), sun_redden_color, sun_surface_warm * (1.0 - surf));  // warm cells
+        vec2 pSurf = vec2(dot(rd, T), dot(rd, Bt)) / rad;          // unit-disc coords (|p|<=1 inside)
+        float r2 = clamp(dot(pSurf, pSurf), 0.0, 1.0);
+        float ball = sqrt(1.0 - r2);                               // 1 center -> 0 rim (sphere foreshorten)
+        vec2 sph = pSurf / (ball + 0.35);                          // de-foreshorten so cells round off at the limb
+
+        // GRANULATION: soft low-contrast convection mottle (fades toward the rim so it reads spherical).
+        vec2 q = sph * sun_surface_cells + vec2(TIME * sun_surface_churn);
+        float gran = (sun_fbm(q) - 0.5) * 2.0;                     // -1..1
+        float granAmt = sun_surface_contrast * 0.6 * ball;         // rim-faded mottle
+
+        // SUNSPOTS: sparse rounded dark patches from a lower-freq field; carve the disc so they read
+        // even on the bright core (multiplicative darkening up to ~0.85).
+        vec2 qs = sph * (sun_surface_cells * 0.4) + vec2(3.1, 8.7) + vec2(TIME * sun_surface_churn * 0.4);
+        float sf = sun_fbm(qs);
+        float spot = smoothstep(0.60, 0.48, sf) * sun_surface_spots * ball;
+
+        disc *= max((1.0 + granAmt) * (1.0 - 0.85 * spot), 0.0);
+        // subtle warm/cool chroma (reads even when the disc clips bright): warm in bright cells, cool in dim.
+        sunCol *= mix(vec3(1.0), sun_redden_color, sun_surface_warm * clamp(0.5 + 0.5 * gran, 0.0, 1.0));
+        // fantasy/exotic base override: strong tint + dim so the hue dominates instead of bleaching to
+        // white (a full replace on a nuclear-bright disc read as a flat blob; this keeps the granulation).
         if (dot(sun_surface_color, sun_surface_color) > 1e-4) {
-            sunCol = mix(sunCol, sun_surface_color * (0.6 + 0.8 * surf), 0.85);        // fantasy override
+            sunCol = mix(sunCol, sun_surface_color, 0.7);
+            disc *= 0.65;
         }
     }
     // Soft optical depth: thin cloud over the sun dims AND reddens the disc/corona; thick cloud kills them.
@@ -118,7 +131,10 @@ vec3 sun_layers(vec3 rd, float aSun) {
     vec3 ext = mix(vec3(1.0), sun_redden_color, clamp(aSun * sun_cloud_redden, 0.0, 1.0));  // warm extinction
     float discT  = (1.0 - clamp(aSun, 0.0, 1.0));            // disc/corona transmittance
     float haloT  = (1.0 - clamp(aSun, 0.0, 1.0) * 0.5);     // halo bleeds (half occlusion)
-    vec3 core = sunCol * ext * (disc * 12.0 + corona) * discT;
+    // Surface mode renders a TEXTURED ball, so the core can't be nuclear-bright (it would clip the
+    // granulation/spots to flat white). Drop the disc multiplier when the surface is on.
+    float discMul = sun_surface_on ? 2.5 : 12.0;
+    vec3 core = sunCol * ext * (disc * discMul + corona) * discT;
     vec3 glow = sunCol * halo * haloT;
     return sun_disc_energy * (core + glow);
 }
