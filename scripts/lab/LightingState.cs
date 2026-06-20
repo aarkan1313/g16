@@ -9,8 +9,10 @@ namespace WG16.Lab;
 /// scene state and do NO scene writes; LightingComposer is the only writer. Loaded from
 /// data/{time,weather,grade}_presets.json via the project's Godot.Json pattern.
 
-/// TIME axis: the sun's day arc (position is analytic; the sky/sun-color/ambient come from the
-/// GPU-compute atmosphere, NOT stored colors — added in Task 5). `TimeOfDay` in hours.
+/// TIME axis: the sun's day arc. Position (elev+az) is analytic from the arc params (driven by
+/// TimeOfDay in Task 4). The color/sky/ambient fields below are TRANSITIONAL — they preserve the
+/// pre-atmosphere mood look during the refactor (Tasks 2–4); the GPU-compute atmosphere OVERRIDES
+/// SunColor/SunEnergy/Sky*/Ambient* in Task 6. `TimeOfDay`/`*H` in hours, elevations/azimuths in degrees.
 public sealed class TimeState
 {
     public string Name = "";
@@ -18,8 +20,26 @@ public sealed class TimeState
     public float SunriseH = 6f, SunsetH = 18f;   // daylight window (hours)
     public float PeakElev = 60f;                 // sun elevation at solar noon (degrees)
     public float AzStart = 90f, AzEnd = 270f;    // sunrise→sunset compass azimuth sweep (E→W)
+    // transitional sun + sky + ambient look (atmosphere-driven from Task 6):
+    public float SunAngle = 35f, SunAzimuth = 40f, SunEnergy = 1.3f;
+    public Color SunColor = new(1f, 0.95f, 0.86f);
+    public float Ambient = 0.4f, AmbientSky = 1.0f;
+    public Color SkyTop = new(0.30f, 0.48f, 0.74f), SkyHorizon = new(0.68f, 0.74f, 0.80f), SkyGround = new(0.22f, 0.26f, 0.22f);
 
     public TimeState Clone() => (TimeState)MemberwiseClone();
+}
+
+/// CELESTIAL sun appearance (Stage-1 disc + shadow softness). Orthogonal to the Time physics; bound to
+/// the cloud_sky.gdshader sun + the DirectionalLight shadow. Becomes part of the Celestial layer (Stage 3).
+public sealed class SunDiscState
+{
+    public string Name = "";
+    public float ShadowSoft = 1.0f, DiscAngular = 0.6f;   // sun.ShadowBlur, sun.LightAngularDistance (PCSS penumbra)
+    public float Size = 0.6f, Limb = 0.55f;
+    public float CoronaSize = 1200f, CoronaEnergy = 2.0f, HaloSize = 90f, HaloEnergy = 0.4f;
+    public float Redden = 1.0f, ReddenOnset = 0.25f, HorizonGrow = 0.6f, CloudRedden = 0.8f;
+
+    public SunDiscState Clone() => (SunDiscState)MemberwiseClone();
 }
 
 /// WEATHER axis: clouds (by preset id) + depth fog. Re-homes the existing cloud/fog systems unchanged.
