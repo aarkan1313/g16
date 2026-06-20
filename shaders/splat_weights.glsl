@@ -31,9 +31,9 @@ layout(set = 0, binding = 0, std430) restrict readonly buffer Heights {
 layout(set = 0, binding = 1, std430) restrict writeonly buffer SplatOut {
     vec4 splat[];
 };
-// Phase A: 7 smooth role weights packed into two Rgba8 weightmaps (filter_linear in
-// the fragment) — the de-blocked replacement for the nearest-index splat path.
-// wa = roles {0,1,2,3}; wb = roles {4,5,6, spare}. One packUnorm4x8 uint per texel.
+// Phase A: 7 smooth role weights as HALF-FLOAT (Rgbah) — 2 uints (packHalf2x16) per texel
+// (G-1: half kills the old Rgba8 8-bit quantization = the stair-stepped blend). filter_linear
+// in the fragment. wa = roles {0,1,2,3}; wb = roles {4,5,6, spare}.
 layout(set = 0, binding = 3, std430) restrict writeonly buffer WOutA { uint wa[]; };
 layout(set = 0, binding = 4, std430) restrict writeonly buffer WOutB { uint wb[]; };
 // Unit 4: per-texel BREAKUP masks (3rd readback). R=slope01, G=curv01 (0.5=flat),
@@ -243,8 +243,10 @@ void main(){
 
     // Phase A weightmaps (independent of the legacy dom/sec packing above).
     int wi = id.y*int(res)+id.x;
-    wa[wi] = packUnorm4x8(vec4(w[0], w[1], w[2], w[3]));
-    wb[wi] = packUnorm4x8(vec4(w[4], w[5], w[6], 0.0));
+    wa[wi*2 + 0] = packHalf2x16(vec2(w[0], w[1]));   // Rgbah R,G
+    wa[wi*2 + 1] = packHalf2x16(vec2(w[2], w[3]));   // Rgbah B,A
+    wb[wi*2 + 0] = packHalf2x16(vec2(w[4], w[5]));
+    wb[wi*2 + 1] = packHalf2x16(vec2(w[6], 0.0));
 
     // --- Unit 4: breakup masks (slope/curv/n/hh/id already computed above) ---
     float slope01 = clamp(slope, 0.0, 1.0);

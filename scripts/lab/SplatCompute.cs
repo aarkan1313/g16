@@ -76,11 +76,11 @@ public sealed class SplatCompute : IDisposable
         var pU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 2 };
         pU.AddId(pBuf);
 
-        // Phase A weightmaps: one packed uint (Rgba8) per cell (bindings 3, 4)
-        Rid waBuf = _rd.StorageBufferCreate((uint)(cells * sizeof(uint)));
+        // Phase A weightmaps: 2 packed uints (Rgbah half-float) per cell (bindings 3, 4)
+        Rid waBuf = _rd.StorageBufferCreate((uint)(cells * 2 * sizeof(uint)));
         var waU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 3 };
         waU.AddId(waBuf);
-        Rid wbBuf = _rd.StorageBufferCreate((uint)(cells * sizeof(uint)));
+        Rid wbBuf = _rd.StorageBufferCreate((uint)(cells * 2 * sizeof(uint)));
         var wbU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 };
         wbU.AddId(wbBuf);
 
@@ -101,7 +101,7 @@ public sealed class SplatCompute : IDisposable
         _rd.Sync();
 
         byte[] outBytes = _rd.BufferGetData(oBuf);
-        byte[] waBytes = _rd.BufferGetData(waBuf);   // packed Rgba8, little-endian: R=w0,G=w1,B=w2,A=w3
+        byte[] waBytes = _rd.BufferGetData(waBuf);   // packed Rgbah half-float: R=w0,G=w1,B=w2,A=w3
         byte[] wbBytes = _rd.BufferGetData(wbBuf);
         byte[] bkBytes = _rd.BufferGetData(bBuf);    // packed Rgba8: R=slope,G=curv,B=cavity,A=wear
         _rd.FreeRid(set);
@@ -113,8 +113,8 @@ public sealed class SplatCompute : IDisposable
         _rd.FreeRid(bBuf);
 
         Image splatImg = Image.CreateFromData(res, res, false, Image.Format.Rgbaf, outBytes);
-        Image waImg = Image.CreateFromData(res, res, false, Image.Format.Rgba8, waBytes);
-        Image wbImg = Image.CreateFromData(res, res, false, Image.Format.Rgba8, wbBytes);
+        Image waImg = Image.CreateFromData(res, res, false, Image.Format.Rgbah, waBytes);
+        Image wbImg = Image.CreateFromData(res, res, false, Image.Format.Rgbah, wbBytes);
         Image bkImg = Image.CreateFromData(res, res, false, Image.Format.Rgba8, bkBytes);
         return new BakeResult(
             ImageTexture.CreateFromImage(splatImg),
