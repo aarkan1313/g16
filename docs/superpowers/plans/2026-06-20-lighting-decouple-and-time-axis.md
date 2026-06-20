@@ -8,6 +8,16 @@
 
 **Tech Stack:** Godot 4.6 C# (Environment/DirectionalLight/Sky), JSON registry, `cloud_sky.gdshader`.
 
+> ## ⚠ SCOPE (revised 2026-06-20) — this push = decouple + arc + KEYFRAMED color ONLY
+> Stage 2 ships **Tasks 1–4: the decouple (`LightingComposer` one-writer + state structs), the 6-mood
+> split, and the analytic sun arc + a keyframed daytime color script.** BUILT + committed
+> (`T1 fcb0b43 · T2 25c3c30 · T2-fix 777046b · T3/T4 12cbf3a`), eye-gate owed. **Tasks 5–6 (the
+> GPU-compute atmosphere) are DEFERRED to their own future stage** — over-scoped for this push, and they
+> carry an unresolved render-thread defect (see the banked correction in Task 5 below). The header/goal's
+> "keyframed color script" is the SHIPPED Stage-2 sky; the atmosphere supersedes it only in the later
+> stage. (Tasks 7–8 — independent Weather/Grade pickers + retiring the last bundled paths — are remaining
+> decouple polish, optional for the eye-gate; the in-memory split via `MoodToStates` already decouples.)
+
 ## Global Constraints
 
 - **One writer:** after this stage, `LightingComposer.Apply()` is the ONLY code that writes scene lighting (sun transform/color/energy, env tonemap/adjust/glow/fog/ambient, sky colors, cloud knobs). No path may write these directly outside the composer.
@@ -76,7 +86,18 @@
 
 ---
 
-### Task 5: GPU-compute atmosphere — transmittance + sky-view LUTs (`AtmosphereCompute`)
+### Task 5: GPU-compute atmosphere — transmittance + sky-view LUTs (`AtmosphereCompute`)  ⏸ DEFERRED
+
+> **⛔ DEFERRED to a separate future stage (2026-06-20) — do NOT build in the decouple push.**
+> **BANKED CORRECTION (critical — the spec/steps below are WRONG on this):** a **local-RD** texture
+> (the `FieldCompute`/`CloudNoiseCompute` pattern this task cites) **CANNOT be sampled by a material** —
+> the material runs on the main render device, the local RD's texture RID is invalid there (see
+> `CloudNoiseCompute.cs:51-53` + memory `compute-to-material-callonrenderthread`). The atmosphere LUTs
+> MUST be produced via **`RenderingServer.CallOnRenderThread` + a `Texture2Drd`** bound once on the render
+> thread — exactly how `CloudVolume` feeds its dome/shadow textures to `cloud_sky.gdshader` — NOT the
+> local-RD `FieldCompute` pattern. Re-spec the atmosphere stage around CloudVolume's render-thread compute
+> seam before building. (The Stage-2 push uses the keyframed color script in Task 4 instead — no compute.)
+
 
 **Files:** Create `shaders/atmosphere_lut.glsl` (compute). Create `scripts/lab/AtmosphereCompute.cs`. Modify `scripts/lab/LightingState.cs` (`AtmosphereState` physical params).
 
@@ -90,7 +111,7 @@
 
 ---
 
-### Task 6: Atmosphere → sky shader + composer (sky color, sun tint/energy, ambient)
+### Task 6: Atmosphere → sky shader + composer (sky color, sun tint/energy, ambient)  ⏸ DEFERRED (with Task 5, future stage)
 
 **Files:** Modify `shaders/cloud_sky.gdshader` (sample sky-view LUT for `background`; the sun-disc tint already from `LIGHT0_COLOR`), `scripts/lab/CloudVolume.cs` (bind the atmosphere LUTs to `_skyMat`), `scripts/lab/LightingComposer.cs` (drive sun color/energy + ambient from the atmosphere; call `AtmosphereCompute.Bake` when sun moves).
 

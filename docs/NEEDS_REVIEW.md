@@ -118,6 +118,20 @@ fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin)
   if the sun sits in a gap.
 - **Unblocks:** Stage 2 (time-of-day driver) — being designed now in parallel (`specs/2026-06-20-sun-light-system-architecture.md`).
 
+### 3c. Lighting decouple + time-of-day driver (Stage 2 daylight) — BUILT 2026-06-20, eye-gate owed
+- **Status:** on `experiment/presentation` (`fcb0b43..12cbf3a`), builds clean. The bundled "mood" is split into
+  Time/Weather/Grade(+SunDisc) state behind one writer (`ComposeLighting`, which also absorbed the per-frame
+  `UpdateOvercast` — no more competing writers). A `time_of_day` knob drives the sun along an analytic arc +
+  a keyframed daytime color script (sky/sun-color/ambient). **GPU atmosphere deferred** to a future stage.
+- **See it:** **Light tab → `time of day (h)`** slider (or `--time=7/12/17`). Also `sunrise/sunset/sun noon
+  height`. Watch the sun travel low-E → high → low-W and the palette shift **cool dawn → bright noon → warm
+  dusk**. The 6 moods (mood dropdown) must still look like before (they reproduce via `MoodToStates`).
+- **Judge:** Does scrubbing time read as a believable day (sun arc + cohesive sky/light/ambient shift, no
+  pops)? Do the 6 moods still match their old looks? Does overcast (raise cloud coverage) still dim the sun
+  correctly? It's a **keyframed** color script, not physical atmosphere — judge "good enough day," not Rayleigh.
+- **Unblocks:** the project-wide re-roadmap (user pausing the sun/light lane here) + the future GPU-atmosphere
+  stage. Spec/plan `2026-06-20-lighting-decouple-and-time-axis*`.
+
 ### 4. Ground Unit 2 — distance detail (BUILT, default OFF, SHELVED)
 - **See it:** Detail tab → **`distance detail`** + `detail amt/scale/normal/fade dist` (or `--detail=1`). **Fly down CLOSE** — it's a ~250 m near band; does nothing from altitude.
 - **Judge:** Up close, real micro-detail vs flat? Any **swimming/crawling** of the derived normal in motion, or a fade **pop** at mid range? Far should be unchanged.

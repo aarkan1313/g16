@@ -235,13 +235,17 @@ Last updated: 2026-06-19.
   cherry-picked onto `experiment/presentation` (`b9cf52d..6a08f93`) to avoid the parked-Unit-4 terrain
   shader. ⚠ EYE-GATE still owed (visual review of the disc/halo/reddening in motion). Spec/plan under
   `docs/superpowers/{specs,plans}/2026-06-19-sun-disc-polish*`.
-- **Stage 2 — Decoupling + Time-of-day driver (daylight) — SPEC'd + PLANNED (2026-06-20), awaiting user
-  review of the spec.** Build `LightingComposer` (the one writer) + 3 pure-data state structs (Time/Weather/
-  Grade); split the 6 moods into per-axis presets (+ combo shim); drive the **Time** axis from a single
-  `time_of_day` knob = analytic sun arc (position) + a keyframed daytime color script (sun color/energy +
-  sky gradient + ambient). Weather + Grade become independent knobs. Below-horizon = dark (night = Stage 3).
-  Spec `specs/2026-06-20-lighting-decouple-and-time-axis-design.md`, plan
-  `plans/2026-06-20-lighting-decouple-and-time-axis.md` (7 tasks). NEXT after spec review: execute.
+- **Stage 2 — Decouple + Time-of-day driver (daylight) — BUILT through the arc (2026-06-20), eye-gate owed.**
+  `LightingComposer`/`ComposeLighting` is the ONE writer (absorbed `UpdateOvercast`); lighting split into
+  Time/Weather/Grade(+SunDisc) state structs; `time_of_day` knob (+ `--time`, sunrise/sunset/noon-height)
+  drives the sun along an analytic arc (feeds `OrientSun`, `--shadowcheck` PASS) + a **keyframed daytime
+  color script** (`time_presets.json` day_script) for sky/sun-color/ambient — cool dawn → bright noon →
+  warm dusk. The 6 moods still reproduce (via `MoodToStates`). Commits `fcb0b43..12cbf3a`. **The GPU-compute
+  atmosphere is DEFERRED to its own future stage** (over-scoped + a render-thread defect: local-RD textures
+  can't be sampled by a material — needs CallOnRenderThread+Texture2Drd like CloudVolume; correction banked
+  in the plan's Task 5). Remaining decouple polish (independent Weather/Grade pickers, retire last bundled
+  paths) is optional. ⮕ user eye-gates Stage 1 + this, then a project-wide re-roadmap. Spec/plan
+  `2026-06-20-lighting-decouple-and-time-axis*`.
 - **Stage 3 — Night & celestial** — extend Time through 24 h: sky darkens to night + night ambient/GI;
   **moon** (disc + phases + cool moonlight 2nd light) + **star field**; clouds occlude sun AND moon.
 - **Stage 4 — Auto day/night cycle + fantasy/exotic** — a running clock (play/pause/speed) with smooth

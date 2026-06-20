@@ -1,6 +1,14 @@
 # Spec: Lighting Decouple + Time-of-Day Driver (Stage 2 of the Sun & Light arc)
 
-Date: 2026-06-20. Status: DESIGN (awaiting user review). Owner: TBD.
+> **⚠ STATUS (2026-06-20): SHIPPED scope = decouple + arc + KEYFRAMED color script.** Stage 2 as built is
+> the `LightingComposer` (one writer), the Time/Weather/Grade(+SunDisc) state split, and the analytic sun
+> arc + a **keyframed daytime color script** (`time_presets.json` `day_script`) for sky/sun-color/ambient.
+> The **GPU-compute atmosphere section below is DEFERRED to its own future stage** (over-scoped + carries a
+> render-thread defect: a local-RD texture can't be sampled by a material — it needs CallOnRenderThread +
+> Texture2Drd like CloudVolume, NOT the FieldCompute pattern; see the plan's Task-5 banked correction).
+> Where this spec says "atmosphere replaces keyframes," read it as the LATER stage; Stage 2 ships keyframes.
+
+Date: 2026-06-20. Status: built (decouple + arc + keyframed color); atmosphere split to a future stage. Owner: TBD.
 Parent: `specs/2026-06-20-sun-light-system-architecture.md` (the 3-axis vision). Stage 1 (sun disc)
 is built; this is Stage 2.
 Touches: NEW `scripts/lab/LightingComposer.cs`, NEW `scripts/lab/LightingState.cs` (3 state structs);
