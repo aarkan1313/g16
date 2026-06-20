@@ -118,6 +118,8 @@ public partial class TerrainLabUI : Control
             case "day_sunrise":     _time.SunriseH = v; DriveTime(_time.TimeOfDay); break;
             case "day_sunset":      _time.SunsetH = v; DriveTime(_time.TimeOfDay); break;
             case "day_peak_elev":   _time.PeakElev = v; DriveTime(_time.TimeOfDay); break;
+            case "night_darkness":      _time.NightDarkness = v; DriveTime(_time.TimeOfDay); break;
+            case "night_ambient_floor": _time.NightAmbientFloor = v; DriveTime(_time.TimeOfDay); break;
             case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
             case "ssao_intensity":  env.SsaoIntensity = v; break;
             case "ssao_radius":     env.SsaoRadius = v; break;
