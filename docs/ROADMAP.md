@@ -142,9 +142,13 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
    `compute-to-material-callonrenderthread`). Toggleable sky-color provider, **default OFF = approved
    keyframed look until it wins its A/B gate**. Phased AT-1 core sky color → AT-2 aerial perspective →
    AT-3 cloud-lighting integration (AT-3 after #2 lands). Supersedes the keyframed `day_script` for sky color.
-4. **Stage 4 — ✅ SPEC'd 2026-06-20** (`specs/2026-06-20-stage4-cycle-and-fantasy-design.md`). ST4-1 auto
-   day/night cycle (play/pause/speed/scrub — buildable now, no deps) → ST4-2 fantasy/exotic via cross-system
-   presets (blood-moon/alien-sky on the existing single sun+moon). **Multiple suns/moons DEFERRED** (own spec).
+4. **Stage 4 — IN PROGRESS** (`specs/2026-06-20-stage4-cycle-and-fantasy-design.md`).
+   - **ST4-1 auto day/night cycle — ✅ GATED 2026-06-20 (live, "looks pretty good").** Clock in `_Process`
+     (play toggle + `cycle speed` + `--autotime`); manual scrub preserved. Follow-ups from the gate: **moon
+     arc decoupled from the sun** (own phase-lagged arc — FIXED) · **galaxy/Milky Way needs review** (banked,
+     NEEDS_REVIEW 10).
+   - **ST4-2 fantasy/exotic — NEXT** (cross-system presets: blood-moon/alien-sky on the single sun+moon).
+   **Multiple suns/moons DEFERRED** (own spec).
 5. **Shadow & Lighting pass** — CSM/cascade tuning, contact + soft (PCSS) shadows, the proxy-on cheap-
    shadow perf lever (~2.8 vs ~4.7 ms), SSIL re-check. Pairs with Stage-3 moonlight shadows.
 

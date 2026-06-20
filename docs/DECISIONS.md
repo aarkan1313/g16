@@ -6,6 +6,18 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #4 ST4-1 (auto day/night cycle) PASS (live) + moon arc decoupled from the sun.**
+ST4-1 auto cycle: a clock in `_Process` advances `_time.TimeOfDay` by `_timeSpeed` h/s and re-`DriveTime()`s
+(wrap 24→0); time-of-day slider synced so manual scrub still works. Light-tab `play day/night` + `cycle speed`,
+`--autotime=<speed>`. **User verdict (live): "looks pretty good"** — cycle smooth, no wrap/seam pops. Two
+follow-ups flagged: (1) **moon shared the sun's arc** (it was placed exactly anti-solar) — FIXED: the moon now
+follows its OWN arc, lagging the sun by `phase*12` hours (full = anti-solar/rises-at-dusk as before so the gated
+Stage-3 full-moon look is preserved; new = rides with the sun; quarters 90° apart), evaluated with the same arc
+function at the lagged hour. Also makes night visibility phase-correct (new moon up by day, not night).
+Elev/Az offsets still tune. (2) **galaxy/Milky Way needs review** — banked (NEEDS_REVIEW), not changed.
+CO-4 cloud presets soft-accepted ("not crazy good but hard to judge without weather/other systems") → #2 clouds
+overhaul DONE (CO-1..CO-4). Commits ST4-1 + moon-arc. NEXT: ST4-2 fantasy presets (finish #4), or #3 atmosphere.
+
 **2026-06-20 — Sun/Light #2 Clouds · CO-4 (preset library) BUILT, awaiting the picker flip-through gate.**
 6 new Clouds-tab presets composing the CO-1/2/3 levers into distinct believable skies: Fair Weather Cumulus
 (3D profile + macro variety), Cirrus Veil, Cumulus & Cirrus (layered), Overcast Stratus (shape-mode sheet),

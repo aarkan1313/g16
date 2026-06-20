@@ -311,6 +311,13 @@ is default-off so the approved look is untouched.
 - Mechanically: cumulus no-op (terrain pixel-identical); `--shadowcheck` PASS r=0.811 (stratus); cirrus appears
   (sky diff 2.0) + night-fades. Plan `plans/2026-06-20-clouds-co2-types.md`. **On PASS → CO-3 anti-repetition/horizon.**
 
+### 10. Stars + Milky Way (galaxy) — ⚑ user-flagged needs review (2026-06-20, during the ST4-1 cycle gate)
+Surfaced while running the auto day/night cycle: the **galaxy/Milky Way (and stars) need a proper look-pass**.
+3d was given a conditional "pass for now"; the running cycle makes the night sky easier to scrutinize.
+- **See it:** run a night (`--time=23` or `--autotime=1` and wait for night), look up. Stars tab knobs on the **Night** tab (`star *`, `mw *`).
+- **Judge:** Milky Way band believable (not blocky/banded/too uniform)? star density/twinkle/brightness right? rotation rate? does it read good in motion as the cycle runs? Any crawl/shimmer.
+- **Unblocks:** finalizing the night sky. Likely needs its own small spec→build if the look needs real work.
+
 ---
 
 ## ⏸ Not "review" — build-when-you-can-see (eye-gated, parked)

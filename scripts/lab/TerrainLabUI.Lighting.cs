@@ -89,13 +89,20 @@ public partial class TerrainLabUI : Control
             _cloud.SetSunHorizonGrow(_sunDisc.HorizonGrow); _cloud.SetSunCloudRedden(_sunDisc.CloudRedden);
             _cloud.SetNightFactor(_nightFactor);
 
-            // ── MOON (Stage 3b/3c): anti-solar by default (opposite the sun → up at night) + tunable
-            //    elev/az offsets. Orient the moon LIGHT via RotationDegrees EXACTLY like OrientSun (known-
-            //    correct: basis.Z = toward the body, so the shader LIGHT = +moonDir and terrain NoL>0),
-            //    then read moonDir back off the node so the disc and the moonlight are always consistent. ──
+            // ── MOON (Stage 3b/3c): OWN arc, decoupled from the sun. The moon's elongation from the sun is
+            //    set by its PHASE — full (1) is anti-solar (rises at dusk), new (0) rides with the sun,
+            //    quarters 90° apart — so the moon lags the sun by phase*12 h and follows its own daily arc
+            //    (same arc function as the sun, evaluated at the lagged hour), NOT a mirror of the sun. This
+            //    also makes night visibility phase-correct (a new moon is up by day, not night). + tunable
+            //    elev/az offsets. Orient the LIGHT via RotationDegrees EXACTLY like OrientSun (basis.Z = toward
+            //    the body), then read moonDir back off the node so the disc + moonlight stay consistent. ──
             EnsureMoonLight();
-            float moonElev = -_time.SunAngle + _moon.ElevOffset;     // anti-solar elevation (+ when sun is below)
-            float moonAz = _time.SunAzimuth + 180f + _moon.AzOffset; // opposite compass bearing
+            float moonDayLen = Mathf.Max(_time.SunsetH - _time.SunriseH, 1e-3f);
+            float moonHour = _time.TimeOfDay - _moon.Phase * 12f;        // lag the sun by phase*12 hours
+            moonHour -= Mathf.Floor(moonHour / 24f) * 24f;              // wrap to [0,24)
+            float mf = (moonHour - _time.SunriseH) / moonDayLen;        // 0 at moon-rise .. 1 at moon-set
+            float moonElev = _time.PeakElev * Mathf.Sin(Mathf.Pi * mf) + _moon.ElevOffset;
+            float moonAz = Mathf.Lerp(_time.AzStart, _time.AzEnd, mf) + _moon.AzOffset;
             // Set LOCAL rotation (valid even before the deferred parent-add lands) and read the LOCAL basis.Z.
             // The MoonLight parents to TerrainLabRoot (identity transform), so local basis == world toward-moon —
             // same convention as the sun, but no GlobalTransform read that would error while not yet in the tree.
