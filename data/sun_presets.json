@@ -1,5 +1,5 @@
 {
-  "active": "neutral",
+  "active": "realistic_midday",
   "presets": {
     "neutral":          { "sun_surface_on": false, "sun_size": 0.6, "sun_limb": 0.55 },
     "realistic_midday": { "sun_surface_on": true, "sun_size": 2.0, "sun_limb": 0.7, "sun_surface_cells": 12.0, "sun_surface_contrast": 0.2, "sun_surface_spots": 0.12, "sun_surface_churn": 0.08, "sun_surface_warm": 0.25, "sun_halo_energy": 0.3 },

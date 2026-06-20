@@ -13,6 +13,7 @@ public partial class TerrainLabUI : Control
 {
     private readonly List<(string name, Godot.Collections.Dictionary values)> _sunPresets = new();
     private int _sunPresetIdx;
+    private int _sunActiveIdx = -1;   // the "active" preset to apply at startup (-1 = none/neutral)
 
     private void LoadSunPresets()
     {
@@ -25,7 +26,17 @@ public partial class TerrainLabUI : Control
         if (!root.ContainsKey("presets")) { return; }
         var pres = root["presets"].AsGodotDictionary();
         foreach (var key in pres.Keys) { _sunPresets.Add((key.AsString(), pres[key].AsGodotDictionary())); }
-        GD.Print($"[sunpresets] loaded {_sunPresets.Count}");
+        string active = root.ContainsKey("active") ? root["active"].AsString() : "";
+        _sunActiveIdx = _sunPresets.FindIndex(p => p.name == active);
+        if (_sunActiveIdx >= 0) { _sunPresetIdx = _sunActiveIdx; }   // review cycle starts on the default
+        GD.Print($"[sunpresets] loaded {_sunPresets.Count}, active='{active}' (idx {_sunActiveIdx})");
+    }
+
+    /// Apply the JSON "active" preset (the everyday default). Called at startup when no --sunpreset.
+    private void ApplyActiveSunPreset()
+    {
+        LoadSunPresets();
+        if (_sunActiveIdx >= 0) { ApplySunPreset(_sunActiveIdx); }
     }
 
     /// Build the Light-tab dropdown (called from the Light-tab UI build).
