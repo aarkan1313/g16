@@ -6,6 +6,22 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light Stage 3a (night sky) BUILT; banked key-2 RD errors root-caused as benign.**
+Resumed the Sun & Light lane at Stage 3 (Night & Celestial). Built 3a (behind defaults): `DriveTime` is
+now a continuous 24 h sun arc (removing the day-clamp lets elevation go negative at night), a master
+`_nightFactor` (0 day → 1 deep night, smoothstep of sun depth below horizon), night color anchors in
+`time_presets.json` `day_script` (20/22/0/2/4 h), `night_darkness`/`night_ambient_floor` Light-tab knobs,
+`time_of_day` range → 0-24, and a sun horizon-gate in `cloud_sky.gdshader` so the disc/corona/halo vanish
+below the horizon. Self-check shots confirm believable dusk→night→dawn, dark night, no ghost sun, daylight
+unchanged. **Banked 3a.4 RD errors investigated (systematic-debugging): they are benign radiance-rebake log
+spam** — `ComposeLighting` re-writes the sun DirectionalLight → realtime sky-radiance re-bake → uniform set
+briefly references `cloud_rd_tex`/dependent material (binding 1/34) → "not valid texture / us is null", 3
+lines per discrete lighting change then quiet, clean exit, no crash, no visual impact. Same class as two
+already-documented cases (CloudVolume frame-1 + the `63c59ff` env.Sky-swap fix). `--time` adds ZERO errors
+over baseline. **Decision: accept + document** (broadened the CloudVolume comment) — a real fix touches the
+fragile realtime-radiance↔Texture2Drd seam (cross-chat cloud lane) for cosmetic spam; not worth the risk.
+Plan: `plans/2026-06-20-night-and-celestial.md`. Awaiting the live 3a eye-gate before building 3b (moon).
+
 **2026-06-20 — Ground GM batch eye-gate (live, review key 3 / GM1 palette): textures OK, SURFACE COMPOSITING
 FAILS → lane redirects to fixing the surface.** Drove key 3 with the user; cycled palettes
 alpine_green→alpine_stone→arid under midday-neutral light (mood 2, POM/height/variation OFF = the approved

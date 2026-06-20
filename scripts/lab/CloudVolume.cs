@@ -141,10 +141,14 @@ public partial class CloudVolume : Node
     private void InstallCloudSky() { if (_env != null && _cloudSky != null) { _env.Sky = _cloudSky; } }
     private void RestoreOrigSky() { if (_env != null && _origSky != null) { _env.Sky = _origSky; } }
 
-    // One benign "Texture (binding 1) not a valid texture" error prints on the very
-    // first frame: the sky material builds its uniform set before the render-thread
-    // RID lands on the Texture2Drd. It self-heals on frame 2 (clouds render fine, no
-    // repeat). Not worth more plumbing to suppress — documented so it's not chased.
+    // Benign "Texture (binding 1 = cloud_rd_tex; 34 = dependent terrain material) not a valid
+    // texture / us is null" errors: the realtime radiance cubemap re-bakes whenever the sky is
+    // dirtied — on frame 1 (uniform set built before the render-thread RID lands) AND on any
+    // LIGHTING CHANGE (ComposeLighting re-writes the sun DirectionalLight, which re-dirties sky
+    // radiance; re-bake briefly references the Texture2Drd). 3 lines per discrete change, then
+    // quiet — clean exit, no crash, no visual impact (verified 3a.4 2026-06-20). Eliminating it
+    // means touching the realtime-radiance↔Texture2Drd seam (fragile; see memory
+    // compute-to-material-callonrenderthread) for cosmetic spam — accepted + documented, not chased.
     private bool _skyInstalled;
     public override void _Process(double delta)
     {
