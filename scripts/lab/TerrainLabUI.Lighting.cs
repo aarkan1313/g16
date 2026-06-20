@@ -14,6 +14,8 @@ public partial class TerrainLabUI : Control
     private SunDiscState _sunDisc = new();
     private WeatherState _weather = new();
     private GradeState _grade = new();
+    private MoonState _moon = new();
+    private Vector3 _lastMoonDir = Vector3.Zero;   // last composed moon direction (for --lookatmoon)
     private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
 
     /// Split a legacy mood dict into the axis states (same keys + defaults as the old ApplyMood).
@@ -80,6 +82,19 @@ public partial class TerrainLabUI : Control
             _cloud.SetSunRedden(_sunDisc.Redden); _cloud.SetSunReddenOnset(_sunDisc.ReddenOnset);
             _cloud.SetSunHorizonGrow(_sunDisc.HorizonGrow); _cloud.SetSunCloudRedden(_sunDisc.CloudRedden);
             _cloud.SetNightFactor(_nightFactor);
+
+            // ── MOON (Stage 3b): default anti-solar (up at night) + tunable elev/az offsets. The disc
+            //    reuses the sun-surface system; rendered + gated to night in cloud_sky.gdshader. ──
+            Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();   // +Z = toward the sun
+            Vector3 anti = -toSun;
+            float mElev = Mathf.Asin(Mathf.Clamp(anti.Y, -1f, 1f)) + Mathf.DegToRad(_moon.ElevOffset);
+            float mAz = Mathf.Atan2(anti.Z, anti.X) + Mathf.DegToRad(_moon.AzOffset);
+            float ce = Mathf.Cos(mElev);
+            Vector3 moonDir = new Vector3(ce * Mathf.Cos(mAz), Mathf.Sin(mElev), ce * Mathf.Sin(mAz)).Normalized();
+            _lastMoonDir = moonDir;
+            _cloud.SetMoon(moonDir, _moon.Color, _moon.DiscEnergy);
+            _cloud.SetMoonAppearance(_moon.Phase, _moon.Size, _moon.Limb, _moon.HaloSize, _moon.HaloEnergy);
+            _cloud.SetMoonSurface(_moon.SurfCells, _moon.SurfContrast, _moon.SurfSpots, _moon.SurfChurn);
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by

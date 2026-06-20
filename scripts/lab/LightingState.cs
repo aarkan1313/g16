@@ -57,6 +57,23 @@ public sealed class SunDiscState
     public SunDiscState Clone() => (SunDiscState)MemberwiseClone();
 }
 
+/// CELESTIAL — the MOON (Stage 3b). Pure data; orthogonal to the Time physics. Default position is
+/// anti-solar (up at night) with tunable elev/az offsets (decoupled, per the tunable ethos). The disc
+/// reuses the sun-surface system (sun_fbm) for maria/craters; `Phase` drives a terminator across the disc.
+public sealed class MoonState
+{
+    public string Name = "";
+    public float Phase = 1.0f;            // 0 = new (dark) · 0.5 = half · 1 = full
+    public float ElevOffset = 0f, AzOffset = 0f;   // degrees off the anti-solar default
+    public float Size = 1.2f, Limb = 0.6f;         // angular radius (deg) + limb darkening
+    public float DiscEnergy = 0.9f;                // overall brightness (cool, dimmer than the sun)
+    public float HaloSize = 120f, HaloEnergy = 0.3f;
+    public float SurfCells = 8f, SurfContrast = 0.5f, SurfSpots = 0.4f, SurfChurn = 0f;  // maria/crater mottle
+    public Color Color = new(0.85f, 0.88f, 1.0f);  // cool moonlight white
+
+    public MoonState Clone() => (MoonState)MemberwiseClone();
+}
+
 /// WEATHER axis: clouds (by preset id) + depth fog. Re-homes the existing cloud/fog systems unchanged.
 public sealed class WeatherState
 {

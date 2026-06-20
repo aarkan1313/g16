@@ -474,6 +474,29 @@ public partial class CloudVolume : Node
     private float _nightFactor = 0f;
     public void SetNightFactor(float v) { _nightFactor = Mathf.Clamp(v, 0f, 1f); _skyMat?.SetShaderParameter("night_factor", _nightFactor); }
 
+    // --- MOON (Stage 3b): custom-uniform disc (independent of a 2nd light; moonlight is 3c) ---
+    public void SetMoon(Vector3 dir, Color color, float energy)
+    {
+        _skyMat?.SetShaderParameter("moon_dir", dir.Normalized());
+        _skyMat?.SetShaderParameter("moon_color", new Vector3(color.R, color.G, color.B));
+        _skyMat?.SetShaderParameter("moon_disc_energy", Mathf.Max(energy, 0f));
+    }
+    public void SetMoonAppearance(float phase, float size, float limb, float haloSize, float haloEnergy)
+    {
+        _skyMat?.SetShaderParameter("moon_phase", Mathf.Clamp(phase, 0f, 1f));
+        _skyMat?.SetShaderParameter("moon_size", Mathf.Clamp(size, 0.1f, 12f));
+        _skyMat?.SetShaderParameter("moon_limb", Mathf.Clamp(limb, 0f, 1f));
+        _skyMat?.SetShaderParameter("moon_halo_size", Mathf.Clamp(haloSize, 8f, 400f));
+        _skyMat?.SetShaderParameter("moon_halo_energy", Mathf.Max(haloEnergy, 0f));
+    }
+    public void SetMoonSurface(float cells, float contrast, float spots, float churn)
+    {
+        _skyMat?.SetShaderParameter("moon_surf_cells", Mathf.Clamp(cells, 1f, 40f));
+        _skyMat?.SetShaderParameter("moon_surf_contrast", Mathf.Clamp(contrast, 0f, 1f));
+        _skyMat?.SetShaderParameter("moon_surf_spots", Mathf.Clamp(spots, 0f, 1f));
+        _skyMat?.SetShaderParameter("moon_surf_churn", Mathf.Clamp(churn, 0f, 1f));
+    }
+
     // --- sun SURFACE (procedural granulation) — material-uniform setters ---
     public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }
     public void SetSunSurfaceCells(float v)   { _skyMat?.SetShaderParameter("sun_surface_cells", v); }

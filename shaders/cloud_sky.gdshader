@@ -39,6 +39,20 @@ uniform float sun_surface_churn : hint_range(0.0, 1.0) = 0.15;     // animation 
 uniform float sun_surface_warm  : hint_range(0.0, 1.0) = 0.3;      // cell-vs-spot warm shift
 uniform vec3  sun_surface_color : source_color = vec3(0.0);        // fantasy base override (black = off)
 
+// --- MOON (Stage 3b): custom-uniform disc, gated to night. Reuses sun_fbm for maria/craters. ---
+uniform vec3  moon_dir = vec3(0.0, 0.7, 0.7);                      // direction TO the moon (pushed from C#, normalized)
+uniform vec3  moon_color : source_color = vec3(0.85, 0.88, 1.0);  // cool moonlight white
+uniform float moon_disc_energy = 0.9;
+uniform float moon_size = 1.2;        // angular radius in DEGREES
+uniform float moon_limb = 0.6;        // limb darkening
+uniform float moon_phase = 1.0;       // 0 new (dark) .. 0.5 half .. 1 full
+uniform float moon_halo_size : hint_range(8.0, 400.0) = 120.0;   // higher = tighter (a subtle moon glow, not a blob)
+uniform float moon_halo_energy = 0.3;
+uniform float moon_surf_cells : hint_range(1.0, 40.0) = 8.0;
+uniform float moon_surf_contrast : hint_range(0.0, 1.0) = 0.5;
+uniform float moon_surf_spots : hint_range(0.0, 1.0) = 0.4;
+uniform float moon_surf_churn : hint_range(0.0, 1.0) = 0.0;
+
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
 uniform vec3 ground_color : source_color = vec3(0.22, 0.26, 0.22);
@@ -144,11 +158,66 @@ vec3 sun_layers(vec3 rd) {
     return sun_disc_energy * (core + glow) * horizonGate;
 }
 
+// MOON (Stage 3b): mirrors sun_layers — a disc at moon_dir with limb darkening, a reused-sun_fbm
+// surface (maria + crater mottle), a phase terminator, and a soft cool halo. Gated to night
+// (night_factor) and to above-horizon, occluded per-pixel by clouds (same as the sun).
+vec3 moon_layers(vec3 rd) {
+    float vis = night_factor * smoothstep(-0.04, 0.02, moon_dir.y);   // only at night + above the horizon
+    if (vis <= 0.0) { return vec3(0.0); }
+    float cosM = dot(rd, moon_dir);
+    float discEdge = cos(radians(moon_size));
+    float mu = clamp((cosM - discEdge) / max(1.0 - discEdge, 1e-6), 0.0, 1.0);
+    float discMask = smoothstep(0.0, 0.04, mu);
+    float limb = mix(1.0, mix(0.45, 1.0, sqrt(mu)), moon_limb);
+    float disc = discMask * limb;
+
+    // disc-local frame (world-anchored → no swimming), de-foreshortened like the sun surface
+    vec3 S = moon_dir;
+    vec3 upv = abs(S.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    vec3 T = normalize(cross(upv, S));
+    vec3 Bt = cross(S, T);
+    float rad = max(sin(radians(moon_size)), 1e-4);
+    vec2 p = vec2(dot(rd, T), dot(rd, Bt)) / rad;     // unit-disc coords (|p|<=1 inside)
+    float r2 = clamp(dot(p, p), 0.0, 1.0);
+    float ball = sqrt(1.0 - r2);                      // sphere foreshorten (1 centre → 0 rim)
+    vec2 sph = p / (ball + 0.35);
+
+    if (discMask > 0.0) {
+        // maria (low-freq dark seas) + finer crater mottle, reusing the sun granulation field
+        vec2 q = sph * moon_surf_cells + vec2(moon_surf_churn * TIME);
+        float gran = (sun_fbm(q) - 0.5) * 2.0;
+        float granAmt = moon_surf_contrast * 0.5 * ball;
+        vec2 qs = sph * (moon_surf_cells * 0.5) + vec2(5.3, 1.7);
+        float maria = smoothstep(0.55, 0.40, sun_fbm(qs)) * moon_surf_spots * ball;
+        disc *= max((1.0 + granAmt) * (1.0 - 0.6 * maria), 0.0);
+    }
+
+    // PHASE terminator: lit fraction from a phase-derived light direction over the disc-sphere normal.
+    // phase 1 → light toward the viewer (full), 0.5 → from the side (half), 0 → behind (new/dark).
+    float angle = (1.0 - moon_phase) * PI;
+    vec3 L = vec3(sin(angle), 0.0, cos(angle));
+    vec3 n = normalize(vec3(p.x, p.y, ball));
+    float lit = smoothstep(-0.08, 0.08, dot(n, L));
+    disc *= lit;
+
+    float halo = pow(max(cosM, 0.0), moon_halo_size) * moon_halo_energy;
+
+    // per-pixel cloud occlusion (same mechanism as the sun)
+    float aPix = (cloud_enabled && rd.y > 0.0) ? clamp(texture(cloud_rd_tex, dir_to_uv(rd)).a, 0.0, 1.0) : 0.0;
+    float discT = (1.0 - aPix);
+    float haloT = (1.0 - aPix * 0.5);
+
+    vec3 core = moon_color * disc * 3.0 * discT;
+    vec3 glow = moon_color * halo * haloT;
+    return moon_disc_energy * vis * (core + glow);
+}
+
 void sky(){
     vec3 rd = EYEDIR;
     vec3 bg = background(rd);
 
     bg += sun_layers(rd);
+    bg += moon_layers(rd);
 
     vec3 outColor = bg;
     if (cloud_enabled && rd.y > 0.0){

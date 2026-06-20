@@ -133,7 +133,14 @@ public partial class TerrainLabUI : Control
         Set("cloud_coverage", NF("coverage", 0.3f));
         Set("night_darkness", NF("darkness", 1.0f));
         Set("night_ambient_floor", NF("floor", 0.02f));
-        Set("time_of_day", NF("time", 12.0f));   // last: DriveTime re-applies with the darkness/floor above
+        bool hasMoon = s.ContainsKey("moonphase");
+        if (hasMoon) { _moon.Phase = NF("moonphase", 1.0f); }   // 3b: per-state moon phase
+        Set("time_of_day", NF("time", 12.0f));   // last: DriveTime re-applies with the darkness/floor/moon above
+        if (hasMoon)   // aim the camera at the (anti-solar, often high) moon so the keypress lands on it
+        {
+            var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+            if (cam != null && _lastMoonDir != Vector3.Zero) { cam.LookAt(cam.GlobalPosition + _lastMoonDir, Vector3.Up); }
+        }
         string label = s.ContainsKey("label") ? s["label"].AsString() : $"night state {n}";
         _reviewLabel.Text = $"NIGHT GATE   {label}\nFly in motion. Light tab: 'time of day' / 'night darkness' / 'night ambient floor' to fine-tune. (no moon/stars yet = 3b+)";
         GD.Print($"[review-night] {label}");

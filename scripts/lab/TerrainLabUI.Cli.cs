@@ -33,9 +33,11 @@ public partial class TerrainLabUI : Control
     private float _godrayHpCli = -1f;   // --godrayhp=N → high-pass amount (0 = old wash+ring, 1 = clean beams); A/B verify
     private int _glowCli = -1;   // --glow=0/1 → force env glow off/on (isolate post-processing effects)
     private bool _lookAtSunCli = false;   // --lookatsun → aim camera at the sun on startup (god-ray verify)
+    private bool _lookAtMoonCli = false;  // --lookatmoon → aim camera at the moon on startup (3b moon gate)
     private float _timeCli = -1f;   // --time=H → drive the decoupled Time axis (sun arc + day color script)
     private bool _nightGate;        // --nightgate=1 → review keys 1-9 jump to data/review_night.json states (Stage 3a)
     private float _nightDarkCli = -1f;   // --nightdark=N → set night_darkness (night brightness lever) at startup for A/B
+    private float _moonPhaseCli = -1f;   // --moonphase=N → set moon_phase (0 new .. 1 full) at startup for A/B
     private int _terrainArCli = -1;
     private int _terrainDetailCli = -1;
     private int _groundRulesCli = -1;
@@ -90,9 +92,11 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--godrayab=")) { _godrayAbPath = a.Substring("--godrayab=".Length); _godrayAbT = 0.0; }
             else if (a.StartsWith("--glow=")) { _glowCli = a.Substring("--glow=".Length) == "1" ? 1 : 0; }
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
+            else if (a == "--lookatmoon") { _lookAtMoonCli = true; }
             else if (a.StartsWith("--time=")) { float.TryParse(a.Substring("--time=".Length), out _timeCli); }
             else if (a.StartsWith("--nightgate=")) { _nightGate = a.Substring("--nightgate=".Length) == "1"; }
             else if (a.StartsWith("--nightdark=")) { float.TryParse(a.Substring("--nightdark=".Length), out _nightDarkCli); }
+            else if (a.StartsWith("--moonphase=")) { float.TryParse(a.Substring("--moonphase=".Length), out _moonPhaseCli); }
             else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--detail=")) { _terrainDetailCli = a.Substring("--detail=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--groundrules=")) { _groundRulesCli = a.Substring("--groundrules=".Length) == "1" ? 1 : 0; }

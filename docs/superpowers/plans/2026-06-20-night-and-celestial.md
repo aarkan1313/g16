@@ -235,13 +235,34 @@ git commit -am "Stage 3a: harden key-2 re-apply cloud rebind (zero mid-session R
 
 ---
 
-## SUB-PHASE 3b — Moon disc  *(FORWARD DESIGN — detail after 3a PASSES)*
+## SUB-PHASE 3b — Moon disc  ← BUILDING NOW (3a passed)
 
-**Approach (from spec):** add `CelestialState` (pure data) to `LightingState.cs` — `moon { phase 0..1, elevOffset/azOffset (own arc), size, limb, surface{cells,contrast,spots,churn,warm}, halo, color }`. Position the moon in `DriveTime` (default ~anti-solar, decoupled per the tunable ethos). Add `moon_layers(rd)` to `cloud_sky.gdshader` mirroring `sun_layers()`: limb-darkened disc at `moon_dir`, reuse `sun_fbm` for maria/craters, a **phase terminator** (darken where the disc normal faces away from the phase-derived light dir — soft smoothstep, no seam), cool tint, soft halo, per-pixel cloud occlusion (same `cloud_rd_tex` mechanism as the sun). Composited in `sky()` after `sun_layers`. Fold the **banked Stage-1 sun polish** (limb/size/corona defaults) in here since we're tuning discs. New uniforms via `CloudVolume` setters (`SetMoon*`). Gate moon visibility by `night_factor`.
+**Outcome:** a believable, textured, phased moon hangs in the night sky — positioned (default anti-solar,
+tunable), limb-darkened, maria/crater mottle (reuses `sun_fbm`), a phase terminator that tracks `moon_phase`
+new→half→full, a cool halo, occluded per-pixel by clouds, gated to night. No moonlight on terrain yet (3c).
 
-**Files:** `LightingState.cs` (+CelestialState), `TerrainLabUI.Lighting.cs` (position/push moon), `cloud_sky.gdshader` (+`moon_layers`, moon uniforms), `CloudVolume.cs` (+`SetMoon*`), `data/lab_controls.json` (moon knobs), `TerrainLabUI.Apply.cs` (routing).
+### Task 3b.1: CelestialState data + moon position plumbing
+**Files:** `LightingState.cs` (+`CelestialState`/`MoonState`), `TerrainLabUI.Lighting.cs` (compute+push moon dir in `ComposeLighting`), `CloudVolume.cs` (+`SetMoon*` setters + uniforms), `cloud_sky.gdshader` (declare moon uniforms).
+- `MoonState` (pure data): `Phase 0..1=1`, `ElevOffset=0`, `AzOffset=0`, `Size=1.2`, `Limb=0.6`, `HaloSize=60`, `HaloEnergy=0.5`, surface `Cells=8/Contrast=0.5/Spots=0.4/Churn=0`, `DiscEnergy=0.9`, `Color=(0.85,0.88,1.0)`.
+- In `ComposeLighting`: `toSun = -sun.forward`; `antiSun=-toSun`; apply Elev/AzOffset → `moonDir`; push `SetMoon(moonDir,color,energy)` + phase/size/limb/halo/surface. Moon dir is a **custom uniform** (`moon_dir`), independent of any 2nd light (that's 3c).
+- Shader: declare `uniform vec3 moon_dir; uniform float moon_size, moon_limb, moon_phase, moon_disc_energy, moon_halo_size, moon_halo_energy, moon_surf_cells, moon_surf_contrast, moon_surf_spots, moon_surf_churn; uniform vec3 moon_color;`
+- Verify: build+import clean (no render yet).
 
-**Gate:** reads as a believable phased, textured moon; terminator tracks `moon_phase` across new→half→full; clouds occlude it per-pixel; no seam between terminator and surface mottle. PASS unblocks 3c.
+### Task 3b.2: moon_layers() render — disc + surface + phase + halo + gates + occlusion
+**Files:** `cloud_sky.gdshader` (+`moon_layers(rd)`, call in `sky()` after `sun_layers`).
+- Mirror `sun_layers`: disc mask at `moon_dir`, limb darkening (`moon_limb`), de-foreshortened surface via `sun_fbm` (maria + craters using `moon_surf_*`), cool tint, soft halo.
+- **Phase terminator:** disc-pixel normal `n=(p.x,p.y,ball)`; light dir from phase `angle=(1-moon_phase)*PI`, `L=vec3(sin(angle),0,cos(angle))`; `lit=smoothstep(-0.06,0.06,dot(n,L))`; multiply disc by `lit` (full=1 at phase 1, dark at phase 0, half-lit at 0.5).
+- **Gates:** `horizonGate=smoothstep(-0.04,0,moon_dir.y)` × `night_factor` (moon only at night, only above horizon).
+- **Cloud occlusion:** per-pixel `cloud_rd_tex` alpha at `rd` (same as the sun fix).
+- Verify: auto-shots at `--time=23` with `--moonphase=0/0.5/1` (add a tiny CLI) — disc visible, phase terminator tracks.
+
+### Task 3b.3: controls + routing + fold banked sun-disc polish
+**Files:** `data/lab_controls.json` (moon knobs, Light tab), `TerrainLabUI.Apply.cs` (route `moon_*` ids), `CloudVolume.cs`/`TerrainLabUI.Lighting.cs` (sun-disc polish defaults: bump `sun_limb` + size/corona to the values the eye-gate liked).
+- Add `--moonphase=`/`--moon=` CLI + a `review_night.json`-style hook (extend night gate states with a `moonphase` field).
+- Verify: build+import; night-gate relaunch for the eye.
+
+### 3b EYE-GATE
+Believable phased, textured moon; terminator tracks `moon_phase` new→half→full; cool halo; clouds occlude it per-pixel; sits correctly anti-solar (and offsets move it). Sun-disc polish reads better too. PASS unblocks 3c.
 
 ## SUB-PHASE 3c — Moonlight  *(FORWARD DESIGN — detail after 3b PASSES)*
 

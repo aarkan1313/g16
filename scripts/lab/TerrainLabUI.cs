@@ -152,6 +152,7 @@ public partial class TerrainLabUI : Control
         if (_godrayHpCli >= 0f) { _godraysScreen?.SetHighpass(_godrayHpCli); }   // --godrayhp=N A/B the high-pass
         if (_glowCli >= 0) { GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.GlowEnabled = _glowCli == 1; }   // --glow diagnostic
         if (_nightDarkCli >= 0f) { _time.NightDarkness = _nightDarkCli; }   // --nightdark=N: night brightness lever (A/B)
+        if (_moonPhaseCli >= 0f) { _moon.Phase = _moonPhaseCli; }           // --moonphase=N: moon phase (A/B)
         if (_timeCli >= 0f) { DriveTime(_timeCli); }   // --time=H drives the decoupled Time axis (overrides the spawn mood's sun/sky)
         // --lookatsun: aim the camera straight at the sun (for god-ray verification — removes the
         // guesswork of matching --cam yaw to the sun azimuth).
@@ -161,6 +162,12 @@ public partial class TerrainLabUI : Control
             var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
             Vector3 toSun = sunN.GlobalTransform.Basis.Z.Normalized();   // +Basis.Z = toward sun
             camN.LookAt(camN.GlobalPosition + toSun, Vector3.Up);
+        }
+        // --lookatmoon: aim the camera at the moon (anti-solar, often high) for the 3b moon gate.
+        if (_lookAtMoonCli && _lastMoonDir != Vector3.Zero)
+        {
+            var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+            camN.LookAt(camN.GlobalPosition + _lastMoonDir, Vector3.Up);
         }
     }
 
