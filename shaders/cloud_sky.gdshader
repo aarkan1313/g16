@@ -16,6 +16,7 @@ uniform int cloud_debug = 0;   // 0 normal | 1 show raw cloud tex
 // light's energy globally (terrain gloom), but the VISIBLE sun disc must stay bright — a cloud
 // in front occludes it via the dome composite, total coverage elsewhere must NOT dim it.
 uniform float sun_disc_energy = 1.3;
+uniform float night_factor = 0.0;   // 0 day .. 1 deep night (drives sun horizon-gate; moon/star fade later)
 uniform float sun_size = 0.6;    // angular disc radius in DEGREES (visible sun size)
 uniform float sun_limb = 0.55;   // limb darkening: 0 = flat disc, 1 = strong center→rim falloff
 uniform float sun_corona_size : hint_range(40.0, 6000.0) = 1200.0;  // tight inner bloom (higher = tighter)
@@ -139,7 +140,8 @@ vec3 sun_layers(vec3 rd) {
     float discMul = sun_surface_on ? 2.5 : 12.0;
     vec3 core = sunCol * ext * (disc * discMul + corona) * discT;
     vec3 glow = sunCol * halo * haloT;
-    return sun_disc_energy * (core + glow);
+    float horizonGate = smoothstep(-0.04, 0.0, LIGHT0_DIRECTION.y);   // 1 above horizon, 0 once below
+    return sun_disc_energy * (core + glow) * horizonGate;
 }
 
 void sky(){
