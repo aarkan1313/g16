@@ -28,6 +28,14 @@ combination valid — exactly as in reality (any weather, at any time of day, un
         │  contrast, saturation, color tint  │     grade tint, bloom character
         │  bloom/glow character              │
         └────────────────────────────────────┘
+        ┌────────── ATMOSPHERE (GPU compute) ┐    the SKY renderer — physically-based scattering
+        │  Hillaire-style dynamic LUTs:      │   — transmittance + multi-scatter + sky-view LUTs baked
+        │  transmittance · multiscatter ·    │     on a local RenderingDevice (the cloud/field compute
+        │  sky-view, re-baked when sun moves │     pattern), sampled in cloud_sky.gdshader. PRODUCES the
+        │  → sky color, sun tint, ambient,   │     sky gradient + sun color/energy + ambient + aerial as
+        │  aerial perspective, for any elev  │     a function of the TIME-driven sun direction. Replaces
+        └────────────────────────────────────┘     keyframed color stops. Extends into night (Stage 3).
+
         ┌────────── CELESTIAL layer ────────┐    sky-body CONTENT, positioned by TIME
         │  sun disc (Stage 1 ✅)             │   — moon(s)+phases+moonlight, star field, fantasy
         │  moon(s), stars, fantasy bodies    │     (blood moon, colored/multiple suns/moons)
@@ -65,15 +73,17 @@ works as "pick one Time + one Weather + one Grade" (a named combo can still set 
 - **Stage 1 — Sun disc polish ✅ BUILT (2026-06-19→20), eye-gate owed.** `sun_layers()` in
   `cloud_sky.gdshader`. (Spec/plan `2026-06-19-sun-disc-polish*`.)
 
-- **Stage 2 — Decoupling + Time-of-day driver (daylight).** Build `LightingComposer` + the three state
-  structs; split the 6 moods into Time/Weather/Grade presets; implement the **Time axis as a physical
-  daylight driver**: a `time_of_day` knob (e.g. 5.0–19.0 h, daytime) drives sun elevation+azimuth along
-  a tunable day arc, sun color-temperature + energy, the sky gradient (zenith blue → warm horizon at
-  low sun), and ambient. Stage-1's sun reddening becomes automatic (driven by the same elevation).
-  Weather + Grade are independent knobs/presets. Below-horizon = simply dark (night content = Stage 3).
-  **Acceptance:** scrub `time_of_day` across the day and the sun travels + sky/light shift physically
-  and cohesively; set any Weather and any Grade independently; the 6 old moods are reproducible as
-  Time×Weather×Grade combos. Detailed spec: `2026-06-20-lighting-decouple-and-time-axis-design.md`.
+- **Stage 2 — Decoupling + Time-of-day driver + GPU-compute atmosphere (daylight).** Build
+  `LightingComposer` + the three state structs; split the 6 moods into Time/Weather/Grade presets;
+  implement the **Time axis**: a `time_of_day` knob (e.g. 5.0–19.0 h) drives the sun's elevation+azimuth
+  along a tunable analytic day arc. Build the **GPU-compute atmosphere** (Hillaire LUTs on a local RD) as
+  the sky renderer — it produces the sky gradient + sun color/energy + ambient from the sun direction
+  (replacing keyframed color stops). Stage-1's sun reddening + the atmosphere both key off the same sun
+  elevation. Weather + Grade are independent knobs/presets. Below-horizon = dark (night = Stage 3).
+  **Acceptance:** scrub `time_of_day` and the sun travels while the atmosphere shifts the sky/sun-color/
+  ambient physically + cohesively (real dawn→noon→sunset); any Weather + any Grade independently; the 6
+  old moods reproducible as Time×Weather×Grade combos. Detailed spec:
+  `2026-06-20-lighting-decouple-and-time-axis-design.md`.
 
 - **Stage 3 — Night & celestial.** Extend the Time axis through the full 24 h: sky darkens to night
   (deep blue → near-black gradient), night ambient/GI floor, sun off below horizon. Add the celestial
@@ -101,11 +111,21 @@ works as "pick one Time + one Weather + one Grade" (a named combo can still set 
 - **Perf:** the composer runs once per change (or per frame only while the clock auto-advances); the
   physical curves are cheap CPU math. Night adds a 2nd directional light (moon) — gate it off in day.
 
-## Open design forks (resolve in each stage's spec)
+## Resolved design decisions
 
-- Time model: a **physical sun-arc** (latitude/season knobs → analytic sun position) vs. a small set of
-  **time anchor keyframes** the driver interpolates. (Stage 2 picks; likely physical arc + tunable
-  lat/season, with sky gradient from a few time-anchored color stops.)
-- Whether named "moods" survive as **combo presets** (one click sets Time+Weather+Grade) — recommended
-  yes, for one-click looks on top of the independent axes.
+- **Time model:** sun POSITION = analytic arc (CPU, cheap, tunable sunrise/sunset/peak-elev/azimuth — not
+  a bake). Sky COLOR/sun-tint/ambient = the **GPU-compute ATMOSPHERE** (physically-based, not keyframes —
+  the AAA/GPU "better option" per the pillars). The Time axis feeds the sun direction; the atmosphere
+  produces the look.
+- **Atmosphere technique:** Hillaire-style dynamic scattering (transmittance LUT + sky-view LUT, optional
+  multi-scatter LUT) computed on a **local RenderingDevice** (the `FieldCompute`/`CloudNoiseCompute`
+  pattern), re-baked when the sun moves (cheap; per-frame only while auto-cycling in Stage 4). Sampled in
+  `cloud_sky.gdshader` by view+sun direction. Gives correct daytime→sunset gradients, sun color via
+  transmittance, sky-integral ambient, and aerial perspective — and extends to night (Stage 3).
+- **Moods survive as combo presets** (one click sets a Time + Weather + Grade) on top of the independent
+  axes.
+
+## Open forks (resolve in the relevant stage's spec)
+
+- Multi-scatter LUT now vs. later (quality vs. scope) — Stage 2 spec decides.
 - Star-field + moon-phase technique (Stage 3 spec).

@@ -76,21 +76,35 @@
 
 ---
 
-### Task 5: Time axis — keyframed daytime color script (sun color/energy, sky, ambient)
+### Task 5: GPU-compute atmosphere — transmittance + sky-view LUTs (`AtmosphereCompute`)
 
-**Files:** Modify `LightingComposer.cs` (TIME block: interpolate the color script), `data/time_presets.json` (a multi-anchor default day script: Dawn/Golden/Noon/Golden/Dusk).
+**Files:** Create `shaders/atmosphere_lut.glsl` (compute). Create `scripts/lab/AtmosphereCompute.cs`. Modify `scripts/lab/LightingState.cs` (`AtmosphereState` physical params).
 
-**Interfaces — Produces:** `LightingComposer.SampleScript(TimeState t) → TimeKey` (lerp the two anchors bracketing `t.TimeOfDay`).
+**Interfaces — Produces:** `AtmosphereCompute.Bake(Vector3 sunDir, AtmosphereState p) → (Rid transmittanceTex, Rid skyViewTex)` on a local `RenderingDevice` (mirror `FieldCompute`/`CloudNoiseCompute`: build pipeline, dispatch, keep textures). `AtmosphereCompute.SampleSun(sunDir) → Color` (CPU readback of transmittance toward the sun) and `AmbientFromSky() → (Color, float)` (sky-view integral) for the composer.
 
-- [ ] **Step 1:** Implement `SampleScript`: find the two `Script` anchors bracketing `TimeOfDay`, lerp all fields (sun_energy, sun_color, sky_top/horizon/ground, ambient, ambient_sky) by hour. In the TIME block, drive `sun.LightEnergy/LightColor`, sky colors, and ambient from the sampled key (replacing the single stored values when `time_of_day` is active).
-- [ ] **Step 2:** Author a default day color script in `time_presets.json` (Dawn 6h warm-dim, Golden 8h warm, Noon 12h white-bright blue sky, Golden 16h warm, Dusk 18h warm-dim) seeded from the moods' sun/sky palettes.
+- [ ] **Step 1:** Write `atmosphere_lut.glsl` — two entry passes (or two dispatches): **transmittance** (256×64: for each (altitude, view-zenith) integrate Rayleigh+Mie+ozone optical depth → `exp(-τ)`); **sky-view** (~200×100: for the given sun dir, ray-march single scattering + sample transmittance → sky radiance by view azimuth/elevation). Earth-physical defaults (Rayleigh βs, Mie βs+g, ozone, R_planet 6360 km, R_atmos 6460 km).
+- [ ] **Step 2:** Write `AtmosphereCompute.cs`: local RD, compile the GLSL, storage textures for the two LUTs, `Bake(sunDir, params)` dispatches both (transmittance first, sky-view reads it), `SampleSun`/`AmbientFromSky` CPU readbacks. `AtmosphereState` defaults = Earth.
 - [ ] **Step 3:** Build → `Build succeeded.`
-- [ ] **Step 4:** Verify cohesion: scrub `time_of_day` 6→12→18 (or `--time`): sun color goes warm→white→warm, sky goes dawn→blue→dusk, ambient dim→bright→dim, ALL together with the moving sun. Stage-1 sun disc reddens at the low ends automatically. No banding/pops mid-interpolation.
-- [ ] **Step 5:** Commit `feat(light): keyframed daytime color script (sun/sky/ambient over time)`.
+- [ ] **Step 4:** Verify the LUTs are sane: a temporary debug `--atmodbg` that blits the sky-view LUT to screen (or saves it) — for a noon sun it's a blue dome brightening toward the horizon; for an 8° sun the sun-side horizon is orange. Transmittance toward a horizon sun is warm/red. No NaNs/black.
+- [ ] **Step 5:** Commit `feat(light): GPU-compute atmosphere LUTs (transmittance + sky-view) on local RD`.
 
 ---
 
-### Task 6: Weather + Grade as independent axes (pickers + CLI) and slider sync
+### Task 6: Atmosphere → sky shader + composer (sky color, sun tint/energy, ambient)
+
+**Files:** Modify `shaders/cloud_sky.gdshader` (sample sky-view LUT for `background`; the sun-disc tint already from `LIGHT0_COLOR`), `scripts/lab/CloudVolume.cs` (bind the atmosphere LUTs to `_skyMat`), `scripts/lab/LightingComposer.cs` (drive sun color/energy + ambient from the atmosphere; call `AtmosphereCompute.Bake` when sun moves).
+
+**Interfaces — Consumes:** `AtmosphereCompute` LUTs + `SampleSun`/`AmbientFromSky` (Task 5); `SunArc` (Task 4).
+
+- [ ] **Step 1:** In `cloud_sky.gdshader`, replace `background(rd)` with a sample of the sky-view LUT by `EYEDIR` (keep the gradient fallback behind a `use_atmosphere` bool for A/B). Bind `sky_view_tex` via a `CloudVolume.SetAtmosphereTextures(skyView, transmittance)` setter on `_skyMat`.
+- [ ] **Step 2:** In `LightingComposer.Apply` TIME block: after `SunArc`, call `AtmosphereCompute.Bake(sunDir, atmoState)`, bind the LUTs (`CloudVolume.SetAtmosphereTextures`), set `sun.LightColor = SampleSun(sunDir)`, scale `sun.LightEnergy` by its luminance, set `env.AmbientLight*` from `AmbientFromSky()`. Re-bake only when `sunDir`/params changed (cache last).
+- [ ] **Step 3:** Build → `Build succeeded.`
+- [ ] **Step 4:** Verify the full Time sweep: `--time=7/12/17 --auto-shot` — the SKY itself goes physically dawn-warm → blue-noon → dusk-warm (from the LUT, not stored colors), the sun light color warms near the horizon, ambient tracks the sky. Stage-1 sun disc reddening stays consistent with the atmosphere. `--shadowcheck` PASS. No banding/pops scrubbing time. **Flag for the user's eye-gate (NEEDS_REVIEW) — this is the visual centerpiece.**
+- [ ] **Step 5:** Commit `feat(light): atmosphere drives sky color + sun tint/energy + ambient over time`.
+
+---
+
+### Task 7: Weather + Grade as independent axes (pickers + CLI) and slider sync
 
 **Files:** Modify `TerrainLabUI.Apply.cs` (`SyncLightControlsToScene` → reflect from the 3 states; weather/grade preset routing), `TerrainLabUI.Cli.cs` (`--weather`/`--grade`), `data/lab_controls.json` (Weather/Grade preset pickers; re-home the existing fog + tonemap/grade knobs to write `_weather`/`_grade` then recompose).
 
@@ -102,7 +116,7 @@
 
 ---
 
-### Task 7: Migrate the load-bearing callers; retire the bundled path
+### Task 8: Migrate the load-bearing callers; retire the bundled path
 
 **Files:** Modify `TerrainLabUI.cs` (`ApplyDefaultMood` / spawn), `TerrainLabUI.Clouds.cs` (preset apply, `OvercastDirty` base), `TerrainLabUI.Apply.cs`. Remove any remaining direct `env.*`/`sun.*` lighting writes outside `LightingComposer`.
 
@@ -116,12 +130,14 @@
 
 ## Self-review notes (done)
 
-- **Spec coverage:** composer+3 states (T1–T2), mood split (T3), analytic arc (T4), color script (T5),
-  Weather/Grade axes + CLI + sync (T6), load-bearing migration + one-writer guarantee (T7). All spec
-  sections map to a task. Night/celestial + auto-cycle correctly OUT (Stages 3–4).
-- **Risk coverage:** ApplyMood load-bearing (T2+T7), sun convention/`--shadowcheck` (T4), OvercastDirty
-  base (T2+T7), slider sync (T6), night scope kept out (whole plan).
-- **Type consistency:** `TimeState/WeatherState/GradeState`, `LightingComposer.Apply/FromMood/SunArc/
-  SampleScript`, `TimeKey` used consistently across tasks.
-- **Behavior-preserving gate:** T2–T3 must look identical to pre-refactor; only T4–T6 change the look.
+- **Spec coverage:** composer+states (T1–T2), mood split (T3), analytic arc (T4), GPU-compute atmosphere
+  LUTs (T5), atmosphere→sky/sun/ambient (T6), Weather/Grade axes + CLI + sync (T7), load-bearing migration
+  + one-writer guarantee (T8). All spec sections map to a task. Night/celestial + auto-cycle correctly OUT
+  (Stages 3–4); the atmosphere is built to extend into night.
+- **Risk coverage:** ApplyMood load-bearing (T2+T8), sun convention/`--shadowcheck` (T4+T6), OvercastDirty
+  base (T2+T8), slider sync (T7), atmosphere LUT correctness (T5 debug), night scope kept out (whole plan).
+- **Type consistency:** `TimeState/AtmosphereState/WeatherState/GradeState`, `LightingComposer.Apply/
+  FromMood/SunArc`, `AtmosphereCompute.Bake/SampleSun/AmbientFromSky` used consistently across tasks.
+- **Behavior-preserving gate:** T2–T3 look identical to pre-refactor; T4–T6 change the look (sun travel +
+  physical atmosphere) → eye-gate. GPU compute lives in T5 (atmosphere LUTs) — matches the stack/pillars.
 ```

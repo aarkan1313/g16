@@ -22,19 +22,25 @@ into three independent axes behind one composer, and builds the **Time** axis as
 
 ```
 LightingState.cs (pure data; no Godot scene writes)
-  struct TimeState   — arc params (sunrise_h, sunset_h, peak_elev, az_start, az_end) + a list of
-                       TimeKey color-script anchors {hour, sun_energy, sun_color, sky_top, sky_horizon,
-                       sky_ground, ambient, ambient_sky}; plus `time_of_day` (current hour).
+  struct TimeState   — `time_of_day` (h) + arc params (sunrise_h, sunset_h, peak_elev, az_start, az_end).
+                       Sky/sun-color/ambient come from the ATMOSPHERE, not stored colors.
+  struct AtmosphereState — physical params: rayleigh/mie scatter+absorption, ozone, planet+atmos radii,
+                       turbidity, ground albedo, sun intensity. (Knobs; physical defaults = Earth.)
   struct WeatherState— cloud preset id/values + fog {color, density, aerial, height, heightd, sun_scatter}.
   struct GradeState  — exposure, white, glow, contrast, saturation, (brightness), grade_tint.
 
+AtmosphereCompute.cs (GPU compute on a local RenderingDevice — FieldCompute/CloudNoiseCompute pattern)
+  Bake(sunDir, AtmosphereState) → transmittance LUT (256×64) + sky-view LUT (~200×100) [+ multiscatter
+  32×32]; exposes them as textures for the sky material + a CPU read of sun-transmittance & sky-ambient
+  for the composer. Re-bake only when sunDir or params change.
+
 LightingComposer.cs (the ONLY writer of scene lighting; replaces ApplyMood's body)
-  Apply(env, sun, cloud, godrays):
-    1. TIME → sun.GlobalTransform (elev+az from the analytic arc at time_of_day),
-              sun.LightEnergy + sun.LightColor (from the color script, interpolated by hour),
-              sky_top/horizon/ground (color script → CloudVolume.SetSkyColors + ProceduralSky),
-              env.AmbientLightEnergy + AmbientLightSkyContribution.
-              (Stage-1 sun-disc reddening already keys off LIGHT0_DIRECTION.y → automatic.)
+  Apply(env, sun, cloud, godrays, atmosphere):
+    1. TIME → sun.GlobalTransform (elev+az from the analytic arc at time_of_day);
+              AtmosphereCompute.Bake(sunDir, atmoState); bind LUTs to cloud_sky.gdshader;
+              sun.LightColor = transmittance(sunDir) (warm/red near horizon), sun.LightEnergy scales by it;
+              env.AmbientLightEnergy/SkyContribution from the sky-view integral.
+              (Stage-1 sun-disc reddening keys off the same sun elevation → consistent.)
     2. WEATHER → cloud knobs (CloudVolume) + env.Fog* .
     3. GRADE → env.TonemapExposure/White, AdjustmentContrast/Saturation/Brightness, Glow* .
 ```
@@ -46,12 +52,20 @@ LightingComposer.cs (the ONLY writer of scene lighting; replaces ApplyMood's bod
     peak at midday). Below `sunrise`/above `sunset` → elev ≤ 0 (night; Stage 3 handles the look).
   - `azimuth(t) = lerp(az_start, az_end, (t − sunrise)/(sunset − sunrise))` (e.g. 90°→270°, E→W).
   - Feeds the existing `OrientSun(sun)` (it already takes `_sunAngle`/`_sunAzimuth`).
-- **Sun COLOR/ENERGY + SKY gradient + AMBIENT = a "color script"** — a short list of `TimeKey` anchors
-  (Dawn ~6 h, Golden ~8 h, Noon ~12 h, Golden ~16 h, Dusk ~18 h) each carrying sun_color/energy +
-  sky_top/horizon/ground + ambient; `time_of_day` interpolates between the two surrounding anchors. This
-  is the art-directable "look of the day," seeded from the 6 moods' existing sun/sky values. (Position is
-  physics; the palette is keyframed — the cleanest hybrid, resolves the architecture doc's open fork.)
-- Net: one `time_of_day` knob moves the sun AND shifts the whole daytime palette cohesively.
+- **Sky COLOR + sun TINT + AMBIENT = a GPU-compute ATMOSPHERE** (the AAA/GPU "better option", replacing
+  keyframed color stops). A physically-based scattering model (Hillaire "Scalable and Production-Ready Sky
+  and Atmosphere") computed on a **local RenderingDevice** (the `FieldCompute`/`CloudNoiseCompute`
+  pattern): a **transmittance LUT** (256×64, optical depth through the atmosphere) and a **sky-view LUT**
+  (~200×100, sky radiance by view direction for the current sun), optional **multi-scatter LUT** (32×32).
+  Re-baked when the sun direction changes (cheap; ~sub-ms; per-frame only while auto-cycling in Stage 4).
+  `cloud_sky.gdshader` samples the sky-view LUT by `EYEDIR` for the sky gradient (replacing
+  `background()`), the transmittance LUT toward the sun for the **sun light color** (`LightColor`) and the
+  Stage-1 sun-disc tint, and the sky-view integral for **ambient**. Sun **energy** scales by the
+  transmittance (dimmer/redder near the horizon). Physical params are knobs: planet/atmosphere radii,
+  Rayleigh + Mie scattering/absorption coeffs, ozone, turbidity, ground albedo.
+- Net: one `time_of_day` knob moves the sun AND the atmosphere produces a physically-correct sky, sun
+  color, and ambient for that sun elevation — real dawn→noon→sunset, and a foundation for night (Stage 3)
+  + aerial perspective. The `TimeKey` color-script is dropped in favor of this.
 
 ### Decoupling — split the 6 moods, keep them as combo presets
 
@@ -74,12 +88,13 @@ existing one-click looks still work — but each axis is now independently overr
 
 ## Scope
 
-IN: `LightingComposer` + 3 state structs; the analytic sun-arc + color-script Time driver; the
-3-way split of the moods into preset files (+ combo-preset shim); the Light-tab controls + CLI;
-re-homing clouds/fog (Weather) and tonemap/grade (Grade) behind the axes WITHOUT changing their
-internals. OUT: night look + celestial bodies (Stage 3); auto-advancing clock + fantasy (Stage 4); any
-new cloud/fog/grade *features* (just re-homing what exists); a full physical Rayleigh sky (color-script
-keyframes stand in for daylight).
+IN: `LightingComposer` + the state structs; the analytic sun-arc Time driver; the **GPU-compute
+atmosphere** (`AtmosphereCompute` LUTs + `cloud_sky.gdshader` sampling) as the sky renderer producing
+sky color + sun tint/energy + ambient; the 3-way split of the moods into preset files (+ combo shim);
+the Light-tab controls + CLI; re-homing clouds/fog (Weather) and tonemap/grade (Grade) behind the axes
+WITHOUT changing their internals. OUT: night/celestial bodies (Stage 3 — but the atmosphere is built so
+it *extends* there); auto-advancing clock + fantasy (Stage 4); new cloud/fog/grade *features* (just
+re-homing what exists).
 
 ## Acceptance
 
