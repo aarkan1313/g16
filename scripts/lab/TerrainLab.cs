@@ -27,6 +27,9 @@ public partial class TerrainLab : MeshInstance3D
     // G1 rule engine: meaningful, signal-driven material placement (vs legacy bands).
     public bool RuleBased = false;   // default off = current approved look
     public float CurvK = 3.0f;       // curvature scale (m): convex ridge vs concave hollow split
+    // Unit 4 breakup-mask SHAPE params (rebake on change).
+    public float BkSlopeLo = 0.30f, BkSlopeHi = 0.62f, BkCurvScale = 3.0f, BkCavityGain = 1.4f, BkSunAzimuth = 0.7f;
+    public int   BkFlowIters = 3;
     // Placement breakpoints — promoted from hardcoded so they're live re-bake UI knobs.
     // Defaults preserve the previous hardcoded bake values exactly.
     public float HValley = 100f, HSlope = 350f, HHigh = 700f, HPeak = 950f;
@@ -114,11 +117,14 @@ public partial class TerrainLab : MeshInstance3D
             MaskMode = (uint)SplatMaskMode,
             EdgeNoiseM = EdgeNoiseM, EdgeNoiseAmp = EdgeNoiseAmp, MacroM = MacroM,
             RuleBased = RuleBased ? 1u : 0u, CurvK = CurvK,
+            BkSlopeLo = BkSlopeLo, BkSlopeHi = BkSlopeHi, BkCurvScale = BkCurvScale,
+            BkCavityGain = BkCavityGain, BkSunAzimuth = BkSunAzimuth, BkFlowIters = (uint)BkFlowIters,
         };
         var baked = _splat.Bake(_heights, _res, sp);
         _mat.SetShaderParameter("splat_tex", baked.Splat);
         _mat.SetShaderParameter("splat_wa", baked.WeightsA);
         _mat.SetShaderParameter("splat_wb", baked.WeightsB);
+        _mat.SetShaderParameter("breakup_tex", baked.Breakup);
         // Fragment must read the baked secondary (splat.g) when the rule engine is on;
         // keep it in lockstep with the bake so the two never disagree.
         _mat.SetShaderParameter("splat_rule_based", RuleBased);
