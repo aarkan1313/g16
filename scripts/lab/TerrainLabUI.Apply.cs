@@ -96,6 +96,7 @@ public partial class TerrainLabUI : Control
             case "sun":    GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").Visible = on; break;
             case "sdfgi":  GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SdfgiEnabled = on; break;
             case "volfog": GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.VolumetricFogEnabled = on; break;
+            case "sun_surface_on": _cloud?.SetSunSurfaceOn(on); break;   // sun-disc surface (cloud_sky material)
         }
     }
 
@@ -135,6 +136,11 @@ public partial class TerrainLabUI : Control
             case "sun_redden":       _cloud?.SetSunRedden(v); break;
             case "sun_redden_onset": _cloud?.SetSunReddenOnset(v); break;
             case "sun_horizon_grow": _cloud?.SetSunHorizonGrow(v); break;
+            case "sun_surface_cells":    _cloud?.SetSunSurfaceCells(v); break;
+            case "sun_surface_contrast": _cloud?.SetSunSurfaceContrast(v); break;
+            case "sun_surface_spots":    _cloud?.SetSunSurfaceSpots(v); break;
+            case "sun_surface_churn":    _cloud?.SetSunSurfaceChurn(v); break;
+            case "sun_surface_warm":     _cloud?.SetSunSurfaceWarm(v); break;
         }
     }
     private void OrientSun(DirectionalLight3D sun)

@@ -464,6 +464,15 @@ public partial class CloudVolume : Node
     public void SetSunReddenOnset(float v) { _sunReddenOnset = Mathf.Clamp(v, 0.02f, 0.8f); _skyMat?.SetShaderParameter("sun_redden_onset", _sunReddenOnset); }
     public void SetSunHorizonGrow(float v) { _sunHorizonGrow = Mathf.Clamp(v, 0f, 3f); _skyMat?.SetShaderParameter("sun_horizon_grow", _sunHorizonGrow); }
 
+    // --- sun SURFACE (procedural granulation) — material-uniform setters ---
+    public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }
+    public void SetSunSurfaceCells(float v)   { _skyMat?.SetShaderParameter("sun_surface_cells", v); }
+    public void SetSunSurfaceContrast(float v){ _skyMat?.SetShaderParameter("sun_surface_contrast", v); }
+    public void SetSunSurfaceSpots(float v)   { _skyMat?.SetShaderParameter("sun_surface_spots", v); }
+    public void SetSunSurfaceChurn(float v)   { _skyMat?.SetShaderParameter("sun_surface_churn", v); }
+    public void SetSunSurfaceWarm(float v)    { _skyMat?.SetShaderParameter("sun_surface_warm", v); }
+    public void SetSunSurfaceColor(Color c)   { _skyMat?.SetShaderParameter("sun_surface_color", new Vector3(c.R, c.G, c.B)); }
+
     /// Mood sky colors → cloud ambient/scatter (compute) + the sky-shader background
     /// gradient, so clouds + the sky behind them track the chosen mood/time-of-day.
     public void SetSkyColors(Color top, Color horizon, Color ground)

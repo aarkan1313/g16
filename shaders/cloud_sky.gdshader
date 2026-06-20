@@ -29,6 +29,15 @@ uniform float sun_redden_onset = 0.25;     // sun elevation (0..1, =LIGHT0_DIREC
 uniform float sun_horizon_grow = 0.6;      // extra disc/halo size factor at the horizon (0 = none)
 uniform vec3  sun_redden_color : source_color = vec3(1.0, 0.42, 0.18);  // target low-sun color
 
+// --- sun SURFACE (procedural granulation; gated, default off = flat disc) ---
+uniform bool  sun_surface_on = false;
+uniform float sun_surface_cells : hint_range(1.0, 40.0) = 9.0;     // granule frequency
+uniform float sun_surface_contrast : hint_range(0.0, 1.0) = 0.0;   // 0 = flat (today), high = bold
+uniform float sun_surface_spots : hint_range(0.0, 1.0) = 0.0;      // sunspot darkening
+uniform float sun_surface_churn : hint_range(0.0, 1.0) = 0.15;     // animation speed (0 = static)
+uniform float sun_surface_warm  : hint_range(0.0, 1.0) = 0.3;      // cell-vs-spot warm shift
+uniform vec3  sun_surface_color : source_color = vec3(0.0);        // fantasy base override (black = off)
+
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
 uniform vec3 ground_color : source_color = vec3(0.22, 0.26, 0.22);
@@ -51,6 +60,20 @@ vec2 dir_to_uv(vec3 d){
     return vec2(az / (2.0 * PI), el / (0.5 * PI));
 }
 
+float sun_hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float sun_vnoise(vec2 p){
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = sun_hash(i), b = sun_hash(i + vec2(1.0, 0.0));
+    float c = sun_hash(i + vec2(0.0, 1.0)), d = sun_hash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float sun_fbm(vec2 p){
+    float s = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++){ s += a * sun_vnoise(p); p *= 2.02; a *= 0.5; }
+    return s;   // ~0..1
+}
+
 // All sun rendering lives here so clouds composite OVER it. Built from cosSun (view·sun) and
 // sunElev (LIGHT0_DIRECTION.y). Pieces are layered in later tasks; this is the current look verbatim.
 vec3 sun_layers(vec3 rd, float aSun) {
@@ -70,6 +93,26 @@ vec3 sun_layers(vec3 rd, float aSun) {
     float halo   = pow(max(cosSun, 0.0), sun_halo_size / grow) * sun_halo_energy;  // halo widens at horizon
 
     vec3 sunCol = mix(LIGHT0_COLOR, sun_redden_color, sunset);                 // warm→red tint
+    if (sun_surface_on && discMask > 0.0) {
+        // disc-local UVs: world-anchored tangent frame around the sun direction (no swimming).
+        vec3 S = LIGHT0_DIRECTION;
+        vec3 upv = abs(S.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+        vec3 T = normalize(cross(upv, S));
+        vec3 Bt = cross(S, T);
+        float rad = max(sin(radians(sun_size * grow)), 1e-4);
+        vec2 pSurf = vec2(dot(rd, T), dot(rd, Bt)) / rad;          // ~unit-disc coords
+        vec2 q = pSurf * sun_surface_cells + vec2(TIME * sun_surface_churn);
+        float surf = sun_fbm(q);                                    // granulation, 0..1
+        float spotField = sun_fbm(q * 0.5 + vec2(7.3, 2.1));
+        float spot = smoothstep(0.55, 0.35, spotField);            // low field = dark spot
+        float bright = mix(1.0 - sun_surface_contrast, 1.0 + sun_surface_contrast, surf);
+        bright *= (1.0 - sun_surface_spots * spot);
+        disc *= max(bright, 0.0);
+        sunCol *= mix(vec3(1.0), sun_redden_color, sun_surface_warm * (1.0 - surf));  // warm cells
+        if (dot(sun_surface_color, sun_surface_color) > 1e-4) {
+            sunCol = mix(sunCol, sun_surface_color * (0.6 + 0.8 * surf), 0.85);        // fantasy override
+        }
+    }
     // Soft optical depth: thin cloud over the sun dims AND reddens the disc/corona; thick cloud kills them.
     // The halo spans a wider cone, so only partially occlude it (it bleeds around the cloud edge).
     vec3 ext = mix(vec3(1.0), sun_redden_color, clamp(aSun * sun_cloud_redden, 0.0, 1.0));  // warm extinction
