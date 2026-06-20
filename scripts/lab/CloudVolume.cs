@@ -449,6 +449,9 @@ public partial class CloudVolume : Node
     public void SetSunCoronaEnergy(float v) { _skyMat?.SetShaderParameter("sun_corona_energy", Mathf.Max(v, 0f)); }
     public void SetSunHaloSize(float v)     { _skyMat?.SetShaderParameter("sun_halo_size", Mathf.Clamp(v, 8f, 400f)); }
     public void SetSunHaloEnergy(float v)   { _skyMat?.SetShaderParameter("sun_halo_energy", Mathf.Max(v, 0f)); }
+    public void SetSunRedden(float v)      { _skyMat?.SetShaderParameter("sun_redden", Mathf.Clamp(v, 0f, 2f)); }
+    public void SetSunReddenOnset(float v) { _skyMat?.SetShaderParameter("sun_redden_onset", Mathf.Clamp(v, 0.02f, 0.8f)); }
+    public void SetSunHorizonGrow(float v) { _skyMat?.SetShaderParameter("sun_horizon_grow", Mathf.Clamp(v, 0f, 3f)); }
 
     /// Mood sky colors → cloud ambient/scatter (compute) + the sky-shader background
     /// gradient, so clouds + the sky behind them track the chosen mood/time-of-day.

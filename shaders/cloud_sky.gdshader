@@ -23,6 +23,11 @@ uniform float sun_corona_energy = 2.0;
 uniform float sun_halo_size : hint_range(8.0, 400.0) = 90.0;        // wide soft glow (lower = wider)
 uniform float sun_halo_energy = 0.4;
 
+uniform float sun_redden = 1.0;            // strength of warm→red shift at low sun
+uniform float sun_redden_onset = 0.25;     // sun elevation (0..1, =LIGHT0_DIRECTION.y) where reddening begins
+uniform float sun_horizon_grow = 0.6;      // extra disc/halo size factor at the horizon (0 = none)
+uniform vec3  sun_redden_color : source_color = vec3(1.0, 0.42, 0.18);  // target low-sun color
+
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
 uniform vec3 ground_color : source_color = vec3(0.22, 0.26, 0.22);
@@ -50,14 +55,21 @@ vec2 dir_to_uv(vec3 d){
 vec3 sun_layers(vec3 rd) {
     if (!LIGHT0_ENABLED) { return vec3(0.0); }
     float cosSun = dot(rd, LIGHT0_DIRECTION);
-    float discEdge = cos(radians(sun_size));                       // cosSun at the disc rim
-    float mu = clamp((cosSun - discEdge) / max(1.0 - discEdge, 1e-6), 0.0, 1.0);  // 0 rim → 1 center
-    float discMask = smoothstep(0.0, 0.04, mu);                    // soft rim
-    float limb = mix(1.0, mix(0.45, 1.0, sqrt(mu)), sun_limb);     // center-bright → dimmer warm rim
+    float sunElev = clamp(LIGHT0_DIRECTION.y, 0.0, 1.0);
+    float sunset = smoothstep(sun_redden_onset, 0.0, sunElev) * sun_redden;   // 0 high → 1 at horizon
+    float grow = 1.0 + sunset * sun_horizon_grow;                             // disc/halo swell at horizon
+
+    float discEdge = cos(radians(sun_size * grow));
+    float mu = clamp((cosSun - discEdge) / max(1.0 - discEdge, 1e-6), 0.0, 1.0);
+    float discMask = smoothstep(0.0, 0.04, mu);
+    float limb = mix(1.0, mix(0.45, 1.0, sqrt(mu)), sun_limb);
     float disc = discMask * limb;
-    float corona = pow(max(cosSun, 0.0), sun_corona_size) * sun_corona_energy;  // searing inner ring
-    float halo   = pow(max(cosSun, 0.0), sun_halo_size)   * sun_halo_energy;    // wide warm forward-scatter
-    return LIGHT0_COLOR * sun_disc_energy * (disc * 12.0 + corona + halo);
+
+    float corona = pow(max(cosSun, 0.0), sun_corona_size) * sun_corona_energy;
+    float halo   = pow(max(cosSun, 0.0), sun_halo_size / grow) * sun_halo_energy;  // halo widens at horizon
+
+    vec3 sunCol = mix(LIGHT0_COLOR, sun_redden_color, sunset);                 // warm→red tint
+    return sunCol * sun_disc_energy * (disc * 12.0 + corona + halo);
 }
 
 void sky(){
