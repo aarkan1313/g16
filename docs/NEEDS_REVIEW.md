@@ -15,27 +15,28 @@ Last updated: 2026-06-19.
 
 ## 🟥 P1 — blocks the active arc
 
-### 0. Compositing core — PHASES A+B — BUILT 2026-06-19, awaiting ONE combined eye-gate
-- **What:** the whole compositing core (plan `plans/2026-06-19-terrain-compositing-core.md`), both phases
-  built behind toggles defaulting to the current look:
-  - **Phase A (Blend quality):** bake emits 7 smooth role weights → two linear Rgba8 weightmaps; fragment
-    samples them, picks **top-2** roles, blends by a derived **material-height interlock**, with organic
-    breakup (weight-domain warp + interlock noise). Behind **`splat_blend_mode`** (Splat tab): **0 = legacy
-    index (current, default)**, **1 = weightmap (new)**.
-  - **Phase B (Surface relief):** **parallax-occlusion** on the dominant plane, LOD-gated near
-    (**`pom_on`**, Detail tab, default OFF) using the same derived height channel; material **AO** bound
-    into the custom BRDF (**`ao_on`**, default on); normal-map application strengthened.
-- **See it:** `... scenes/terrain_lab.tscn -- --clouds=0 --groundrules=1`, then fly **close / mid / far**, in motion:
-  - Splat tab → toggle `blend: legacy/weightmap` 0↔1; tune `interlock sharpness/height drive/breakup`, `boundary warp (m)`.
-  - Detail tab → toggle `surface depth (POM)` + `material AO`; tune `POM steps/depth m/fade @`. Debug tab `normal maps`/`force matte` bisect the BRDF.
-- **Judge:** (A) mode 1 **less blocky**, organic relief-driven boundaries, no speckle/swimming, top-2 swap
-  seams? (B) up close, real depth/self-occlusion vs flat; POM swimming or near→mid fade pop; AO believable;
-  far unchanged (POM gated)?
-- **Mechanically verified:** compiles/bakes/renders; weightmap in-motion clouds-off 164 fps/6.1 ms; POM-on
-  ~5.4 ms; no speckle/NaN/black. NOT judged: whether it reads good — that's this gate.
-- **On approval → unblocks:** flip `splat_blend_mode` default→1 and `pom_on` default→true; then **Unit 4
-  (procedural breakup)**, then **Unit 5 (macro color)**. Escalations noted in the plan: top-3 blend (swap
-  seams), per-plane POM (cliff seam), real height maps (if derived relief too weak).
+### 0. Compositing core — eye-gated 2026-06-19 (plan `plans/2026-06-19-terrain-compositing-core.md`)
+- **Phase A (Blend quality) ✅ APPROVED + SHIPPED (default).** User flying it: "weightmap is good! it
+  actually looks good." Bake emits 7 smooth role weights → two linear Rgba8 weightmaps; fragment picks
+  **top-2** roles, blends by a derived **material-height interlock** + organic breakup. `splat_blend_mode`
+  **default now 1 (weightmap)**; legacy index path kept behind mode 0 for A/B. Knobs (Splat tab):
+  `interlock sharpness/height drive/breakup`, `boundary warp (m)`. The de-block is the win; it does NOT add
+  more material *variety* per area (that's placement/roles — G3/Unit 4, a separate lever).
+- **AO ✅ kept.** Bound into the custom BRDF (`ao_on`, default on). User: "nice little detail, could do
+  more" — fine as-is; revisit strength later.
+- **Phase B POM ⏸ DEFERRED (built, default OFF).** User flying it: relief only "raises elevation a little"
+  even tuned. Root cause: derived inverted-roughness height is nearly flat on this library (no height maps).
+  POM is binary — it only reads with **real height maps** (spec ceiling seam #1). Decision (user): if we do
+  height maps + POM later, **defer** now (seam kept, zero runtime cost). → see ROADMAP "height maps" arc.
+
+### 0b. GI/SDFGI — under review (user flagged, 2026-06-19)
+- **Symptom:** user sees "weird shadows occasionally" + big blocky rectangular patches, and toggling
+  SDFGI / GI-proxy "doesn't seem to do much." Hypothesis: SDFGI adds marginal visible benefit on open
+  sky-lit terrain (env ambient+SSAO+SSIL already cover most), while costing ~2.9 ms in motion, and the
+  coarse 512² GI/shadow proxy likely causes the blocky patches.
+- **Targeted A/B owed (user, live):** in a **shadowed valley / north slope in shade**, toggle Debug `sdfgi`
+  off/on (do shaded areas go flat → GI earns it, retune; or look the same → purge candidate) and toggle
+  `GI/shadow proxy (perf)` watching the blocky patches. **Purge would also help the 8 ms target.**
 
 ### 1. Ground G1 — rule-based placement engine ✅ APPROVED 2026-06-19
 - **Verdict (user, live):** "rule placement does work, it's basic, will want a lot more in the future but this proves the basics work." Gate PASSED — the engine + tunable knobs are in; richer rules grow via G3 + future expansion.

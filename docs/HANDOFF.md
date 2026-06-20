@@ -79,17 +79,24 @@ Run a scene (always `--rendering-driver vulkan`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-19, refreshed — TERRAIN MATERIAL SYSTEM is the active work)
-> **⮕ ACTIVE: build the TERRAIN MATERIAL SYSTEM properly (not tweaks).** Live verdict: the ground was
-> "only frameworked, no real work done" — it reads **blocky** (splat blends nearest dom/sec on a grid)
-> and **flat** (no relief). Approved design = the standard AAA **weight-blended material pipeline**;
-> **build order = compositing-core first (Blend quality + Surface relief), then breakup, then color.**
-> Two ceiling seams designed-for/deferred: real **height maps** (derive first) + **RVT caching** (infinite
-> world; needs chunks). Spec: `docs/superpowers/specs/2026-06-19-terrain-material-system-design.md`.
-> **NEW-CHAT HANDOFF: `docs/superpowers/handoffs/2026-06-19-terrain-material-system.md`** (read it first
-> → writing-plans for the compositing core → build, eye-gated, profile in-motion).
-> Ground arc status: **G1 placement APPROVED** ("basics work"); palette/splat-warp were stopgaps (the
-> blend-quality LAYER is the real gap — no prior plan had it). User CAN do visual checks (review live).
+> ### ⮕ START HERE (2026-06-19, refreshed — COMPOSITING CORE built + eye-gated)
+> **⮕ DONE THIS SESSION: the terrain compositing core** (plan
+> `docs/superpowers/plans/2026-06-19-terrain-compositing-core.md`, built + committed on
+> `experiment/presentation`, eye-gated live):
+> - **Phase A weight-blend ✅ APPROVED + SHIPPED.** Bake emits 7 smooth role weights → two linear Rgba8
+>   weightmaps; fragment picks top-2 roles, blends by a derived material-height interlock + organic breakup.
+>   `splat_blend_mode` **default 1 (weightmap)**; legacy index path behind mode 0. User: "it actually looks
+>   good." This killed the **blocky** look. (Does NOT add more material *variety* per area — that's Unit 4 / G3.)
+> - **AO ✅** bound into the custom BRDF (`ao_on`, default on), kept.
+> - **POM (surface relief) ⏸ DEFERRED**, built behind `pom_on` (default OFF). Derived inverted-roughness
+>   height is too flat → relief barely reads. Needs **real height maps** (ceiling seam #1) to be worth it;
+>   user chose to defer until that arc happens. The seam (`material_height_uv`, `pom_offset`) is in place.
+> - **⚠ GI/SDFGI under review** — user flagged "doesn't do much" + weird blocky shadows; possible purge =
+>   perf win. Targeted A/B owed (see NEEDS_REVIEW 0b).
+> **⮕ NEXT material levers:** Unit 4 (procedural breakup — adds the per-area variety the user wanted), then
+> Unit 5 (macro color). Deferred: real **height maps** (revives POM) + **RVT caching** (needs chunks).
+> Spec: `docs/superpowers/specs/2026-06-19-terrain-material-system-design.md`.
+> Ground arc status: **G1 placement APPROVED**; **compositing-core blend APPROVED**. User reviews live.
 > ⚠ **Another chat owns god rays in this same tree — don't touch `GodRays*`/`shaders/godray*`; some of
 > this session's terrain code is uncommitted + intermingled with theirs (see the handoff doc).**
 >

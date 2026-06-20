@@ -48,6 +48,15 @@ Last updated: 2026-06-19.
    still wants an eye-confirm of no regression.
 
 ## 🔨 Active arc — GROUND: build the MATERIAL SYSTEM properly (reframed 2026-06-19, eve)
+> **⮕ STATUS (2026-06-19, eye-gated live):** compositing core built (plan
+> `plans/2026-06-19-terrain-compositing-core.md`). **Phase A weight-blend (smooth top-2 weightmaps +
+> height interlock + breakup) APPROVED + SHIPPED** (`splat_blend_mode` default 1) — user: "it actually
+> looks good." **AO** bound + kept. **POM (relief) DEFERRED** — built behind a toggle (default off) but
+> derived-roughness height is too flat; it only reads with **real height maps** → see the new "height maps"
+> deferred arc below. **NEXT material levers:** Unit 4 (procedural breakup — also adds the per-area variety
+> the user noticed missing), Unit 5 (macro color). ⚠ User also flagged **GI/SDFGI** ("doesn't do much" +
+> weird blocky shadows) → under review (see NEEDS_REVIEW 0b; possible purge = perf win toward 8 ms).
+>
 > **⮕ CURRENT DIRECTION (supersedes the framing below):** live review showed the ground is "only
 > frameworked" — **blocky** (splat blends nearest dom/sec on a grid) + **flat** (no relief). The roadmap
 > below planned most layers but **never had a plan for the blend/compositing QUALITY layer — the gap.**
@@ -57,7 +66,13 @@ Last updated: 2026-06-19.
 > Ceiling seams deferred: real height maps (derive first) + RVT caching (infinite-world perf; needs
 > chunks). Spec `specs/2026-06-19-terrain-material-system-design.md`; handoff
 > `handoffs/2026-06-19-terrain-material-system.md`. Perf: top-2 blend · POM LOD-gated near · masks baked ·
-> profile in-motion. **Continuing in a new chat.** The unit/foundation framing below is the input plan-set.
+> profile in-motion.
+>
+> **⛏ DEFERRED arc — real height maps (revives POM + sharpens the blend interlock).** The 108-material
+> library has albedo/normal/roughness/AO only; POM + height-interlock currently derive height from inverted
+> roughness, which is too flat for real relief. To get genuine surface depth: generate per-material height
+> maps (from albedo/normal, or sourced) and bind `z*_hgt`; the POM seam + `material_height_uv` are already
+> in place to consume them. User's call to do this when it's worth it; POM stays off until then.
 >
 > ── prior framing (units/foundation — still the layer plan-set the system reuses) ──
 > Live judging proved the ground "doesn't look good enough to judge detail" — it's "random
