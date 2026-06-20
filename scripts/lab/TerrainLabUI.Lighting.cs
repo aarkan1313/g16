@@ -107,6 +107,12 @@ public partial class TerrainLabUI : Control
         env.FogHeightDensity = _weather.FogHeightD * 0.3f;
         env.FogSunScatter = _weather.FogSunScatter * 0.25f;
         env.VolumetricFogEnabled = false;
+        // NIGHT: stop the depth fog from washing the night. Fog/aerial perspective is a DISTANCE effect
+        // (far-off haze in a large world), so at night drop how much it tints the SKY dome — the sky keeps
+        // its own dark night gradient and the moon/stars read against black (the atmosphere stage will own
+        // sky haze later). Also dim the base fog color cool so terrain aerial-perspective stays night-right.
+        env.FogSkyAffect = Mathf.Lerp(1.0f, 0.05f, _nightFactor);
+        _baseFogColor = _baseFogColor.Lerp(NightFogColor, _nightFactor);
 
         // ── GRADE: tonemap + color adjustments + glow ──
         env.TonemapExposure = _grade.Exposure;
@@ -176,6 +182,7 @@ public partial class TerrainLabUI : Control
     private static readonly Color NightBrightHorizon = new(0.10f, 0.13f, 0.20f);
     private static readonly Color NightBrightGround = new(0.05f, 0.06f, 0.09f);
     private static readonly Color NightAmbientTint = new(0.55f, 0.62f, 0.85f);   // cool moonlight ambient fill
+    private static readonly Color NightFogColor = new(0.04f, 0.05f, 0.09f);      // dark cool night depth-fog (vs the bright day fog)
     private const float NightAmbientBright = 0.30f;     // moonlit-bright terrain ambient ceiling
     private const float NightSkyContribution = 0.25f;   // sky-contribution at deep night (down from ~0.8 so the energy lever bites)
 
