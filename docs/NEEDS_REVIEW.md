@@ -15,22 +15,27 @@ Last updated: 2026-06-19.
 
 ## 🟥 P1 — blocks the active arc
 
-### 0. Compositing core — PHASE A (Blend quality) — BUILT 2026-06-19, awaiting eye-gate
-- **What:** the de-blocked weight-blended pipeline (plan `plans/2026-06-19-terrain-compositing-core.md`).
-  Bake now emits 7 smooth role weights into two linear Rgba8 weightmaps; fragment samples them, picks
-  top-2 roles, blends by a derived material-height interlock, with organic breakup (weight-domain warp +
-  interlock noise). Behind **`splat_blend_mode`** (Splat tab): **0 = legacy index (current look, default)**,
-  **1 = weightmap (new)**.
-- **See it:** `... scenes/terrain_lab.tscn -- --clouds=0 --groundrules=1`, then Splat tab → toggle
-  `blend: legacy/weightmap` 0↔1 and fly **close / mid / far**, in motion. Tune `interlock sharpness`,
-  `interlock height drive`, `interlock breakup`, `boundary warp (m)`.
-- **Judge:** does mode 1 read **less blocky** (no axis-aligned stair-stepped patches, no grid-snapped
-  boundaries)? Believable relief-driven, organic boundaries (rock through gravel, gravel into grass)
-  without speckle/swimming in motion? Any top-2 swap seam where a third material belongs (→ top-3 lever)?
-- **Mechanically verified:** compiles/bakes/renders; mode-1 in-motion clouds-off 164 fps / 6.1 ms (within
-  8 ms); no speckle/NaN in stills. NOT judged: whether it reads good — that's this gate.
-- **On approval → unblocks:** flip `splat_blend_mode` default to 1, then **Phase B (Surface relief: POM +
-  AO/normal BRDF)**, then Unit 4 (breakup), Unit 5 (color).
+### 0. Compositing core — PHASES A+B — BUILT 2026-06-19, awaiting ONE combined eye-gate
+- **What:** the whole compositing core (plan `plans/2026-06-19-terrain-compositing-core.md`), both phases
+  built behind toggles defaulting to the current look:
+  - **Phase A (Blend quality):** bake emits 7 smooth role weights → two linear Rgba8 weightmaps; fragment
+    samples them, picks **top-2** roles, blends by a derived **material-height interlock**, with organic
+    breakup (weight-domain warp + interlock noise). Behind **`splat_blend_mode`** (Splat tab): **0 = legacy
+    index (current, default)**, **1 = weightmap (new)**.
+  - **Phase B (Surface relief):** **parallax-occlusion** on the dominant plane, LOD-gated near
+    (**`pom_on`**, Detail tab, default OFF) using the same derived height channel; material **AO** bound
+    into the custom BRDF (**`ao_on`**, default on); normal-map application strengthened.
+- **See it:** `... scenes/terrain_lab.tscn -- --clouds=0 --groundrules=1`, then fly **close / mid / far**, in motion:
+  - Splat tab → toggle `blend: legacy/weightmap` 0↔1; tune `interlock sharpness/height drive/breakup`, `boundary warp (m)`.
+  - Detail tab → toggle `surface depth (POM)` + `material AO`; tune `POM steps/depth m/fade @`. Debug tab `normal maps`/`force matte` bisect the BRDF.
+- **Judge:** (A) mode 1 **less blocky**, organic relief-driven boundaries, no speckle/swimming, top-2 swap
+  seams? (B) up close, real depth/self-occlusion vs flat; POM swimming or near→mid fade pop; AO believable;
+  far unchanged (POM gated)?
+- **Mechanically verified:** compiles/bakes/renders; weightmap in-motion clouds-off 164 fps/6.1 ms; POM-on
+  ~5.4 ms; no speckle/NaN/black. NOT judged: whether it reads good — that's this gate.
+- **On approval → unblocks:** flip `splat_blend_mode` default→1 and `pom_on` default→true; then **Unit 4
+  (procedural breakup)**, then **Unit 5 (macro color)**. Escalations noted in the plan: top-3 blend (swap
+  seams), per-plane POM (cliff seam), real height maps (if derived relief too weak).
 
 ### 1. Ground G1 — rule-based placement engine ✅ APPROVED 2026-06-19
 - **Verdict (user, live):** "rule placement does work, it's basic, will want a lot more in the future but this proves the basics work." Gate PASSED — the engine + tunable knobs are in; richer rules grow via G3 + future expansion.
