@@ -21,7 +21,7 @@ manual tuning). Press a key, fly, judge, move on:
 | **3** | GM1 palette (press 3 again to A/B palettes) | 1c |
 | **4** | GM2 real height + POM | 1c |
 | **5** | GM3-A within-area variation | 1c |
-| **6** | Clouds (feature review) | 5 |
+| **6** | Clouds CO-1 vertical profile (press 6 to A/B on/off) | 9 |
 | **7** | God rays | 3 |
 | **8** | GI / SDFGI ✅ RESOLVED → off+proxy off (toggle `GI (SDFGI)` on the **Light** tab to A/B) | 0b · 2 |
 | **9** | BRDF / approved baseline (clouds off) | 6 |

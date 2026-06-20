@@ -17,6 +17,7 @@ public partial class TerrainLabUI : Control
 
     private Label _reviewLabel;
     private int _lastPreset = -1;
+    private bool _co1ProfileOn;   // CO-1 vertical-profile A/B state (review key 6 toggles it)
     private List<string> _palNames;
     private Dictionary<string, string[]> _palRoles;
     private int _palIdx;
@@ -82,11 +83,19 @@ public partial class TerrainLabUI : Control
                 title = "5 · GM3-A within-area variation";
                 judge = "On a uniform slope: stops reading uniform — drier-lighter-rougher vs damper-darker-smoother patches, organic, no squares/shimmer? Far ~unchanged. Toggle 'within-area variation' (Color tab).";
                 break;
-            case 6: // Clouds — feature review (5)
-                ApplyMood(5);
-                Set("cloud_enabled", true); Set("cloud_coverage", 0.50f);
-                title = "6 · Clouds (feature review)";
-                judge = "Cloud shape/lighting/motion read good? Use Clouds tab (coverage/type/presets/decks). Distant-sky/horizon is a known soft spot. Checklist: docs/cloud-next-steps.md.";
+            case 6: // Clouds #2 · CO-1 vertical-profile A/B (NEEDS_REVIEW 9). Press 6 again to toggle profile ON/OFF.
+                if (_lastPreset == 6) { _co1ProfileOn = !_co1ProfileOn; }
+                else
+                {
+                    ApplyMood(5);                                  // neutral midday
+                    Set("cloud_enabled", true); Set("cloud_coverage", 0.55f);
+                    Set("cloud_profile_bottom", 0.15f); Set("cloud_profile_top", 0.6f); Set("cloud_anvil", 0.0f);
+                    LookUpAtClouds();
+                    _co1ProfileOn = false;                         // start from the approved slab look
+                }
+                Set("cloud_profile_on", _co1ProfileOn);
+                title = $"6 · Clouds CO-1 vertical profile — {(_co1ProfileOn ? "ON (3D volume)" : "OFF (approved slab)")}  (press 6 to A/B)";
+                judge = "Fly UNDER and up at a deck. ON: reads as a 3D volume (flat base, rounded/anvil top), not a slab? OFF: approved cumulus look reproduces? No shimmer/horizon artifact? Tune 'profile: base round / top fade / anvil' on the Clouds tab. NOTE: profile ON thins clouds — raise 'density' to compensate.";
                 break;
             case 7: // God rays — final pass (3)
                 ApplyMood(0);                                   // low sun
@@ -191,6 +200,14 @@ public partial class TerrainLabUI : Control
         if (cam == null || _shots == null || i < 0 || i >= _shots.Count) return;
         cam.Position = _shots[i].Item2;
         cam.RotationDegrees = _shots[i].Item3;
+    }
+
+    // Vantage for judging cloud vertical shape: a low-ish camera tilted UP at the cloud band,
+    // so decks are seen from underneath (where slab-vs-volume reads clearest), not down from altitude.
+    private void LookUpAtClouds()
+    {
+        var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+        if (cam != null) { cam.Position = new Vector3(0, 280, 520); cam.RotationDegrees = new Vector3(16, 0, 0); }
     }
 
     private void LookAtSun()
