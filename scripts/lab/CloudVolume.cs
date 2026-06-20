@@ -134,6 +134,7 @@ public partial class CloudVolume : Node
         _skyMat.SetShaderParameter("cloud_enabled", _enabled);
         _skyMat.SetShaderParameter("cloud_debug", _debug);
         _skyMat.SetShaderParameter("sun_disc_energy", _sunDiscEnergy);
+        _skyMat.SetShaderParameter("night_factor", _nightFactor);
         _cloudSky = new Sky { SkyMaterial = _skyMat, ProcessMode = Sky.ProcessModeEnum.Realtime, RadianceSize = Sky.RadianceSizeEnum.Size256 };
     }
 
@@ -464,6 +465,10 @@ public partial class CloudVolume : Node
     public void SetSunRedden(float v)      { _sunRedden = Mathf.Clamp(v, 0f, 2f); _skyMat?.SetShaderParameter("sun_redden", _sunRedden); }
     public void SetSunReddenOnset(float v) { _sunReddenOnset = Mathf.Clamp(v, 0.02f, 0.8f); _skyMat?.SetShaderParameter("sun_redden_onset", _sunReddenOnset); }
     public void SetSunHorizonGrow(float v) { _sunHorizonGrow = Mathf.Clamp(v, 0f, 3f); _skyMat?.SetShaderParameter("sun_horizon_grow", _sunHorizonGrow); }
+
+    // --- NIGHT (Stage 3a): master night factor (0 day .. 1 deep night) for the sun horizon-gate + moon/star fade ---
+    private float _nightFactor = 0f;
+    public void SetNightFactor(float v) { _nightFactor = Mathf.Clamp(v, 0f, 1f); _skyMat?.SetShaderParameter("night_factor", _nightFactor); }
 
     // --- sun SURFACE (procedural granulation) — material-uniform setters ---
     public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }

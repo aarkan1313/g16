@@ -14,6 +14,7 @@ public partial class TerrainLabUI : Control
     private SunDiscState _sunDisc = new();
     private WeatherState _weather = new();
     private GradeState _grade = new();
+    private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
 
     /// Split a legacy mood dict into the axis states (same keys + defaults as the old ApplyMood).
     private void MoodToStates(Godot.Collections.Dictionary m)
@@ -73,6 +74,7 @@ public partial class TerrainLabUI : Control
             _cloud.SetSunHaloSize(_sunDisc.HaloSize); _cloud.SetSunHaloEnergy(_sunDisc.HaloEnergy);
             _cloud.SetSunRedden(_sunDisc.Redden); _cloud.SetSunReddenOnset(_sunDisc.ReddenOnset);
             _cloud.SetSunHorizonGrow(_sunDisc.HorizonGrow); _cloud.SetSunCloudRedden(_sunDisc.CloudRedden);
+            _cloud.SetNightFactor(_nightFactor);
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by
@@ -110,15 +112,32 @@ public partial class TerrainLabUI : Control
     private void DriveTime(float hour)
     {
         _time.TimeOfDay = hour;
-        float f = Mathf.Clamp((hour - _time.SunriseH) / Mathf.Max(_time.SunsetH - _time.SunriseH, 1e-3f), 0f, 1f);
-        _time.SunAngle = _time.PeakElev * Mathf.Sin(Mathf.Pi * f);   // analytic arc: 0 at sunrise/set, peak at noon
-        _time.SunAzimuth = Mathf.Lerp(_time.AzStart, _time.AzEnd, f);
+        float dayLen = Mathf.Max(_time.SunsetH - _time.SunriseH, 1e-3f);
+        float f = (hour - _time.SunriseH) / dayLen;                  // 0 at sunrise, 1 at sunset; <0/>1 = night
+        _time.SunAngle = _time.PeakElev * Mathf.Sin(Mathf.Pi * f);   // continuous: peak at noon, NEGATIVE at night
+        _time.SunAzimuth = Mathf.Lerp(_time.AzStart, _time.AzEnd, f);// continues sweeping (extrapolates) at night
+
+        // nightFactor: 0 while the sun is up, ramping to 1 once it is ~6° below the horizon (civil twilight).
+        float belowDeg = Mathf.Max(-_time.SunAngle, 0f);
+        float nf = Mathf.Clamp(belowDeg / 6f, 0f, 1f);
+        _nightFactor = nf * nf * (3f - 2f * nf);                     // smoothstep
+
         TimeKey k = SampleDayScript(hour);
-        _time.SunEnergy = k.SunEnergy; _time.SunColor = k.SunColor;
-        _time.SkyTop = k.SkyTop; _time.SkyHorizon = k.SkyHorizon; _time.SkyGround = k.SkyGround;
-        _time.Ambient = k.Ambient; _time.AmbientSky = k.AmbientSky;
+        // night scaling: NightDarkness multiplies sky+ambient by nightFactor (1 = authored night).
+        float ns = Mathf.Lerp(1f, _time.NightDarkness, _nightFactor);
+        _time.SunEnergy = k.SunEnergy;
+        _time.SunColor = k.SunColor;
+        _time.SkyTop = ScaleRgb(k.SkyTop, ns);
+        _time.SkyHorizon = ScaleRgb(k.SkyHorizon, ns);
+        _time.SkyGround = ScaleRgb(k.SkyGround, ns);
+        _time.AmbientSky = k.AmbientSky;
+        // ambient: scaled toward dark, but never below the night floor (keeps the moonlit option alive).
+        float amb = k.Ambient * ns;
+        _time.Ambient = Mathf.Lerp(amb, Mathf.Max(amb, _time.NightAmbientFloor), _nightFactor);
         ComposeLighting();
     }
+
+    private static Color ScaleRgb(Color c, float s) => new Color(c.R * s, c.G * s, c.B * s, c.A);
 
     /// Interpolate the daytime color script (LightingPresets.DayScript anchors) at `hour`.
     private static TimeKey SampleDayScript(float hour)

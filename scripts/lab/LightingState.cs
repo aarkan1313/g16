@@ -20,6 +20,10 @@ public sealed class TimeState
     public float SunriseH = 6f, SunsetH = 18f;   // daylight window (hours)
     public float PeakElev = 60f;                 // sun elevation at solar noon (degrees)
     public float AzStart = 90f, AzEnd = 270f;    // sunrise→sunset compass azimuth sweep (E→W)
+    // NIGHT (Stage 3a): the night half of the 24 h arc. Defaults = physical (mirror dip, near-black floor).
+    public float NightNadir = -60f;        // sun elevation at solar midnight (deg, negative). default mirrors PeakElev.
+    public float NightDarkness = 1.0f;     // scales night sky+ambient: 1 = authored, <1 dark-scary, >1 moonlit-bright
+    public float NightAmbientFloor = 0.02f;// minimum ambient at deep night (≈0 = scary; raise for moonlit)
     // transitional sun + sky + ambient look (atmosphere-driven from Task 6):
     public float SunAngle = 35f, SunAzimuth = 40f, SunEnergy = 1.3f;
     public Color SunColor = new(1f, 0.95f, 0.86f);
