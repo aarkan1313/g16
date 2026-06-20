@@ -6,6 +6,25 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #2 Clouds · CO-3 (macro variety) built default-off + high-effort code review of CO-1/2/3.**
+CO-3 anti-repetition: per-layer field 23 (`AntiRepeat`, reserved in CO-1 → no stride growth) — a mid-scale
+weather tap clusters cumulus into varying-size groups with gaps; byte-identical ×3 shaders; default 0 = cumulus
+unchanged; Clouds-tab `macro variety` knob + `--antirepeat`. **Kept default-off/banked:** user flew it and the
+on-chunk benefit is marginal — the repetition they actually see is the **far/down "huge dome" regime**, which is
+a **Phase-B (infinite world) concern, not a region-look bug** (banked, not tuned). **Code review (8 finder angles
++ verify) findings, ranked + acted on:** (1) FIXED — `CloudShadowCheck` was rebuilding layer-0 with the new
+fields neutral (+ hardcoded CellScale=1.6), so `--shadowcheck` silently validated cumulus even under `--stratus`;
+now fed production's `PackedLayers` (single source of truth) — verified stratus now reads SATURATED (overcast
+sheet), cumulus/antirepeat PASS. (2) FIXED — cirrus `t<=0` guard (camera at/above the cirrus altitude rendered
+the sheet on the wrong side at low-altitude settings). (3) FIXED — CLI `--stratus/--cirrus/--antirepeat`
+parse-then-assign (bad value no longer overwrites the -1 sentinel → silent enable-at-0). (4) FIXED — stale
+`layers[40]/[24]` (5 vec4) comments → `[48]` (6 vec4). **DEFERRED (reported, not changed):** pre-existing
+**detail-erosion divergence** between the raymarch (2-octave, erodeAmt 0.45-0.95, edgeBoost 2.3-0.5) and the
+shadow/check shaders (1-octave, 0.35-0.85, 1.6-0.7) — shadows cast from a slightly fuller cloud EDGE than
+rendered; long-standing, within accepted tolerance (shadow gates passed), and fixing it changes the approved
+shadow look + adds shadow-pass cost → needs its own eye-gate. Cirrus envelope/streak two-rate drift shear
+(approved look). Commit `93a0dfa`. NEXT: CO-4 presets (or revisit CO-3 default-on if wanted).
+
 **2026-06-20 — Sun/Light #2 Clouds · CO-1 + CO-2 PASSED the live eye-gate. CO-3 next.**
 Drove the gate via `review.tscn` (key 6 cycles cumulus→stratus→cirrus). User verdicts (live): CO-1 cumulus
 vertical profile + CO-2 both **"fine / good"**. Iterations done at the gate: **stratus** now leaves occasional

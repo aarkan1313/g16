@@ -126,7 +126,12 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      density/orientation/size variety, kept ~free via early-out + 3-octave noise). Clouds-tab `cumulus↔stratus`
      + `cirrus: coverage/density/wind/scale/sharpness/variety/speed/altitude`; `--stratus`/`--cirrus`; review
      key 6 cycles cumulus→stratus→cirrus. Stratus = selectable type, cirrus = opt-in layer (default off).
-   - **CO-3 anti-repetition/horizon — NEXT** (one phase past the CO-2 pass). CO-4 presets after.
+   - **CO-3 anti-repetition — 🔨 BUILT 2026-06-20, default-off/banked.** Macro coverage/size variety (field 23,
+     lockstep ×3) clusters cumulus into varying-size groups; Clouds-tab `macro variety` + `--antirepeat`.
+     On-chunk benefit marginal (user couldn't tell); the visible repetition is the far/down **"huge dome"**
+     regime → **Phase-B (infinite world)**, banked. Horizon: no clear defect found from the live look — left.
+     High-effort code review done (4 fixes incl. shadowcheck-active-config; 1 pre-existing detail-erosion
+     divergence deferred). See DECISIONS. **CO-4 presets NEXT.**
 3. **GPU-compute physical atmosphere — ✅ SPEC'd 2026-06-20** (`specs/2026-06-20-gpu-atmosphere-design.md`).
    Hillaire LUTs on the CloudVolume **`Texture2Drd`/`CallOnRenderThread` seam, NOT FieldCompute** (memory
    `compute-to-material-callonrenderthread`). Toggleable sky-color provider, **default OFF = approved
@@ -143,6 +148,9 @@ Gated by the scale infra; hybrid build (spine first, content designed region-fir
 - **Scale spine — CDLOD → chunks → streaming → infinite.** T1 pop-free on the fixed region (the
   gate; clipmap killed WG1–15 via pops) → T2 stable world tiles → T3 streaming. Also the dominant
   perf lever toward 8 ms. Spec `specs/2026-06-18-terrain-lod-roadmap-design.md`.
+  - **Banked (user-flagged 2026-06-20, Sun/Light lane):** the cloud field reads as a **camera-anchored
+    "huge dome"** at far/down extreme-distance views (clouds line up / repeat far out). Fine on-chunk;
+    revisit for the infinite world (the cloud shell + cirrus altitude-plane both anchor to the camera).
 - **Biomes** — climate field (moisture/temperature) selects per-region material palettes + rules +
   flora; the ground palette/rule system is already data-driven for this.
 - **Macro procedural variety** — regions genuinely differ (not one mountain tiled).
