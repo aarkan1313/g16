@@ -64,6 +64,12 @@ uniform float detail_scale : hint_range(2.0, 16.0) = 6.0;    // finer = tex_scal
 uniform float detail_dist : hint_range(0.05, 1.0) = 0.1;     // fraction of ar_far_m over which detail fades out (0.1*2500 ≈ 250m near band; "near" detail should be genuinely near)
 uniform float detail_nrm_amp : hint_range(0.0, 2.0) = 0.8;   // derived detail-normal strength
 
+// --- Surface relief / parallax-occlusion (Phase B) ---------------------------
+uniform bool pom_on = false;                                 // master toggle (default OFF until eye-gate)
+uniform int pom_steps : hint_range(0, 64) = 24;              // max march steps (close range)
+uniform float pom_scale_m : hint_range(0.0, 0.5) = 0.06;     // displacement depth, meters
+uniform float pom_far_fade : hint_range(0.0, 1.0) = 0.6;     // distanceWeight at which POM hits 0
+
 // mask_mode: 0 height bands | 1 height+slope | 2 noise-broken bands |
 //            3 curvature-aware (dirt in hollows) | 4 steep=cliff sharp |
 //            5 world-noise biome patches

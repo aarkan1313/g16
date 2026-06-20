@@ -63,6 +63,17 @@
     { "id": "detail_nrm_amp", "label": "detail normal", "tab": "Detail", "type": "slider",
       "param": "detail_nrm_amp", "min": 0, "max": 2, "default": 0.8, "rand": true },
 
+    { "id": "pom_on", "label": "surface depth (POM)", "tab": "Detail", "type": "toggle",
+      "param": "pom_on", "default": false, "rand": false },
+    { "id": "pom_steps", "label": "POM steps", "tab": "Detail", "type": "slider",
+      "param": "pom_steps", "min": 0, "max": 64, "default": 24, "rand": false },
+    { "id": "pom_scale_m", "label": "POM depth m", "tab": "Detail", "type": "slider",
+      "param": "pom_scale_m", "min": 0.0, "max": 0.5, "default": 0.06, "rand": false },
+    { "id": "pom_far_fade", "label": "POM fade @", "tab": "Detail", "type": "slider",
+      "param": "pom_far_fade", "min": 0.0, "max": 1.0, "default": 0.6, "rand": false },
+    { "id": "ao_on", "label": "material AO", "tab": "Detail", "type": "toggle",
+      "param": "ao_on", "default": true, "rand": false },
+
     { "id": "splat_on", "label": "splat mix", "tab": "Splat", "type": "toggle",
       "param": "splat_on", "default": true, "rand": true },
     { "id": "splat_blend_mode", "label": "blend: legacy/weightmap", "tab": "Splat", "type": "enum",
