@@ -123,6 +123,17 @@ uniform float macro_hue_amp : hint_range(0.0, 0.2) = 0.05;   // hue drift (radia
 uniform float macro_sat_amp : hint_range(0.0, 0.6) = 0.18;   // saturation drift
 uniform float macro_scale2 : hint_range(60.0, 400.0) = 170.0; // 2nd (medium) octave wavelength
 
+// --- GM3-A: within-area variation (multi-scale world-pos material-property modulation) -------
+uniform bool  variation_on = true;
+uniform float variation_amt   : hint_range(0.0, 2.0) = 1.0;     // master
+uniform float var_val   : hint_range(0.0, 0.5)  = 0.12;   // ± brightness (drier patches lighter)
+uniform float var_sat   : hint_range(0.0, 0.5)  = 0.10;   // ± saturation
+uniform float var_rough : hint_range(0.0, 0.6)  = 0.15;   // ± roughness (the surface-character lever)
+uniform float var_nrm   : hint_range(0.0, 1.0)  = 0.25;   // ± normal-detail strength
+uniform float var_scale_macro : hint_range(15.0, 160.0) = 55.0;  // m, large character patches
+uniform float var_scale_meso  : hint_range(4.0, 40.0)   = 12.0;  // m, medium breakup
+uniform float var_far_keep : hint_range(0.0, 1.0) = 0.3;  // fraction of variation kept at distance
+
 // --- Lever 4: contact & wear shading ----------------------------------------
 // Uses already-computed curvature (v_curv) + slope to add depth: darken concave
 // folds (cheap AO), roughen/expose steep faces, optional snow dusting up high.
@@ -727,6 +738,30 @@ Breakup groundBreakup(vec2 uv, vec3 wp){
     return r;
 }
 
+// GM3-A: coherent ground-character patches. +field = drier (lighter+rougher), -field = compacted
+// (darker+smoother) — physically coherent; nrm uses a decorrelated field so bumpiness varies
+// independently. Domain-warped 2 octaves, world-XZ, distance-faded. No texture fetches.
+struct GroundVar { float val; float sat; float rough; float nrmAmp; };
+GroundVar groundVariation(vec3 wp){
+    GroundVar g; g.val = 0.0; g.sat = 0.0; g.rough = 0.0; g.nrmAmp = 0.0;
+    if (!variation_on) return g;
+    vec2 w = wp.xz;
+    vec2 warp = vec2(vnoise(w + vec2(31.0,17.0), var_scale_macro*0.6),
+                     vnoise(w + vec2(7.0,53.0),  var_scale_macro*0.6)) - 0.5;
+    w += warp * var_scale_macro * 0.5;
+    float nMacro = vnoise(w, max(var_scale_macro,1.0)) - 0.5;
+    float nMeso  = vnoise(w + vec2(91.0,11.0), max(var_scale_meso,1.0)) - 0.5;
+    float n = nMacro * 0.7 + nMeso * 0.3;                 // ~[-0.5,0.5] coherent character field
+    float nB = vnoise(w + vec2(211.0,143.0), max(var_scale_meso*1.7,1.0)) - 0.5;  // decorrelated bumpiness
+    float fade = mix(var_far_keep, 1.0, 1.0 - distanceWeight(wp));
+    float amt = variation_amt * fade;
+    g.val    = n  * var_val   * 2.0 * amt;
+    g.sat    = n  * var_sat   * 2.0 * amt;
+    g.rough  = n  * var_rough * 2.0 * amt;
+    g.nrmAmp = nB * var_nrm   * 2.0 * amt;
+    return g;
+}
+
 void fragment(){
     vec3 wp=v_world; vec3 nr=v_normal;
 
@@ -916,6 +951,17 @@ void fragment(){
     // light, not albedo — albedo-darkening gets washed out by ambient+SDFGI, which is
     // why max strength was barely visible). Ambient still fills, so shadows read
     // natural rather than black.
+
+    // GM3-A: within-area variation — modulate the composited surface character (post-blend,
+    // continuous, no extra fetches). val+rough correlated (drier=lighter+rougher); relief decorrelated.
+    {
+        GroundVar gv = groundVariation(wp);
+        alb *= (1.0 + gv.val);
+        float varLuma = dot(alb, vec3(0.2126, 0.7152, 0.0722));
+        alb = mix(vec3(varLuma), alb, clamp(1.0 + gv.sat, 0.0, 2.0));
+        rgh = clamp(rgh + gv.rough, 0.0, 1.0);
+        nrm.xy *= (1.0 + gv.nrmAmp);
+    }
 
     // splat debug view overrides the lit output (no early return — gdshader bans it).
     ALBEDO = (dbg==1) ? dbg_col : alb;
