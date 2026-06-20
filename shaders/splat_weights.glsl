@@ -36,6 +36,10 @@ layout(set = 0, binding = 1, std430) restrict writeonly buffer SplatOut {
 // wa = roles {0,1,2,3}; wb = roles {4,5,6, spare}. One packUnorm4x8 uint per texel.
 layout(set = 0, binding = 3, std430) restrict writeonly buffer WOutA { uint wa[]; };
 layout(set = 0, binding = 4, std430) restrict writeonly buffer WOutB { uint wb[]; };
+// Unit 4: per-texel BREAKUP masks (3rd readback). R=slope01, G=curv01 (0.5=flat),
+// B=cavity01, A=wear (max aspect-shade, flow-streak). Pure f(heightfield), baked once.
+// packUnorm4x8 → RGBA8 (same idiom as WOutA/WOutB); masks are [0,1], no float precision needed.
+layout(set = 0, binding = 5, std430) restrict writeonly buffer BreakupOut { uint breakup[]; };
 
 layout(set = 0, binding = 2, std430) restrict readonly buffer ParamsBuf {
     uint  res;
@@ -58,6 +62,13 @@ layout(set = 0, binding = 2, std430) restrict readonly buffer ParamsBuf {
     float macro_m;
     uint  rule_based;      // 0 = legacy bands (zone_weights) | 1 = rule engine (role_weights)
     float curv_k;          // curvature scale (m) separating convex ridges from concave hollows
+    // --- Unit 4: breakup-mask shaping ---
+    float bk_slope_lo;     // (reserved; fragment owns the visible ramp)
+    float bk_slope_hi;
+    float bk_curv_scale;   // metres of relief mapping curvature/cavity to [0,1]
+    float bk_cavity_gain;  // how aggressively concavity reads as a cavity
+    float bk_sun_azimuth;  // sun compass dir (radians) for aspect weathering
+    uint  bk_flow_iters;   // 0 = skip flow proxy; >0 = cheap gather passes
 };
 
 float fetch(int x, int z){
@@ -141,6 +152,52 @@ void role_weights(out float w[7], float hh, float slope, float curv){
     if(s>1e-4) for(int i=0;i<7;i++) w[i]/=s;
 }
 
+// --- Unit 4: breakup-mask helpers (pure f(heightfield)) ----------------------
+// Cavity: average of the 8-neighbour height minus this cell, gained + clamped.
+// Positive = this cell sits BELOW its surroundings (a pocket where debris/dirt
+// collects). Wider stencil than the 4-tap curv so it reads pockets, not noise.
+float cavity_at(ivec2 id, float hh){
+    float s = 0.0;
+    s += fetch(id.x-1,id.y) + fetch(id.x+1,id.y);
+    s += fetch(id.x,id.y-1) + fetch(id.x,id.y+1);
+    s += fetch(id.x-1,id.y-1) + fetch(id.x+1,id.y-1);
+    s += fetch(id.x-1,id.y+1) + fetch(id.x+1,id.y+1);
+    float concavity = (s * 0.125) - hh;             // >0 = pocket
+    return clamp(concavity * bk_cavity_gain / max(bk_curv_scale, 1e-3), 0.0, 1.0);
+}
+
+// Aspect: 0 = faces the sun's compass direction, 1 = faces away (shade side).
+// Uses the surface normal's XZ projection vs the sun azimuth unit vector.
+float aspect_at(vec3 n){
+    vec2 nd = n.xz;
+    float l = length(nd);
+    if (l < 1e-4) return 0.5;                        // flat-up = neutral
+    nd /= l;
+    vec2 sun = vec2(sin(bk_sun_azimuth), cos(bk_sun_azimuth));
+    return clamp(0.5 - 0.5 * dot(nd, sun), 0.0, 1.0); // facing sun -> 0, away -> 1
+}
+
+// CHEAP flow proxy (NOT true sequential routing — that's a multi-dispatch job;
+// erosion's real drainage replaces this later). Gather-only: each cell sums how
+// much higher its neighbours are (water draining toward it), widened per pass,
+// re-weighted by local slope so gullies streak. flow_iters=0 disables.
+float flow_at(ivec2 id, float hh, float slope){
+    if (bk_flow_iters == 0u) return 0.0;
+    float acc = 0.0;
+    for (uint it = 0u; it < bk_flow_iters && it < 8u; it++){
+        float r = 1.0 + float(it);                   // widen the gather each pass
+        float up = 0.0;
+        up += max(fetch(id.x-int(r),id.y) - hh, 0.0);
+        up += max(fetch(id.x+int(r),id.y) - hh, 0.0);
+        up += max(fetch(id.x,id.y-int(r)) - hh, 0.0);
+        up += max(fetch(id.x,id.y+int(r)) - hh, 0.0);
+        acc += up / (r * max(bk_curv_scale, 1e-3));
+    }
+    // more flow where it's steep enough to channel but not a sheer cliff face
+    float channel = slope * (1.0 - smoothstep(0.7, 0.95, slope));
+    return clamp(acc * channel, 0.0, 1.0);
+}
+
 void main(){
     ivec2 id = ivec2(gl_GlobalInvocationID.xy);
     if (id.x >= int(res) || id.y >= int(res)) return;
@@ -188,4 +245,12 @@ void main(){
     int wi = id.y*int(res)+id.x;
     wa[wi] = packUnorm4x8(vec4(w[0], w[1], w[2], w[3]));
     wb[wi] = packUnorm4x8(vec4(w[4], w[5], w[6], 0.0));
+
+    // --- Unit 4: breakup masks (slope/curv/n/hh/id already computed above) ---
+    float slope01 = clamp(slope, 0.0, 1.0);
+    float curv01  = clamp(0.5 + curv / max(bk_curv_scale, 1e-3) * 0.5, 0.0, 1.0);
+    float cavity  = cavity_at(id, hh);
+    float aspect  = aspect_at(n);
+    float flow    = flow_at(id, hh, slope);   // gather-only PROXY — erosion's real drainage replaces this
+    breakup[wi] = packUnorm4x8(vec4(slope01, curv01, cavity, max(aspect, flow)));
 }
