@@ -6,6 +6,19 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #2 Clouds · CO-4 (preset library) BUILT, awaiting the picker flip-through gate.**
+6 new Clouds-tab presets composing the CO-1/2/3 levers into distinct believable skies: Fair Weather Cumulus
+(3D profile + macro variety), Cirrus Veil, Cumulus & Cirrus (layered), Overcast Stratus (shape-mode sheet),
+Stormy Anvil (anvil profile), Mackerel Sky (broken cumulus + cirrus). Pure DATA (`cloud_presets.json`) — the
+preset infra already existed; the new control ids route via the registry, bool toggles via numeric 1/0 (like
+`cloud_godrays`). **One code change:** `ApplyCloudPreset` now RESETS the cloud-type levers (profile_on/shape_mode/
+cirrus_on/anti_repeat) before applying, so every preset is **self-contained** (selecting a preset that omits
+cirrus no longer inherits a leftover cirrus from the prior pick) — the right-depth fix vs adding off-keys to every
+preset. Verified: presets apply (`--preset=N`) + render distinct (Cirrus Veil/Overcast Stratus/Stormy Anvil
+auto-shots). Presets are opt-in selections → startup default look unchanged. Commit `acd90d8`. **This ~completes
+#2 Clouds overhaul** (CO-1..CO-4); weather-axis tie-in stays DEFERRED to its own stage. NEXT (user's pick):
+#3 GPU atmosphere (AT-1, now unblocked since #2 landed) · #4 Stage-4 auto-cycle · or revisit CO-3 default-on.
+
 **2026-06-20 — Sun/Light #2 Clouds · CO-3 (macro variety) built default-off + high-effort code review of CO-1/2/3.**
 CO-3 anti-repetition: per-layer field 23 (`AntiRepeat`, reserved in CO-1 → no stride growth) — a mid-scale
 weather tap clusters cumulus into varying-size groups with gaps; byte-identical ×3 shaders; default 0 = cumulus

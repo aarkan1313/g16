@@ -131,7 +131,12 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      On-chunk benefit marginal (user couldn't tell); the visible repetition is the far/down **"huge dome"**
      regime → **Phase-B (infinite world)**, banked. Horizon: no clear defect found from the live look — left.
      High-effort code review done (4 fixes incl. shadowcheck-active-config; 1 pre-existing detail-erosion
-     divergence deferred). See DECISIONS. **CO-4 presets NEXT.**
+     divergence deferred). See DECISIONS.
+   - **CO-4 presets — 🔨 BUILT 2026-06-20, awaiting the picker flip-through eye-gate.** 6 new Clouds-tab
+     presets composing the new types (Fair Weather Cumulus, Cirrus Veil, Cumulus & Cirrus, Overcast Stratus,
+     Stormy Anvil, Mackerel Sky); `--preset=N`. `ApplyCloudPreset` resets the type levers first → self-contained
+     presets. Verified distinct via auto-shots. **#2 Clouds overhaul ~COMPLETE pending this gate** (weather-axis
+     tie-in remains DEFERRED to its own stage).
 3. **GPU-compute physical atmosphere — ✅ SPEC'd 2026-06-20** (`specs/2026-06-20-gpu-atmosphere-design.md`).
    Hillaire LUTs on the CloudVolume **`Texture2Drd`/`CallOnRenderThread` seam, NOT FieldCompute** (memory
    `compute-to-material-callonrenderthread`). Toggleable sky-color provider, **default OFF = approved
