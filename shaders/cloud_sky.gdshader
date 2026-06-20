@@ -18,6 +18,10 @@ uniform int cloud_debug = 0;   // 0 normal | 1 show raw cloud tex
 uniform float sun_disc_energy = 1.3;
 uniform float sun_size = 0.6;    // angular disc radius in DEGREES (visible sun size)
 uniform float sun_limb = 0.55;   // limb darkening: 0 = flat disc, 1 = strong center→rim falloff
+uniform float sun_corona_size : hint_range(40.0, 6000.0) = 1200.0;  // tight inner bloom (higher = tighter)
+uniform float sun_corona_energy = 2.0;
+uniform float sun_halo_size : hint_range(8.0, 400.0) = 90.0;        // wide soft glow (lower = wider)
+uniform float sun_halo_energy = 0.4;
 
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
@@ -51,8 +55,9 @@ vec3 sun_layers(vec3 rd) {
     float discMask = smoothstep(0.0, 0.04, mu);                    // soft rim
     float limb = mix(1.0, mix(0.45, 1.0, sqrt(mu)), sun_limb);     // center-bright → dimmer warm rim
     float disc = discMask * limb;
-    float glow = pow(max(cosSun, 0.0), 220.0) * 0.5;               // (replaced in Task 3)
-    return LIGHT0_COLOR * sun_disc_energy * (disc * 12.0 + glow);
+    float corona = pow(max(cosSun, 0.0), sun_corona_size) * sun_corona_energy;  // searing inner ring
+    float halo   = pow(max(cosSun, 0.0), sun_halo_size)   * sun_halo_energy;    // wide warm forward-scatter
+    return LIGHT0_COLOR * sun_disc_energy * (disc * 12.0 + corona + halo);
 }
 
 void sky(){
