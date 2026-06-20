@@ -119,6 +119,8 @@ public partial class TerrainLabUI : Control
             case "fog_heightd":     env.FogHeightDensity = v; break;
             case "exposure":        env.TonemapExposure = v; break;
             case "volfog_d":        env.VolumetricFogDensity = v; break;
+            case "sun_size":  _cloud?.SetSunSize(v); break;
+            case "sun_limb":  _cloud?.SetSunLimb(v); break;
         }
     }
     private void OrientSun(DirectionalLight3D sun)

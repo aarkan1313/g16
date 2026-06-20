@@ -16,6 +16,8 @@ uniform int cloud_debug = 0;   // 0 normal | 1 show raw cloud tex
 // light's energy globally (terrain gloom), but the VISIBLE sun disc must stay bright — a cloud
 // in front occludes it via the dome composite, total coverage elsewhere must NOT dim it.
 uniform float sun_disc_energy = 1.3;
+uniform float sun_size = 0.6;    // angular disc radius in DEGREES (visible sun size)
+uniform float sun_limb = 0.55;   // limb darkening: 0 = flat disc, 1 = strong center→rim falloff
 
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
@@ -44,8 +46,12 @@ vec2 dir_to_uv(vec3 d){
 vec3 sun_layers(vec3 rd) {
     if (!LIGHT0_ENABLED) { return vec3(0.0); }
     float cosSun = dot(rd, LIGHT0_DIRECTION);
-    float disc = smoothstep(0.9994, 0.9998, cosSun);          // ~0.6° disc
-    float glow = pow(max(cosSun, 0.0), 220.0) * 0.5;          // halo
+    float discEdge = cos(radians(sun_size));                       // cosSun at the disc rim
+    float mu = clamp((cosSun - discEdge) / max(1.0 - discEdge, 1e-6), 0.0, 1.0);  // 0 rim → 1 center
+    float discMask = smoothstep(0.0, 0.04, mu);                    // soft rim
+    float limb = mix(1.0, mix(0.45, 1.0, sqrt(mu)), sun_limb);     // center-bright → dimmer warm rim
+    float disc = discMask * limb;
+    float glow = pow(max(cosSun, 0.0), 220.0) * 0.5;               // (replaced in Task 3)
     return LIGHT0_COLOR * sun_disc_energy * (disc * 12.0 + glow);
 }
 

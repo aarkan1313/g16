@@ -443,6 +443,8 @@ public partial class CloudVolume : Node
     // actual cloud in front occludes it (dome composite). Pushed from TerrainLabUI._baseSunEnergy.
     private float _sunDiscEnergy = 1.3f;
     public void SetSunDiscEnergy(float e) { _sunDiscEnergy = e; _skyMat?.SetShaderParameter("sun_disc_energy", e); }
+    public void SetSunSize(float deg) { _skyMat?.SetShaderParameter("sun_size", Mathf.Clamp(deg, 0.05f, 8f)); }
+    public void SetSunLimb(float v)   { _skyMat?.SetShaderParameter("sun_limb", Mathf.Clamp(v, 0f, 1f)); }
 
     /// Mood sky colors → cloud ambient/scatter (compute) + the sky-shader background
     /// gradient, so clouds + the sky behind them track the chosen mood/time-of-day.
