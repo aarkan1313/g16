@@ -23,6 +23,33 @@ public partial class TerrainLabUI : Control
     // of being overwritten every frame. -1 forces the first apply.
     private float _lastOvercast = -1f;
 
+    // Inspection headlamp (press L): a movable omni light at the camera to check how surfaces read,
+    // especially at night before real moonlight (3c). Toggle on/off; follows the camera while on.
+    private OmniLight3D? _inspectLight;
+    private bool _inspectOn;
+    private bool _lastLDown;
+
+    /// Toggle the inspection headlamp (press L). Lazily creates a shadow-casting omni light parented to
+    /// the scene root; it follows the camera while on. A debug aid to check how surfaces read under a
+    /// movable light (e.g. dark night before moonlight lands in 3c).
+    private void ToggleInspectLight()
+    {
+        if (_inspectLight == null)
+        {
+            _inspectLight = new OmniLight3D
+            {
+                OmniRange = 2000f,
+                LightEnergy = 8f,
+                LightColor = new Color(1f, 0.96f, 0.90f),
+                ShadowEnabled = true,
+            };
+            GetNode<Node3D>("/root/TerrainLabRoot").AddChild(_inspectLight);
+        }
+        _inspectOn = !_inspectOn;
+        _inspectLight.Visible = _inspectOn;
+        GD.Print($"[inspect light] {(_inspectOn ? "ON (follows camera)" : "off")}");
+    }
+
     // Per-frame overcast tracker. NO scene writes here — it only updates the overcast amount and
     // re-runs the composer's ApplyOvercastScaling (the one writer of sun-energy/ambient/fog-color), so
     // this can't diverge from / fight LightingComposer (Stage 2 T2-fix).
@@ -64,6 +91,12 @@ public partial class TerrainLabUI : Control
             Vector3 camPos = GetNode<Camera3D>("/root/TerrainLabRoot/Camera").GlobalPosition;
             _terrain.SetCameraWorld(camPos);
             _cloud?.SetCameraWorld(camPos);
+
+            // Inspection headlamp (L): toggle a movable omni light at the camera to check surfaces.
+            bool lDown = Input.IsKeyPressed(Key.L);
+            if (lDown && !_lastLDown) { ToggleInspectLight(); }
+            _lastLDown = lDown;
+            if (_inspectOn && _inspectLight != null) { _inspectLight.GlobalPosition = camPos; }
         }
         // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)

@@ -46,8 +46,8 @@ uniform float moon_disc_energy = 0.9;
 uniform float moon_size = 1.2;        // angular radius in DEGREES
 uniform float moon_limb = 0.6;        // limb darkening
 uniform float moon_phase = 1.0;       // 0 new (dark) .. 0.5 half .. 1 full
-uniform float moon_halo_size : hint_range(8.0, 400.0) = 120.0;   // higher = tighter (a subtle moon glow, not a blob)
-uniform float moon_halo_energy = 0.3;
+uniform float moon_halo_size : hint_range(8.0, 400.0) = 140.0;   // higher = tighter (a subtle moon glow, not a blob)
+uniform float moon_halo_energy = 0.2;
 uniform float moon_surf_cells : hint_range(1.0, 40.0) = 8.0;
 uniform float moon_surf_contrast : hint_range(0.0, 1.0) = 0.5;
 uniform float moon_surf_spots : hint_range(0.0, 1.0) = 0.4;
@@ -200,14 +200,18 @@ vec3 moon_layers(vec3 rd) {
     float lit = smoothstep(-0.08, 0.08, dot(n, L));
     disc *= lit;
 
-    float halo = pow(max(cosM, 0.0), moon_halo_size) * moon_halo_energy;
+    // Halo = scattered moonlight, so it must scale with the ILLUMINATED FRACTION (a thin crescent
+    // emits little light → faint halo; a full moon → full halo). Without this the glow was a fixed
+    // bright ring regardless of phase ("doesn't change relative to shape").
+    float illum = 0.5 + 0.5 * cos(angle);   // 1 full · 0.5 half · 0 new
+    float halo = pow(max(cosM, 0.0), moon_halo_size) * moon_halo_energy * illum;
 
     // per-pixel cloud occlusion (same mechanism as the sun)
     float aPix = (cloud_enabled && rd.y > 0.0) ? clamp(texture(cloud_rd_tex, dir_to_uv(rd)).a, 0.0, 1.0) : 0.0;
     float discT = (1.0 - aPix);
     float haloT = (1.0 - aPix * 0.5);
 
-    vec3 core = moon_color * disc * 3.0 * discT;
+    vec3 core = moon_color * disc * 2.2 * discT;   // lower mult → less runaway bloom (the "crazy luminosity")
     vec3 glow = moon_color * halo * haloT;
     return moon_disc_energy * vis * (core + glow);
 }
