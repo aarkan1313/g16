@@ -16,7 +16,7 @@ public readonly record struct CloudLayer(
     float Edge, float Detail, float DetailSize,
     float PhaseG, float PhaseIso, float Albedo, float SunAbsorb,
     float TintR, float TintG, float TintB,
-    float ProfileBottom, float ProfileTop, float Anvil,
+    float ProfileBottom, float ProfileTop, float Anvil, float ShapeMode,
     int NoiseId, bool Enabled);
 
 /// Owns the cloud-layer array: load/validate from JSON, pack into a float[] run for the
@@ -25,7 +25,7 @@ public readonly record struct CloudLayer(
 public static class CloudLayers
 {
     public const int MaxLayers = 8;
-    public const int Stride = 24;   // floats per layer: 12 density (0-11) + 7 lighting (12-18) + 3 profile (19-21) + 2 reserved (22-23) = 6 vec4. See Pack.
+    public const int Stride = 24;   // floats per layer: 12 density (0-11) + 7 lighting (12-18) + 3 profile (19-21) + shape-mode (22) + 1 reserved (23) = 6 vec4. See Pack.
     public const string Path = "res://data/cloud_layers.json";
 
     // Build one CloudLayer from key→value accessors. The ONLY place layer field names +
@@ -39,7 +39,7 @@ public static class CloudLayers
             F("edge", 0.5f), F("detail", 0.4f), F("detail_size", 1f),
             F("phase_g", 0.8f), F("phase_iso", 0.2f), F("albedo", 1f), F("sun_absorb", 1f),
             F("tint_r", 1f), F("tint_g", 1f), F("tint_b", 1f),
-            F("profile_bottom", 0f), F("profile_top", 1f), F("anvil", 0f),
+            F("profile_bottom", 0f), F("profile_top", 1f), F("anvil", 0f), F("shape_mode", 0f),
             I("noise_id", 0), B("enabled", true));
 
     /// The default deck stack from data/cloud_layers.json (System.Text.Json).
@@ -111,7 +111,7 @@ public static class CloudLayers
             packed[o + 18] = L.TintB;
             // 19-21: VERTICAL PROFILE (CO-1) — density-affecting, read by BOTH shaders
             packed[o + 19] = L.ProfileBottom; packed[o + 20] = L.ProfileTop;
-            packed[o + 21] = L.Anvil;         packed[o + 22] = 0f;   // reserved (CO-2 ShapeMode)
+            packed[o + 21] = L.Anvil;         packed[o + 22] = L.ShapeMode;   // 22 = stratus shape-mode (CO-2)
             packed[o + 23] = 0f;              // reserved
             count++;
         }

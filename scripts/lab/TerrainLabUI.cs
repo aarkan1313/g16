@@ -124,6 +124,7 @@ public partial class TerrainLabUI : Control
             if (pp.Length > 2 && float.TryParse(pp[2], out float pa)) { _cloud.SetKnob("anvil", pa); }
             GD.Print($"[cloudprofile] CO-1 vertical profile ON ({_cloudProfileCli})");
         }
+        if (_stratusCli >= 0f) { _cloud.SetKnob("shape_mode", _stratusCli); GD.Print($"[stratus] shape_mode={_stratusCli}"); }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
         if (_shadowDbgCli == 1) { _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground

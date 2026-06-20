@@ -103,7 +103,7 @@ const float WARP_AMOUNT   = 600.0;          // domain-warp displacement in meter
 float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
                     float lsize, float lcell, float ldens, float ltype,
                     float ledge, float ldetail, float ldetsize, float covW,
-                    float pBottom, float pTop, float anvil){
+                    float pBottom, float pTop, float anvil, float shapeMode){
     float r = length(p);
     float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
     vec3 lp = vec3(p.x, r - baseR, p.z);
@@ -140,6 +140,7 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     float cellScale = sScale * 0.7 * max(lcell, 0.05);   // higher cell freq → MANY clumps, not few giants
     float cell = texture(shape_tex, lpw * cellScale + vec3(wCell.x, h, wCell.y) * cellScale).g;
     float cellGate = smoothstep(mix(0.80, 0.42, coverage), mix(1.0, 0.78, coverage), cell);
+    cellGate = mix(cellGate, 1.0, shapeMode);   // stratus: don't fragment into clumps → a connected sheet
     shape *= cellGate;
 
     shape *= type_gradient(h, type);
@@ -157,7 +158,7 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
         float det2 = texture(detail_tex, duv * 3.1 + vec3(0.37)).r;
         det = det * 0.6 + det2 * 0.4;
         float edgeBoost = mix(2.3, 0.5, shape);              // erode edges MUCH harder → crisp silhouettes
-        float erodeAmt = mix(0.45, 0.95, h) * ldetail * edgeBoost;
+        float erodeAmt = mix(0.45, 0.95, h) * ldetail * edgeBoost * (1.0 - 0.7 * shapeMode);   // stratus: smoother (less cauliflower)
         shape = clamp(remap(shape, det * erodeAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
     }
     return shape * ldens * densBias;   // opacity applied by the caller (sigma)
@@ -175,7 +176,7 @@ float density_all(vec3 p, vec2 windOff, out float opacOut, out int activeOut){
         if (r < baseR || r > topR) continue;
         float d = layer_density(p, baseR, topR, windOff,
             LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4),
-            LF(i,19), LF(i,20), LF(i,21));
+            LF(i,19), LF(i,20), LF(i,21), LF(i,22));
         total += d; opAccum += d * LF(i,6);
         if (d > bestD){ bestD = d; activeOut = i; }
     }

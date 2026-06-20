@@ -83,6 +83,7 @@ public partial class CloudVolume : Node
     private float _profileBottom = 0.15f;   // believable cumulus starting point (applied only when _profileOn)
     private float _profileTop = 0.6f;
     private float _anvil = 0f;
+    private float _shapeMode = 0f;   // CO-2: 0 cumulus (default) .. 1 stratus sheet (drives layer 0)
     private System.Collections.Generic.List<CloudLayer> _layers = new();
     private int _layerCount;
 
@@ -419,7 +420,7 @@ public partial class CloudVolume : Node
             Altitude = _p.AltitudeM, Thickness = _p.ThicknessM, Size = _p.Size, CellScale = _cellScale,
             CoverageWeight = 1f, Density = _p.Density, Opacity = _p.Opacity, Type = _p.CloudType,
             Edge = _p.Edge, Detail = _p.Detail, DetailSize = _p.DetailSize,
-            ProfileBottom = pb, ProfileTop = pt, Anvil = av, NoiseId = 0, Enabled = true });
+            ProfileBottom = pb, ProfileTop = pt, Anvil = av, ShapeMode = _shapeMode, NoiseId = 0, Enabled = true });
         return CloudLayers.Pack(eff, out count);
     }
 
@@ -621,6 +622,7 @@ public partial class CloudVolume : Node
             case "profile_bottom":  _profileBottom = Mathf.Clamp(v, 0f, 0.6f); break;   // CO-1 base round-up height
             case "profile_top":     _profileTop = Mathf.Clamp(v, 0.2f, 1f); break;      // CO-1 top fade onset
             case "anvil":           _anvil = Mathf.Clamp(v, 0f, 1f); break;             // CO-1 cumulonimbus top spread
+            case "shape_mode":      _shapeMode = Mathf.Clamp(v, 0f, 1f); break;          // CO-2 cumulus↔stratus sheet
         }
     }
 
