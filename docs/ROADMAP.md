@@ -219,8 +219,12 @@ Last updated: 2026-06-19.
   non-cloud sky gradient in the distance so a sparse sky doesn't look cut off. Surfaced in the
   T-checkpoint review; deferred to a focused pass after the cloud core is judged good.
 ## ☀️ ACTIVE arc — SUN & LIGHT (started 2026-06-19; user pulled it forward after the god-ray work)
-> Brainstormed into a 3-stage arc. Target: **full-range tunable** (physical default, every knob
-> exposed → stylized → fantasy). Whole arc handoff: `docs/superpowers/handoffs/2026-06-19-sun-light-arc-handoff.md`.
+> **⮕ MASTER ARCHITECTURE + ROADMAP: `specs/2026-06-20-sun-light-system-architecture.md`** — the full
+> vision. Per user direction (2026-06-20): a **fully decoupled, data-driven sky & light system** = three
+> orthogonal axes (**Time × Weather × Mood/grade**) + a **Celestial** content layer, every parameter a
+> knob, any combination valid ("any weather at any time, any mood at any time — it's a complex system").
+> Today a "mood" bundles all of it; the arc splits it behind one `LightingComposer`. Target: full-range
+> tunable (physical default → stylized → fantasy). Whole arc handoff: `handoffs/2026-06-19-sun-light-arc-handoff.md`.
 - **Stage 1 — Sun disc polish — BUILT + on `experiment/presentation` (2026-06-19→20), builds clean.** The
   flat white dot is replaced by `sun_layers(rd, aSun)` in `cloud_sky.gdshader`: limb-darkened disc + corona
   + warm atmospheric halo + horizon reddening/growth (elev-driven, `+LIGHT0_DIRECTION.y`) + soft
@@ -231,14 +235,20 @@ Last updated: 2026-06-19.
   cherry-picked onto `experiment/presentation` (`b9cf52d..6a08f93`) to avoid the parked-Unit-4 terrain
   shader. ⚠ EYE-GATE still owed (visual review of the disc/halo/reddening in motion). Spec/plan under
   `docs/superpowers/{specs,plans}/2026-06-19-sun-disc-polish*`.
-- **Stage 2 — Time-of-day driver** — one `time_of_day` param moves the sun + drives whole-sky color + light
-  energy/color + fog/ambient together (this IS the "overall light feel"). 6 moods fold in (open fork:
-  keyframes vs. style axis). Its own spec when reached.
-- **Stage 3 — Night & celestial** — folds into the day/night arc below.
+- **Stage 2 — Decoupling + Time-of-day driver (daylight) — SPEC'd + PLANNED (2026-06-20), awaiting user
+  review of the spec.** Build `LightingComposer` (the one writer) + 3 pure-data state structs (Time/Weather/
+  Grade); split the 6 moods into per-axis presets (+ combo shim); drive the **Time** axis from a single
+  `time_of_day` knob = analytic sun arc (position) + a keyframed daytime color script (sun color/energy +
+  sky gradient + ambient). Weather + Grade become independent knobs. Below-horizon = dark (night = Stage 3).
+  Spec `specs/2026-06-20-lighting-decouple-and-time-axis-design.md`, plan
+  `plans/2026-06-20-lighting-decouple-and-time-axis.md` (7 tasks). NEXT after spec review: execute.
+- **Stage 3 — Night & celestial** — extend Time through 24 h: sky darkens to night + night ambient/GI;
+  **moon** (disc + phases + cool moonlight 2nd light) + **star field**; clouds occlude sun AND moon.
+- **Stage 4 — Auto day/night cycle + fantasy/exotic** — a running clock (play/pause/speed) with smooth
+  dawn/dusk transitions; blood/colored moon, colored/multiple suns/moons, exotic sky palettes (all knobs).
 
-## 🌌 Future arc — DAY/NIGHT + CELESTIAL BODIES (now Stages 2–3 of the Sun & Light arc above)
-> User vision (2026-06-17): a full sky-time system. Pulled forward 2026-06-19 (Stage 1 underway).
-> Stage 2 = day/night cycle + variable sun; Stage 3 = moons/stars/fantasy. Large coordinated arc.
+> (Full per-stage scope + acceptance in the master architecture doc above. The old "DAY/NIGHT + CELESTIAL
+> BODIES future arc" is now Stages 3–4 here.)
 - **Day/night cycle** — sun travels, time-of-day drives sky color + light energy + shadows;
   dawn/dusk/golden-hour transitions; sun peeking over / setting behind mountains.
 - **Variable sun coverage / position** — sun height/azimuth as part of the cycle, not a fixed
