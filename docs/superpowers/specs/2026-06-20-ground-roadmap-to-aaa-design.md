@@ -31,6 +31,26 @@ graveyard was caused by repeated teardowns — do not repeat it).
   fit). Material work is fragment-side + baked-once and must stay cheap; the geometry/scale cost
   is the CDLOD arc's job. Always profile `--profmove`.
 
+## Weighting — this is a SYSTEM, not a texture problem (user steer, 2026-06-20)
+
+Good textures are a **prerequisite**, but they are NOT where most of the quality (or the work)
+lives. AAA ground is a *system*, and the heavy engineering is in the **rendering tech**:
+mask generation (at the *right resolution* — Unit 4 failed precisely because its masks were
+4 m-coarse), shader compositing, material **blending** quality, **tile-to-tile** transitions
+(both material-to-material across the surface and, later, chunk-seam continuity), within-area
+procedural variation, and how all of it survives lighting. **These weigh as much as or more than
+the texture choices.** Concretely in the sequence below: GM1 (palette) is the small prerequisite;
+**GM2–GM4 are predominantly shader/mask/blending engineering** and are where the bulk of the AAA
+work is. Don't read the "material foundation first" ordering as "textures are the main thing" —
+it's "you can't judge the shader/blending work until the inputs are distinct."
+
+Two corollaries: (1) **masks must be generated at adequate resolution / the right space** (the
+Unit 4 lesson — a baked 4 m region-stretched mask can't do close-range work; prefer fragment-side
+world-position fields or higher-res/finer-derived signals); (2) **lighting is co-equal** — the
+current "drab" is partly warm/aerial light washing the palette flat, and the **Sun & Light arc is
+progressing in a parallel chat** (sun-disc polish built; time-of-day next). Perceived material
+quality depends on it, so coordinate — don't chase material contrast that's really a lighting issue.
+
 ## North star — what "AAA ground for this region" means when done
 
 You fly from peak to valley and the ground reads **real**: distinct materials with genuine
