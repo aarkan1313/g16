@@ -6,9 +6,10 @@ tile-to-tile matter as much or more than textures"). It is the *real* fix for th
 complaint — "the ground doesn't have enough variety within an area" — that Unit 4 (context
 breakup) failed to deliver.
 
-> **Status: DESIGN — awaiting user review.** Build order: do GM1 (palette) live-audit + GM2
-> (height maps) first per the roadmap, unless the GM1 audit shows variation should jump ahead.
-> This spec is drafted now so the design is ready and reviewable.
+> **Status: Approach A BUILT (default-on, gentle), eye-gate owed (2026-06-20).** Committed `82f60fb`
+> (shader) + `4108ad2` (controls); near-zero perf. Approaches **B/C (true material patches via texture
+> arrays) remain DESIGN** — deferred pending the user's verdict on A. LOOK awaiting the combined
+> eye-gate (NEEDS_REVIEW §1c). Do NOT build B/C until A is judged.
 
 ## The problem, precisely
 

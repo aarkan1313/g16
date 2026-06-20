@@ -5,10 +5,12 @@ Takes ground from "painted" to "real 3D surface": **real height data sharpens th
 heightblend interlock and revives POM relief** — the #2 AAA lever after the palette, and core
 "masks/shaders/blending" work (height drives the blend boundary + parallax).
 
-> **Status: DESIGN — awaiting user review.** ⚠ Unlike GM1/GM3-A (additive, free, toggled), **GM2
-> changes a look that is already APPROVED** (the compositing-core interlock) and revives POM — so it
-> **must be eye-gated**; it should not ship default-on blind. Build is the natural next *eye-gated*
-> session.
+> **Status: BUILT (Approach B), default-off, eye-gate owed (2026-06-20).** Committed `39058ab` (compute
+> module) + `b907b77` (shader threading + toggle). `height_from_maps` defaults **false** → identical to
+> the approved look until enabled. ⚠ It alters the approved interlock + revives POM, so the LOOK is
+> **awaiting the user's combined eye-gate** (NEEDS_REVIEW §1d) — it is NOT approved yet, only built
+> behind its toggle. Mechanically verified: Poisson normal→height bake recovers genuine relief
+> (basalt columns / talus cobbles), shader compiles, off=no regression, forced-on 5.1 ms (in budget).
 
 ## Problem
 

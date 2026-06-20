@@ -5,6 +5,15 @@ ground items in `ROADMAP.md` (which stays as the cross-arc index but defers to t
 ground sequence) and the per-unit framing in the 2026-06-17 / 2026-06-19 ground specs (those
 remain valid as *layer* designs; this fixes their ORDER and completeness).
 
+## ⏸ GROUND LANE — PAUSED (2026-06-20) for a project-wide re-roadmap
+
+**Built this lane, all committed, none user-approved yet:** **GM1** (data-driven palette), **GM2** (real
+per-material height from normals, Poisson bake), **GM3-A** (within-area variation). That's three phases past
+the "approve before the next phase" rule — so the lane STOPS here. **Defaults reproduce the approved-era look:**
+palette `active=alpine_green` (prior set), GM3-A `variation_on=false`, GM2 `height_from_maps=false` — every new
+feature is opt-in. **GM1+GM2+GM3-A await ONE combined live eye-gate** (NEEDS_REVIEW §1c), after which we
+re-roadmap. **Do NOT start GM4, GM3 Approach B/C, or any new unit** until then. Unit 4 stays parked.
+
 ## Why this doc exists
 
 The ground arc had been built one shader "Unit" at a time, and each piece kept under-delivering
@@ -129,9 +138,12 @@ Legend: ✅ done/approved · ◐ partial · 🅿️ built-but-parked · ⬜ not 
   `01_columnar_basalt_face` · high=`04_arctic_rock_with_orange_lichen` · peak=`01_fresh_powder`.
 - **Gate:** reads photoreal/varied across the gradient, not drab. (Old G2.)
 
-### GM2 — Real per-material height maps  *(flat → deep surface)*
+### GM2 — Real per-material height maps  *(flat → deep surface)*  — ✅ BUILT (Approach B), eye-gate owed
 - **📄 Detailed design: `specs/2026-06-20-ground-gm2-real-height-maps-design.md`** (library has NO height →
   derive from normal via a GPU Poisson solve, baked once; one seam `material_height_uv`; ⚠ eye-gated — alters the approved interlock).
+- **BUILT 2026-06-20** (`39058ab`,`b907b77`): `shaders/height_from_normal.glsl` + `HeightCompute.cs` derive
+  real height from normals (Jacobi-Poisson, inspected = genuine relief); threaded through the height seam +
+  `height_from_maps` toggle (default OFF). Revives POM. NEEDS_REVIEW §1d. (GM2-C displacement/array = later.)
 - **Goal:** genuine surface depth — sharpens the heightblend interlock and revives POM relief
   (both currently derive height from inverted roughness, which is too flat).
 - **Approach:** generate per-material height from normal+albedo (or source better maps); bind
