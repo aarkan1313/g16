@@ -6,6 +6,29 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun SURFACE shader + sun presets: SHIPPED, default ON (realistic_midday).** User asked
+for a procedural sun surface + a sun-preset pattern (spec/plan `2026-06-20-sun-surface-shader-and-presets*`).
+v1 FAILED the eye-gate ("weird suns don't look good, didn't carry"); root-caused via auto-shot iteration:
+sub-degree disc (surface too small), nuclear core clipped texture to white, full-color override = flat
+blob, plus my cloud fix had stopped cloud_sky installing when clouds start off. Reworked: sphere-shaded
+textured ball (foreshorten + de-foreshortened UVs, rim-faded granulation, carving sunspots, lower core
+multiplier so texture survives tonemap, warm chroma, strong-tint+dim color override); cloud_sky installs
+even clouds-off; sun_size cap 4→8. v2 PASSED ("looks good enough"). **Default ON = `realistic_midday`**
+(perf effectively free — surface math gated to disc pixels, per-pixel cloud fetch replaced the centre
+fetch 1:1); the `active` preset applies at startup, `neutral` = old flat disc. Sun-preset system
+(`data/sun_presets.json` + Light-tab picker + `--sunpreset` + review key-1 cycle) establishes the
+per-feature preset pattern. Also fixed: large discs were fully hidden when a cloud touched their centre →
+**per-pixel cloud occlusion**. Colored fantasy (blood/alien) bleach at the bright core — opt-in, dim-able
+later. Commits `346a1cd`,`b666bd3`,`c406e12`,`04a3f62`,`756ab7e`.
+
+**2026-06-20 — Cloud error-burst fix: toggle clouds via uniform, never swap env.Sky.** Preset switches
+re-set cloud_enabled=true each press; the old SetKnobBool re-assigned env.Sky every time, queuing async
+radiance rebuilds that built uniform sets against a not-yet-valid Texture2Drd (binding 1 cloud_rd_tex,
+binding 34 dependent material) → the error burst. Fix (systematic-debugging, evidence via render-thread
+markers): toggle clouds via the cloud_enabled uniform only; cloud sky installs once and is never swapped
+(clouds-off renders the clear-sky gradient + sun via cloud_sky). Verified 0 mid-session errors across
+125+ live switches; a benign teardown-race burst remains at app-quit only (documented). Commit `63c59ff`.
+
 **2026-06-20 — Sun/Light daylight eye-gate PASSED (live): Stage 1 sun disc + Stage 2 time-of-day both
 approved → Stage 3 (night + moon) unblocked.** Drove review keys 1 + 2 with the user. **Sun disc (3b):
 PASS** — "pretty good, maybe a little bit more; basically just a circle still but it does other stuff":

@@ -128,6 +128,26 @@ fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin)
 - **Judge:** Do the shafts read as believable sun-through-cloud light (crisp where wanted, not uniform fog, not washing the scene)? Tune to taste with the god-ray chat's knobs.
 - **Note:** god-ray files are owned by the other chat — coordinate; don't edit `GodRays*`/`shaders/godray*` from this thread.
 
+### 3b-surface. Sun SURFACE shader + presets — ✅ PASS (reworked) 2026-06-20 (eye-gate, live)
+- **v1 FAILED** (user: "the weird suns don't look good, didn't carry"). Root-caused via auto-shot
+  iteration: disc sub-degree (surface too small), nuclear core clipped texture to white, full-color
+  override = flat blob, and my cloud fix had stopped cloud_sky installing when clouds start off.
+- **Rework (`c406e12`):** sphere foreshorten + de-foreshortened UVs, rim-faded granulation, carving
+  sunspots, lower core multiplier in surface mode (texture survives tonemap), warm chroma, color
+  override = strong-tint+dim; cloud_sky now installs even clouds-off; `sun_size` cap 4→8; presets
+  re-sized visible. **Verdict (user, live, full cycle): "looks good enough to me."** PASS.
+- **Believable presets (realistic_midday/golden_hour/living_star) read as textured warm suns.** Colored
+  fantasy (blood_sun/alien) tint but bleach pale at the bright core (engine glow/AgX) — accepted as-is;
+  can be dimmed for deep saturation if wanted later.
+- **Default (user):** **ON = `realistic_midday`** (subtle granulation + faint spots), since perf is
+  effectively free (surface math gated to disc pixels; the per-pixel cloud fetch replaced the old centre
+  fetch 1:1). The JSON `active` preset now applies at startup; pick `neutral` for the old flat disc.
+  Commits `c406e12`,`04a3f62`,`756ab7e`.
+- **Also fixed during gate:** large discs were fully hidden when a cloud touched their centre →
+  cloud occlusion is now **per-pixel** (`04a3f62`). Cloud error-burst fix confirmed holding (0
+  mid-session errors). Colored fantasy (blood/alien) still bleach at the bright core — opt-in, can be
+  dimmed for deep saturation later if wanted.
+
 ### 3b. Sun disc polish (Stage 1) — ✅ PASS 2026-06-20 (eye-gate, live), polish note owed
 - **Verdict (user, live, review key 1):** "pretty good… maybe a little bit more — it's basically just a
   circle still, but it does other stuff." The halo / corona / horizon-reddening read well; the **disc
