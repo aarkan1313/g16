@@ -80,7 +80,20 @@ Last updated: 2026-06-20.
 - **Knobs (Light tab):** `sun size (deg)` (the VISIBLE disc — the old `sun size` is now "shadow penumbra"),
   `sun limb darken`, `sun corona size/energy`, `sun halo size/energy`, `sun horizon redden`, `redden onset`,
   `sun horizon grow`, `sun cloud redden`.
-- **Unblocks:** Stage 2 (time-of-day driver) — being designed now in parallel.
+- **Built via:** subagent-driven-development (6 tasks, each spec+quality reviewed; opus whole-branch review = "ready
+  to merge, no Critical/Important"). All rendering lives in `sun_layers()` inside `sky()`; `sun_disc_energy` stays
+  decoupled from `LIGHT0_ENERGY` (overcast dims the directional light, not the visible disc); the halo is kept LOCAL
+  to the sun cone (no broad-sky recolor — that's deliberately Stage 2). Elevation sign verified `+LIGHT0_DIRECTION.y`.
+- **Pre-checked (controller, stills only — NOT a substitute for your live eye):** high sun (mood 2) = neutral-white
+  soft disc + gentle halo, not over-bloomed; low sun (mood 0) = warm orange halo + reddening; Golden Hour preset =
+  warm low sun with a lit cloud band. Build clean.
+- **Watch for (known soft spots to judge):** (1) the default `sun size (deg)` = 0.6 renders a SMALL disc (limb
+  darkening is sub-pixel at default) — decide if the default disc should be bigger. (2) The Golden Hour preset sun
+  sits very low (8°) so its disc can read subtle / partly behind the cloud band — also swing a clear-sky low mood to
+  see the bare warm disc. (3) `sun horizon redden` > 1 intentionally pushes the tint past the target color (a
+  strength boost, not a bug). (4) cloud occlusion needs a cumulus actually crossing the sun — raise coverage (~0.8)
+  if the sun sits in a gap.
+- **Unblocks:** Stage 2 (time-of-day driver) — being designed now in parallel (`specs/2026-06-20-sun-light-system-architecture.md`).
 
 ### 4. Ground Unit 2 — distance detail (BUILT, default OFF, SHELVED)
 - **See it:** Detail tab → **`distance detail`** + `detail amt/scale/normal/fade dist` (or `--detail=1`). **Fly down CLOSE** — it's a ~250 m near band; does nothing from altitude.
