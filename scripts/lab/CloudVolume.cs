@@ -37,7 +37,7 @@ public partial class CloudVolume : Node
     // the origin-dome-vs-world-shadow mismatch + camera-motion jitter). Pushed each
     // frame from TerrainLabUI._Process.
     private Vector3 _camWorld = Vector3.Zero;
-    public void SetCameraWorld(Vector3 p) { _camWorld = p; }
+    public void SetCameraWorld(Vector3 p) { _camWorld = p; _skyMat?.SetShaderParameter("cam_world", p); }   // world-anchored cirrus parallax
     // mood sky colors → cloud ambient/background (set by TerrainLabUI.ApplyMood)
     // _sky*Base = the mood sky colors (input); _sky* = after the overcast grey-shift (what the
     // shaders see). Overcast greys BOTH the sky background AND the cloud ambient fill (the raymarch
@@ -537,6 +537,8 @@ public partial class CloudVolume : Node
             case "cirrus_speed":     _skyMat?.SetShaderParameter("cirrus_speed", v); break;
             case "cirrus_scale":     _skyMat?.SetShaderParameter("cirrus_scale", Mathf.Max(0.1f, v)); break;
             case "cirrus_sharpness": _skyMat?.SetShaderParameter("cirrus_sharpness", Mathf.Clamp(v, 0f, 1f)); break;
+            case "cirrus_variety":   _skyMat?.SetShaderParameter("cirrus_variety", Mathf.Clamp(v, 0f, 1f)); break;
+            case "cirrus_altitude":  _skyMat?.SetShaderParameter("cirrus_altitude", Mathf.Max(500f, v)); break;
         }
     }
 

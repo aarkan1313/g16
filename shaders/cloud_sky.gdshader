@@ -68,13 +68,16 @@ uniform vec3 ground_color : source_color = vec3(0.22, 0.26, 0.22);
 
 // --- CIRRUS (CO-2): cheap 2D wind-streaked high layer, composited under the cumulus dome. default off. ---
 uniform bool  cirrus_on = false;
-uniform float cirrus_coverage : hint_range(0.0, 1.0) = 0.5;   // how much sky has streaks
-uniform float cirrus_density : hint_range(0.0, 1.0) = 0.6;    // opacity of the streaks
+uniform float cirrus_coverage : hint_range(0.0, 1.0) = 0.6;   // how much sky has streaks
+uniform float cirrus_density : hint_range(0.0, 1.0) = 0.7;    // opacity of the streaks
 uniform float cirrus_wind_deg = 30.0;                          // streak direction (degrees)
-uniform float cirrus_speed = 0.002;                            // drift along the wind
+uniform float cirrus_speed = 0.04;                             // drift along the wind (visible motion)
 uniform float cirrus_scale = 1.4;                              // streak frequency
 uniform float cirrus_sharpness : hint_range(0.0, 1.0) = 0.5;  // soft wisps ↔ crisp filaments
+uniform float cirrus_variety : hint_range(0.0, 1.0) = 0.7;    // per-region density/orientation/size variation (realism)
+uniform float cirrus_altitude = 8000.0;                        // world altitude of the sheet (m) → sets parallax
 uniform vec3  cirrus_color : source_color = vec3(0.92, 0.94, 1.0);
+uniform vec3  cam_world = vec3(0.0);                           // camera world pos (pushed from CloudVolume) — for world-anchored cirrus
 
 // PI is a built-in in Godot sky shaders — don't redefine it.
 
@@ -297,19 +300,39 @@ vec3 stars_layer(vec3 rd){
 // CIRRUS (CO-2): anisotropic wind-stretched fbm3 → high thin filaments. Streaks run ALONG the wind
 // (cross-wind varies faster). Gated by elevation (fades at the horizon), tinted warm near the sun,
 // dimmed at night. Cheap: one fbm3 tap. Returns (rgb, alpha) for an over-composite.
-vec4 cirrus_layer(vec3 rd){
-    if (!cirrus_on || rd.y < 0.02) { return vec4(0.0); }
-    float ang = radians(cirrus_wind_deg);
+// Cheap 3-octave value-noise fbm for cirrus (the 5-octave fbm3 is too costly full-screen).
+float cfbm(vec3 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 3; i++){ s += a * vnoise3(p); p *= 2.07; a *= 0.5; } return s * 1.14; }
+
+// One cirrus band anchored at world altitude `alt`. Cheap per-region MACRO fields (single vnoise3 taps)
+// VARY density (gathered into regions with gaps), orientation (fanning streaks) and feature size (mixed
+// fine/broad filaments) across the sky → varied real cirrus, not one uniform field. cirrus_variety scales
+// it all (0 = uniform). EARLY-OUT in gap regions skips the expensive streak noise (keeps it cheap).
+float cirrus_band(vec3 rd, float alt, float scaleMul, float angOff, float densMul){
+    float t = (alt - cam_world.y) / max(rd.y, 0.05);
+    vec2 wpos = cam_world.xz + rd.xz * t;                       // world XZ where the ray pierces this band
+    vec2 muv = wpos * 0.00003;                                  // macro coords (~33 km regions)
+    float vary = cirrus_variety;
+    float region = vnoise3(vec3(muv + TIME * cirrus_speed * 0.07, 0.3));      // cheap macro region field
+    float macro = smoothstep(mix(-1.0, 0.42, vary), mix(0.55, 0.72, vary), region);   // density variety + gaps
+    if (macro < 0.02) { return 0.0; }                          // EARLY OUT (gap) before the streak noise
+    float orient = (vnoise3(vec3(muv * 2.1 + 5.0, 1.0)) - 0.5) * 2.2 * vary;  // local orientation jitter (rad)
+    float scl    = mix(1.0, mix(0.55, 1.8, vnoise3(vec3(muv * 1.6 + 9.0, 2.0))), vary);  // local size variety
+    float ang = radians(cirrus_wind_deg) + angOff + orient;
     vec2 w = vec2(cos(ang), sin(ang));
-    vec2 hv = rd.xz / max(rd.y, 0.15);                 // project the view onto the sky plane
-    float along = dot(hv, w);
-    float cross = dot(hv, vec2(-w.y, w.x));
-    vec3 sp = vec3(along * cirrus_scale + TIME * cirrus_speed, cross * cirrus_scale * 6.0, 0.0);
-    float n = fbm3(sp);
+    vec2 huv = wpos * (cirrus_scale * scaleMul * scl * 0.00025);
+    float along = dot(huv, w);
+    float cross = dot(huv, vec2(-w.y, w.x));
+    float n = cfbm(vec3(along + TIME * cirrus_speed, cross * 6.0, 0.0));      // streaks (cross stretched ×6)
     float streak = smoothstep(1.0 - cirrus_coverage, 1.0, n);
     streak = pow(streak, mix(1.0, 4.0, cirrus_sharpness));
+    return streak * macro * densMul;
+}
+
+vec4 cirrus_layer(vec3 rd){
+    if (!cirrus_on || rd.y < 0.02) { return vec4(0.0); }
     float band = smoothstep(0.02, 0.18, rd.y) * (1.0 - 0.3 * smoothstep(0.85, 1.0, rd.y));
-    float a = clamp(streak * band * cirrus_density, 0.0, 1.0);
+    if (band <= 0.001) { return vec4(0.0); }
+    float a = clamp(cirrus_band(rd, cirrus_altitude, 1.0, 0.0, 1.0) * band * cirrus_density, 0.0, 1.0);
     // sun tint: warm the streaks near the sun direction (forward scatter)
     float toSun = max(dot(normalize(rd), LIGHT0_DIRECTION), 0.0);
     vec3 col = mix(cirrus_color, sun_redden_color, 0.4 * pow(toSun, 8.0)) * mix(0.6, 1.2, LIGHT0_COLOR.r);

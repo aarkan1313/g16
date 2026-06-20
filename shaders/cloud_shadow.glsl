@@ -111,7 +111,10 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     float cellScale = sScale * 0.7 * max(lcell, 0.05);   // higher cell freq → MANY clumps, not few giants
     float cell = texture(shape_tex, lpw * cellScale + vec3(wCell.x, h, wCell.y) * cellScale).g;
     float cellGate = smoothstep(mix(0.80, 0.42, coverage), mix(1.0, 0.78, coverage), cell);
-    cellGate = mix(cellGate, 1.0, shapeMode);   // stratus: don't fragment into clumps → a connected sheet
+    // stratus: a mostly-connected sheet but KEEP occasional gaps (broken stratus, not 100% fill);
+    // coverage drives how solid — high cov → near-overcast, lower cov → more breaks.
+    float sheetGate = smoothstep(mix(0.45, 0.12, coverage), mix(0.75, 0.42, coverage), cell);
+    cellGate = mix(cellGate, sheetGate, shapeMode);
     shape *= cellGate;
 
     shape *= type_gradient(h, type);
