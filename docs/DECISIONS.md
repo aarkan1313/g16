@@ -6,6 +6,29 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — FULL-SCOPE RE-ROADMAP: finish both lanes → make it a world → climate/elements; water
+co-designs with erosion (user direction).** After the doc-set reset, set the forward shape in three
+phases. **(A) Finish the two lanes FULLY before moving on — especially ground texture:** Sun & Light
+→ the *full* sky system (Stage 1 disc + Stage 2 daylight, built; then Stage 3 night + moon/stars, the
+GPU-compute atmosphere, Stage 4 auto-cycle/fantasy — all gated, designed-ahead OK but built one phase
+past the last gate); Ground/Texture → the *full* material stack **including erosion + surface height**.
+**(B) Make it a WORLD** — the pivot the user called for ("it doesn't matter if one mountain looks good,
+it's not a world"): scale infra (CDLOD → chunks → streaming → infinite) + biomes + macro procedural
+variety + erosion-at-scale + flora/world-editing integration. **Hybrid build** (user's call): the
+chunk/streaming spine is the keystone and the perf fix, but each content system is designed
+region-first + stream-aware so scaling is wiring, not a rewrite. **(C) Climate & elements** — visible
+water, precipitation (rain/snowfall), wetness, snow-on-ground.
+**Key coupling (user's erosion insight, the crux):** WG15's erosion failed because *erosion wasn't
+informed by water* — channels didn't follow real drainage, so it "didn't make sense when water was
+added." Therefore the **water FLOW / hydrology MODEL co-designs with erosion in Phase A** (one field:
+carved terrain + flow + sediment derived together; visible water *rendering* defers to Phase C but
+consumes that same field). **Erosion + the terrain-depth/height work get a fresh brainstorm → spec →
+plan → review** (the archived 2026-06-17 erosion spec — which already diagnoses the water-coupling root
+cause — is the base; the new spec elevates visible water to a co-designed output). The separate
+**material surface-height / POM** ("we didn't have height setup" — GM2, built fast) owes its own proper
+write-up + its eye-gate. **Brought erosion + terrain-LOD specs back to the active set**
+(`docs/superpowers/specs/`) from the archive. Build stays gated behind the current eye-gate batch.
+
 **2026-06-20 — DOC-SET RESET + both active lanes PAUSED at a combined eye-gate (user direction).**
 An audit found WG16 had grown **20 specs + 23 plans + 4 handoffs in five days** (~100k words vs
 ~7.4k lines of code) — the exact "process outran the results" sprawl the project was founded to

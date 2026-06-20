@@ -13,10 +13,9 @@ porting an old plan.
 - `plans/` — all 23 implementation plans (throwaway execution detail by design).
 - `specs/` — superseded or not-yet-scheduled designs: the cloud refactor/shadow/volumetric/
   multi-layer/per-deck arc, the ground richness/baked-compute/presentation-arc/foundation/
-  material-system designs, library-integration, godray-occlusion, the base-field design, and
-  the two **future-arc** designs still pointed at from the active roadmap: **erosion**
-  (`2026-06-17-erosion-arc-design.md`) and **terrain-LOD/CDLOD**
-  (`2026-06-18-terrain-lod-roadmap-design.md`).
+  material-system designs, library-integration, godray-occlusion, the base-field design.
+  (The **erosion** and **terrain-LOD/CDLOD** specs were pulled BACK to the active set on
+  2026-06-20 — the full-scope re-roadmap made them live Phase-A/Phase-B designs.)
 - `handoffs/` — the four transient session handoffs.
 - `cloud-look-audit-prompt.md`, `cloud-polish-handoff-prompt.md` — transient prompt docs.
 
