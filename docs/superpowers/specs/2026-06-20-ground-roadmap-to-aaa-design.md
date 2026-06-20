@@ -138,6 +138,8 @@ Legend: ✅ done/approved · ◐ partial · 🅿️ built-but-parked · ⬜ not 
   "height maps" arc — elevated to scheduled.)
 
 ### GM3 — Within-area variation  *(uniform → varied; the user's core complaint)*
+- **📄 Detailed design: `specs/2026-06-20-ground-gm3-within-area-variation-design.md`** (Approach A =
+  cheap multi-scale material-property modulation core; B/C = true material patches via texture arrays, deferred).
 - **Goal:** variety even across a single uniform slope.
 - **Pieces:** (a) **procedural mesoscale material patches** — blend 2–3 ground materials by a
   domain-warped, multi-octave **world-position** noise field (infinite detail, no baked-grid
