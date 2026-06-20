@@ -50,7 +50,12 @@ Last updated: 2026-06-20.
 
 ### 1b. Ground Unit 4 — procedural breakup ❌ FAILED eye-gate 2026-06-20 → PARKED (not in the review queue)
 - **Verdict (user, live):** hard square edges + "barely does anything." Built T1–T6, root-caused, **parked** (`breakup_on` default off, `3077abe`). NOT awaiting re-review — it's the wrong tool for "variety within an area" (masks are f(heightfield)). Infra kept for GM4 (revive after erosion). See DECISIONS 2026-06-20.
-- **⮕ Active ground direction RE-SEQUENCED (2026-06-20):** material foundation first — **GM1 curated palette is the NEXT build.** Authoritative roadmap: `specs/2026-06-20-ground-roadmap-to-aaa-design.md`. (The G1/G2 framing in `specs/2026-06-19-ground-foundation-splatting-design.md` is folded into GM1–GM4 there.)
+- **⮕ Active ground direction RE-SEQUENCED (2026-06-20):** material foundation first. Authoritative roadmap: `specs/2026-06-20-ground-roadmap-to-aaa-design.md`.
+
+### 1c. Ground GM1 (palette infra) + GM3-A (within-area variation) — BUILT, awaiting live eye-gate (2026-06-20)
+- **Both built/committed, default-on, near-zero cost; awaiting the user's eye (built while user couldn't visualize).**
+- **GM1 — data-driven palette** (`61dd605..90c39ef`): `data/ground_palette.json` (active `alpine_stone`; also `alpine_green`=prior look, `arid`) → loads on startup, per-role tuning via **Zones-tab dropdowns**. **GM1 T4 live audit owed:** fly to where roles vary (cliffs/peaks, not just the warm sand basin), under **midday/neutral mood** (the warm default washes it) at close range — isolate whether drab = lighting vs material saturation vs placement, then curate the 7 picks. Plan `plans/2026-06-20-ground-gm1-curated-palette.md` T4.
+- **GM3-A — within-area variation** (`82f60fb`,`4108ad2`): fragment-side multi-scale world-pos noise modulating **roughness + relief + value/sat** of the composited surface (the real "variety within an area" lever; Unit-4 done right). Profmove 4.8 ms = baseline (free). **See it:** Color tab → **`within-area variation`** toggle + `var roughness`/`var value`/`var relief`/`var scale macro/meso`. **Judge (close/mid on a uniform slope):** does it stop reading uniform — drier-lighter-rougher vs damper-darker-smoother patches, organic, no tiling/squares, no shimmer? Far ~unchanged (`var far keep`). **Verdict gates Approach B/C** (true different-material patches via texture arrays — see `specs/2026-06-20-ground-gm3-within-area-variation-design.md`). Plan `plans/2026-06-20-ground-gm3a-within-area-variation.md` T3.
 
 ## 🟧 P2 — perf default needs a fidelity confirm
 
