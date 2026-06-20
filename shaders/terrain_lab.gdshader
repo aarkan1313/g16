@@ -396,18 +396,31 @@ float ao_by(int z, vec3 wp, vec3 nr){
     return s_ao(z6_ao,wp,nr);
 }
 
+// --- GM2: real per-material height maps (derived from normals by HeightCompute) -------------
+// Bound per zone in SetZoneMaterial. Sampled when height_from_maps is ON, replacing the
+// inverted-roughness proxy → genuine relief for the interlock + real POM depth. Default OFF
+// (height_from_maps=false) → identical to the approved look. Modular/revertable.
+uniform sampler2D z0_hgt : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z1_hgt : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z2_hgt : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z3_hgt : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z4_hgt : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z5_hgt : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D z6_hgt : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform bool height_from_maps = false;   // GM2 master: use baked z*_hgt vs the inverted-roughness proxy
+
 // --- Phase A/B SHARED material-height channel -------------------------------
-// Derived per-plane (no triplanar) so POM can march it as a true 2D field; inverted
-// roughness matches the existing heightblend intent. Real height maps: bind z*_hgt here.
-float material_height_uv(sampler2D rgh_t, sampler2D alb_t, vec2 uv, vec2 dx, vec2 dy){
+// Derived per-plane (no triplanar) so POM can march it as a true 2D field.
+float material_height_uv(sampler2D rgh_t, sampler2D alb_t, sampler2D hgt_t, vec2 uv, vec2 dx, vec2 dy){
+    if (height_from_maps){ return clamp(textureGrad(hgt_t, uv, dx, dy).r, 0.0, 1.0); }
     if (height_from_rough){ return clamp(1.0 - textureGrad(rgh_t, uv, dx, dy).r, 0.0, 1.0); }
     return clamp(dot(textureGrad(alb_t, uv, dx, dy).rgb, vec3(0.299,0.587,0.114)), 0.0, 1.0);
 }
 float height_by(int z, vec2 uv, vec2 dx, vec2 dy){
-    if(z==0) return material_height_uv(z0_rgh,z0_alb,uv,dx,dy); if(z==1) return material_height_uv(z1_rgh,z1_alb,uv,dx,dy);
-    if(z==2) return material_height_uv(z2_rgh,z2_alb,uv,dx,dy); if(z==3) return material_height_uv(z3_rgh,z3_alb,uv,dx,dy);
-    if(z==4) return material_height_uv(z4_rgh,z4_alb,uv,dx,dy); if(z==5) return material_height_uv(z5_rgh,z5_alb,uv,dx,dy);
-    return material_height_uv(z6_rgh,z6_alb,uv,dx,dy);
+    if(z==0) return material_height_uv(z0_rgh,z0_alb,z0_hgt,uv,dx,dy); if(z==1) return material_height_uv(z1_rgh,z1_alb,z1_hgt,uv,dx,dy);
+    if(z==2) return material_height_uv(z2_rgh,z2_alb,z2_hgt,uv,dx,dy); if(z==3) return material_height_uv(z3_rgh,z3_alb,z3_hgt,uv,dx,dy);
+    if(z==4) return material_height_uv(z4_rgh,z4_alb,z4_hgt,uv,dx,dy); if(z==5) return material_height_uv(z5_rgh,z5_alb,z5_hgt,uv,dx,dy);
+    return material_height_uv(z6_rgh,z6_alb,z6_hgt,uv,dx,dy);
 }
 // Dominant-plane triplanar height for interlock (cheap: one plane, the relief boundary
 // only needs a representative height per material at this fragment).
@@ -689,7 +702,7 @@ vec3 zone_color(int z){
 // Phase B: parallax-occlusion. Marches the DOMINANT triplanar plane only, using the
 // Phase-A material height channel. Returns the in-plane uv offset (caller maps to world).
 // dom out: 0=zy(normal x), 1=xz(normal y), 2=xy(normal z).
-vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, vec3 wp, vec3 nr, vec3 vdir, out int dom){
+vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, sampler2D hgt_t, vec3 wp, vec3 nr, vec3 vdir, out int dom){
     vec3 bw = tri_w(nr);
     dom = (bw.x >= bw.y && bw.x >= bw.z) ? 0 : (bw.y >= bw.z ? 1 : 2);
     vec2 uv; vec2 vp; float vdepth;
@@ -708,15 +721,15 @@ vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, vec3 wp, vec3 nr, vec3 vdir, o
     float dStep = 1.0 / float(steps);
     vec2 dUV = maxShift * dStep;
     vec2 curUV = uv; float rayH = 1.0;
-    float h = material_height_uv(rgh_t, alb_t, curUV, dx, dy);
+    float h = material_height_uv(rgh_t, alb_t, hgt_t, curUV, dx, dy);
     for (int i = 0; i < 64; i++){
         if (i >= steps) break;
         if (rayH <= h) break;
         rayH -= dStep; curUV -= dUV;
-        h = material_height_uv(rgh_t, alb_t, curUV, dx, dy);
+        h = material_height_uv(rgh_t, alb_t, hgt_t, curUV, dx, dy);
     }
     vec2 prevUV = curUV + dUV;
-    float hPrev = material_height_uv(rgh_t, alb_t, prevUV, dx, dy);
+    float hPrev = material_height_uv(rgh_t, alb_t, hgt_t, prevUV, dx, dy);
     float after  = h - rayH;
     float before = hPrev - (rayH + dStep);
     float wgt = after / max(after - before, 1e-4);
@@ -785,13 +798,13 @@ void fragment(){
             else                               hz = 0;
         }
         int domPlane; vec2 off = vec2(0.0);
-        if      (hz==0) off = pom_offset(z0_rgh,z0_alb,wp,nr,vdir,domPlane);
-        else if (hz==1) off = pom_offset(z1_rgh,z1_alb,wp,nr,vdir,domPlane);
-        else if (hz==2) off = pom_offset(z2_rgh,z2_alb,wp,nr,vdir,domPlane);
-        else if (hz==3) off = pom_offset(z3_rgh,z3_alb,wp,nr,vdir,domPlane);
-        else if (hz==4) off = pom_offset(z4_rgh,z4_alb,wp,nr,vdir,domPlane);
-        else if (hz==5) off = pom_offset(z5_rgh,z5_alb,wp,nr,vdir,domPlane);
-        else            off = pom_offset(z6_rgh,z6_alb,wp,nr,vdir,domPlane);
+        if      (hz==0) off = pom_offset(z0_rgh,z0_alb,z0_hgt,wp,nr,vdir,domPlane);
+        else if (hz==1) off = pom_offset(z1_rgh,z1_alb,z1_hgt,wp,nr,vdir,domPlane);
+        else if (hz==2) off = pom_offset(z2_rgh,z2_alb,z2_hgt,wp,nr,vdir,domPlane);
+        else if (hz==3) off = pom_offset(z3_rgh,z3_alb,z3_hgt,wp,nr,vdir,domPlane);
+        else if (hz==4) off = pom_offset(z4_rgh,z4_alb,z4_hgt,wp,nr,vdir,domPlane);
+        else if (hz==5) off = pom_offset(z5_rgh,z5_alb,z5_hgt,wp,nr,vdir,domPlane);
+        else            off = pom_offset(z6_rgh,z6_alb,z6_hgt,wp,nr,vdir,domPlane);
         vec2 woff = off * tex_scale_m;
         if      (domPlane==0){ wp.z += woff.x; wp.y += woff.y; }
         else if (domPlane==1){ wp.x += woff.x; wp.z += woff.y; }
