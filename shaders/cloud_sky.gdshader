@@ -76,7 +76,7 @@ float sun_fbm(vec2 p){
 
 // All sun rendering lives here so clouds composite OVER it. Built from cosSun (view·sun) and
 // sunElev (LIGHT0_DIRECTION.y). Pieces are layered in later tasks; this is the current look verbatim.
-vec3 sun_layers(vec3 rd, float aSun) {
+vec3 sun_layers(vec3 rd) {
     if (!LIGHT0_ENABLED) { return vec3(0.0); }
     float cosSun = dot(rd, LIGHT0_DIRECTION);
     float sunElev = clamp(LIGHT0_DIRECTION.y, 0.0, 1.0);
@@ -126,11 +126,14 @@ vec3 sun_layers(vec3 rd, float aSun) {
             disc *= 0.65;
         }
     }
+    // Per-PIXEL cloud occlusion: sample the cloud dome at THIS pixel's direction, not the sun centre.
+    // Centre-sampling hid an entire large disc when a cloud touched its middle; per-pixel means a cloud
+    // only occludes the part of the disc it actually covers (the dome composite below is per-pixel too).
+    float aPix = (cloud_enabled && rd.y > 0.0) ? clamp(texture(cloud_rd_tex, dir_to_uv(rd)).a, 0.0, 1.0) : 0.0;
     // Soft optical depth: thin cloud over the sun dims AND reddens the disc/corona; thick cloud kills them.
-    // The halo spans a wider cone, so only partially occlude it (it bleeds around the cloud edge).
-    vec3 ext = mix(vec3(1.0), sun_redden_color, clamp(aSun * sun_cloud_redden, 0.0, 1.0));  // warm extinction
-    float discT  = (1.0 - clamp(aSun, 0.0, 1.0));            // disc/corona transmittance
-    float haloT  = (1.0 - clamp(aSun, 0.0, 1.0) * 0.5);     // halo bleeds (half occlusion)
+    vec3 ext = mix(vec3(1.0), sun_redden_color, clamp(aPix * sun_cloud_redden, 0.0, 1.0));  // warm extinction
+    float discT  = (1.0 - aPix);            // disc/corona transmittance (per-pixel)
+    float haloT  = (1.0 - aPix * 0.5);      // halo bleeds (half occlusion)
     // Surface mode renders a TEXTURED ball, so the core can't be nuclear-bright (it would clip the
     // granulation/spots to flat white). Drop the disc multiplier when the surface is on.
     float discMul = sun_surface_on ? 2.5 : 12.0;
@@ -143,11 +146,7 @@ void sky(){
     vec3 rd = EYEDIR;
     vec3 bg = background(rd);
 
-    float aSun = 0.0;
-    if (cloud_enabled && LIGHT0_DIRECTION.y > 0.0) {
-        aSun = clamp(texture(cloud_rd_tex, dir_to_uv(LIGHT0_DIRECTION)).a, 0.0, 1.0);
-    }
-    bg += sun_layers(rd, aSun);
+    bg += sun_layers(rd);
 
     vec3 outColor = bg;
     if (cloud_enabled && rd.y > 0.0){
