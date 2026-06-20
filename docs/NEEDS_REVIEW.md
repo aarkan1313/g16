@@ -9,7 +9,7 @@ How to run (windowed, one Godot at a time):
 Kill strays first: `taskkill //F //IM Godot_v4.6.2-stable_mono_win64.exe`. Judge **in motion**, and at
 **close / mid / far** for ground items. `FLAT BASELINE` (top of panel) + per-item toggles isolate things.
 
-Last updated: 2026-06-19.
+Last updated: 2026-06-20.
 
 ---
 
@@ -66,6 +66,21 @@ Last updated: 2026-06-19.
 - **See it:** Clouds tab → **`god rays`** toggle (or `--godrays=1`), clouds on, sun toward camera through cloud gaps.
 - **Judge:** Do the shafts read as believable sun-through-cloud light (crisp where wanted, not uniform fog, not washing the scene)? Tune to taste with the god-ray chat's knobs.
 - **Note:** god-ray files are owned by the other chat — coordinate; don't edit `GodRays*`/`shaders/godray*` from this thread.
+
+### 3b. Sun disc polish (Stage 1, Sun & Light arc) — BUILT + published 2026-06-20, eye-gate owed
+- **Status:** built + cherry-picked onto `experiment/presentation` (`b9cf52d..6a08f93`), builds clean. The flat
+  white sun dot is now `sun_layers(rd, aSun)` in `cloud_sky.gdshader`: limb-darkened disc + corona + warm halo
+  + horizon reddening/growth + soft optical-depth cloud occlusion. Spec/plan `docs/superpowers/{specs,plans}/2026-06-19-sun-disc-polish*`.
+- **See it:** `--preset=8` ("Golden Hour Sun") `--godrays=0 --lookatsun` for the warm low sun; or any mood +
+  raise/lower **Light tab → `sun height`** to swing high(neutral white)↔low(warm/red + grown). Drift a cumulus
+  across the sun (or raise coverage) for the dim+redden cloud occlusion + halo bleed.
+- **Judge:** Does it read as a believable glowing sun (limb-darkened disc, tight corona, soft warm halo) vs a
+  flat circle? Does it redden + grow at the horizon and stay neutral-white high? Does cloud dim AND warm it
+  softly (halo bleeding around the edge)? No banding / hard ring at the disc/halo edge.
+- **Knobs (Light tab):** `sun size (deg)` (the VISIBLE disc — the old `sun size` is now "shadow penumbra"),
+  `sun limb darken`, `sun corona size/energy`, `sun halo size/energy`, `sun horizon redden`, `redden onset`,
+  `sun horizon grow`, `sun cloud redden`.
+- **Unblocks:** Stage 2 (time-of-day driver) — being designed now in parallel.
 
 ### 4. Ground Unit 2 — distance detail (BUILT, default OFF, SHELVED)
 - **See it:** Detail tab → **`distance detail`** + `detail amt/scale/normal/fade dist` (or `--detail=1`). **Fly down CLOSE** — it's a ~250 m near band; does nothing from altitude.
