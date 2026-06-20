@@ -92,8 +92,11 @@ public partial class TerrainLabUI : Control
             EnsureMoonLight();
             float moonElev = -_time.SunAngle + _moon.ElevOffset;     // anti-solar elevation (+ when sun is below)
             float moonAz = _time.SunAzimuth + 180f + _moon.AzOffset; // opposite compass bearing
+            // Set LOCAL rotation (valid even before the deferred parent-add lands) and read the LOCAL basis.Z.
+            // The MoonLight parents to TerrainLabRoot (identity transform), so local basis == world toward-moon —
+            // same convention as the sun, but no GlobalTransform read that would error while not yet in the tree.
             _moonLight!.RotationDegrees = new Vector3(-moonElev, moonAz, 0f);
-            Vector3 moonDir = _moonLight.GlobalTransform.Basis.Z.Normalized();   // toward the moon (same convention as the sun)
+            Vector3 moonDir = _moonLight.Transform.Basis.Z.Normalized();
             _lastMoonDir = moonDir;
             _cloud.SetMoon(moonDir, _moon.Color, _moon.DiscEnergy);
             _cloud.SetMoonAppearance(_moon.Phase, _moon.Size, _moon.Limb, _moon.HaloSize, _moon.HaloEnergy);
@@ -213,12 +216,15 @@ public partial class TerrainLabUI : Control
 
     /// Lazily create the Stage-3c moonlight directional (parented to the scene root, shadow-casting).
     /// Separate from the scene Sun so the sky shader's LIGHT0 stays the sun; this only lights terrain.
+    private bool _moonLightQueued;
     private void EnsureMoonLight()
     {
         _moonLight ??= new DirectionalLight3D { Name = "MoonLight", ShadowEnabled = true, LightEnergy = 0f, Visible = false };
-        if (_moonLight.IsInsideTree()) { return; }   // retry the parent add until it actually lands in the tree
+        if (_moonLight.IsInsideTree() || _moonLightQueued) { return; }
+        // DEFERRED add: ComposeLighting first runs during _Ready while the tree is "busy setting up
+        // children", so a direct AddChild errors. Queue it once; it lands next idle frame.
         var root = GetNodeOrNull<Node3D>("/root/TerrainLabRoot");
-        if (root != null && _moonLight.GetParent() == null) { root.AddChild(_moonLight); }
+        if (root != null) { root.CallDeferred(Node.MethodName.AddChild, _moonLight); _moonLightQueued = true; }
     }
 
     /// Interpolate the daytime color script (LightingPresets.DayScript anchors) at `hour`.
