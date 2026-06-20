@@ -241,6 +241,18 @@ fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin)
 - **See it:** currently MSAA 2×. Compare MSAA off / FXAA / TAA.
 - **Judge:** crawl/shimmer on terrain edges + cloud ghosting (TAA) vs the perf cost. Pick the AA. See `docs/performance.md`.
 
+### 8. Stage 3 (Night & Celestial) — built+gated, two UI bits await your eye 2026-06-20
+Stage 3 is COMPLETE and 3a–3d all PASSED live. Two later additions were built + self-checked (auto-shots)
+but haven't had your live eye — confirm them whenever:
+- **See it:** `"<godot>" --path /c/Wg16/wg-16-project --rendering-driver vulkan scenes/review.tscn -- --nightgate=1 --time=23` → open the **`Night` tab**.
+- **Celestial preset dropdown** ("CELESTIAL PRESET" at the top of the Night tab): try `full_moon_clear`,
+  `new_moon_dark`, `crescent`, `bright_moonlit`, `deep_scary`, `exotic` (amber moon). Each should give a
+  cohesive night look; `--celestial=N` is the CLI equivalent. **Judge:** do the 6 presets read distinct + believable?
+- **Live color pickers** (`moon color`, `moonlight color` on the Night tab): drag them — moon disc tint +
+  cool/warm ground moonlight should change live. **Judge:** colors apply cleanly, no lag/glitch.
+- Unblocks: nothing (Stage 3 already gated) — this is just confirming the preset/color UX. Self-checked
+  `exotic` renders (amber moon); startup is clean (no add_child spam after the MoonLight deferred-add fix).
+
 ---
 
 ## ⏸ Not "review" — build-when-you-can-see (eye-gated, parked)
