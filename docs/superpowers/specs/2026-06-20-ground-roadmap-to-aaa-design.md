@@ -102,7 +102,12 @@ Legend: ✅ done/approved · ◐ partial · 🅿️ built-but-parked · ⬜ not 
 
 **Layer 4 — Blending / compositing (how they combine)**
 - ✅ Weight-blend top-2 + derived height interlock (compositing core, approved; `splat_blend_mode` 1)
-- ✅ Anti-repetition / stochastic tiling (Unit 1, approved)
+- ⬜📄 **Anti-repetition / stochastic tiling — UPGRADING to histogram-preserving** (was "Unit 1 approved",
+  but the GM1 eye-gate proved the `tile_mode=1` IQ path **seams blocky at close range**; the approved
+  status was wrong). FOUNDATION FIX, must land before the GM1/2/3-A batch can pass — everything close-up
+  renders through this sampler. Spec `specs/2026-06-20-ground-anti-tiling-histogram-preserving-design.md`
+  (Deliot-Heitz tiling-and-blending + a baked inverse-histogram LUT). On gate-pass: flip `tile_mode` default
+  → histogram and **retire the superseded IQ/hex/legacy-anti-tile paths** (don't keep dead toggles).
 - ⬜ Real heightblend interlock (sharpens once GM2 height maps exist)
 - ⬜ RVT caching for many-layer compositing at world scale (needs chunks)
 
