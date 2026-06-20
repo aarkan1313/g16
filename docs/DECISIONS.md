@@ -6,6 +6,20 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — RE-SEQUENCE the GROUND arc: material foundation first; Unit 4 breakup PARKED (user, live).**
+Unit 4 (procedural breakup) was built (T1–T6) and failed its live eye-gate: hard square edges + "barely
+does anything." Deep root-cause (systematic-debugging): three compounding causes, one wrong premise —
+(1) the masks are `f(heightfield)`, so within a *uniform* area they're ~constant → they add *between*-area
+variety, NOT the *within*-area variety the user asked for; (2) baked at 4 m/texel (8192 m region / 2048
+res) and stretched across the region → thresholding reveals the texel grid as faint squares; (3) the
+near-monochrome palette gave the material swaps no contrast. **Context-driven breakup is the wrong tool
+for "variety within an area."** Decision (user was open to a full reset; argued against — resetting proven
+work is the WG15 trap): **re-sequence, don't reset.** Build the material FOUNDATION first — **GM1 curated
+palette → GM2 real height maps → GM3 within-area procedural patches → GM4 placement+erosion → GM5 detail
+layers → GM6 scale/perf.** Unit 4's bake infra is kept (parked, `breakup_on` default off, `3077abe`) for
+revival as a SECONDARY context bias in GM4 once erosion provides real steep faces/gullies. Authoritative
+roadmap: `specs/2026-06-20-ground-roadmap-to-aaa-design.md` (consolidates the scattered ground items).
+
 **2026-06-19 — Build the TERRAIN MATERIAL SYSTEM properly (weight-blended pipeline), not tweaks (user,
 live).** Reviewing the ground live, the user judged it "only frameworked, no real work done" and "small
 tunes instead of building a system." Diagnosis (close-up shots): it reads **blocky** (splat bakes

@@ -79,7 +79,19 @@ Run a scene (always `--rendering-driver vulkan`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> ### ⮕ START HERE (2026-06-19, refreshed — COMPOSITING CORE built + eye-gated)
+> ### ⮕ START HERE (2026-06-20, refreshed — GROUND arc RE-SEQUENCED; Unit 4 parked)
+> **⮕ READ FIRST: the authoritative ground roadmap `docs/superpowers/specs/2026-06-20-ground-roadmap-to-aaa-design.md`.**
+> The ground was being built one shader "Unit" at a time and kept under-delivering. **Unit 4
+> (procedural breakup) was built (T1–T6) and FAILED its eye-gate** (hard square edges + "barely does
+> anything") → root-caused (masks are f(heightfield) → no within-area variety; baked 4m-coarse →
+> square edges; monochrome palette → no contrast) → **PARKED** (`breakup_on` default off, `3077abe`).
+> Decision (DECISIONS 2026-06-20): **re-sequence, not reset** — build the material FOUNDATION first.
+> **⮕ NEXT BUILD: GM1 — curated palette** (the per-role material picker already exists; GM1 =
+> curate a distinct contrast-rich set + `data/ground_palette.json` load path). Then GM2 height maps →
+> GM3 within-area procedural patches → GM4 placement+erosion → GM5 detail → GM6 scale/perf. Plan for
+> GM1: see `docs/superpowers/plans/2026-06-20-ground-gm1-curated-palette.md` (writing-plans output).
+>
+> ── prior START HERE (2026-06-19 — COMPOSITING CORE built + eye-gated; still valid history) ──
 > **⮕ DONE THIS SESSION: the terrain compositing core** (plan
 > `docs/superpowers/plans/2026-06-19-terrain-compositing-core.md`, built + committed on
 > `experiment/presentation`, eye-gated live):

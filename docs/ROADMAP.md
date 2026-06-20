@@ -47,7 +47,31 @@ Last updated: 2026-06-19.
 4. **H1 BRDF check** — clouds-off terrain vs the approved look (custom `light()` = Burley+GGX);
    still wants an eye-confirm of no regression.
 
-## 🔨 Active arc — GROUND: build the MATERIAL SYSTEM properly (reframed 2026-06-19, eve)
+## 🔨 Active arc — GROUND: roadmap to AAA (RE-SEQUENCED 2026-06-20)
+> **⮕ AUTHORITATIVE GROUND ROADMAP: `specs/2026-06-20-ground-roadmap-to-aaa-design.md`** — read it
+> for the full 7-layer stack + the GM1–GM6 build sequence. The items below are the prior framing,
+> kept as *layer* designs; the new doc fixes their ORDER and completeness.
+>
+> **Why re-sequenced:** building one shader "Unit" at a time kept under-delivering because the two
+> highest-impact layers — the material *assets* (curated palette + real height maps) — were deferred
+> as polish, so every variation/breakup layer decorated monochrome, flat materials. **Unit 4
+> (breakup) eye-gate FAILED + PARKED** (default off; `3077abe`): context masks are f(heightfield) →
+> ~uniform within a uniform area → add between-area, NOT within-area, variety; baked 4m-coarse →
+> square edges; monochrome palette → no contrast. Re-sequence, NOT a reset — nothing proven is dropped.
+>
+> **NEW SEQUENCE (each eye-gated; own spec→plan):**
+> - **GM1 — Curated palette** (NEXT; picker already exists → curation + `ground_palette.json` load path).
+> - **GM2 — Real per-material height maps** (flat→deep; revives heightblend interlock + POM).
+> - **GM3 — Within-area variation** (procedural world-pos material patches = the real "variety in an
+>   area" fix + macro color (Unit 5) + distance detail (Unit 2)).
+> - **GM4 — Placement realism + Erosion** (G3 aspect/moisture/flow + Erosion E1; revives parked Unit 4
+>   masks as a SECONDARY bias on erosion-carved features).
+> - **GM5 — Detail layers** (scatter/decals/wetness/flora).
+> - **GM6 — Scale & perf** (CDLOD → chunks → RVT → streaming; also the dominant perf lever).
+>
+> ── prior framing (2026-06-19; layer designs the GM sequence reuses) ──
+
+## 🔨 (prior) GROUND: build the MATERIAL SYSTEM properly (reframed 2026-06-19, eve)
 > **⮕ STATUS (2026-06-19, eye-gated live):** compositing core built (plan
 > `plans/2026-06-19-terrain-compositing-core.md`). **Phase A weight-blend (smooth top-2 weightmaps +
 > height interlock + breakup) APPROVED + SHIPPED** (`splat_blend_mode` default 1) — user: "it actually
@@ -102,10 +126,12 @@ Last updated: 2026-06-19.
 - [x] **Compositing core (was Unit 3 + new blend layer) — Phase A blend SHIPPED, AO kept, POM deferred.**
   Plan `plans/2026-06-19-terrain-compositing-core.md`. Weightmap top-2 + height interlock APPROVED
   (`splat_blend_mode` default 1). AO bound + kept. POM built but deferred (needs real height maps).
-- [ ] **Unit 4 — procedural breakup** (slope/curv/cavity/aspect/flow masks → rock on steep, soil in
-  cavities, gritty shelves, shade/flow wear; modulates the role weights pre-top-2). **PLAN READY**
-  (fitted to the compositing core): `plans/2026-06-19-ground-unit4-breakup.md` + handoff
-  `handoffs/2026-06-19-unit4-breakup-start-here.md`. Build next. (Old `2026-06-17-ground-unit4-*` is superseded.)
+- [🅿️] **Unit 4 — procedural breakup** — BUILT (T1–T6) + eye-gate FAILED + **PARKED** (`breakup_on`
+  default off, `3077abe`). Bakes slope/curv/cavity/aspect/flow masks → fragment overlay. Failure
+  root cause (see the GM roadmap's "Lesson banked"): masks are f(heightfield) → no within-area
+  variety; 4m-coarse → square edges; monochrome palette → no contrast. **Infra kept** for revival
+  as a SECONDARY context bias in **GM4** (after erosion gives it real features). Plan
+  `plans/2026-06-19-ground-unit4-breakup.md`.
 - [ ] **Unit 5 — color/value tint** (hue/value break that survives GI+AgX — the macro-tint layer,
   distinct from G2's base palette). PLANNED.
 - [ ] **Unit 6 — "and more"** (scatter hooks / wetness / hi-Q triplanar). PLANNED.

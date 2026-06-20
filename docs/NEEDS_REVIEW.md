@@ -46,8 +46,11 @@ Last updated: 2026-06-19.
   enclosed geometry that makes GI earn its cost. Don't delete it.
 
 ### 1. Ground G1 — rule-based placement engine ✅ APPROVED 2026-06-19
-- **Verdict (user, live):** "rule placement does work, it's basic, will want a lot more in the future but this proves the basics work." Gate PASSED — the engine + tunable knobs are in; richer rules grow via G3 + future expansion.
-- **Unblocked → G2 (curated palette)** is the next build. Spec `specs/2026-06-19-ground-foundation-splatting-design.md`, plan `plans/2026-06-19-ground-foundation-g1-rule-engine.md`.
+- **Verdict (user, live):** "rule placement does work, it's basic, will want a lot more in the future but this proves the basics work." Gate PASSED.
+
+### 1b. Ground Unit 4 — procedural breakup ❌ FAILED eye-gate 2026-06-20 → PARKED (not in the review queue)
+- **Verdict (user, live):** hard square edges + "barely does anything." Built T1–T6, root-caused, **parked** (`breakup_on` default off, `3077abe`). NOT awaiting re-review — it's the wrong tool for "variety within an area" (masks are f(heightfield)). Infra kept for GM4 (revive after erosion). See DECISIONS 2026-06-20.
+- **⮕ Active ground direction RE-SEQUENCED (2026-06-20):** material foundation first — **GM1 curated palette is the NEXT build.** Authoritative roadmap: `specs/2026-06-20-ground-roadmap-to-aaa-design.md`. (The G1/G2 framing in `specs/2026-06-19-ground-foundation-splatting-design.md` is folded into GM1–GM4 there.)
 
 ## 🟧 P2 — perf default needs a fidelity confirm
 
