@@ -6,6 +6,14 @@ Supersedes the 3-stage sketch in the arc handoff with a fuller decomposition (pe
 2026-06-20: "any weather at any time and any mood at any time… it's a complex system — make a full
 fleshed-out roadmap/plan/spec, everything needs focus and attention").
 
+> **STATUS (2026-06-20) — `../../ROADMAP.md` is authoritative for cross-arc sequencing.** This is a
+> **Phase A** lane: finish the FULL sky system before the world phase (user's call). **Built + eye-gate
+> owed:** Stage 1 sun disc + Stage 2 decouple/time-of-day (daylight). **Then, each gated, one phase past
+> the last gate:** Stage 3 night + moon/stars · the **GPU-compute atmosphere** — DEFERRED + must be
+> re-spec'd around the **CloudVolume render-thread `Texture2Drd` seam, NOT FieldCompute** (a local-RD
+> texture can't be sampled by a material) · Stage 4 auto-cycle + fantasy. The Stage-2 doc reconciled the
+> earlier "atmosphere inside Stage 2" framing — Stage 2 ships keyframed color; atmosphere is its own stage.
+
 ## Vision
 
 A **fully decoupled, data-driven sky & lighting system**: the final look at any instant is the

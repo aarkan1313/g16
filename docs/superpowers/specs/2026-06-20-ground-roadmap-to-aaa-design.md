@@ -7,6 +7,13 @@ remain valid as *layer* designs; this fixes their ORDER and completeness).
 
 ## ⏸ GROUND LANE — PAUSED (2026-06-20) for a project-wide re-roadmap
 
+> **STATUS — `../../ROADMAP.md` is authoritative for cross-phase sequencing.** This lane is **Phase A**
+> ("finish the texture stack, fully"), now extended to include **erosion + water hydrology + surface
+> height** — which get a **fresh brainstorm → spec → plan → review** (water flow co-designs with erosion;
+> visible-water *rendering* defers to Phase B/C). GM6 scale/CDLOD belongs to **Phase B** (make it a world).
+> Stay paused at the eye-gate until the GM1/GM2/GM3-A batch is user-judged.
+
+
 **Built this lane, all committed, none user-approved yet:** **GM1** (data-driven palette), **GM2** (real
 per-material height from normals, Poisson bake), **GM3-A** (within-area variation). That's three phases past
 the "approve before the next phase" rule — so the lane STOPS here. **Defaults reproduce the approved-era look:**

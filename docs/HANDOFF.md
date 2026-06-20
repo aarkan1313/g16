@@ -80,12 +80,17 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> **2026-06-20 — DOC-SET RESET + both active lanes PAUSED at a combined eye-gate.**
+> **2026-06-20 — DOC-SET RESET + FULL-SCOPE RE-ROADMAP; both lanes PAUSED at a combined eye-gate.**
 >
 > Two lanes (GROUND material, SUN & LIGHT) each ran three phases past their last eye-gate while the
 > user couldn't be at a screen. We **paused both**, set everything to default-off / approved-look so
 > it's all opt-in, archived the doc sprawl (20 specs + 23 plans → `docs/archive/`), and rewrote
-> `ROADMAP.md` thin with the discipline rule baked in.
+> `ROADMAP.md` thin. Then set the **forward shape (3 phases): (A) finish both lanes FULLY** — Sun &
+> Light = full sky system, Ground = full material stack **incl. erosion + water hydrology + surface
+> height** (water flow co-designs with erosion; fresh spec→plan→review owed) — **(B) make it a WORLD**
+> (scale infra CDLOD→chunks→streaming + biomes + procedural + erosion-at-scale + flora/world-editing),
+> **(C) climate & elements** (water render, precip, snow). See `ROADMAP.md` for the authoritative path.
+> **Review scene: `scenes/review.tscn`** — keys 1–9 jump to each eye-gate item (see `NEEDS_REVIEW.md`).
 >
 > **⮕ NEXT: the combined eye-gate session** — run the gates in `ROADMAP.md` ▶ NOW order (light first,
 > then base shading, then ground under settled light, then sky, then whole-scene AA). Per-item how/

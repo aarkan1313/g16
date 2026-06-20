@@ -5,9 +5,28 @@ is always the user flying it, never a still or a mechanical check (project rule)
 you're back at a screen. Each item: **how to see it · what to judge · what it unblocks.**
 
 How to run (windowed, one Godot at a time):
-`"<godot>" --path /c/Wg16/wg-16-project --rendering-driver vulkan scenes/terrain_lab.tscn`
+`"<godot>" --path /c/Wg16/wg-16-project --rendering-driver vulkan scenes/review.tscn`
 Kill strays first: `taskkill //F //IM Godot_v4.6.2-stable_mono_win64.exe`. Judge **in motion**, and at
 **close / mid / far** for ground items. `FLAT BASELINE` (top of panel) + per-item toggles isolate things.
+
+### ▶ FAST PATH — the review scene (`scenes/review.tscn`)
+A copy of the terrain lab wired with **number-key presets** that jump straight to each gate item from
+the approved baseline, with an on-screen "what to judge" banner (the full lab UI is still there for
+manual tuning). Press a key, fly, judge, move on:
+
+| Key | Item | NEEDS_REVIEW § |
+|----|------|----|
+| **1** | Sun disc (Stage 1) | 3b |
+| **2** | Time-of-day / daylight (Stage 2) | 3c |
+| **3** | GM1 palette (press 3 again to A/B palettes) | 1c |
+| **4** | GM2 real height + POM | 1c |
+| **5** | GM3-A within-area variation | 1c |
+| **6** | Clouds (feature review) | 5 |
+| **7** | God rays | 3 |
+| **8** | GI / SDFGI + proxy (toggle in Debug to A/B) | 0b · 2 |
+| **9** | BRDF / approved baseline (clouds off) | 6 |
+
+(AA-in-motion, item 7, is **not** wired in the lab — judge it separately; see `performance.md`.)
 
 Last updated: 2026-06-20.
 
