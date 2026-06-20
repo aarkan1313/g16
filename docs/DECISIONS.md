@@ -6,6 +6,22 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light Stage 3b (moon disc) + 3c (moonlight) eye-gates PASSED (live) → 3d (stars) next.**
+Drove both via `review.tscn --nightgate=1`. **3b PASS** ("looks good"): textured phased moon (disc + limb +
+reused-sun_fbm maria/craters + phase terminator new→half→full + cool halo), per-pixel cloud occlusion,
+anti-solar. Iterated on feedback: halo was a phase-independent bright ring → scaled by illuminated fraction
++ lowered core mult (killed the "crazy luminosity" bloom); surface reworked (large maria + crater pits);
+added a **Night lab tab** (night darkness/floor + all moon knobs) since the user wanted a dedicated
+moon/night tab. **3c PASS** ("looks good"): moonlight = a 2nd cool shadow-casting DirectionalLight, anti-
+solar via RotationDegrees, gated night×moon-up×phase, cross-fading with the sun. Two bugs caught with a
+debug print: the light was never added to the scene tree (EnsureMoonLight didn't retry the AddChild →
+identity transform, moon at horizon, no light) and an earlier LookAt gave wrong NoL — both fixed.
+**Also shipped (user asks):** `L` = a toggleable studio inspection DirectionalLight (was an omni that
+"didn't work" from altitude; default energy 2.0→1.0 + a Night-tab slider after "too bright"); and the
+**banked fog-wash fix pulled forward** — depth fog/aerial is night-graded (FogSkyAffect 1→0.05 by
+nightFactor) so the night sky/scene stops washing grey. NEXT: 3d stars + Milky Way, folding in the banked
+Stage-1 sun-disc polish. Plan `plans/2026-06-20-night-and-celestial.md`.
+
 **2026-06-20 — AAA anti-tiling PASSED the live eye-gate → histogram-preserving is the new default.** Built
 the Deliot–Heitz histogram-preserving tiling-and-blending (spec/plan `2026-06-20-ground-anti-tiling-histogram-
 preserving*`): T1 `HistogramCompute` (pure-C# forward/inverse LUT bake, `--histcheck` round-trip PASS on
