@@ -18,6 +18,12 @@ public partial class TerrainLab : MeshInstance3D
     private const float AabbMarginM = 8f;
 
     private SplatCompute? _splat;
+    private HeightCompute? _height;
+    // GM2: derive per-material height from normals (modular; behind shader's height_from_maps, default off).
+    public bool  BakeHeightMaps = true;     // bake on material-set so height is ready when toggled on
+    public int   HeightBakeRes = 512, HeightIters = 64;
+    public float HeightAmp = 1.0f;
+    public bool  HeightFlipY = false, HeightInvert = false;
     private MeshInstance3D? _giProxy;   // coarse GI/shadow proxy (perf)
     public bool UseGiProxy = true;      // default ON (user-approved 2026-06-19): coarse proxy feeds GI+shadows
     public int ProxyRes = 511;          // 512² (~260k verts): the sweet spot — blob-free (user-verified 2026-06-19) at ~8.4 ms in-motion. 256² blobbed; 1024² clean but ~2 ms costlier. Tunable via --proxyres=N.
@@ -139,6 +145,21 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter($"z{zone}_nrm", LoadOr(b, "normal"));
         _mat.SetShaderParameter($"z{zone}_rgh", LoadOr(b, "roughness"));
         _mat.SetShaderParameter($"z{zone}_ao", LoadOr(b, "ao"));
+        BakeZoneHeight(zone, materialName);
+    }
+
+    /// GM2: derive this zone's height map from its normal map and bind z{zone}_hgt.
+    /// Cheap, baked-once-per-material; inert until the shader's height_from_maps is on.
+    private void BakeZoneHeight(int zone, string materialName)
+    {
+        if (!BakeHeightMaps) { return; }
+        string p = ProjectSettings.GlobalizePath($"res://assets/materials/{materialName}/normal.png");
+        if (!System.IO.File.Exists(p)) { return; }   // no normal → leave z*_hgt unbound (flat); height_from_maps off anyway
+        Image nrm = Image.LoadFromFile(p);
+        if (nrm == null) { return; }
+        _height ??= new HeightCompute();
+        ImageTexture hgt = _height.BakeHeight(nrm, HeightBakeRes, HeightIters, HeightAmp, HeightFlipY, HeightInvert);
+        _mat.SetShaderParameter($"z{zone}_hgt", hgt);
     }
 
     /// Toggle the GI/shadow proxy. ON: the coarse proxy feeds SDFGI + casts shadows; the
@@ -207,5 +228,5 @@ public partial class TerrainLab : MeshInstance3D
         return ResourceLoader.Exists(alb) ? GD.Load<Texture2D>(alb) : null;
     }
 
-    public override void _ExitTree() => _splat?.Dispose();
+    public override void _ExitTree() { _splat?.Dispose(); _height?.Dispose(); }
 }
