@@ -193,6 +193,8 @@ public partial class TerrainLabUI : Control
                 for (int i = 0; i < _moodNames.Count; i++) { _moodPick.AddItem(_moodNames[i], i); }
                 _moodPick.ItemSelected += idx => ApplyMood((int)idx);
                 col.AddChild(_moodPick);
+                col.AddChild(new Label { Text = "SUN PRESET (disc look — surface/size)" });
+                BuildSunPresetPicker(col);
                 col.AddChild(new HSeparator());
                 col.AddChild(new Label { Text = "fine-tune:" });
             }

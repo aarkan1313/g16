@@ -1,0 +1,11 @@
+{
+  "active": "neutral",
+  "presets": {
+    "neutral":          { "sun_surface_on": false, "sun_size": 0.6, "sun_limb": 0.55 },
+    "realistic_midday": { "sun_surface_on": true, "sun_size": 0.8, "sun_limb": 0.7, "sun_surface_cells": 14.0, "sun_surface_contrast": 0.12, "sun_surface_spots": 0.1, "sun_surface_churn": 0.08, "sun_surface_warm": 0.2 },
+    "golden_hour":      { "sun_surface_on": true, "sun_size": 1.4, "sun_limb": 0.5, "sun_surface_cells": 8.0, "sun_surface_contrast": 0.2, "sun_surface_spots": 0.1, "sun_surface_churn": 0.1, "sun_surface_warm": 0.6 },
+    "living_star":      { "sun_surface_on": true, "sun_size": 1.2, "sun_limb": 0.6, "sun_surface_cells": 10.0, "sun_surface_contrast": 0.45, "sun_surface_spots": 0.25, "sun_surface_churn": 0.3, "sun_surface_warm": 0.4 },
+    "blood_sun":        { "sun_surface_on": true, "sun_size": 1.6, "sun_limb": 0.4, "sun_surface_cells": 7.0, "sun_surface_contrast": 0.6, "sun_surface_spots": 0.5, "sun_surface_churn": 0.2, "sun_surface_warm": 0.9, "sun_surface_color": [0.7, 0.08, 0.04] },
+    "alien":            { "sun_surface_on": true, "sun_size": 1.3, "sun_limb": 0.6, "sun_surface_cells": 12.0, "sun_surface_contrast": 0.5, "sun_surface_spots": 0.3, "sun_surface_churn": 0.25, "sun_surface_warm": 0.2, "sun_surface_color": [0.2, 0.8, 0.5] }
+  }
+}

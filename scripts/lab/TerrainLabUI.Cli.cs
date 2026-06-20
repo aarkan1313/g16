@@ -26,6 +26,7 @@ public partial class TerrainLabUI : Control
     private int _deckDbgCli = -1;          // --deckdbg=1: deck-ID overlay (flat color per deck)
     private bool _cloudStatsCli = false;   // --cloudstats: read back dome, print coverage/brightness
     private int _presetCli = -1;           // --preset=N: apply cloud preset N at startup (test layer stacks)
+    private int _sunPresetCli = -1;        // --sunpreset=N: apply sun-disc preset N at startup
     private int _temporalCli = 0;          // --temporal=N: temporal amortization stride (roadmap #4)
     private int _godraysOnCli = -1;
     private int _godrayDbgCli = 0;   // --godraydbg=N → GodRaysScreen debug_mode (1=mask, 2=sun pos)
@@ -84,6 +85,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--lightcheck") { _lightCheckCli = true; }
             else if (a == "--cloudstats") { _cloudStatsCli = true; }
             else if (a.StartsWith("--preset=")) { int.TryParse(a.Substring("--preset=".Length), out _presetCli); }
+            else if (a.StartsWith("--sunpreset=")) { int.TryParse(a.Substring("--sunpreset=".Length), out _sunPresetCli); }
             else if (a.StartsWith("--cloudtex=")) { if (int.TryParse(a.Substring("--cloudtex=".Length), out int th) && th >= 64) { CloudVolume.TexH = th; CloudVolume.TexW = th * 4; } }
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;

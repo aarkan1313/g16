@@ -41,13 +41,19 @@ public partial class TerrainLabUI : Control
         string title, judge;
         switch (n)
         {
-            case 1: // Sun disc — Stage 1 (NEEDS_REVIEW 3b)
+            case 1: // Sun disc + surface — Stage 1 (NEEDS_REVIEW 3b); press 1 again to cycle sun presets
                 ApplyMood(0);                                   // golden hour = low warm sun
                 Set("cloud_enabled", true); Set("cloud_coverage", 0.55f);
-                Set("sun_size", 1.4f); Set("sun_corona_energy", 1.0f);
-                Set("sun_halo_energy", 1.0f); Set("sun_redden", 1.0f);
-                title = "1 · Sun disc (Stage 1)";
-                judge = "Believable glowing sun — limb-darkened disc, tight corona, soft warm halo, horizon redden+grow? Raise cloud coverage to drift a cloud across it (dim+redden). No hard ring/banding.";
+                Set("sun_corona_energy", 1.0f); Set("sun_halo_energy", 1.0f); Set("sun_redden", 1.0f);
+                LoadSunPresets();
+                if (_sunPresets.Count > 0)
+                {
+                    if (_lastPreset == 1) { _sunPresetIdx = (_sunPresetIdx + 1) % _sunPresets.Count; }
+                    ApplySunPreset(_sunPresetIdx);
+                }
+                string sunName = (_sunPresets.Count > 0) ? _sunPresets[_sunPresetIdx].name : "?";
+                title = $"1 · Sun disc + surface  [{sunName}]  (press 1 to cycle)";
+                judge = "Fly CLOSE to the sun. Surface believable (granulation, churn, spots), not a flat circle? No swimming or pole-spin (raise sun high). No clip-to-white. Press 1 to cycle presets; tune 'sun surface *' on the Light tab.";
                 break;
             case 2: // Lighting decouple + time-of-day — Stage 2 (3c)
                 ApplyMood(5);                                   // clear alpine = neutral
