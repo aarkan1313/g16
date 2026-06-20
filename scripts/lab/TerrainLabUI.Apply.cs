@@ -125,6 +125,7 @@ public partial class TerrainLabUI : Control
             case "sun_corona_energy": _cloud?.SetSunCoronaEnergy(v); break;
             case "sun_halo_size":     _cloud?.SetSunHaloSize(v); break;
             case "sun_halo_energy":   _cloud?.SetSunHaloEnergy(v); break;
+            case "sun_cloud_redden": _cloud?.SetSunCloudRedden(v); break;
             case "sun_redden":       _cloud?.SetSunRedden(v); break;
             case "sun_redden_onset": _cloud?.SetSunReddenOnset(v); break;
             case "sun_horizon_grow": _cloud?.SetSunHorizonGrow(v); break;

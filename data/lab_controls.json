@@ -151,6 +151,7 @@
     { "id": "sun_redden",       "label": "sun horizon redden", "tab": "Light", "type": "scenef", "scene": "sun_redden",       "min": 0.0,  "max": 2.0, "default": 1.0,  "rand": false },
     { "id": "sun_redden_onset", "label": "redden onset (elev)","tab": "Light", "type": "scenef", "scene": "sun_redden_onset", "min": 0.05, "max": 0.8, "default": 0.25, "rand": false },
     { "id": "sun_horizon_grow", "label": "sun horizon grow",   "tab": "Light", "type": "scenef", "scene": "sun_horizon_grow", "min": 0.0,  "max": 3.0, "default": 0.6,  "rand": false },
+    { "id": "sun_cloud_redden", "label": "sun cloud redden", "tab": "Light", "type": "scenef", "scene": "sun_cloud_redden", "min": 0.0, "max": 2.0, "default": 0.8, "rand": false },
     { "id": "ambient_e", "label": "sky ambient", "tab": "Light", "type": "scenef", "scene": "ambient", "min": 0.0, "max": 1.5, "default": 0.4, "rand": false },
     { "id": "ssao_i", "label": "AO strength", "tab": "Light", "type": "scenef", "scene": "ssao_intensity", "min": 0.0, "max": 4.0, "default": 2.0, "rand": false },
     { "id": "ssao_r", "label": "AO radius m", "tab": "Light", "type": "scenef", "scene": "ssao_radius", "min": 0.5, "max": 30.0, "default": 8.0, "rand": false },
