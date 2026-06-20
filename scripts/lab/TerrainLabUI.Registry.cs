@@ -33,16 +33,25 @@ public partial class TerrainLabUI : Control
     {
         string abs = ProjectSettings.GlobalizePath("res://data/ground_palette.json");
         if (!System.IO.File.Exists(abs)) { return; }   // null → ZoneDefaultMaterialIndex uses its fallback
-        using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(abs));
-        JsonElement root = doc.RootElement;
-        string active = root.GetProperty("active").GetString() ?? "";
-        if (root.GetProperty("palettes").TryGetProperty(active, out var pal)
-            && pal.TryGetProperty("roles", out var roles))
+        try
         {
-            _groundPalette = roles.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
-            GD.Print($"[ground_palette] active '{active}' loaded ({_groundPalette.Length} roles)");
+            using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(abs));
+            JsonElement root = doc.RootElement;
+            string active = root.GetProperty("active").GetString() ?? "";
+            if (root.GetProperty("palettes").TryGetProperty(active, out var pal)
+                && pal.TryGetProperty("roles", out var roles))
+            {
+                _groundPalette = roles.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
+                GD.Print($"[ground_palette] active '{active}' loaded ({_groundPalette.Length} roles)");
+            }
+            else { GD.PushWarning($"[ground_palette] active '{active}' not found → using fallback"); }
         }
-        else { GD.PushWarning($"[ground_palette] active '{active}' not found → using fallback"); }
+        catch (Exception e)
+        {
+            // malformed/partial JSON must NOT crash startup — fall back to the hardcoded palette.
+            _groundPalette = null;
+            GD.PushWarning($"[ground_palette] parse failed ({e.Message}) → using hardcoded fallback");
+        }
     }
 
     private void LoadRegistry()
