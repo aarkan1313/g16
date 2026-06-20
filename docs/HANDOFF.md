@@ -93,10 +93,15 @@ Run a scene (always `--rendering-driver vulkan`):
 >   user chose to defer until that arc happens. The seam (`material_height_uv`, `pom_offset`) is in place.
 > - **⚠ GI/SDFGI under review** — user flagged "doesn't do much" + weird blocky shadows; possible purge =
 >   perf win. Targeted A/B owed (see NEEDS_REVIEW 0b).
-> **⮕ NEXT material levers:** Unit 4 (procedural breakup — adds the per-area variety the user wanted), then
-> Unit 5 (macro color). Deferred: real **height maps** (revives POM) + **RVT caching** (needs chunks).
+> **⮕ NEXT (build in a new chat): Unit 4 — procedural breakup.** Adds the per-area variety the user
+> flagged missing (rock on steep, soil in cavities/gullies, gritty shelves, shade/flow wear). The old
+> 2026-06-17 Unit-4 plan was STALE (binding/param/fragment conflicts with the compositing core) → a
+> rewritten plan fitted to the new pipeline is ready: **plan
+> `docs/superpowers/plans/2026-06-19-ground-unit4-breakup.md`**, **start-here handoff
+> `docs/superpowers/handoffs/2026-06-19-unit4-breakup-start-here.md`**. Then Unit 5 (macro color).
+> Deferred: real **height maps** (revives POM) + **RVT caching** (needs chunks).
 > Spec: `docs/superpowers/specs/2026-06-19-terrain-material-system-design.md`.
-> Ground arc status: **G1 placement APPROVED**; **compositing-core blend APPROVED**. User reviews live.
+> Ground arc status: **G1 placement APPROVED**; **compositing-core blend APPROVED + shipped**. User reviews live.
 > ⚠ **Another chat owns god rays in this same tree — don't touch `GodRays*`/`shaders/godray*`; some of
 > this session's terrain code is uncommitted + intermingled with theirs (see the handoff doc).**
 >

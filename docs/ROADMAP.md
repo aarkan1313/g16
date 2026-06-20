@@ -99,7 +99,13 @@ Last updated: 2026-06-19.
   until the foundation reads good (only added a near-band albedo tweak on an unready base). Plan:
   `plans/2026-06-17-ground-unit2-distance-detail.md` (built w/ 2 deviations: perf-pass preserved,
   toggle default off).
-- [ ] **Unit 3 — surface depth** (parallax-occlusion + AO/normal/rough → BRDF). PLANNED.
+- [x] **Compositing core (was Unit 3 + new blend layer) — Phase A blend SHIPPED, AO kept, POM deferred.**
+  Plan `plans/2026-06-19-terrain-compositing-core.md`. Weightmap top-2 + height interlock APPROVED
+  (`splat_blend_mode` default 1). AO bound + kept. POM built but deferred (needs real height maps).
+- [ ] **Unit 4 — procedural breakup** (slope/curv/cavity/aspect/flow masks → rock on steep, soil in
+  cavities, gritty shelves, shade/flow wear; modulates the role weights pre-top-2). **PLAN READY**
+  (fitted to the compositing core): `plans/2026-06-19-ground-unit4-breakup.md` + handoff
+  `handoffs/2026-06-19-unit4-breakup-start-here.md`. Build next. (Old `2026-06-17-ground-unit4-*` is superseded.)
 - [ ] **Unit 5 — color/value tint** (hue/value break that survives GI+AgX — the macro-tint layer,
   distinct from G2's base palette). PLANNED.
 - [ ] **Unit 6 — "and more"** (scatter hooks / wetness / hi-Q triplanar). PLANNED.
