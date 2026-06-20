@@ -61,6 +61,7 @@ public partial class TerrainLabUI : Control
 
         ParseCli();
         LoadLibrary();
+        LoadGroundPalette();   // GM1: must run before LoadRegistry builds the material controls
         LoadMoods();
         LoadRegistry();
         BuildPanel();

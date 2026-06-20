@@ -27,6 +27,24 @@ public partial class TerrainLabUI : Control
         _materials.Sort();
     }
 
+    private string[]? _groundPalette;   // GM1: role->material name from the active ground_palette.json palette
+
+    private void LoadGroundPalette()
+    {
+        string abs = ProjectSettings.GlobalizePath("res://data/ground_palette.json");
+        if (!System.IO.File.Exists(abs)) { return; }   // null → ZoneDefaultMaterialIndex uses its fallback
+        using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(abs));
+        JsonElement root = doc.RootElement;
+        string active = root.GetProperty("active").GetString() ?? "";
+        if (root.GetProperty("palettes").TryGetProperty(active, out var pal)
+            && pal.TryGetProperty("roles", out var roles))
+        {
+            _groundPalette = roles.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
+            GD.Print($"[ground_palette] active '{active}' loaded ({_groundPalette.Length} roles)");
+        }
+        else { GD.PushWarning($"[ground_palette] active '{active}' not found → using fallback"); }
+    }
+
     private void LoadRegistry()
     {
         string abs = ProjectSettings.GlobalizePath(RegistryPath);
