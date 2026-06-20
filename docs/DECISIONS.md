@@ -6,6 +6,29 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Ground GM batch eye-gate (live, review key 3 / GM1 palette): textures OK, SURFACE COMPOSITING
+FAILS → lane redirects to fixing the surface.** Drove key 3 with the user; cycled palettes
+alpine_green→alpine_stone→arid under midday-neutral light (mood 2, POM/height/variation OFF = the approved
+compositing core). Verdict (user, live, flying close/mid): "textures are OK, implementation/everything around them
+sucks — artifacting, clear tile-to-tile chunk lines, weird color differences." So GM1's deliverable (a curated,
+contrast-rich palette) is acceptable — the textures aren't drab — but the **shared ground SURFACE fails**:
+hard-edged large rectangular **tile-chunk seams** with abrupt color/value steps (worst looking straight down,
+close), visible **texture tiling/repetition** (cracked-clay), **salt-pepper speckle** on mid slopes. Confirmed
+**lighting-independent** (mood 2 = midday-neutral) → genuinely in the compositing/placement implementation, not the
+palette or the light. **ROOT-CAUSED live** (user-driven `splat debug` + per-toggle isolation, then confirmed in
+shader code): **NOT the zones** (zone map renders smooth/organic) and **NOT the weightmap resolution** (my first
+hypothesis — WRONG; legacy↔weightmap blend toggle changed nothing). **Two separable culprits:** (1) **IQ 2-tap
+anti-tiling** (`tile_mode=1`, `iq_sample` in terrain_lab.gdshader): the blend factor `f` is **constant per
+`floor(uv)` cell** at `tex_scale_m≈28 m`, so it jumps at every tile-cell boundary → **blocky stair-step seams**
+aligned to the 28 m tile grid (worst up close); it feeds both albedo and `material_height→interlock`, which is why
+`splat debug=mix amt` exposed the blocks. `tile mode=none(sharp)` removes them but reintroduces visible repetition.
+(2) **macro color** (`macro_on`, Color tab): the big soft "weird color differences" blotches — user: "macro color
+fixed a lot of artifacting" when toggled off. Residual after both = the true material **transition borders**
+(interlock width, separately tunable). GM2/GM3-A (keys 4/5) ride this surface → deferred until it holds. Batch gate
+1c stays **OPEN**. NEXT (design first, build behind toggles, eye-gated): a **non-blocking anti-tiling** technique
+(smooth the IQ per-cell blend, or a better method) + **rework/tune macro** variation. No fixing on a guess — both
+now confirmed.
+
 **2026-06-20 — Sun SURFACE shader + sun presets: SHIPPED, default ON (realistic_midday).** User asked
 for a procedural sun surface + a sun-preset pattern (spec/plan `2026-06-20-sun-surface-shader-and-presets*`).
 v1 FAILED the eye-gate ("weird suns don't look good, didn't carry"); root-caused via auto-shot iteration:

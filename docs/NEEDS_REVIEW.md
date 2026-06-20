@@ -97,11 +97,27 @@ reproduce the **approved-era look** (palette `alpine_green` = prior set; GM3-A v
 every new feature is **opt-in** and you A/B from a known baseline. **Gate them TOGETHER** (they share the surface):
 fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin) under a **midday/neutral mood**.
 
+> **⚠ GATE IN PROGRESS 2026-06-20 — SURFACE BLOCKER FOUND.** Key 3 (GM1) judged live: **textures OK, the shared
+> ground SURFACE fails** — hard-edged rectangular **tile-chunk seams** + abrupt color/value steps (worst looking
+> straight down, close), visible **texture tiling/repetition**, **salt-pepper speckle** on mid slopes. Confirmed
+> **lighting-independent** (key 3 = mood 2 midday-neutral, POM/height/variation OFF → the approved compositing core
+> itself). Keys 4/5 ride this same surface → **deferred until the surface is root-caused.** Batch gate **OPEN
+> (blocked on the surface, not the palette).** See GM1 verdict below + DECISIONS 2026-06-20.
+
 - **GM1 — data-driven palette** (`61dd605..90c39ef`, `4108ad2`+fix): `data/ground_palette.json` loads on startup,
   warn-on-miss, per-role **Zones-tab dropdowns**. Default `active=alpine_green` (prior look). **Judge:** switch
   `active` to **`alpine_stone`** (the curated candidate) or `arid`, and/or tune per-role dropdowns at close/mid
   under neutral light — isolate whether "drab" is lighting vs material saturation vs placement. Plan
   `plans/2026-06-20-ground-gm1-curated-palette.md` T4.
+  - **⊘ Verdict (2026-06-20, user, live, review key 3, cycled alpine_green→alpine_stone→arid, midday-neutral):**
+    "textures are OK, implementation/everything around them sucks — artifacting, clear tile-to-tile chunk lines,
+    weird color differences." **Palette deliverable acceptable (not drab); the surface compositing is the blocker**
+    (tile-chunk seams, color steps, repetition, speckle — see the SURFACE BLOCKER banner above). Leading unconfirmed
+    **ROOT-CAUSED** (live isolation + code): two culprits — (1) **IQ 2-tap anti-tiling** (`tile_mode=1`) blend factor
+    is constant per ~28 m tile cell → **blocky stair-step seams** (feeds albedo + interlock `mix amt`); `tile mode=none`
+    removes them but brings back repetition. (2) **macro color** (`macro_on`) = the soft "weird color differences"
+    blotches (user: off "fixed a lot of artifacting"). Residual = true material transition borders. **Fix = non-blocking
+    anti-tiling + macro rework, design-first/eye-gated.** GM1 not separately approvable until the surface holds.
 - **GM2 — real per-material height** (`39058ab`,`b907b77`): Poisson normal→height bake (verified: genuine
   basalt-column / talus-cobble relief), behind **`real height (GM2)`** (Detail tab, default OFF). **Judge:**
   toggle it (interlock uses real height), then flip **`surface depth (POM)`** — POM's revival gate (was "too flat";

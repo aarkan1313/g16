@@ -117,7 +117,9 @@ uniform float hex_contrast : hint_range(0.3, 1.0) = 0.7;     // contrast-restore
 // Far Cry 5 style). Drives brightness + gentle hue/saturation, neutral-centered
 // so it both lightens and darkens. macro_amp above feeds the legacy value-only
 // path; these drive the richer one.
-uniform bool macro_on = true;
+uniform bool macro_on = false;  // 2026-06-20: default OFF — its value-noise hue/sat/val drift read as
+                                // unconvincing "weird color" blotches at the ground eye-gate (user, live).
+                                // Proper within-area variation is GM3-A; revisit "macro done right" later.
 uniform float macro_val_amp : hint_range(0.0, 0.6) = 0.22;   // brightness drift
 uniform float macro_hue_amp : hint_range(0.0, 0.2) = 0.05;   // hue drift (radians-ish)
 uniform float macro_sat_amp : hint_range(0.0, 0.6) = 0.18;   // saturation drift

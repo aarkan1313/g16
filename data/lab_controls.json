@@ -31,7 +31,7 @@
       "default": 3, "rand": false },
 
     { "id": "macro_on", "label": "macro color", "tab": "Color", "type": "toggle",
-      "param": "macro_on", "default": true, "rand": true },
+      "param": "macro_on", "default": false, "rand": true },
     { "id": "macro_val_amp", "label": "macro val", "tab": "Color", "type": "slider",
       "param": "macro_val_amp", "min": 0, "max": 0.6, "default": 0.22, "rand": true },
     { "id": "macro_hue_amp", "label": "macro hue", "tab": "Color", "type": "slider",
