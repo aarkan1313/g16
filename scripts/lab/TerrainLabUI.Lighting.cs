@@ -50,12 +50,10 @@ public partial class TerrainLabUI : Control
         var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
 
-        // ── TIME: sun position + color/energy, sky gradient, ambient ──
+        // ── TIME: sun position + color, sky gradient. Sun ENERGY + AMBIENT energy come from
+        //    ApplyOvercastScaling (the one writer for overcast-scaled fields). Capture the bases here. ──
         _sunAngle = _time.SunAngle; _sunAzimuth = _time.SunAzimuth; OrientSun(sun);
-        sun.LightEnergy = _time.SunEnergy;
         sun.LightColor = _time.SunColor;
-        env.AmbientLightEnergy = _time.Ambient;
-        env.AmbientLightSkyContribution = _time.AmbientSky;
         _baseAmbient = _time.Ambient;
         _baseSunEnergy = _time.SunEnergy;
         if (env.Sky?.SkyMaterial is ProceduralSkyMaterial psky)
@@ -77,9 +75,9 @@ public partial class TerrainLabUI : Control
             _cloud.SetSunHorizonGrow(_sunDisc.HorizonGrow); _cloud.SetSunCloudRedden(_sunDisc.CloudRedden);
         }
 
-        // ── WEATHER: depth fog (same down-scaling the old mood applied) ──
+        // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by
+        //    ApplyOvercastScaling (it tints toward cloud-grey under overcast). Capture the base here. ──
         env.FogEnabled = true;
-        env.FogLightColor = _weather.FogColor;
         _baseFogColor = _weather.FogColor;
         env.FogDensity = _weather.FogDensity * 0.25f;
         env.FogAerialPerspective = Mathf.Min(_weather.FogAerial, 0.5f);
@@ -102,7 +100,22 @@ public partial class TerrainLabUI : Control
         env.GlowIntensity = _grade.Glow * 0.35f;
         env.SetGlowLevel(4, 0.0f); env.SetGlowLevel(5, 0.0f); env.SetGlowLevel(6, 0.0f);
 
+        ApplyOvercastScaling();       // sun energy + ambient + fog color (overcast-scaled) — the one writer of these
         SyncLightControlsToScene();   // Light-tab sliders reflect the composed state
-        OvercastDirty();              // re-apply overcast scaling onto the new bases
+    }
+
+    /// THE ONE WRITER of the overcast-scaled lighting (sun energy, ambient energy, fog color). Called by
+    /// ComposeLighting (on any state change) and by UpdateOvercast (per-frame, when coverage changes), so
+    /// the two share one formula/base and never diverge. Scales from _base* (which the live sun-energy
+    /// slider updates) by the current _overcast amount.
+    private void ApplyOvercastScaling()
+    {
+        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
+        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        float oc = _overcast;
+        env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 0.7f, oc);     // sky fill DOWN (grey gloom)
+        env.AmbientLightSkyContribution = _time.AmbientSky;
+        sun.LightEnergy = _baseSunEnergy * (1f - oc * 0.8f);                  // direct sun DOWN under cloud
+        env.FogLightColor = (_cloud != null) ? _baseFogColor.Lerp(_cloud.SkyHorizonColor, 0.55f * oc) : _baseFogColor;
     }
 }

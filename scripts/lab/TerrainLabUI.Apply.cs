@@ -106,12 +106,14 @@ public partial class TerrainLabUI : Control
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
         switch (target)
         {
-            case "sun_energy":      sun.LightEnergy = v; _baseSunEnergy = v; OvercastDirty(); PushSunToCloud(sun); break;
+            // sun energy + ambient go through ApplyOvercastScaling (the one writer of the overcast-scaled
+            // fields) so they stay overcast-correct and never fight UpdateOvercast.
+            case "sun_energy":      _baseSunEnergy = v; ApplyOvercastScaling(); PushSunToCloud(sun); break;
             case "sun_soft":        sun.ShadowBlur = v; break;   // shadow softness (separate from disc)
             case "sun_disc":        sun.LightAngularDistance = v; break;   // visible sun size (PCSS penumbra too)
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
             case "sun_azimuth":     _sunAzimuth = v; OrientSun(sun); break;
-            case "ambient":         env.AmbientLightEnergy = v; break;
+            case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
             case "ssao_intensity":  env.SsaoIntensity = v; break;
             case "ssao_radius":     env.SsaoRadius = v; break;
             case "fog_density":     env.FogDensity = v; break;

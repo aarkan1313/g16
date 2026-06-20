@@ -16,33 +16,24 @@ public partial class TerrainLabUI : Control
     private float _baseAmbient = 0.4f, _baseSunEnergy = 1.3f;
     private Color _baseFogColor = new Color(0.71f, 0.78f, 0.86f);
     private bool _overcastDim = true;
+    private float _overcast = 0f;   // current overcast amount; the composer's ApplyOvercastScaling reads this
 
     // M1 fix: only re-apply when the overcast amount actually CHANGES (or after a mood/
     // slider sets a new base), so the sun-energy slider is 1:1 in the steady state instead
     // of being overwritten every frame. -1 forces the first apply.
     private float _lastOvercast = -1f;
-    /// Force the next UpdateOvercast to re-apply (call after a mood or sun/ambient/fog
-    /// base change so overcast scaling picks up the new base immediately).
-    private void OvercastDirty() => _lastOvercast = -1f;
 
+    // Per-frame overcast tracker. NO scene writes here — it only updates the overcast amount and
+    // re-runs the composer's ApplyOvercastScaling (the one writer of sun-energy/ambient/fog-color), so
+    // this can't diverge from / fight LightingComposer (Stage 2 T2-fix).
     private void UpdateOvercast()
     {
         if (_cloud == null) { return; }
         float oc = _overcastDim ? _cloud.Overcast() : 0f;
-        if (Mathf.Abs(oc - _lastOvercast) < 0.002f) { return; }   // nothing changed → leave bases alone
+        if (Mathf.Abs(oc - _lastOvercast) < 0.002f) { return; }   // nothing changed → leave it alone
         _lastOvercast = oc;
-
-        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
-        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
-        const float OvercastAmt = 0.8f;
-        float k = 1f - oc * OvercastAmt;
-        // Real overcast = flat, dim, diffuse: pull direct sun WAY down + ambient DOWN a bit
-        // (the sky becomes a dull grey source, not a brighter one). oc is ~0 for sparse skies
-        // now, so this only engages when the sky is genuinely heavily covered.
-        env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 0.7f, oc);     // sky fill DOWN (grey gloom)
-        sun.LightEnergy = _baseSunEnergy * k;                                // direct sun DOWN under cloud
-        // fog only tints toward the cloud-grey when actually overcast (oc~0 → no tint shift).
-        env.FogLightColor = _baseFogColor.Lerp(_cloud.SkyHorizonColor, 0.55f * oc);
+        _overcast = oc;
+        ApplyOvercastScaling();
     }
 
     private bool _shadowEnabledOnce;
