@@ -75,7 +75,7 @@
         "cloud_ambient": 0.75, "cloud_altitude": 2000, "cloud_thickness": 900,
         "cloud_drift_speed": 6.0, "cloud_drift_dir": 110,
         "sun_angle": 8.0, "sun_azimuth": 110.0, "sun_energy": 1.5,
-        "sun_redden": 1.3, "sun_horizon_grow": 1.0, "sun_corona_energy": 2.5,
+        "sun_size": 1.0, "sun_redden": 1.3, "sun_horizon_grow": 1.0, "sun_corona_energy": 2.5,
         "sun_halo_energy": 0.6, "sun_halo_size": 120.0, "sun_limb": 0.65
       }
     }
