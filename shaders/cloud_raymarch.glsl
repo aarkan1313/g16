@@ -64,6 +64,20 @@ float type_gradient(float h, float type){
     return baseRound * topFade;
 }
 
+// Vertical density profile WITHIN a deck (CO-1). Turns a flat slab into a 3D body:
+//   pBottom = height fraction over which density rounds up from the base (flat-ish bottom),
+//   pTop    = height fraction at which density begins fading to the top,
+//   anvil   = 0 cumulus (taper) .. 1 cumulonimbus (a spreading top lobe near the crown).
+// NEUTRAL (0,1,0) returns ~1.0 across the body so the approved look reproduces exactly.
+// MUST be byte-identical to cloud_shadow.glsl's height_profile (density-affecting → shadows).
+float height_profile(float h, float pBottom, float pTop, float anvil){
+    float bottom = smoothstep(0.0, max(pBottom, 1e-4), h);   // rounded base
+    float top    = 1.0 - smoothstep(pTop, 1.0, h);           // faded top
+    // anvil: a secondary density lobe just below the crown so tops spread instead of tapering.
+    float bump = anvil * smoothstep(pTop, mix(pTop, 1.0, 0.5), h) * (1.0 - smoothstep(0.85, 1.0, h));
+    return bottom * max(top, bump);
+}
+
 vec2 ray_sphere(vec3 ro, vec3 rd, float R){
     float b = dot(ro, rd);
     float c = dot(ro, ro) - R * R;
@@ -88,7 +102,8 @@ const float WARP_AMOUNT   = 600.0;          // domain-warp displacement in meter
 // cellularity as before — just parameterized per layer instead of from P.* globals.
 float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
                     float lsize, float lcell, float ldens, float ltype,
-                    float ledge, float ldetail, float ldetsize, float covW){
+                    float ledge, float ldetail, float ldetsize, float covW,
+                    float pBottom, float pTop, float anvil){
     float r = length(p);
     float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
     vec3 lp = vec3(p.x, r - baseR, p.z);
@@ -128,6 +143,7 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     shape *= cellGate;
 
     shape *= type_gradient(h, type);
+    shape *= height_profile(h, pBottom, pTop, anvil);
     if (shape <= 0.0) return 0.0;
 
     // DETAIL EROSION — stronger + biting harder at edges (low shape) and tops (audit:
@@ -158,7 +174,8 @@ float density_all(vec3 p, vec2 windOff, out float opacOut, out int activeOut){
         float baseR = PLANET_R + LF(i,0), topR = baseR + LF(i,1);
         if (r < baseR || r > topR) continue;
         float d = layer_density(p, baseR, topR, windOff,
-            LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4));
+            LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4),
+            LF(i,19), LF(i,20), LF(i,21));
         total += d; opAccum += d * LF(i,6);
         if (d > bestD){ bestD = d; activeOut = i; }
     }

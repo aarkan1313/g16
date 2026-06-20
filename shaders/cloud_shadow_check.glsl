@@ -29,10 +29,10 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     float strength, ground_height;
     vec2 wind_offset;
     vec4 tail;            // w = layer_count (x/y/z unused here)
-    vec4 layers[40];      // 8 layers × 5 vec4 (CloudLayers.Pack order) — fields 0-11 density
+    vec4 layers[48];      // 8 layers × 6 vec4 (CloudLayers.Pack order) — 0-11 density, 19-21 profile
 } P;
 #define LAYER_COUNT P.tail.w
-#define LF(i, f) P.layers[(i)*5 + ((f)>>2)][(f)&3]
+#define LF(i, f) P.layers[(i)*6 + ((f)>>2)][(f)&3]
 
 const float PLANET_R = 200000.0;
 const float WEATHER_SCALE = 1.0 / 80000.0;
@@ -46,6 +46,13 @@ float type_gradient(float h, float type){
     float topFade = 1.0 - smoothstep(mix(0.5, 0.95, type), 1.0, h);
     return baseRound * topFade;
 }
+// CO-1 vertical profile — byte-identical to the production shaders' height_profile.
+float height_profile(float h, float pBottom, float pTop, float anvil){
+    float bottom = smoothstep(0.0, max(pBottom, 1e-4), h);
+    float top    = 1.0 - smoothstep(pTop, 1.0, h);
+    float bump = anvil * smoothstep(pTop, mix(pTop, 1.0, 0.5), h) * (1.0 - smoothstep(0.85, 1.0, h));
+    return bottom * max(top, bump);
+}
 vec2 ray_sphere(vec3 ro, vec3 rd, float R){
     float b = dot(ro, rd); float c = dot(ro, ro) - R * R; float disc = b * b - c;
     if (disc < 0.0) return vec2(-1.0);
@@ -54,7 +61,8 @@ vec2 ray_sphere(vec3 ro, vec3 rd, float R){
 // per-layer density — byte-identical to the production shaders' layer_density.
 float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
                     float lsize, float lcell, float ldens, float ltype,
-                    float ledge, float ldetail, float ldetsize, float covW){
+                    float ledge, float ldetail, float ldetsize, float covW,
+                    float pBottom, float pTop, float anvil){
     float r = length(p);
     float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
     vec3 lp = vec3(p.x, r - baseR, p.z);
@@ -81,6 +89,7 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     float cellGate = smoothstep(mix(0.80, 0.42, coverage), mix(1.0, 0.78, coverage), cell);
     shape *= cellGate;
     shape *= type_gradient(h, type);
+    shape *= height_profile(h, pBottom, pTop, anvil);
     if (shape <= 0.0) return 0.0;
     if (ldetail > 0.0){
         float dScale = DETAIL_SCALE / max(ldetsize, 0.01);
@@ -99,7 +108,8 @@ float density_all(vec3 p, vec2 windOff){
         float baseR = PLANET_R + LF(i,0), topR = baseR + LF(i,1);
         if (r < baseR || r > topR) continue;
         total += layer_density(p, baseR, topR, windOff,
-            LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4));
+            LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4),
+            LF(i,19), LF(i,20), LF(i,21));
     }
     return total;
 }
