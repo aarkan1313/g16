@@ -658,8 +658,81 @@ vec3 zone_color(int z){
     return c[clamp(z,0,6)];
 }
 
+// Phase B: parallax-occlusion. Marches the DOMINANT triplanar plane only, using the
+// Phase-A material height channel. Returns the in-plane uv offset (caller maps to world).
+// dom out: 0=zy(normal x), 1=xz(normal y), 2=xy(normal z).
+vec2 pom_offset(sampler2D rgh_t, sampler2D alb_t, vec3 wp, vec3 nr, vec3 vdir, out int dom){
+    vec3 bw = tri_w(nr);
+    dom = (bw.x >= bw.y && bw.x >= bw.z) ? 0 : (bw.y >= bw.z ? 1 : 2);
+    vec2 uv; vec2 vp; float vdepth;
+    if (dom == 0){ uv = wp.zy/tex_scale_m; vp = vdir.zy; vdepth = vdir.x; }
+    else if (dom == 1){ uv = wp.xz/tex_scale_m; vp = vdir.xz; vdepth = vdir.y; }
+    else { uv = wp.xy/tex_scale_m; vp = vdir.xy; vdepth = vdir.z; }
+
+    float far = distanceWeight(wp);
+    float lod = 1.0 - smoothstep(0.0, max(pom_far_fade, 1e-3), far);
+    int steps = int(float(pom_steps) * lod);
+    if (!pom_on || steps < 1 || pom_scale_m <= 0.0) return vec2(0.0);
+
+    vec2 dx = dFdx(uv), dy = dFdy(uv);
+    float vz = max(abs(vdepth), 0.05);                       // grazing → longer offset
+    vec2 maxShift = (vp / vz) * (pom_scale_m / tex_scale_m);
+    float dStep = 1.0 / float(steps);
+    vec2 dUV = maxShift * dStep;
+    vec2 curUV = uv; float rayH = 1.0;
+    float h = material_height_uv(rgh_t, alb_t, curUV, dx, dy);
+    for (int i = 0; i < 64; i++){
+        if (i >= steps) break;
+        if (rayH <= h) break;
+        rayH -= dStep; curUV -= dUV;
+        h = material_height_uv(rgh_t, alb_t, curUV, dx, dy);
+    }
+    vec2 prevUV = curUV + dUV;
+    float hPrev = material_height_uv(rgh_t, alb_t, prevUV, dx, dy);
+    float after  = h - rayH;
+    float before = hPrev - (rayH + dStep);
+    float wgt = after / max(after - before, 1e-4);
+    vec2 off = mix(curUV, prevUV, wgt) - uv;
+    float seam = smoothstep(0.0, 0.15, lod);                // thin fade only in last 15% before cutoff
+    return off * seam;
+}
+
 void fragment(){
     vec3 wp=v_world; vec3 nr=v_normal;
+
+    // Phase B: parallax-occlusion. Pick the dominant zone's height field, march it, and
+    // shift wp along the dominant plane so every later material fetch parallaxes.
+    if (pom_on){
+        vec3 vdir = normalize(wp - cam_world);
+        int hz = 0;
+        if (splat_on){
+            if (splat_blend_mode == 1){
+                float pw[7]; splat_weights7(pw, v_uv);
+                float mx=-1.0; for(int i=0;i<7;i++){ if(pw[i]>mx){ mx=pw[i]; hz=i; } }
+            } else { hz = clamp(int(texture(splat_tex, v_uv).r + 0.5), 0, 6); }
+        } else {
+            if      (v_slope > slope_cliff_hi) hz = 4;
+            else if (v_h > h_peak)             hz = 6;
+            else if (v_h > h_high)             hz = 5;
+            else if (v_slope > slope_cliff_lo) hz = 3;
+            else if (v_h > h_slope)            hz = 2;
+            else if (v_h > h_valley)           hz = 1;
+            else                               hz = 0;
+        }
+        int domPlane; vec2 off = vec2(0.0);
+        if      (hz==0) off = pom_offset(z0_rgh,z0_alb,wp,nr,vdir,domPlane);
+        else if (hz==1) off = pom_offset(z1_rgh,z1_alb,wp,nr,vdir,domPlane);
+        else if (hz==2) off = pom_offset(z2_rgh,z2_alb,wp,nr,vdir,domPlane);
+        else if (hz==3) off = pom_offset(z3_rgh,z3_alb,wp,nr,vdir,domPlane);
+        else if (hz==4) off = pom_offset(z4_rgh,z4_alb,wp,nr,vdir,domPlane);
+        else if (hz==5) off = pom_offset(z5_rgh,z5_alb,wp,nr,vdir,domPlane);
+        else            off = pom_offset(z6_rgh,z6_alb,wp,nr,vdir,domPlane);
+        vec2 woff = off * tex_scale_m;
+        if      (domPlane==0){ wp.z += woff.x; wp.y += woff.y; }
+        else if (domPlane==1){ wp.x += woff.x; wp.z += woff.y; }
+        else                 { wp.x += woff.x; wp.y += woff.y; }
+    }
+
     float w[7]; zone_weights(w, v_h, v_slope, v_curv, wp);
 
     vec3 alb=vec3(0.0); vec3 nrm=vec3(0.0,0.0,1.0); float rgh=0.0; float ao=1.0;
