@@ -858,10 +858,13 @@ void fragment(){
     // Normal: detailed normal-map (specular-shimmer suspect) only when enabled AND
     // blend_mode supports it. Otherwise the flat geometric normal.
     if (blend_mode>=1 && dbg_use_normalmap){
-        vec3 wn=normalize(nr + vec3(nrm.x,0.0,nrm.y)*0.8);
-        NORMAL=normalize((VIEW_MATRIX*vec4(wn,0.0)).xyz);
+        // apply the tangent-space normal across BOTH horizontal axes (was y-only) so
+        // POM-revealed relief gets matching shading; stronger near, calm far (shares POM LOD intent).
+        float nrNear = 1.0 - distanceWeight(wp);
+        vec3 wn = normalize(nr + vec3(nrm.x, 0.0, nrm.y) * mix(0.4, 1.0, nrNear));
+        NORMAL = normalize((VIEW_MATRIX*vec4(wn,0.0)).xyz);
     } else {
-        NORMAL=normalize((VIEW_MATRIX*vec4(nr,0.0)).xyz);
+        NORMAL = normalize((VIEW_MATRIX*vec4(nr,0.0)).xyz);
     }
 }
 // Cloud-shadow sun factor in [0,1] (1 = full sun). Samples the top-down transmittance
