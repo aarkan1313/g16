@@ -166,6 +166,8 @@
     { "id": "moon_halo_energy", "label": "moon halo energy", "tab": "Night", "type": "scenef", "scene": "moon_halo_energy", "min": 0.0, "max": 1.0, "default": 0.2, "rand": false },
     { "id": "moon_elev_off", "label": "moon elev offset", "tab": "Night", "type": "scenef", "scene": "moon_elev_off", "min": -60.0, "max": 60.0, "default": 0.0, "rand": false },
     { "id": "moon_az_off", "label": "moon az offset", "tab": "Night", "type": "scenef", "scene": "moon_az_off", "min": -180.0, "max": 180.0, "default": 0.0, "rand": false },
+    { "id": "moonlight_energy", "label": "moonlight on ground", "tab": "Night", "type": "scenef", "scene": "moonlight_energy", "min": 0.0, "max": 2.0, "default": 0.5, "rand": false },
+    { "id": "inspect_light", "label": "inspect light (L) energy", "tab": "Night", "type": "scenef", "scene": "inspect_energy", "min": 0.0, "max": 4.0, "default": 1.0, "rand": false },
     { "id": "day_sunrise", "label": "sunrise (h)", "tab": "Light", "type": "scenef", "scene": "day_sunrise", "min": 3.0, "max": 9.0, "default": 6.0, "rand": false },
     { "id": "day_sunset", "label": "sunset (h)", "tab": "Light", "type": "scenef", "scene": "day_sunset", "min": 15.0, "max": 21.0, "default": 18.0, "rand": false },
     { "id": "day_peak_elev", "label": "sun noon height", "tab": "Light", "type": "scenef", "scene": "day_peak_elev", "min": 20.0, "max": 85.0, "default": 60.0, "rand": false },

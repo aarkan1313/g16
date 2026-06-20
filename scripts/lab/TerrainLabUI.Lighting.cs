@@ -16,6 +16,7 @@ public partial class TerrainLabUI : Control
     private GradeState _grade = new();
     private MoonState _moon = new();
     private Vector3 _lastMoonDir = Vector3.Zero;   // last composed moon direction (for --lookatmoon)
+    private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
 
     /// Split a legacy mood dict into the axis states (same keys + defaults as the old ApplyMood).
@@ -83,18 +84,30 @@ public partial class TerrainLabUI : Control
             _cloud.SetSunHorizonGrow(_sunDisc.HorizonGrow); _cloud.SetSunCloudRedden(_sunDisc.CloudRedden);
             _cloud.SetNightFactor(_nightFactor);
 
-            // ── MOON (Stage 3b): default anti-solar (up at night) + tunable elev/az offsets. The disc
-            //    reuses the sun-surface system; rendered + gated to night in cloud_sky.gdshader. ──
-            Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();   // +Z = toward the sun
-            Vector3 anti = -toSun;
-            float mElev = Mathf.Asin(Mathf.Clamp(anti.Y, -1f, 1f)) + Mathf.DegToRad(_moon.ElevOffset);
-            float mAz = Mathf.Atan2(anti.Z, anti.X) + Mathf.DegToRad(_moon.AzOffset);
-            float ce = Mathf.Cos(mElev);
-            Vector3 moonDir = new Vector3(ce * Mathf.Cos(mAz), Mathf.Sin(mElev), ce * Mathf.Sin(mAz)).Normalized();
+            // ── MOON (Stage 3b/3c): anti-solar by default (opposite the sun → up at night) + tunable
+            //    elev/az offsets. Orient the moon LIGHT via RotationDegrees EXACTLY like OrientSun (known-
+            //    correct: basis.Z = toward the body, so the shader LIGHT = +moonDir and terrain NoL>0),
+            //    then read moonDir back off the node so the disc and the moonlight are always consistent. ──
+            EnsureMoonLight();
+            float moonElev = -_time.SunAngle + _moon.ElevOffset;     // anti-solar elevation (+ when sun is below)
+            float moonAz = _time.SunAzimuth + 180f + _moon.AzOffset; // opposite compass bearing
+            _moonLight!.RotationDegrees = new Vector3(-moonElev, moonAz, 0f);
+            Vector3 moonDir = _moonLight.GlobalTransform.Basis.Z.Normalized();   // toward the moon (same convention as the sun)
             _lastMoonDir = moonDir;
             _cloud.SetMoon(moonDir, _moon.Color, _moon.DiscEnergy);
             _cloud.SetMoonAppearance(_moon.Phase, _moon.Size, _moon.Limb, _moon.HaloSize, _moon.HaloEnergy);
             _cloud.SetMoonSurface(_moon.SurfCells, _moon.SurfContrast, _moon.SurfSpots, _moon.SurfChurn);
+
+            // ── MOONLIGHT (Stage 3c): the same directional casts cool light, gated to night × moon-up ×
+            //    phase. Cross-fades with the sun automatically (sun energy → 0 at night via the day script
+            //    while this ramps in by nightFactor). Shadow-casting; off (invisible) in daylight. ──
+            float moonUp = Mathf.Clamp((moonDir.Y + 0.05f) / 0.15f, 0f, 1f);   // ramps in as the moon clears the horizon
+            float mAngle = (1f - _moon.Phase) * Mathf.Pi;
+            float mIllum = 0.5f + 0.5f * Mathf.Cos(mAngle);                     // 0 new · 1 full
+            float mEnergy = _moon.LightEnergy * _nightFactor * moonUp * mIllum;
+            _moonLight.LightColor = _moon.LightColor;
+            _moonLight.LightEnergy = mEnergy;
+            _moonLight.Visible = mEnergy > 0.001f;                              // invisible = no shadow/cost in day
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by
@@ -191,6 +204,16 @@ public partial class TerrainLabUI : Control
     {
         if (nd <= 1f) return new Color(authored.R * nd, authored.G * nd, authored.B * nd, authored.A);  // 1→authored, 0→black
         return authored.Lerp(bright, Mathf.Clamp(nd - 1f, 0f, 1f));                                     // 1→authored, 2→bright
+    }
+
+    /// Lazily create the Stage-3c moonlight directional (parented to the scene root, shadow-casting).
+    /// Separate from the scene Sun so the sky shader's LIGHT0 stays the sun; this only lights terrain.
+    private void EnsureMoonLight()
+    {
+        _moonLight ??= new DirectionalLight3D { Name = "MoonLight", ShadowEnabled = true, LightEnergy = 0f, Visible = false };
+        if (_moonLight.IsInsideTree()) { return; }   // retry the parent add until it actually lands in the tree
+        var root = GetNodeOrNull<Node3D>("/root/TerrainLabRoot");
+        if (root != null && _moonLight.GetParent() == null) { root.AddChild(_moonLight); }
     }
 
     /// Interpolate the daytime color script (LightingPresets.DayScript anchors) at `hour`.

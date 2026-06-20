@@ -28,6 +28,7 @@ public partial class TerrainLabUI : Control
     private DirectionalLight3D? _inspectLight;
     private bool _inspectOn;
     private bool _lastLDown;
+    private float _inspectEnergy = 1.0f;   // L-light brightness (Night tab 'inspect light')
 
     /// Toggle the inspection light (press L). Lazily creates a fixed-angle shadow-casting directional
     /// ("studio key light") that lights the whole scene, so you can check how surfaces read regardless of
@@ -38,7 +39,7 @@ public partial class TerrainLabUI : Control
         {
             _inspectLight = new DirectionalLight3D
             {
-                LightEnergy = 2.0f,
+                LightEnergy = _inspectEnergy,
                 LightColor = new Color(1f, 0.97f, 0.92f),
                 ShadowEnabled = true,
                 RotationDegrees = new Vector3(-55f, 40f, 0f),   // 3/4 studio angle

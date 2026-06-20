@@ -132,6 +132,8 @@ public partial class TerrainLabUI : Control
             case "moon_surf_cells":     _moon.SurfCells = v; ComposeLighting(); break;
             case "moon_elev_off":       _moon.ElevOffset = v; ComposeLighting(); break;
             case "moon_az_off":         _moon.AzOffset = v; ComposeLighting(); break;
+            case "moonlight_energy":    _moon.LightEnergy = v; ComposeLighting(); break;
+            case "inspect_energy":      _inspectEnergy = v; if (_inspectLight != null) { _inspectLight.LightEnergy = v; } break;
             case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
             case "ssao_intensity":  env.SsaoIntensity = v; break;
             case "ssao_radius":     env.SsaoRadius = v; break;

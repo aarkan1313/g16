@@ -70,6 +70,9 @@ public sealed class MoonState
     public float HaloSize = 140f, HaloEnergy = 0.2f;
     public float SurfCells = 8f, SurfContrast = 0.6f, SurfSpots = 0.55f, SurfChurn = 0f;  // maria/crater mottle
     public Color Color = new(0.85f, 0.88f, 1.0f);  // cool moonlight white
+    // MOONLIGHT (Stage 3c): a 2nd cool directional cast on the terrain, gated to night × moon-up × phase.
+    public float LightEnergy = 0.5f;
+    public Color LightColor = new(0.60f, 0.70f, 1.0f);  // cool blue moonlight
 
     public MoonState Clone() => (MoonState)MemberwiseClone();
 }
