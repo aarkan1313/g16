@@ -114,18 +114,18 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
    `L` inspection light, sun-disc limb polish. Plan `plans/2026-06-20-night-and-celestial.md`. Spec
    `specs/2026-06-20-night-and-celestial-design.md`. Owed (minor, await user eye): celestial-preset
    dropdown live-check; optional live moon/moonlight color pickers.
-2. **Clouds overhaul** — own brainstorm→spec. User asks: **cirrus / wispy-striated "lines" clouds** (not
-   represented), **more shapes & types**, **more/higher elevation bands** + **height ranges WITHIN a
-   band** (the "decks are flat slabs" vertical-realism gap, memory `cloud-deck-vertical-realism`),
-   **weather-axis tie-in**, **stronger anti-repetition** (still tiles sometimes), + presets/tunability.
-   (Broad cloud review passed "all good" 5; this is the next depth pass the deprecated cloud roadmap owed.)
-3. **GPU-compute physical atmosphere** — the unifying sky-color/scattering pass (day+dusk+night, aerial,
-   how clouds are lit) — the "sky pass that relates to everything." Hillaire LUTs on the CloudVolume
-   render-thread **`Texture2Drd` seam (`CallOnRenderThread`), NOT FieldCompute** (a local-RD texture
-   can't be sampled by a material — memory `compute-to-material-callonrenderthread`). Re-spec'd as its
-   own stage.
-4. **Stage 4** — auto day/night cycle (play/pause/speed) + fantasy/exotic (blood/colored/multiple
-   moons+suns, exotic palettes).
+2. **Clouds overhaul — ✅ SPEC'd 2026-06-20** (`specs/2026-06-20-clouds-overhaul-design.md`). Phased CO-1
+   vertical realism (height profile in decks) → CO-2 types (cirrus as a 2D layer + stratus shape-mode;
+   cumulus preserved) → CO-3 anti-repetition/horizon → CO-4 presets. **Weather-axis tie-in DEFERRED** (own
+   later stage, user's call). **NEXT TO BUILD** (when the user picks it) — writing-plans then CO-1.
+3. **GPU-compute physical atmosphere — ✅ SPEC'd 2026-06-20** (`specs/2026-06-20-gpu-atmosphere-design.md`).
+   Hillaire LUTs on the CloudVolume **`Texture2Drd`/`CallOnRenderThread` seam, NOT FieldCompute** (memory
+   `compute-to-material-callonrenderthread`). Toggleable sky-color provider, **default OFF = approved
+   keyframed look until it wins its A/B gate**. Phased AT-1 core sky color → AT-2 aerial perspective →
+   AT-3 cloud-lighting integration (AT-3 after #2 lands). Supersedes the keyframed `day_script` for sky color.
+4. **Stage 4 — ✅ SPEC'd 2026-06-20** (`specs/2026-06-20-stage4-cycle-and-fantasy-design.md`). ST4-1 auto
+   day/night cycle (play/pause/speed/scrub — buildable now, no deps) → ST4-2 fantasy/exotic via cross-system
+   presets (blood-moon/alien-sky on the existing single sun+moon). **Multiple suns/moons DEFERRED** (own spec).
 5. **Shadow & Lighting pass** — CSM/cascade tuning, contact + soft (PCSS) shadows, the proxy-on cheap-
    shadow perf lever (~2.8 vs ~4.7 ms), SSIL re-check. Pairs with Stage-3 moonlight shadows.
 
