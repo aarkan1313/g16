@@ -29,12 +29,13 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     // TAIL vec4 (16-aligned) so layers[] starts on a 16-byte boundary. x=wind_x, y=wind_y,
     // z=cell_scale, w=layer_count. (See cloud_raymarch.glsl — hand-packed std430 drift.)
     vec4 tail;
-    vec4 layers[40];       // 8 layers × 5 vec4 (CloudLayers.Pack order); fields 12-19 are
-                           // raymarch-only lighting — shadow uses only density fields 0-11.
+    vec4 layers[48];       // 8 layers × 6 vec4 (CloudLayers.Pack order); fields 12-18 are
+                           // raymarch-only lighting (ignored here); 19-21 = vertical profile
+                           // (applied — density-affecting); shadow uses density 0-11 + 19-21.
 } P;
 #define WIND vec2(P.tail.x, P.tail.y)
 #define LAYER_COUNT P.tail.w
-#define LF(i, f) P.layers[(i)*5 + ((f)>>2)][(f)&3]
+#define LF(i, f) P.layers[(i)*6 + ((f)>>2)][(f)&3]
 
 const float PLANET_R = 200000.0;
 

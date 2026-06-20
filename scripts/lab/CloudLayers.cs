@@ -6,14 +6,17 @@ namespace WG16.Lab;
 
 /// One cloud deck. Data only — no marching/scene knowledge (separation of concerns).
 /// Fields 0-11 are DENSITY (must stay byte-identical between raymarch & shadow shaders);
-/// PhaseG..TintB are per-deck LIGHTING (raymarch only — shadow ignores them) so cumulus
-/// vs cirrus read as different cloud kinds (roadmap #1).
+/// fields 19-21 are the VERTICAL PROFILE (CO-1) — ALSO density-affecting, so they too are
+/// read + applied byte-identically by BOTH shaders (height_profile). PhaseG..TintB are
+/// per-deck LIGHTING (raymarch only — shadow ignores them) so cumulus vs cirrus read as
+/// different cloud kinds (roadmap #1).
 public readonly record struct CloudLayer(
     float Altitude, float Thickness, float Size, float CellScale,
     float CoverageWeight, float Density, float Opacity, float Type,
     float Edge, float Detail, float DetailSize,
     float PhaseG, float PhaseIso, float Albedo, float SunAbsorb,
     float TintR, float TintG, float TintB,
+    float ProfileBottom, float ProfileTop, float Anvil,
     int NoiseId, bool Enabled);
 
 /// Owns the cloud-layer array: load/validate from JSON, pack into a float[] run for the
@@ -22,7 +25,7 @@ public readonly record struct CloudLayer(
 public static class CloudLayers
 {
     public const int MaxLayers = 8;
-    public const int Stride = 20;   // floats per layer in the packed buffer: 12 density + 7 lighting + 1 reserved (see Pack)
+    public const int Stride = 24;   // floats per layer: 12 density (0-11) + 7 lighting (12-18) + 3 profile (19-21) + 2 reserved (22-23) = 6 vec4. See Pack.
     public const string Path = "res://data/cloud_layers.json";
 
     // Build one CloudLayer from key→value accessors. The ONLY place layer field names +
@@ -36,6 +39,7 @@ public static class CloudLayers
             F("edge", 0.5f), F("detail", 0.4f), F("detail_size", 1f),
             F("phase_g", 0.8f), F("phase_iso", 0.2f), F("albedo", 1f), F("sun_absorb", 1f),
             F("tint_r", 1f), F("tint_g", 1f), F("tint_b", 1f),
+            F("profile_bottom", 0f), F("profile_top", 1f), F("anvil", 0f),
             I("noise_id", 0), B("enabled", true));
 
     /// The default deck stack from data/cloud_layers.json (System.Text.Json).
@@ -100,11 +104,15 @@ public static class CloudLayers
             packed[o + 6] = L.Opacity;        packed[o + 7] = L.Type;
             packed[o + 8] = L.Edge;           packed[o + 9] = L.Detail;
             packed[o + 10] = L.DetailSize;    packed[o + 11] = L.NoiseId;
-            // 12-19: per-deck LIGHTING (raymarch only)
+            // 12-18: per-deck LIGHTING (raymarch only)
             packed[o + 12] = L.PhaseG;        packed[o + 13] = L.PhaseIso;
             packed[o + 14] = L.Albedo;        packed[o + 15] = L.SunAbsorb;
             packed[o + 16] = L.TintR;         packed[o + 17] = L.TintG;
-            packed[o + 18] = L.TintB;         packed[o + 19] = 0f;   // reserved
+            packed[o + 18] = L.TintB;
+            // 19-21: VERTICAL PROFILE (CO-1) — density-affecting, read by BOTH shaders
+            packed[o + 19] = L.ProfileBottom; packed[o + 20] = L.ProfileTop;
+            packed[o + 21] = L.Anvil;         packed[o + 22] = 0f;   // reserved (CO-2 ShapeMode)
+            packed[o + 23] = 0f;              // reserved
             count++;
         }
         return packed;

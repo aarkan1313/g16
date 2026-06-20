@@ -39,18 +39,19 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     // bytes → scrambled → NO CLOUDS). Keeping the tail as ONE vec4 + the C# writer padding
     // to 16 before it removes the hazard. x=wind_x, y=wind_y, z=cell_scale, w=layer_count.
     vec4 tail;
-    // 8 layers × 20 floats = 5 vec4 PER LAYER (40 vec4). vec4[] (not float[]) so the stride
+    // 8 layers × 24 floats = 6 vec4 PER LAYER (48 vec4). vec4[] (not float[]) so the stride
     // is tight 16B and matches CloudLayers.Pack's contiguous float run.
-    // fields 0-11 = density (byte-identical to cloud_shadow.glsl); 12-19 = per-deck lighting.
-    vec4 layers[40];
+    // fields 0-11 = density (byte-identical to cloud_shadow.glsl); 12-18 = per-deck lighting;
+    // 19-21 = vertical profile (CO-1, also byte-identical to the shadow shader).
+    vec4 layers[48];
 } P;
 #define WIND vec2(P.tail.x, P.tail.y)
 #define CELL_SCALE P.tail.z
 #define LAYER_COUNT P.tail.w
 // per-layer field accessor. f: 0 alt,1 thick,2 size,3 cell,4 covW,5 dens,6 opac,7 type,
 // 8 edge,9 detail,10 detailSize,11 noiseId, 12 phaseG,13 phaseIso,14 albedo,15 sunAbsorb,
-// 16 tintR,17 tintG,18 tintB,19 reserved.
-#define LF(i, f) P.layers[(i)*5 + ((f)>>2)][(f)&3]
+// 16 tintR,17 tintG,18 tintB, 19 profileBottom,20 profileTop,21 anvil, 22-23 reserved.
+#define LF(i, f) P.layers[(i)*6 + ((f)>>2)][(f)&3]
 
 const float PLANET_R = 200000.0;
 const float PI = 3.14159265;
