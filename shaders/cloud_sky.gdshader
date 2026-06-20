@@ -39,22 +39,21 @@ vec2 dir_to_uv(vec3 d){
     return vec2(az / (2.0 * PI), el / (0.5 * PI));
 }
 
+// All sun rendering lives here so clouds composite OVER it. Built from cosSun (view·sun) and
+// sunElev (LIGHT0_DIRECTION.y). Pieces are layered in later tasks; this is the current look verbatim.
+vec3 sun_layers(vec3 rd) {
+    if (!LIGHT0_ENABLED) { return vec3(0.0); }
+    float cosSun = dot(rd, LIGHT0_DIRECTION);
+    float disc = smoothstep(0.9994, 0.9998, cosSun);          // ~0.6° disc
+    float glow = pow(max(cosSun, 0.0), 220.0) * 0.5;          // halo
+    return LIGHT0_COLOR * sun_disc_energy * (disc * 12.0 + glow);
+}
+
 void sky(){
     vec3 rd = EYEDIR;
     vec3 bg = background(rd);
 
-    // SUN DISC + glow — drawn into the BACKGROUND so clouds composite OVER it (a cloud in
-    // front of the sun correctly occludes it; in clear sky the disc shows). The cloud sky
-    // shader previously drew no sun at all, so toggling clouds on made the sun vanish and
-    // left only a bright gradient ("a light behind fog"). LIGHT0_* is the scene's sun.
-    if (LIGHT0_ENABLED){
-        float cosSun = dot(rd, LIGHT0_DIRECTION);
-        // tight disc + wider soft glow toward the sun
-        float disc = smoothstep(0.9994, 0.9998, cosSun);          // ~0.6° disc
-        float glow = pow(max(cosSun, 0.0), 220.0) * 0.5;          // halo
-        vec3 sunRGB = LIGHT0_COLOR * sun_disc_energy;   // base brightness, NOT overcast-dimmed
-        bg += sunRGB * (disc * 12.0 + glow);
-    }
+    bg += sun_layers(rd);
 
     vec3 outColor = bg;
     if (cloud_enabled && rd.y > 0.0){
