@@ -68,7 +68,7 @@ public sealed class MoonState
     public float Size = 1.2f, Limb = 0.6f;         // angular radius (deg) + limb darkening
     public float DiscEnergy = 0.9f;                // overall brightness (cool, dimmer than the sun)
     public float HaloSize = 140f, HaloEnergy = 0.2f;
-    public float SurfCells = 8f, SurfContrast = 0.5f, SurfSpots = 0.4f, SurfChurn = 0f;  // maria/crater mottle
+    public float SurfCells = 8f, SurfContrast = 0.6f, SurfSpots = 0.55f, SurfChurn = 0f;  // maria/crater mottle
     public Color Color = new(0.85f, 0.88f, 1.0f);  // cool moonlight white
 
     public MoonState Clone() => (MoonState)MemberwiseClone();

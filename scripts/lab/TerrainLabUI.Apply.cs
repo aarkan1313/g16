@@ -120,6 +120,18 @@ public partial class TerrainLabUI : Control
             case "day_peak_elev":   _time.PeakElev = v; DriveTime(_time.TimeOfDay); break;
             case "night_darkness":      _time.NightDarkness = v; DriveTime(_time.TimeOfDay); break;
             case "night_ambient_floor": _time.NightAmbientFloor = v; DriveTime(_time.TimeOfDay); break;
+            // MOON (Stage 3b) — Night tab. Each sets the _moon field then re-composes (re-pushes the moon).
+            case "moon_phase":          _moon.Phase = v; ComposeLighting(); break;
+            case "moon_size":           _moon.Size = v; ComposeLighting(); break;
+            case "moon_limb":           _moon.Limb = v; ComposeLighting(); break;
+            case "moon_energy":         _moon.DiscEnergy = v; ComposeLighting(); break;
+            case "moon_halo_size":      _moon.HaloSize = v; ComposeLighting(); break;
+            case "moon_halo_energy":    _moon.HaloEnergy = v; ComposeLighting(); break;
+            case "moon_surf_contrast":  _moon.SurfContrast = v; ComposeLighting(); break;
+            case "moon_surf_spots":     _moon.SurfSpots = v; ComposeLighting(); break;
+            case "moon_surf_cells":     _moon.SurfCells = v; ComposeLighting(); break;
+            case "moon_elev_off":       _moon.ElevOffset = v; ComposeLighting(); break;
+            case "moon_az_off":         _moon.AzOffset = v; ComposeLighting(); break;
             case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
             case "ssao_intensity":  env.SsaoIntensity = v; break;
             case "ssao_radius":     env.SsaoRadius = v; break;

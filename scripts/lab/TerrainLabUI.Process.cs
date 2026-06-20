@@ -23,31 +23,31 @@ public partial class TerrainLabUI : Control
     // of being overwritten every frame. -1 forces the first apply.
     private float _lastOvercast = -1f;
 
-    // Inspection headlamp (press L): a movable omni light at the camera to check how surfaces read,
-    // especially at night before real moonlight (3c). Toggle on/off; follows the camera while on.
-    private OmniLight3D? _inspectLight;
+    // Inspection light (press L): a fixed-angle "studio" directional that lights the whole scene so you
+    // can check how surfaces read — especially at night before real moonlight (3c). Toggle on/off.
+    private DirectionalLight3D? _inspectLight;
     private bool _inspectOn;
     private bool _lastLDown;
 
-    /// Toggle the inspection headlamp (press L). Lazily creates a shadow-casting omni light parented to
-    /// the scene root; it follows the camera while on. A debug aid to check how surfaces read under a
-    /// movable light (e.g. dark night before moonlight lands in 3c).
+    /// Toggle the inspection light (press L). Lazily creates a fixed-angle shadow-casting directional
+    /// ("studio key light") that lights the whole scene, so you can check how surfaces read regardless of
+    /// time of day (e.g. a dark night before real moonlight lands in 3c). NOT the sun/moon — a debug aid.
     private void ToggleInspectLight()
     {
         if (_inspectLight == null)
         {
-            _inspectLight = new OmniLight3D
+            _inspectLight = new DirectionalLight3D
             {
-                OmniRange = 2000f,
-                LightEnergy = 8f,
-                LightColor = new Color(1f, 0.96f, 0.90f),
+                LightEnergy = 2.0f,
+                LightColor = new Color(1f, 0.97f, 0.92f),
                 ShadowEnabled = true,
+                RotationDegrees = new Vector3(-55f, 40f, 0f),   // 3/4 studio angle
             };
             GetNode<Node3D>("/root/TerrainLabRoot").AddChild(_inspectLight);
         }
         _inspectOn = !_inspectOn;
         _inspectLight.Visible = _inspectOn;
-        GD.Print($"[inspect light] {(_inspectOn ? "ON (follows camera)" : "off")}");
+        GD.Print($"[inspect light] {(_inspectOn ? "ON (studio directional)" : "off")}");
     }
 
     // Per-frame overcast tracker. NO scene writes here — it only updates the overcast amount and
@@ -92,11 +92,10 @@ public partial class TerrainLabUI : Control
             _terrain.SetCameraWorld(camPos);
             _cloud?.SetCameraWorld(camPos);
 
-            // Inspection headlamp (L): toggle a movable omni light at the camera to check surfaces.
+            // Inspection light (L): toggle a fixed-angle studio directional to check surfaces.
             bool lDown = Input.IsKeyPressed(Key.L);
             if (lDown && !_lastLDown) { ToggleInspectLight(); }
             _lastLDown = lDown;
-            if (_inspectOn && _inspectLight != null) { _inspectLight.GlobalPosition = camPos; }
         }
         // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)

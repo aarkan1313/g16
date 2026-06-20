@@ -183,13 +183,17 @@ vec3 moon_layers(vec3 rd) {
     vec2 sph = p / (ball + 0.35);
 
     if (discMask > 0.0) {
-        // maria (low-freq dark seas) + finer crater mottle, reusing the sun granulation field
+        // MARIA: large dark "seas" from a low-frequency field (the big recognizable dark patches).
+        vec2 qm = sph * (moon_surf_cells * 0.32) + vec2(5.3, 1.7);
+        float maria = smoothstep(0.58, 0.40, sun_fbm(qm)) * moon_surf_spots;
+        // CRATERS: finer scattered dark pits from a higher-frequency field.
+        vec2 qc = sph * (moon_surf_cells * 1.7) + vec2(2.1, 9.4);
+        float craters = smoothstep(0.60, 0.72, sun_fbm(qc)) * moon_surf_spots * 0.6;
+        // fine granular mottle (optional churn) for surface texture between the big features.
         vec2 q = sph * moon_surf_cells + vec2(moon_surf_churn * TIME);
         float gran = (sun_fbm(q) - 0.5) * 2.0;
-        float granAmt = moon_surf_contrast * 0.5 * ball;
-        vec2 qs = sph * (moon_surf_cells * 0.5) + vec2(5.3, 1.7);
-        float maria = smoothstep(0.55, 0.40, sun_fbm(qs)) * moon_surf_spots * ball;
-        disc *= max((1.0 + granAmt) * (1.0 - 0.6 * maria), 0.0);
+        float shade = (1.0 + moon_surf_contrast * 0.35 * gran) * (1.0 - 0.72 * maria) * (1.0 - 0.45 * craters);
+        disc *= max(mix(1.0, shade, ball), 0.0);   // surface strongest at centre, foreshortens to the rim
     }
 
     // PHASE terminator: lit fraction from a phase-derived light direction over the disc-sphere normal.
