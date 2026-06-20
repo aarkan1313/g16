@@ -9,7 +9,7 @@
     { "hour": 12.0, "sun_energy": 1.4, "sun_color": [1.00, 0.95, 0.86], "sky_top": [0.48, 0.65, 0.92], "sky_horizon": [0.78, 0.85, 0.92], "sky_ground": [0.28, 0.28, 0.26], "ambient": 0.45, "ambient_sky": 0.95 },
     { "hour": 16.0, "sun_energy": 1.4, "sun_color": [1.00, 0.82, 0.58], "sky_top": [0.30, 0.46, 0.70], "sky_horizon": [0.90, 0.72, 0.54], "sky_ground": [0.25, 0.23, 0.19], "ambient": 0.40, "ambient_sky": 0.85 },
     { "hour": 18.5, "sun_energy": 0.9, "sun_color": [1.00, 0.55, 0.35], "sky_top": [0.20, 0.25, 0.45], "sky_horizon": [0.86, 0.50, 0.34], "sky_ground": [0.20, 0.18, 0.18], "ambient": 0.32, "ambient_sky": 0.88 },
-    { "hour": 20.0, "sun_energy": 0.15, "sun_color": [0.55, 0.45, 0.55], "sky_top": [0.05, 0.07, 0.16], "sky_horizon": [0.18, 0.14, 0.22], "sky_ground": [0.07, 0.07, 0.10], "ambient": 0.14, "ambient_sky": 0.85 },
+    { "hour": 20.0, "sun_energy": 0.15, "sun_color": [0.80, 0.45, 0.40], "sky_top": [0.07, 0.09, 0.18], "sky_horizon": [0.30, 0.17, 0.15], "sky_ground": [0.09, 0.08, 0.09], "ambient": 0.18, "ambient_sky": 0.85 },
     { "hour": 22.0, "sun_energy": 0.0,  "sun_color": [0.40, 0.45, 0.65], "sky_top": [0.02, 0.03, 0.08], "sky_horizon": [0.05, 0.06, 0.12], "sky_ground": [0.03, 0.03, 0.05], "ambient": 0.06, "ambient_sky": 0.80 },
     { "hour": 0.0,  "sun_energy": 0.0,  "sun_color": [0.40, 0.45, 0.65], "sky_top": [0.015,0.02, 0.06], "sky_horizon": [0.04, 0.05, 0.10], "sky_ground": [0.02, 0.02, 0.04], "ambient": 0.05, "ambient_sky": 0.80 },
     { "hour": 2.0,  "sun_energy": 0.0,  "sun_color": [0.40, 0.45, 0.65], "sky_top": [0.02, 0.03, 0.08], "sky_horizon": [0.05, 0.06, 0.12], "sky_ground": [0.03, 0.03, 0.05], "ambient": 0.06, "ambient_sky": 0.80 },

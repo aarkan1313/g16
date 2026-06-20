@@ -19,6 +19,7 @@ public partial class TerrainLabUI : Control
     /// Split a legacy mood dict into the axis states (same keys + defaults as the old ApplyMood).
     private void MoodToStates(Godot.Collections.Dictionary m)
     {
+        _nightFactor = 0f;   // moods are daytime looks — clear any night grade left from a time-scrub
         _time.SunAngle = F(m, "sun_angle", 35f); _time.SunAzimuth = F(m, "sun_az", 40f);
         _time.SunEnergy = F(m, "sun_energy", 1.3f);
         _time.SunColor = m.ContainsKey("sun_color") ? Col(m["sun_color"]) : new Color(1f, 0.95f, 0.86f);
@@ -57,6 +58,10 @@ public partial class TerrainLabUI : Control
         sun.LightColor = _time.SunColor;
         _baseAmbient = _time.Ambient;
         _baseSunEnergy = _time.SunEnergy;
+        // Ambient COLOR cools toward moonlight as night falls (day = white). CRITICAL: Godot's default
+        // AmbientLightColor is BLACK, so without this the night ambient ENERGY lever multiplies by black
+        // and never reaches the screen — this is what makes night_darkness actually visible on terrain.
+        env.AmbientLightColor = new Color(1f, 1f, 1f).Lerp(NightAmbientTint, _nightFactor);
         if (env.Sky?.SkyMaterial is ProceduralSkyMaterial psky)
         {
             psky.SkyTopColor = _time.SkyTop;
@@ -123,21 +128,48 @@ public partial class TerrainLabUI : Control
         _nightFactor = nf * nf * (3f - 2f * nf);                     // smoothstep
 
         TimeKey k = SampleDayScript(hour);
-        // night scaling: NightDarkness multiplies sky+ambient by nightFactor (1 = authored night).
-        float ns = Mathf.Lerp(1f, _time.NightDarkness, _nightFactor);
         _time.SunEnergy = k.SunEnergy;
         _time.SunColor = k.SunColor;
-        _time.SkyTop = ScaleRgb(k.SkyTop, ns);
-        _time.SkyHorizon = ScaleRgb(k.SkyHorizon, ns);
-        _time.SkyGround = ScaleRgb(k.SkyGround, ns);
-        _time.AmbientSky = k.AmbientSky;
-        // ambient: scaled toward dark, but never below the night floor (keeps the moonlit option alive).
-        float amb = k.Ambient * ns;
-        _time.Ambient = Mathf.Lerp(amb, Mathf.Max(amb, _time.NightAmbientFloor), _nightFactor);
+
+        // NIGHT GRADE (Stage 3a): night_darkness is the master night-brightness lever with REAL
+        // perceptual range. Multiplying the near-black anchors did nothing, so instead lerp the
+        // authored night look toward BLACK (scary, nd<1) or a MOONLIT target (nd>1). nd=1 = the
+        // authored physical night. Endpoints are the Night* constants (one place = modular).
+        float nd = _time.NightDarkness;
+        Color gTop = NightGrade(k.SkyTop, NightBrightTop, nd);
+        Color gHor = NightGrade(k.SkyHorizon, NightBrightHorizon, nd);
+        Color gGnd = NightGrade(k.SkyGround, NightBrightGround, nd);
+        _time.SkyTop = k.SkyTop.Lerp(gTop, _nightFactor);
+        _time.SkyHorizon = k.SkyHorizon.Lerp(gHor, _nightFactor);
+        _time.SkyGround = k.SkyGround.Lerp(gGnd, _nightFactor);
+
+        // Ambient terrain fill: scary(0) → authored → moonlit ceiling, clamped to the floor. At night we
+        // also drop sky-contribution so this energy lever actually lights the terrain (the near-black
+        // night sky otherwise dominates ambient and the knob can't bite). The ambient COLOR is cooled in
+        // ComposeLighting (default AmbientLightColor is black, which would zero out the energy lever).
+        float ambNight = (nd <= 1f)
+            ? Mathf.Lerp(0f, k.Ambient, nd)
+            : Mathf.Lerp(k.Ambient, NightAmbientBright, Mathf.Clamp(nd - 1f, 0f, 1f));
+        ambNight = Mathf.Max(ambNight, _time.NightAmbientFloor);
+        _time.Ambient = Mathf.Lerp(k.Ambient, ambNight, _nightFactor);
+        _time.AmbientSky = Mathf.Lerp(k.AmbientSky, NightSkyContribution, _nightFactor);
         ComposeLighting();
     }
 
-    private static Color ScaleRgb(Color c, float s) => new Color(c.R * s, c.G * s, c.B * s, c.A);
+    // Night-grade endpoints (modular: tune the night palette here). nd: 0 = scary-black, 1 = authored, 2 = moonlit-bright.
+    private static readonly Color NightBrightTop = new(0.07f, 0.10f, 0.18f);
+    private static readonly Color NightBrightHorizon = new(0.10f, 0.13f, 0.20f);
+    private static readonly Color NightBrightGround = new(0.05f, 0.06f, 0.09f);
+    private static readonly Color NightAmbientTint = new(0.55f, 0.62f, 0.85f);   // cool moonlight ambient fill
+    private const float NightAmbientBright = 0.30f;     // moonlit-bright terrain ambient ceiling
+    private const float NightSkyContribution = 0.25f;   // sky-contribution at deep night (down from ~0.8 so the energy lever bites)
+
+    /// Night brightness grade: nd 0 = black (scary), 1 = authored, 2 = bright (moonlit) — real perceptual range.
+    private static Color NightGrade(Color authored, Color bright, float nd)
+    {
+        if (nd <= 1f) return new Color(authored.R * nd, authored.G * nd, authored.B * nd, authored.A);  // 1→authored, 0→black
+        return authored.Lerp(bright, Mathf.Clamp(nd - 1f, 0f, 1f));                                     // 1→authored, 2→bright
+    }
 
     /// Interpolate the daytime color script (LightingPresets.DayScript anchors) at `hour`.
     private static TimeKey SampleDayScript(float hour)
