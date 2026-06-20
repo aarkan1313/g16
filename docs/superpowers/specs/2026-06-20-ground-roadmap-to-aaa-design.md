@@ -1,3 +1,7 @@
+> **⮕ SUPERSEDED 2026-06-20 by `2026-06-20-ground-rendering-system-master-design.md`** (the from-scratch,
+> game-agnostic redesign). This doc is kept for its **7-layer inventory** + the **Unit-4 lesson**; the
+> master design owns the north star, scope, keep/rebuild calls, and the foundation-first build order.
+
 # GROUND — Roadmap to AAA (consolidated, single source of truth)
 
 Date: 2026-06-20. **This is the authoritative ground roadmap.** It supersedes the scattered
