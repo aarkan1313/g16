@@ -125,8 +125,17 @@ uniform float snow_dust_h : hint_range(0.0, 900.0) = 560.0;  // height where dus
 // filter_nearest: the R/G channels are integer zone indices — linear filtering
 // would interpolate them into wrong fractional indices at boundaries.
 uniform sampler2D splat_tex : filter_nearest, repeat_disable, hint_default_black;
+// Phase A weightmaps (filter_linear → smooth de-blocked weights). Roles packed:
+// splat_wa = {0,1,2,3}, splat_wb = {4,5,6, spare}. Read by splat_blend_mode==1.
+uniform sampler2D splat_wa : filter_linear, repeat_disable, hint_default_black;
+uniform sampler2D splat_wb : filter_linear, repeat_disable, hint_default_black;
 uniform bool splat_on = false;
 uniform bool splat_rule_based = false;   // G1: read baked secondary (splat.g) vs fixed sec_zone[dom]
+// Splat de-blocking: domain-warp the splat lookup by world-space noise so material
+// boundaries flow organically instead of snapping to the axis-aligned splat grid
+// (the stair-stepped blocky patches). 0 = off (raw grid). Live, no rebake.
+uniform float splat_warp_m : hint_range(0.0, 120.0) = 24.0;    // warp distance (m)
+uniform float splat_warp_wl : hint_range(10.0, 200.0) = 55.0;  // warp noise wavelength (m)
 uniform float mix_strength : hint_range(0.0, 1.0) = 0.6;   // live: how strongly secondary shows
 uniform int splat_debug = 0;   // 0 off | 1 show dominant zone as color | 2 show mix amount
 
@@ -586,7 +595,13 @@ void fragment(){
         // (trip_*). ~18 texture fetches/px (3 planes × 2 materials × 3 maps), 3× under
         // the original ~54 (which had hex × triplanar). NO hex: hex's rotated tiles
         // made tile-seam squares. Detail stays crisp (real mipmapped texture taps).
-        vec4 sp = texture(splat_tex, v_uv);
+        // De-block the splat: domain-warp the lookup with 2 octaves of world-space noise
+        // so boundaries are organic/high-freq, not axis-aligned stair-stepped blocks.
+        vec2 swarp = (vec2(vnoise(wp.xz + vec2(19.0,57.0), splat_warp_wl),
+                           vnoise(wp.xz + vec2(83.0,11.0), splat_warp_wl)) - 0.5)
+                   + 0.5 * (vec2(vnoise(wp.xz + vec2(5.0,99.0), splat_warp_wl*0.4),
+                                 vnoise(wp.xz + vec2(61.0,7.0), splat_warp_wl*0.4)) - 0.5);
+        vec4 sp = texture(splat_tex, v_uv + swarp * (splat_warp_m / region_size));
         int dom = int(sp.r + 0.5);
         // G1: the rule engine bakes a spatially-meaningful runner-up role into splat.g;
         // use it. Legacy path keeps the fixed per-dom companion lookup.

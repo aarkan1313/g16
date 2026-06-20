@@ -20,6 +20,7 @@ public partial class TerrainLab : MeshInstance3D
     private SplatCompute? _splat;
     private MeshInstance3D? _giProxy;   // coarse GI/shadow proxy (perf)
     public bool UseGiProxy = true;      // default ON (user-approved 2026-06-19): coarse proxy feeds GI+shadows
+    public int ProxyRes = 511;          // 512² (~260k verts): the sweet spot — blob-free (user-verified 2026-06-19) at ~8.4 ms in-motion. 256² blobbed; 1024² clean but ~2 ms costlier. Tunable via --proxyres=N.
     // Splat bake params the UI can tweak before a rebake (Lever 1).
     public float MixScaleM = 26f, MixBias = 0.5f, EdgeNoiseM = 80f, EdgeNoiseAmp = 0.30f, MacroM = 480f;
     public int SplatMaskMode = 2;
@@ -73,8 +74,8 @@ public partial class TerrainLab : MeshInstance3D
                 Mesh = new PlaneMesh
                 {
                     Size = new Vector2(p.RegionSizeM, p.RegionSizeM),
-                    SubdivideWidth = 255,
-                    SubdivideDepth = 255,
+                    SubdivideWidth = ProxyRes,
+                    SubdivideDepth = ProxyRes,
                 },
                 MaterialOverride = _mat,
                 GIMode = GeometryInstance3D.GIModeEnum.Disabled,         // inert until toggled on
@@ -114,8 +115,10 @@ public partial class TerrainLab : MeshInstance3D
             EdgeNoiseM = EdgeNoiseM, EdgeNoiseAmp = EdgeNoiseAmp, MacroM = MacroM,
             RuleBased = RuleBased ? 1u : 0u, CurvK = CurvK,
         };
-        var tex = _splat.Bake(_heights, _res, sp);
-        _mat.SetShaderParameter("splat_tex", tex);
+        var baked = _splat.Bake(_heights, _res, sp);
+        _mat.SetShaderParameter("splat_tex", baked.Splat);
+        _mat.SetShaderParameter("splat_wa", baked.WeightsA);
+        _mat.SetShaderParameter("splat_wb", baked.WeightsB);
         // Fragment must read the baked secondary (splat.g) when the rule engine is on;
         // keep it in lockstep with the bake so the two never disagree.
         _mat.SetShaderParameter("splat_rule_based", RuleBased);
@@ -153,6 +156,22 @@ public partial class TerrainLab : MeshInstance3D
             _giProxy.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
         }
         GD.Print($"TerrainLab: GI/shadow proxy {(on ? "ON (coarse proxy feeds GI+shadows)" : "off (detail mesh feeds GI+shadows)")}");
+    }
+
+    /// Rebuild the proxy mesh at a new subdivision (live A/B of GI-blob vs cost).
+    public void SetProxyRes(int r)
+    {
+        ProxyRes = Mathf.Clamp(r, 31, 2047);
+        if (_giProxy != null)
+        {
+            _giProxy.Mesh = new PlaneMesh
+            {
+                Size = new Vector2(_regionSize, _regionSize),
+                SubdivideWidth = ProxyRes,
+                SubdivideDepth = ProxyRes,
+            };
+            GD.Print($"TerrainLab: proxy res → {ProxyRes}² (~{((ProxyRes + 1) * (ProxyRes + 1)) / 1000}k verts)");
+        }
     }
 
     public void SetMaskMode(int mode) => _mat.SetShaderParameter("mask_mode", mode);

@@ -31,6 +31,11 @@ layout(set = 0, binding = 0, std430) restrict readonly buffer Heights {
 layout(set = 0, binding = 1, std430) restrict writeonly buffer SplatOut {
     vec4 splat[];
 };
+// Phase A: 7 smooth role weights packed into two Rgba8 weightmaps (filter_linear in
+// the fragment) — the de-blocked replacement for the nearest-index splat path.
+// wa = roles {0,1,2,3}; wb = roles {4,5,6, spare}. One packUnorm4x8 uint per texel.
+layout(set = 0, binding = 3, std430) restrict writeonly buffer WOutA { uint wa[]; };
+layout(set = 0, binding = 4, std430) restrict writeonly buffer WOutB { uint wb[]; };
 
 layout(set = 0, binding = 2, std430) restrict readonly buffer ParamsBuf {
     uint  res;
@@ -178,4 +183,9 @@ void main(){
         ? float(d1)
         : ((boundary > mix_amt) ? float(d1) : float(companion));
     splat[id.y*int(res)+id.x] = vec4(float(d0), secondary, mix_amt, boundary);
+
+    // Phase A weightmaps (independent of the legacy dom/sec packing above).
+    int wi = id.y*int(res)+id.x;
+    wa[wi] = packUnorm4x8(vec4(w[0], w[1], w[2], w[3]));
+    wb[wi] = packUnorm4x8(vec4(w[4], w[5], w[6], 0.0));
 }

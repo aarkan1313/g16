@@ -46,9 +46,12 @@ public sealed class SplatCompute : IDisposable
         _pipeline = _rd.ComputePipelineCreate(_shader);
     }
 
+    /// Result of one bake: the legacy index map (splat_tex) + the two Phase-A weightmaps.
+    public readonly record struct BakeResult(ImageTexture Splat, ImageTexture WeightsA, ImageTexture WeightsB);
+
     /// (Re)bake the mask from a heightfield page → an ImageTexture (RGBAF) to bind
     /// as sampler2D on the terrain material. Safe to call repeatedly (rebake).
-    public ImageTexture Bake(float[] heights, int res, Params p)
+    public BakeResult Bake(float[] heights, int res, Params p)
     {
         int cells = checked(res * res);
 
@@ -70,7 +73,15 @@ public sealed class SplatCompute : IDisposable
         var pU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 2 };
         pU.AddId(pBuf);
 
-        Rid set = _rd.UniformSetCreate(new Godot.Collections.Array<RDUniform> { hU, oU, pU }, _shader, 0);
+        // Phase A weightmaps: one packed uint (Rgba8) per cell (bindings 3, 4)
+        Rid waBuf = _rd.StorageBufferCreate((uint)(cells * sizeof(uint)));
+        var waU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 3 };
+        waU.AddId(waBuf);
+        Rid wbBuf = _rd.StorageBufferCreate((uint)(cells * sizeof(uint)));
+        var wbU = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 };
+        wbU.AddId(wbBuf);
+
+        Rid set = _rd.UniformSetCreate(new Godot.Collections.Array<RDUniform> { hU, oU, pU, waU, wbU }, _shader, 0);
 
         long list = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(list, _pipeline);
@@ -82,13 +93,22 @@ public sealed class SplatCompute : IDisposable
         _rd.Sync();
 
         byte[] outBytes = _rd.BufferGetData(oBuf);
+        byte[] waBytes = _rd.BufferGetData(waBuf);   // packed Rgba8, little-endian: R=w0,G=w1,B=w2,A=w3
+        byte[] wbBytes = _rd.BufferGetData(wbBuf);
         _rd.FreeRid(set);
         _rd.FreeRid(hBuf);
         _rd.FreeRid(oBuf);
         _rd.FreeRid(pBuf);
+        _rd.FreeRid(waBuf);
+        _rd.FreeRid(wbBuf);
 
-        Image img = Image.CreateFromData(res, res, false, Image.Format.Rgbaf, outBytes);
-        return ImageTexture.CreateFromImage(img);
+        Image splatImg = Image.CreateFromData(res, res, false, Image.Format.Rgbaf, outBytes);
+        Image waImg = Image.CreateFromData(res, res, false, Image.Format.Rgba8, waBytes);
+        Image wbImg = Image.CreateFromData(res, res, false, Image.Format.Rgba8, wbBytes);
+        return new BakeResult(
+            ImageTexture.CreateFromImage(splatImg),
+            ImageTexture.CreateFromImage(waImg),
+            ImageTexture.CreateFromImage(wbImg));
     }
 
     private static byte[] BuildParams(Params p)
