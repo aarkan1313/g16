@@ -84,6 +84,15 @@ public partial class TerrainLabUI : Control
         }
 
         if (_ready) { UpdateOvercast(); }
+        // ST4-1: auto day/night cycle — advance the Time axis + re-compose; sync the slider so manual
+        // scrub still works (grab the slider to pause-and-scrub; toggle off to stop). Wraps at 24→0.
+        if (_ready && _timeRunning)
+        {
+            float h = _time.TimeOfDay + (float)delta * _timeSpeed;
+            h -= Mathf.Floor(h / 24f) * 24f;                 // wrap to [0,24) (handles +/- speed)
+            DriveTime(h);
+            if (_byId.TryGetValue("time_of_day", out var tc)) { SetWidgetValueSilent(tc, h); }
+        }
         // push camera world pos for the ground anti-repetition distance LOD (Unit 1)
         // AND the world-space cloud raymarch (rays start at the camera so clouds + the
         // ground shadow map share one world frame — fixes the dome-vs-world mismatch).

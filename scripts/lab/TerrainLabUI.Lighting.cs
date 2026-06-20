@@ -11,6 +11,10 @@ namespace WG16.Lab;
 public partial class TerrainLabUI : Control
 {
     private TimeState _time = new();
+    // Stage 4 (ST4-1): auto day/night clock. When _timeRunning, _Process advances _time.TimeOfDay by
+    // _timeSpeed hours per real second and re-DriveTime()s — manual scrub via the time-of-day slider still works.
+    private bool _timeRunning = false;
+    private float _timeSpeed = 1.0f;   // in-world hours per real second
     private SunDiscState _sunDisc = new();
     private WeatherState _weather = new();
     private GradeState _grade = new();

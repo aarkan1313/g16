@@ -109,6 +109,7 @@ public partial class TerrainLabUI : Control
             case "sdfgi":  GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SdfgiEnabled = on; break;
             case "volfog": GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.VolumetricFogEnabled = on; break;
             case "sun_surface_on": _cloud?.SetSunSurfaceOn(on); break;   // sun-disc surface (cloud_sky material)
+            case "time_running":   _timeRunning = on; break;             // ST4-1 auto day/night cycle play/pause
         }
     }
 
@@ -127,6 +128,7 @@ public partial class TerrainLabUI : Control
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
             case "sun_azimuth":     _sunAzimuth = v; OrientSun(sun); break;
             case "time_of_day":     DriveTime(v); break;   // decoupled Time axis: sun arc + day color script
+            case "time_speed":      _timeSpeed = v; break; // ST4-1 auto-cycle: in-world hours per real second
             case "day_sunrise":     _time.SunriseH = v; DriveTime(_time.TimeOfDay); break;
             case "day_sunset":      _time.SunsetH = v; DriveTime(_time.TimeOfDay); break;
             case "day_peak_elev":   _time.PeakElev = v; DriveTime(_time.TimeOfDay); break;

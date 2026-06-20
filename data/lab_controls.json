@@ -153,6 +153,8 @@
     { "id": "sun_angle", "label": "sun height", "tab": "Light", "type": "scenef", "scene": "sun_angle", "min": 2.0, "max": 80.0, "default": 35.0, "rand": false },
     { "id": "sun_azimuth", "label": "sun dir", "tab": "Light", "type": "scenef", "scene": "sun_azimuth", "min": 0.0, "max": 360.0, "default": 40.0, "rand": false },
     { "id": "time_of_day", "label": "time of day (h)", "tab": "Light", "type": "scenef", "scene": "time_of_day", "min": 0.0, "max": 24.0, "default": 12.0, "rand": false },
+    { "id": "time_running", "label": "play day/night (ST4)", "tab": "Light", "type": "scene", "scene": "time_running", "default": false, "rand": false },
+    { "id": "time_speed", "label": "cycle speed (h/s)", "tab": "Light", "type": "scenef", "scene": "time_speed", "min": 0.0, "max": 6.0, "default": 1.0, "rand": false },
     { "id": "night_darkness", "label": "night darkness", "tab": "Night", "type": "scenef", "scene": "night_darkness", "min": 0.0, "max": 2.0, "default": 1.0, "rand": false },
     { "id": "night_ambient_floor", "label": "night ambient floor", "tab": "Night", "type": "scenef", "scene": "night_ambient_floor", "min": 0.0, "max": 0.4, "default": 0.02, "rand": false },
     { "id": "moon_phase", "label": "moon phase", "tab": "Night", "type": "scenef", "scene": "moon_phase", "min": 0.0, "max": 1.0, "default": 1.0, "rand": false },
