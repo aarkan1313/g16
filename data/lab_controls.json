@@ -73,6 +73,8 @@
       "param": "interlock_height_amp", "min": 0.0, "max": 1.0, "default": 1.0, "rand": false },
     { "id": "height_from_rough", "label": "height = 1-rough (vs luma)", "tab": "Splat", "type": "toggle",
       "param": "height_from_rough", "default": true, "rand": false },
+    { "id": "interlock_breakup", "label": "interlock breakup", "tab": "Splat", "type": "slider",
+      "param": "interlock_breakup", "min": 0.0, "max": 0.6, "default": 0.25, "rand": false },
     { "id": "mix_strength", "label": "mix strength", "tab": "Splat", "type": "slider",
       "param": "mix_strength", "min": 0, "max": 1, "default": 0.6, "rand": true },
     { "id": "heightblend_on", "label": "height blend", "tab": "Splat", "type": "toggle",

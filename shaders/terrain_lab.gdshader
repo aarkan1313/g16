@@ -147,6 +147,9 @@ uniform bool height_from_rough = true;
 uniform float interlock_sharp : hint_range(0.05, 0.9) = 0.35;
 // How strongly the height channel drives the boundary (0 = pure weight crossfade).
 uniform float interlock_height_amp : hint_range(0.0, 1.0) = 1.0;
+// Phase A organic breakup: high-freq world-noise added to the interlock heights so the
+// relief boundary is crinkled/irregular, not a smooth contour. 0 = off.
+uniform float interlock_breakup : hint_range(0.0, 0.6) = 0.25;
 
 // --- Height-blended transitions (AAA seamless multi-texture) -----------------
 // Blend two materials by their RELIEF instead of a flat crossfade: the one whose
@@ -670,14 +673,22 @@ void fragment(){
             } else { rgh = 0.9; }
         } else {
             // ---- Phase A: smooth weightmap top-2 blend (de-blocked) ----
-            // (A3 warps this uv for organic breakup; A2 uses v_uv directly.)
-            float sw[7]; splat_weights7(sw, v_uv);
+            // Organic breakup: domain-warp the weightmap lookup (folds in splat_warp) so
+            // boundaries flow with the world, not the weightmap grid.
+            vec2 swarp = (vec2(vnoise(wp.xz + vec2(19.0,57.0), splat_warp_wl),
+                               vnoise(wp.xz + vec2(83.0,11.0), splat_warp_wl)) - 0.5)
+                       + 0.5 * (vec2(vnoise(wp.xz + vec2(5.0,99.0), splat_warp_wl*0.4),
+                                     vnoise(wp.xz + vec2(61.0,7.0), splat_warp_wl*0.4)) - 0.5);
+            float sw[7]; splat_weights7(sw, v_uv + swarp * (splat_warp_m / region_size));
             int d0=0; float m0=-1.0; for(int i=0;i<7;i++){ if(sw[i]>m0){ m0=sw[i]; d0=i; } }
             int d1=d0; float m1=-1.0; for(int i=0;i<7;i++){ if(i!=d0 && sw[i]>m1){ m1=sw[i]; d1=i; } }
             float t = clamp(m1 / max(m0+m1, 1e-5), 0.0, 1.0);   // 0 deep in d0 .. ~0.5 at boundary
 
-            float hD = material_height(d0, wp, nr) * interlock_height_amp;
-            float hS = material_height(d1, wp, nr) * interlock_height_amp;
+            // crinkle the interlock heights with opposite-signed high-freq noise so the
+            // boundary weaves between the two materials (organic, not a smooth contour).
+            float bk = (vnoise(wp.xz + vec2(127.0,311.0), tex_scale_m*1.7) - 0.5) * interlock_breakup;
+            float hD = clamp(material_height(d0, wp, nr) * interlock_height_amp + bk, 0.0, 1.0);
+            float hS = clamp(material_height(d1, wp, nr) * interlock_height_amp - bk, 0.0, 1.0);
             float m = heightblend_on ? interlock_blend(hD, hS, t, interlock_sharp) : t;
 
             if (splat_debug == 1){ dbg = 1; dbg_col = mix(zone_color(d0),zone_color(d1),m); }
