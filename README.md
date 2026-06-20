@@ -52,13 +52,18 @@ docs/               this, TECH_STACK.md, DECISIONS.md, the design spec
   is, how to run, current state, and what to do next. Written to pick up cold.
 - **[TECH_STACK.md](docs/TECH_STACK.md)** — what we use, the modularity rules,
   the C#/Rust/GPU-compute policy. Read this to understand the shape.
+- **[ROADMAP.md](docs/ROADMAP.md)** — the authoritative path forward (3 phases:
+  finish the lanes → make it a world → climate/elements) + the discipline rule.
+- **[NEEDS_REVIEW.md](docs/NEEDS_REVIEW.md)** — the eye-gate queue + the **visual
+  review scene guide** (`scenes/review.tscn`, keys 1-9).
 - **[DECISIONS.md](docs/DECISIONS.md)** — running log of choices made, so we
   don't re-litigate. One entry per decision.
-- **[2026-06-15-wg16-base-field-design.md](docs/2026-06-15-wg16-base-field-design.md)**
-  — the design that started this project.
+- Superseded designs are frozen in **[docs/archive/](docs/archive/)** (the
+  base-field design lives there now).
 
-Scenes: `lab.tscn` (base-field lab) · `terrain_lab.tscn` (the look lab, active) ·
-`material_board.tscn` (material judging loop) · `lab_experiment.tscn` (sandbox).
+Scenes: **`review.tscn` (visual review — number keys 1-9 jump to each eye-gate item)** ·
+`terrain_lab.tscn` (the look lab, active work) · `lab.tscn` (base-field lab) ·
+`material_board.tscn` (material judging loop).
 
 ## Posture (the "low plans" rule)
 

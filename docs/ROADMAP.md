@@ -54,9 +54,10 @@ region look is *done*, the priority pivots hard to scale/biomes/procedural, then
 ## ▶ NOW — finish Phase A · the combined eye-gate session (lanes PAUSED here)
 
 Everything built so far is **default-off / approved-look, awaiting the user's live eye.** Both
-lanes are parked until this batch is judged; then we act on results and continue Phase A. Per-item
-how-to-see / judge / unblocks lives in `NEEDS_REVIEW.md`. **Run the gates upstream → downstream so
-judgments aren't contaminated:**
+lanes are parked until this batch is judged; then we act on results and continue Phase A.
+**Run `scenes/review.tscn` — number keys 1-9 jump to each gate item** (guide + per-item judge
+criteria in `NEEDS_REVIEW.md`). **Run the gates upstream → downstream so judgments aren't
+contaminated:**
 
 1. **Light first** (it washes everything): GI/SDFGI default decision (0b) → Sun disc Stage 1 (3b)
    → Lighting decouple + time-of-day Stage 2 (3c).

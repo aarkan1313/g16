@@ -26,7 +26,15 @@ manual tuning). Press a key, fly, judge, move on:
 | **8** | GI / SDFGI + proxy (toggle in Debug to A/B) | 0b · 2 |
 | **9** | BRDF / approved baseline (clouds off) | 6 |
 
-(AA-in-motion, item 7, is **not** wired in the lab — judge it separately; see `performance.md`.)
+**Flow:** press a number → read the on-screen banner (what to judge) → fly **close / mid / far**, **in
+motion** → form a verdict → record it (below + a `DECISIONS.md` line) → next number. The full lab UI is
+still there for manual tuning, and `FLAT BASELINE` (Debug) isolates any contributor.
+
+**Caveats (by design):** close-up presets (3/4/5/8) drop you at ~140 m looking down — **fly the last bit
+to a real cliff/slope**, the preset only sets the toggles. Preset **8** sets a starting state — toggle
+`sdfgi`/`GI proxy` in the Debug tab yourself to A/B. **AA-in-motion (item 7 in the gate order) is NOT
+wired** in the lab — judge it separately (see `performance.md`). Presets are gated on `ReviewMode`, so
+`terrain_lab.tscn` is unaffected.
 
 Last updated: 2026-06-20.
 

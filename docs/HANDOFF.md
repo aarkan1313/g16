@@ -73,12 +73,18 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 
 | Scene | What it is | Key controls |
 |-------|-----------|--------------|
+| `scenes/review.tscn` | **THE VISUAL REVIEW SCENE** (for the eye-gate session). A copy of the look lab where **number keys 1-9 jump to each gate item** — sets toggles/mood/time/camera from the approved baseline + shows an on-screen "what to judge" banner. Full lab UI still present. | 1 sun disc · 2 time-of-day · 3 GM1 palette (3 again=cycle) · 4 GM2 height+POM · 5 GM3-A variation · 6 clouds · 7 god rays · 8 GI/SDFGI+proxy · 9 BRDF baseline. Guide in `NEEDS_REVIEW.md`. |
 | `scenes/terrain_lab.tscn` | **The look lab (active work).** Base field + data-driven panel | Tabs: Zones · Surface · Color · Detail · Splat · **Light** · Clouds · Debug + Presets. Randomize/Lock, FLAT BASELINE, MOOD presets, hero shots. RMB/LMB+WASD fly |
 | `scenes/lab.tscn` | Plain base-field lab (clean baseline) | 0–5 layer views · R reseed · G walk · F12 shot |
 | `scenes/material_board.tscn` | Material judging loop | 1 = pass · 3 = fail · ← undo · RMB+WASD |
 | `scenes/godray_test.tscn` | God-ray screen-space test harness | god-ray sliders/presets |
 
 ## 6. Current State — REFRESH EVERY SESSION
+
+> **⮕ TAKING OVER AS IMPLEMENTOR?** Start with
+> `docs/superpowers/handoffs/2026-06-20-lanes-implementor-handoff.md` — it covers BOTH lanes
+> (Ground/Texture + Sun/Light), their built-but-ungated state, the gated build order, and your
+> first job: driving the eye-gate session via `scenes/review.tscn`.
 
 > **2026-06-20 — DOC-SET RESET + FULL-SCOPE RE-ROADMAP; both lanes PAUSED at a combined eye-gate.**
 >
