@@ -6,6 +6,35 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light daylight eye-gate PASSED (live): Stage 1 sun disc + Stage 2 time-of-day both
+approved → Stage 3 (night + moon) unblocked.** Drove review keys 1 + 2 with the user. **Sun disc (3b):
+PASS** — "pretty good, maybe a little bit more; basically just a circle still but it does other stuff":
+the halo/corona/horizon-redden read well, the disc itself reads flat. Owes a **small Stage-1 polish**
+(limb-darkening gradient + a touch more size/corona presence; live-tunable Light-tab `sun *` knobs, then
+bake defaults). **Time-of-day (3c): PASS** — "time of day is good; we just need the missing hours and a
+moon, that comes later." Below-horizon = ~dark (exact darkness is a Stage 3 call). Both daylight stages
+approved → builds the discipline green-light for **Stage 3 (night + moon/phases/cool moonlight + stars)**
+as the next single gated phase. Minor correctness follow-up banked: key-2 re-apply threw transient
+RenderingDevice uniform-set "invalid texture" errors (clean exit, not a crash) — investigate the Stage-2
+cloud/compute re-bind. The GPU-compute physical atmosphere stays deferred (build only after night, and on
+the CloudVolume `Texture2Drd`/CallOnRenderThread seam, not FieldCompute).
+
+**2026-06-20 — GI/SDFGI eye-gate RESOLVED (Sun/Light lane): default SDFGI OFF + GI proxy OFF; new
+Shadow & Lighting roadmap stage opened.** Drove review key 8 with the user (live). SDFGI's
+camera-centered cascade renders a hard-edged bright box on the terrain that re-centers on the camera
+as you fly ("a light that gets brighter as you get closer") — toggling SDFGI off removes it with no
+visible loss, confirming the 0b investigation in motion. **Decision: default SDFGI off + GI proxy
+off** — sharp detail-mesh shadows, no cascade box, ~4.7 ms (also ~0.5 ms cheaper than the old
+sdfgi-on+proxy-on default). **Parked, not purged** (pillars + 0b "don't delete it"): both toggles
+kept, revive GI when flora / erosion canyons / night+moonlight add real occluding/bouncing geometry.
+Flipped defaults in `lab_controls.json` (`sdfgi_on`,`gi_proxy`→false), `TerrainLab.cs`
+(`UseGiProxy=false`), `scenes/{review,terrain_lab}.tscn` (`sdfgi_enabled=false`). Also fixed a
+misleading test: the SDFGI toggle is on the **Light** tab labeled `GI (SDFGI)`, not the Debug tab —
+corrected the review banner (key 8) + NEEDS_REVIEW. **Opened a Shadow & Lighting roadmap stage**
+(user's call: "add a new part of roadmap for shadow/lighting with whatever we have") to take the
+current sharp-shadow setup to AAA — CSM/cascade tuning, contact/soft shadows, the proxy-on cheap-shadow
+perf lever (~2.8 ms), and an SSIL re-check (still on; another view-dependent term). See ROADMAP Sun/Light lane.
+
 **2026-06-20 — FULL-SCOPE RE-ROADMAP: finish both lanes → make it a world → climate/elements; water
 co-designs with erosion (user direction).** After the doc-set reset, set the forward shape in three
 phases. **(A) Finish the two lanes FULLY before moving on — especially ground texture:** Sun & Light

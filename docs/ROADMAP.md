@@ -85,6 +85,16 @@ Lane roadmap: `specs/2026-06-20-ground-roadmap-to-aaa-design.md`.
 
 ### SUN & LIGHT — full sky system
 Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
+- **GI/SDFGI decision ✅ RESOLVED 2026-06-20 (eye-gate key 8):** default **SDFGI off + GI proxy off**
+  (cascade box artifact removed, sharp shadows, ~4.7 ms). Parked, not purged — revive GI with flora /
+  canyons / night. See DECISIONS + NEEDS_REVIEW 0b.
+- **Shadow & Lighting pass (NEW stage — user's call 2026-06-20, "with whatever we have"):** with SDFGI
+  parked, take the current **sharp directional-shadow** setup to AAA before/alongside Stage 3. Scope to
+  spec: directional **CSM / cascade tuning** (splits, bias, range — kill any remaining shadow shimmer/
+  shifting), **contact + soft (PCSS-style) shadows**, the **proxy-on cheap-coarse-shadow perf lever**
+  (~2.8 ms vs ~4.7 ms — quality/cost A/B), and an **SSIL re-check** (still on; another view-dependent
+  GI term — decide keep/tune/off). Eye-gated like the rest; design-ahead OK, build one phase past the
+  last gate. Pairs naturally with the moonlight shadow work in Stage 3.
 - **Built, awaiting the gate (3b/3c):** Stage 1 sun disc; Stage 2 decouple (`ComposeLighting` +
   Time/Weather/Grade states) + analytic sun arc + keyframed day color (`time_of_day`). Spec
   `specs/2026-06-20-lighting-decouple-and-time-axis-design.md`.

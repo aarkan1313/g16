@@ -46,7 +46,6 @@ public partial class TerrainLabUI : Control
                 Set("cloud_enabled", true); Set("cloud_coverage", 0.55f);
                 Set("sun_size", 1.4f); Set("sun_corona_energy", 1.0f);
                 Set("sun_halo_energy", 1.0f); Set("sun_redden", 1.0f);
-                LookAtSun();
                 title = "1 · Sun disc (Stage 1)";
                 judge = "Believable glowing sun — limb-darkened disc, tight corona, soft warm halo, horizon redden+grow? Raise cloud coverage to drift a cloud across it (dim+redden). No hard ring/banding.";
                 break;
@@ -54,12 +53,11 @@ public partial class TerrainLabUI : Control
                 ApplyMood(5);                                   // clear alpine = neutral
                 Set("cloud_enabled", true); Set("cloud_coverage", 0.40f);
                 Set("time_of_day", 12.0f);
-                GoToShot(0);
                 title = "2 · Time-of-day / daylight (Stage 2)";
                 judge = "Scrub Light tab 'time of day' 5->19: sun arc low-E -> high -> low-W, cohesive sky/light/ambient shift, no pops? Switch the 6 moods (dropdown) — do they still match their old looks?";
                 break;
             case 3: // Ground GM1 — palette (1c)
-                BaselineGround(); CloseGround();
+                BaselineGround();
                 CyclePalette(advance: _lastPreset == 3);
                 string palName = (_palNames != null && _palNames.Count > 0) ? _palNames[_palIdx] : "?";
                 title = $"3 · GM1 palette  [{palName}]  (press 3 again to cycle)";
@@ -68,21 +66,18 @@ public partial class TerrainLabUI : Control
             case 4: // Ground GM2 — real height + POM (1c)
                 BaselineGround();
                 Set("height_from_maps", true); Set("pom_on", true);
-                CloseGround();
                 title = "4 · GM2 real height + POM";
                 judge = "Real crevice/relief depth under motion+light (not just 'raised a little')? No swimming/artifacts. Toggle 'real height (GM2)' / 'surface depth (POM)' (Detail tab) to A/B.";
                 break;
             case 5: // Ground GM3-A — within-area variation (1c)
                 BaselineGround();
                 Set("variation_on", true);
-                CloseGround();
                 title = "5 · GM3-A within-area variation";
                 judge = "On a uniform slope: stops reading uniform — drier-lighter-rougher vs damper-darker-smoother patches, organic, no squares/shimmer? Far ~unchanged. Toggle 'within-area variation' (Color tab).";
                 break;
             case 6: // Clouds — feature review (5)
                 ApplyMood(5);
                 Set("cloud_enabled", true); Set("cloud_coverage", 0.50f);
-                GoToShot(0);
                 title = "6 · Clouds (feature review)";
                 judge = "Cloud shape/lighting/motion read good? Use Clouds tab (coverage/type/presets/decks). Distant-sky/horizon is a known soft spot. Checklist: docs/cloud-next-steps.md.";
                 break;
@@ -90,21 +85,18 @@ public partial class TerrainLabUI : Control
                 ApplyMood(0);                                   // low sun
                 Set("cloud_enabled", true); Set("cloud_coverage", 0.72f);
                 Set("cloud_godrays", true);
-                LookAtSun();
                 title = "7 · God rays";
                 judge = "Believable sun-through-cloud shafts (crisp, not uniform fog, not washing the scene)? Needs a cloud actually crossing the sun (coverage is high). Tune in Clouds tab.";
                 break;
-            case 8: // GI / SDFGI default decision + proxy fidelity (0b / 2)
+            case 8: // GI / SDFGI default — DECISION LANDED 2026-06-20 (0b / 2)
                 ApplyMood(5);
                 Set("cloud_enabled", false);
-                Set("sdfgi_on", true); Set("gi_proxy", true);
-                CloseGround();
-                title = "8 · GI / SDFGI + proxy (toggle to A/B)";
-                judge = "Toggle 'sdfgi' and 'GI proxy' (Debug tab) to compare: does SDFGI change anything visible? Any blocky GI/shadow blobs from the proxy on steep ground? This is the perf-default decision.";
+                Set("sdfgi_on", false); Set("gi_proxy", false);   // the approved artifact-free baseline
+                title = "8 · GI / SDFGI — DECISION LANDED: off + proxy off";
+                judge = "Approved default: SDFGI OFF + GI proxy OFF (sharp shadows, no cascade box, ~4.7 ms). To see WHY: Light tab 'GI (SDFGI)' ON = the moving bright cascade box that brightens as you approach. Re-evaluate GI when flora / erosion canyons / night land.";
                 break;
             case 9: // H1 BRDF clouds-off baseline (6)
                 BaselineGround();
-                GoToShot(0);
                 title = "9 · BRDF / approved baseline (clouds off, H1)";
                 judge = "Clouds-off terrain matches the approved look — no regression from the custom light() (Burley+GGX). The clean reference shot.  NOTE: AA (MSAA/FXAA/TAA) is NOT wired in the lab yet.";
                 break;

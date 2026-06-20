@@ -23,7 +23,7 @@ manual tuning). Press a key, fly, judge, move on:
 | **5** | GM3-A within-area variation | 1c |
 | **6** | Clouds (feature review) | 5 |
 | **7** | God rays | 3 |
-| **8** | GI / SDFGI + proxy (toggle in Debug to A/B) | 0b · 2 |
+| **8** | GI / SDFGI ✅ RESOLVED → off+proxy off (toggle `GI (SDFGI)` on the **Light** tab to A/B) | 0b · 2 |
 | **9** | BRDF / approved baseline (clouds off) | 6 |
 
 **Flow:** press a number → read the on-screen banner (what to judge) → fly **close / mid / far**, **in
@@ -31,8 +31,8 @@ motion** → form a verdict → record it (below + a `DECISIONS.md` line) → ne
 still there for manual tuning, and `FLAT BASELINE` (Debug) isolates any contributor.
 
 **Caveats (by design):** close-up presets (3/4/5/8) drop you at ~140 m looking down — **fly the last bit
-to a real cliff/slope**, the preset only sets the toggles. Preset **8** sets a starting state — toggle
-`sdfgi`/`GI proxy` in the Debug tab yourself to A/B. **AA-in-motion (item 7 in the gate order) is NOT
+to a real cliff/slope**, the preset only sets the toggles. Preset **8** (GI decision, now RESOLVED) sets the approved off+off
+baseline — toggle `GI (SDFGI)` on the **Light** tab (NOT Debug) and `GI/shadow proxy` on the Debug tab to A/B. **AA-in-motion (item 7 in the gate order) is NOT
 wired** in the lab — judge it separately (see `performance.md`). Presets are gated on `ReviewMode`, so
 `terrain_lab.tscn` is unaffected.
 
@@ -56,9 +56,20 @@ Last updated: 2026-06-20.
   POM is binary — it only reads with **real height maps** (spec ceiling seam #1). Decision (user): if we do
   height maps + POM later, **defer** now (seam kept, zero runtime cost). → see ROADMAP "height maps" arc.
 
-### 0b. GI/SDFGI — INVESTIGATED 2026-06-19; decision handed to the LIGHT/SUN chat (don't change here)
-- **⚠ Another chat owns light/sun (scene WorldEnvironment) — do NOT change `sdfgi_enabled`/ambient/GI
-  proxy from a material chat; coordinate.** This is the investigation result for them to act on.
+### 0b. GI/SDFGI — ✅ RESOLVED 2026-06-20 (eye-gate, Sun/Light lane): default SDFGI OFF + GI proxy OFF
+- **Verdict (user, live, review key 8):** SDFGI's camera-centered cascade renders a hard-edged bright
+  box on the terrain that **re-centers on the camera as you fly** ("a light that gets brighter as you
+  get closer"). Toggling SDFGI **off** removes it with no visible loss — confirms the 0b finding live.
+  **Decision: default SDFGI off + GI proxy off** (sharp detail-mesh shadows, no cascade box, ~4.7 ms —
+  also ~0.5 ms cheaper than the old sdfgi-on+proxy-on default). **Parked, not purged:** toggles kept
+  (`GI (SDFGI)` on the **Light** tab; `GI/shadow proxy (perf)` on the Debug tab) — revive GI when flora
+  / erosion canyons / night+moonlight add geometry that actually occludes & bounces. Defaults flipped in
+  `lab_controls.json` (`sdfgi_on`/`gi_proxy` → false), `TerrainLab.cs` (`UseGiProxy=false`), both scenes
+  (`sdfgi_enabled=false`). Follow-up: a **Shadow & Lighting roadmap stage** (see ROADMAP, Sun/Light lane)
+  to take the current sharp-shadow setup to AAA (CSM tuning, contact/soft shadows, the proxy-on perf lever
+  ~2.8 ms, SSIL re-check). NOTE: the SDFGI toggle is on the **Light** tab, not Debug (banner/table fixed).
+- **(Investigation 2026-06-19, retained):** Another chat owned light/sun (scene WorldEnvironment) — this
+  was the investigation result handed to this lane to act on (now acted on, above).
 - **Finding (objective, `--sdfgi=`/`--giproxy=` A/B + pixel-diff, cam 0,120,0,-22,0, clouds off):**
   toggling SDFGI changes the rendered image by **0.002–0.003 / 255** (invisible) — confirmed the user's
   "does nothing." It is **NOT misconfigured/broken:** tested SDFGI on the full detail mesh (proxy off) →
@@ -117,8 +128,14 @@ fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin)
 - **Judge:** Do the shafts read as believable sun-through-cloud light (crisp where wanted, not uniform fog, not washing the scene)? Tune to taste with the god-ray chat's knobs.
 - **Note:** god-ray files are owned by the other chat — coordinate; don't edit `GodRays*`/`shaders/godray*` from this thread.
 
-### 3b. Sun disc polish (Stage 1, Sun & Light arc) — BUILT + published 2026-06-20, eye-gate owed
-- **Status:** built + cherry-picked onto `experiment/presentation` (`b9cf52d..6a08f93`), builds clean. The flat
+### 3b. Sun disc polish (Stage 1) — ✅ PASS 2026-06-20 (eye-gate, live), polish note owed
+- **Verdict (user, live, review key 1):** "pretty good… maybe a little bit more — it's basically just a
+  circle still, but it does other stuff." The halo / corona / horizon-reddening read well; the **disc
+  itself reads flat** (a bright circle). PASS — unblocks Stage 2 (already passed) + Stage 3. **Open polish
+  (small, Stage-1):** give the disc more presence (limb-darkening gradient so it's not a flat sticker,
+  slightly larger / stronger corona bleed) — live-tunable via the Light-tab `sun *` knobs; bake the
+  approved values as defaults.
+- **Status (orig):** built + cherry-picked onto `experiment/presentation` (`b9cf52d..6a08f93`), builds clean. The flat
   white sun dot is now `sun_layers(rd, aSun)` in `cloud_sky.gdshader`: limb-darkened disc + corona + warm halo
   + horizon reddening/growth + soft optical-depth cloud occlusion. Spec/plan `docs/superpowers/{specs,plans}/2026-06-19-sun-disc-polish*`.
 - **See it:** `--preset=8` ("Golden Hour Sun") `--godrays=0 --lookatsun` for the warm low sun; or any mood +
@@ -145,8 +162,15 @@ fly **close/mid** on a varied region (cliffs/peaks too, not just the warm basin)
   if the sun sits in a gap.
 - **Unblocks:** Stage 2 (time-of-day driver) — being designed now in parallel (`specs/2026-06-20-sun-light-system-architecture.md`).
 
-### 3c. Lighting decouple + time-of-day driver (Stage 2 daylight) — BUILT 2026-06-20, eye-gate owed
-- **Status:** on `experiment/presentation` (`fcb0b43..12cbf3a`), builds clean. The bundled "mood" is split into
+### 3c. Lighting decouple + time-of-day driver (Stage 2 daylight) — ✅ PASS 2026-06-20 (eye-gate, live)
+- **Verdict (user, live, review key 2):** "time of day is good — we just need the hours missing, and a
+  moon, but that all comes later." Daylight arc + cohesive sky/light shift PASS. The **missing night
+  hours + moon = Stage 3** (below-horizon goes ~dark; exact darkness is a Stage 3 design choice). Unblocks
+  Stage 3. **Correctness follow-up (not a look-gate):** pressing key 2 once threw a burst of
+  `Texture ... is not a valid texture` / `Parameter "us" is null` (RenderingDevice uniform-set) errors —
+  likely cloud/compute re-bake on mood+time re-apply; process exited clean (not a crash). Investigate
+  whether the Stage-2 re-apply path transiently unbinds a compute texture.
+- **Status (orig):** on `experiment/presentation` (`fcb0b43..12cbf3a`), builds clean. The bundled "mood" is split into
   Time/Weather/Grade(+SunDisc) state behind one writer (`ComposeLighting`, which also absorbed the per-frame
   `UpdateOvercast` — no more competing writers). A `time_of_day` knob drives the sun along an analytic arc +
   a keyframed daytime color script (sky/sun-color/ambient). **GPU atmosphere deferred** to a future stage.

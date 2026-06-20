@@ -25,7 +25,7 @@ public partial class TerrainLab : MeshInstance3D
     public float HeightAmp = 1.0f;
     public bool  HeightFlipY = false, HeightInvert = false;
     private MeshInstance3D? _giProxy;   // coarse GI/shadow proxy (perf)
-    public bool UseGiProxy = true;      // default ON (user-approved 2026-06-19): coarse proxy feeds GI+shadows
+    public bool UseGiProxy = false;     // default OFF (eye-gate 2026-06-20): SDFGI off → proxy's only job is shadows; detail mesh casts SHARP shadows (~+1.9 ms vs coarse proxy, no shifting). Toggle on for the cheap-coarse-shadow perf lever.
     public int ProxyRes = 511;          // 512² (~260k verts): the sweet spot — blob-free (user-verified 2026-06-19) at ~8.4 ms in-motion. 256² blobbed; 1024² clean but ~2 ms costlier. Tunable via --proxyres=N.
     // Splat bake params the UI can tweak before a rebake (Lever 1).
     public float MixScaleM = 26f, MixBias = 0.5f, EdgeNoiseM = 80f, EdgeNoiseAmp = 0.30f, MacroM = 480f;
