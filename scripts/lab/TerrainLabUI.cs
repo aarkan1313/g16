@@ -63,6 +63,7 @@ public partial class TerrainLabUI : Control
         LoadLibrary();
         LoadGroundPalette();   // GM1: must run before LoadRegistry builds the material controls
         LoadMoods();
+        LightingPresets.Load();   // Time/Weather/Grade presets + the day color script (decoupled lighting)
         LoadRegistry();
         BuildPanel();
         ApplyAll();              // push all defaults to the shader (also fixes the .Value-doesn't-fire issue)
@@ -149,6 +150,7 @@ public partial class TerrainLabUI : Control
         if (_godrayDbgCli != 0) { _godraysScreen?.SetDebug(_godrayDbgCli); }   // --godraydbg=N diagnostic
         if (_godrayHpCli >= 0f) { _godraysScreen?.SetHighpass(_godrayHpCli); }   // --godrayhp=N A/B the high-pass
         if (_glowCli >= 0) { GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.GlowEnabled = _glowCli == 1; }   // --glow diagnostic
+        if (_timeCli >= 0f) { DriveTime(_timeCli); }   // --time=H drives the decoupled Time axis (overrides the spawn mood's sun/sky)
         // --lookatsun: aim the camera straight at the sun (for god-ray verification — removes the
         // guesswork of matching --cam yaw to the sun azimuth).
         if (_lookAtSunCli)

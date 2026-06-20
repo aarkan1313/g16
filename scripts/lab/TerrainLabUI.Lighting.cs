@@ -104,6 +104,49 @@ public partial class TerrainLabUI : Control
         SyncLightControlsToScene();   // Light-tab sliders reflect the composed state
     }
 
+    /// TIME-OF-DAY driver (Task 4): one `hour` knob moves the sun along the analytic arc AND interpolates
+    /// the day color script into _time, then composes. Mood-pick (MoodToStates) and time-scrub both write
+    /// _time → last one wins, so the 6 moods still reproduce and scrubbing time gives a cohesive day.
+    private void DriveTime(float hour)
+    {
+        _time.TimeOfDay = hour;
+        float f = Mathf.Clamp((hour - _time.SunriseH) / Mathf.Max(_time.SunsetH - _time.SunriseH, 1e-3f), 0f, 1f);
+        _time.SunAngle = _time.PeakElev * Mathf.Sin(Mathf.Pi * f);   // analytic arc: 0 at sunrise/set, peak at noon
+        _time.SunAzimuth = Mathf.Lerp(_time.AzStart, _time.AzEnd, f);
+        TimeKey k = SampleDayScript(hour);
+        _time.SunEnergy = k.SunEnergy; _time.SunColor = k.SunColor;
+        _time.SkyTop = k.SkyTop; _time.SkyHorizon = k.SkyHorizon; _time.SkyGround = k.SkyGround;
+        _time.Ambient = k.Ambient; _time.AmbientSky = k.AmbientSky;
+        ComposeLighting();
+    }
+
+    /// Interpolate the daytime color script (LightingPresets.DayScript anchors) at `hour`.
+    private static TimeKey SampleDayScript(float hour)
+    {
+        var s = LightingPresets.DayScript;
+        if (s.Count == 0) { return new TimeKey { Hour = hour }; }
+        if (hour <= s[0].Hour) { return s[0]; }
+        if (hour >= s[s.Count - 1].Hour) { return s[s.Count - 1]; }
+        for (int i = 0; i < s.Count - 1; i++)
+        {
+            if (hour >= s[i].Hour && hour <= s[i + 1].Hour)
+            {
+                float t = (hour - s[i].Hour) / Mathf.Max(s[i + 1].Hour - s[i].Hour, 1e-4f);
+                return new TimeKey
+                {
+                    Hour = hour, SunEnergy = Mathf.Lerp(s[i].SunEnergy, s[i + 1].SunEnergy, t),
+                    SunColor = s[i].SunColor.Lerp(s[i + 1].SunColor, t),
+                    SkyTop = s[i].SkyTop.Lerp(s[i + 1].SkyTop, t),
+                    SkyHorizon = s[i].SkyHorizon.Lerp(s[i + 1].SkyHorizon, t),
+                    SkyGround = s[i].SkyGround.Lerp(s[i + 1].SkyGround, t),
+                    Ambient = Mathf.Lerp(s[i].Ambient, s[i + 1].Ambient, t),
+                    AmbientSky = Mathf.Lerp(s[i].AmbientSky, s[i + 1].AmbientSky, t),
+                };
+            }
+        }
+        return s[s.Count - 1];
+    }
+
     /// THE ONE WRITER of the overcast-scaled lighting (sun energy, ambient energy, fog color). Called by
     /// ComposeLighting (on any state change) and by UpdateOvercast (per-frame, when coverage changes), so
     /// the two share one formula/base and never diverge. Scales from _base* (which the live sun-energy

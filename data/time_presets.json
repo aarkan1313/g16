@@ -1,6 +1,13 @@
 {
-  "_comment": "TIME axis presets for the decoupled Sun & Light system (Stage 2). Each = a sun day-arc: time_of_day (h), the daylight window (sunrise/sunset), peak sun elevation at noon, and the sunrise→sunset azimuth sweep. The SKY/sun-color/ambient are produced by the GPU-compute atmosphere (not stored here). Task 3 fills this from the 6 moods' sun positions.",
+  "_comment": "TIME axis (decoupled Sun & Light, Stage 2). 'time' = sun day-arc presets (time_of_day h, daylight window, peak elevation, azimuth sweep). 'day_script' = the daytime COLOR SCRIPT: anchors by hour that time_of_day interpolates for sky/sun-color/ambient (a cheap keyframed day — the physical GPU atmosphere is a separate future stage). NOTE: the 6 lighting_moods.json moods still reproduce via MoodToStates (picking a mood overrides the script with its authored colors); the script is the default procedural day for scrubbing time_of_day.",
   "time": [
     { "name": "Midday", "time_of_day": 12.0, "sunrise": 6.0, "sunset": 18.0, "peak_elev": 60.0, "az_start": 90.0, "az_end": 270.0 }
+  ],
+  "day_script": [
+    { "hour": 5.5,  "sun_energy": 0.7, "sun_color": [0.75, 0.80, 1.00], "sky_top": [0.12, 0.20, 0.42], "sky_horizon": [0.55, 0.60, 0.78], "sky_ground": [0.18, 0.20, 0.26], "ambient": 0.50, "ambient_sky": 1.00 },
+    { "hour": 8.0,  "sun_energy": 1.5, "sun_color": [1.00, 0.80, 0.55], "sky_top": [0.28, 0.42, 0.66], "sky_horizon": [0.92, 0.74, 0.55], "sky_ground": [0.25, 0.22, 0.18], "ambient": 0.38, "ambient_sky": 0.85 },
+    { "hour": 12.0, "sun_energy": 1.4, "sun_color": [1.00, 0.95, 0.86], "sky_top": [0.48, 0.65, 0.92], "sky_horizon": [0.78, 0.85, 0.92], "sky_ground": [0.28, 0.28, 0.26], "ambient": 0.45, "ambient_sky": 0.95 },
+    { "hour": 16.0, "sun_energy": 1.4, "sun_color": [1.00, 0.82, 0.58], "sky_top": [0.30, 0.46, 0.70], "sky_horizon": [0.90, 0.72, 0.54], "sky_ground": [0.25, 0.23, 0.19], "ambient": 0.40, "ambient_sky": 0.85 },
+    { "hour": 18.5, "sun_energy": 0.9, "sun_color": [1.00, 0.55, 0.35], "sky_top": [0.20, 0.25, 0.45], "sky_horizon": [0.86, 0.50, 0.34], "sky_ground": [0.20, 0.18, 0.18], "ambient": 0.32, "ambient_sky": 0.88 }
   ]
 }

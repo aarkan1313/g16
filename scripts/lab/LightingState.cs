@@ -29,6 +29,17 @@ public sealed class TimeState
     public TimeState Clone() => (TimeState)MemberwiseClone();
 }
 
+/// One anchor in the daytime COLOR SCRIPT (Task 4): the sky/sun-color/ambient look at a given hour.
+/// time_of_day interpolates between the two bracketing anchors → a cohesive day without an atmosphere
+/// model (the GPU atmosphere is a separate future stage). Authored in data/time_presets.json "day_script".
+public sealed class TimeKey
+{
+    public float Hour = 12f, SunEnergy = 1.4f;
+    public Color SunColor = new(1f, 0.95f, 0.86f);
+    public Color SkyTop = new(0.30f, 0.48f, 0.74f), SkyHorizon = new(0.68f, 0.74f, 0.80f), SkyGround = new(0.22f, 0.26f, 0.22f);
+    public float Ambient = 0.45f, AmbientSky = 0.95f;
+}
+
 /// CELESTIAL sun appearance (Stage-1 disc + shadow softness). Orthogonal to the Time physics; bound to
 /// the cloud_sky.gdshader sun + the DirectionalLight shadow. Becomes part of the Celestial layer (Stage 3).
 public sealed class SunDiscState
@@ -70,14 +81,27 @@ public static class LightingPresets
     public static readonly List<TimeState> Time = new();
     public static readonly List<WeatherState> Weather = new();
     public static readonly List<GradeState> Grade = new();
+    public static readonly List<TimeKey> DayScript = new();   // the daytime color script (anchors by hour)
 
     public static void Load()
     {
-        Time.Clear(); Weather.Clear(); Grade.Clear();
+        Time.Clear(); Weather.Clear(); Grade.Clear(); DayScript.Clear();
         foreach (var d in ReadList("res://data/time_presets.json", "time")) { Time.Add(ParseTime(d)); }
         foreach (var d in ReadList("res://data/weather_presets.json", "weather")) { Weather.Add(ParseWeather(d)); }
         foreach (var d in ReadList("res://data/grade_presets.json", "grade")) { Grade.Add(ParseGrade(d)); }
+        foreach (var d in ReadList("res://data/time_presets.json", "day_script")) { DayScript.Add(ParseKey(d)); }
+        DayScript.Sort((a, b) => a.Hour.CompareTo(b.Hour));
     }
+
+    private static TimeKey ParseKey(Godot.Collections.Dictionary d) => new()
+    {
+        Hour = F(d, "hour", 12f), SunEnergy = F(d, "sun_energy", 1.4f),
+        SunColor = C(d, "sun_color", new Color(1f, 0.95f, 0.86f)),
+        SkyTop = C(d, "sky_top", new Color(0.30f, 0.48f, 0.74f)),
+        SkyHorizon = C(d, "sky_horizon", new Color(0.68f, 0.74f, 0.80f)),
+        SkyGround = C(d, "sky_ground", new Color(0.22f, 0.26f, 0.22f)),
+        Ambient = F(d, "ambient", 0.45f), AmbientSky = F(d, "ambient_sky", 0.95f),
+    };
 
     private static List<Godot.Collections.Dictionary> ReadList(string resPath, string key)
     {
