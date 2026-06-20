@@ -74,7 +74,7 @@
     { "id": "ao_on", "label": "material AO", "tab": "Detail", "type": "toggle",
       "param": "ao_on", "default": true, "rand": false },
 
-    { "id": "breakup_on", "label": "breakup", "tab": "Detail", "type": "toggle", "param": "breakup_on", "default": true, "rand": true },
+    { "id": "breakup_on", "label": "breakup (parked)", "tab": "Detail", "type": "toggle", "param": "breakup_on", "default": false, "rand": false },
     { "id": "bk_dirt_amt", "label": "cavity soil", "tab": "Detail", "type": "slider", "param": "bk_dirt_amt", "min": 0, "max": 1, "default": 0.65, "rand": true },
     { "id": "bk_rock_amt", "label": "steep rock", "tab": "Detail", "type": "slider", "param": "bk_rock_amt", "min": 0, "max": 1, "default": 0.8, "rand": true },
     { "id": "bk_debris_amt", "label": "debris", "tab": "Detail", "type": "slider", "param": "bk_debris_amt", "min": 0, "max": 1, "default": 0.5, "rand": true },

@@ -148,7 +148,9 @@ uniform sampler2D splat_wb : filter_linear, repeat_disable, hint_default_black;
 // --- Unit 4: GPU-baked BREAKUP masks (3rd SplatCompute output) ---------------
 // R=slope01, G=curv01 (0.5=flat), B=cavity01, A=wear (max aspect-shade/flow-streak).
 uniform sampler2D breakup_tex : filter_linear, repeat_disable, hint_default_black;
-uniform bool breakup_on = true;   // provisional default-on for the T7 eye-gate; flip if rejected
+uniform bool breakup_on = false;  // PARKED 2026-06-20: eye-gate failed (masks are 4m-coarse + f(heightfield)
+                                  // can't add within-area variety on a smooth field); revive after erosion. See
+                                  // specs/2026-06-20-ground-roadmap-to-aaa-design.md.
 uniform int  breakup_debug = 0;   // 0 off |1 slope |2 curv |3 cavity |4 wear |5 composite
 uniform float bk_dirt_amt  : hint_range(0.0, 1.0) = 0.65;  // soil-role boost in cavities
 uniform float bk_rock_amt  : hint_range(0.0, 1.0) = 0.8;   // rock-role boost on steep faces
@@ -811,16 +813,6 @@ void fragment(){
                        + 0.5 * (vec2(vnoise(wp.xz + vec2(5.0,99.0), splat_warp_wl*0.4),
                                      vnoise(wp.xz + vec2(61.0,7.0), splat_warp_wl*0.4)) - 0.5);
             float sw[7]; splat_weights7(sw, v_uv + swarp * (splat_warp_m / region_size));
-            // Unit 4: nudge role weights by the breakup masks BEFORE top-2 selection so
-            // the Phase-A interlock then renders them (rock pokes through on steep faces,
-            // soil settles in cavities). No renormalize needed — top-2 uses m1/(m0+m1).
-            Breakup bkm = groundBreakup(v_uv, wp);
-            if (breakup_on){
-                float rockw = smoothstep(bk_slope_lo, bk_slope_hi, bkm.slope) * bk_rock_amt;
-                float dirtw = bkm.cavity * bk_dirt_amt * (1.0 - rockw);   // rock wins on faces
-                sw[clamp(bk_rock_role,0,6)] += rockw;                     // expose rock on steep
-                sw[clamp(bk_dirt_role,0,6)] += dirtw;                     // soil collects in pockets
-            }
             int d0=0; float m0=-1.0; for(int i=0;i<7;i++){ if(sw[i]>m0){ m0=sw[i]; d0=i; } }
             int d1=d0; float m1=-1.0; for(int i=0;i<7;i++){ if(i!=d0 && sw[i]>m1){ m1=sw[i]; d1=i; } }
             float t = clamp(m1 / max(m0+m1, 1e-5), 0.0, 1.0);   // 0 deep in d0 .. ~0.5 at boundary
@@ -841,8 +833,36 @@ void fragment(){
                 rgh = mix(trip_rgh_by(d0,wp,nr), trip_rgh_by(d1,wp,nr), m);
                 ao = mix(ao_by(d0,wp,nr), ao_by(d1,wp,nr), m);
             } else { rgh = 0.9; }
-            // Unit 4: cheap post-blend tints — gritty scree on shelves, damping on shade/flow.
+            // Unit 4: breakup as a CONTINUOUS overlay on top of the finished base blend.
+            // (Earlier this boosted role weights before the top-2 pick — a strong boost
+            //  collapsed the interlock to a pure fill with a hard slope-contour edge. A soft
+            //  alpha overlay with a noise-jittered boundary stays smooth, is decoupled from
+            //  the top-2 math, and is fully controllable 0..1 without blobbing.)
             if (breakup_on){
+                Breakup bkm = groundBreakup(v_uv + swarp * (splat_warp_m / region_size), wp);
+                // jitter the slope threshold so rock scatters in like outcrops, not a contour
+                float nz = vnoise(wp.xz + vec2(41.0, 7.0), tex_scale_m * 1.3) - 0.5;
+                float rockw = clamp(smoothstep(bk_slope_lo, bk_slope_hi, bkm.slope + nz*0.28) * bk_rock_amt, 0.0, 1.0);
+                float dirtw = clamp(bkm.cavity * bk_dirt_amt * (1.0 - rockw), 0.0, 1.0);
+                if (rockw > 0.004){                                      // expose rock on steep faces
+                    int rr = clamp(bk_rock_role, 0, 6);
+                    alb = mix(alb, trip_alb_by(rr,wp,nr), rockw);
+                    if (blend_mode>=1){
+                        nrm = mix(nrm, trip_nrm_by(rr,wp,nr)*2.0-1.0, rockw);
+                        rgh = mix(rgh, trip_rgh_by(rr,wp,nr), rockw);
+                        ao  = mix(ao,  ao_by(rr,wp,nr), rockw);
+                    }
+                }
+                if (dirtw > 0.004){                                      // soil settles in cavities
+                    int sr = clamp(bk_dirt_role, 0, 6);
+                    alb = mix(alb, trip_alb_by(sr,wp,nr), dirtw);
+                    if (blend_mode>=1){
+                        nrm = mix(nrm, trip_nrm_by(sr,wp,nr)*2.0-1.0, dirtw);
+                        rgh = mix(rgh, trip_rgh_by(sr,wp,nr), dirtw);
+                        ao  = mix(ao,  ao_by(sr,wp,nr), dirtw);
+                    }
+                }
+                // weather ON TOP of placed materials: gritty scree on shelves, damp shade/flow.
                 float shelf = smoothstep(0.5,0.75,bkm.curv) * smoothstep(0.15,bk_slope_hi,bkm.slope);
                 float debris = shelf * bk_debris_amt;
                 alb = mix(alb, alb*vec3(0.78,0.74,0.70), debris);       // gritty scree

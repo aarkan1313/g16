@@ -41,13 +41,18 @@
 
 **Files:** Modify `shaders/splat_weights.glsl`.
 
-**Interfaces produced:** compute output buffer `BreakupOut` at binding 5 (one `vec4` per cell: R slope01, G curv01, B cavity01, A wear = max(aspect, flow)); 6 new `ParamsBuf` fields.
+**Interfaces produced:** compute output buffer `BreakupOut` at binding 5 (one `uint` per cell, `packUnorm4x8`: R slope01, G curv01, B cavity01, A wear = max(aspect, flow)); 6 new `ParamsBuf` fields.
 
-- [ ] **Step 1: Add the 3rd output buffer** after `WOutB` (binding 4):
+> **PILLARS NOTE (2026-06-19, updated): pack to RGBA8, not RGBAF.** All four masks are `[0,1]` read through linear filtering — 32-bit float is 4× the VRAM/bandwidth for zero visible gain. **Match the weightmaps' existing idiom** (`WOutA`/`WOutB` already do `packUnorm4x8` → `uint` → read back as `Image.Format.Rgba8`): same 4 bytes/texel, no CPU float→u8 conversion, codebase-consistent. Steps below use that.
+>
+> **EROSION-READINESS NOTE:** these masks are pure `f(heightfield)` — when the erosion arc later reshapes the field, they auto-recompute against the new geomorphology (rock on new steep faces, soil in new gullies) with **zero rework**, and fire *stronger* (erosion produces the cavities/drainage they read). Unit 4 is the material-response layer erosion plugs into, NOT throwaway. The one seam erosion supersedes: `flow_at` is a gather-only wetness *proxy*, not real D8 routing — flag it in-code as "replace with erosion's real drainage when that lands."
+
+- [ ] **Step 1: Add the 3rd output buffer** after `WOutB` (binding 4), mirroring the `WOutA`/`WOutB` `uint` pattern:
 ```glsl
 // Unit 4: per-texel BREAKUP masks (3rd readback). R=slope01, G=curv01 (0.5=flat),
 // B=cavity01, A=wear (max aspect-shade, flow-streak). Pure f(heightfield), baked once.
-layout(set = 0, binding = 5, std430) restrict writeonly buffer BreakupOut { vec4 breakup[]; };
+// packUnorm4x8 → RGBA8 (same idiom as WOutA/WOutB); masks are [0,1], no float precision needed.
+layout(set = 0, binding = 5, std430) restrict writeonly buffer BreakupOut { uint breakup[]; };
 ```
 - [ ] **Step 2: Append 6 fields to `ParamsBuf`** (after `curv_k`), in this exact order:
 ```glsl
@@ -66,8 +71,8 @@ layout(set = 0, binding = 5, std430) restrict writeonly buffer BreakupOut { vec4
     float curv01  = clamp(0.5 + curv / max(bk_curv_scale, 1e-3) * 0.5, 0.0, 1.0);
     float cavity  = cavity_at(id, hh);
     float aspect  = aspect_at(n);
-    float flow    = flow_at(id, hh, slope);
-    breakup[wi] = vec4(slope01, curv01, cavity, max(aspect, flow));
+    float flow    = flow_at(id, hh, slope);   // gather-only PROXY — erosion's real drainage replaces this later
+    breakup[wi] = packUnorm4x8(vec4(slope01, curv01, cavity, max(aspect, flow)));
 ```
 - [ ] **Step 5: Verify** `dotnet build WG16.csproj` (0 errors; GLSL compiles at runtime in Task 2's windowed bake).
 - [ ] **Step 6: Commit** `git add shaders/splat_weights.glsl && git commit -m "Unit 4 T1: bake slope/curv/cavity/aspect/flow masks to compute binding 5"`
@@ -86,8 +91,8 @@ layout(set = 0, binding = 5, std430) restrict writeonly buffer BreakupOut { vec4
         public uint  BkFlowIters;
 ```
 - [ ] **Step 2: Extend `BakeResult`** to `public readonly record struct BakeResult(ImageTexture Splat, ImageTexture WeightsA, ImageTexture WeightsB, ImageTexture Breakup);`
-- [ ] **Step 3: Add the binding-5 output buffer** in `Bake` (after `wbBuf`), `cells*4*sizeof(float)` (RGBAF), add `bU` to the `UniformSetCreate` array.
-- [ ] **Step 4: Read back + build the texture**: `byte[] bkBytes = _rd.BufferGetData(bBuf);`, free `bBuf`, `Image bkImg = Image.CreateFromData(res,res,false,Image.Format.Rgbaf,bkBytes);`, add `ImageTexture.CreateFromImage(bkImg)` as the 4th `BakeResult` member.
+- [ ] **Step 3: Add the binding-5 output buffer** in `Bake` (after `wbBuf`), sized `cells*sizeof(uint)` (RGBA8 via `packUnorm4x8`, exactly like `wbBuf`), add `bU` to the `UniformSetCreate` array.
+- [ ] **Step 4: Read back + build the texture** (mirror the `WeightsB` readback): `byte[] bkBytes = _rd.BufferGetData(bBuf);`, free `bBuf`, `Image bkImg = Image.CreateFromData(res,res,false,Image.Format.Rgba8,bkBytes);`, add `ImageTexture.CreateFromImage(bkImg)` as the 4th `BakeResult` member.
 - [ ] **Step 5: Repad `BuildParams` to 96 bytes** (`new byte[96]`) and append, after `U(p.RuleBased); F(p.CurvK);`:
 ```csharp
         F(p.BkSlopeLo); F(p.BkSlopeHi); F(p.BkCurvScale); F(p.BkCavityGain); F(p.BkSunAzimuth);
