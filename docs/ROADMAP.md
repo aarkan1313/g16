@@ -221,11 +221,16 @@ Last updated: 2026-06-19.
 ## ☀️ ACTIVE arc — SUN & LIGHT (started 2026-06-19; user pulled it forward after the god-ray work)
 > Brainstormed into a 3-stage arc. Target: **full-range tunable** (physical default, every knob
 > exposed → stylized → fantasy). Whole arc handoff: `docs/superpowers/handoffs/2026-06-19-sun-light-arc-handoff.md`.
-- **Stage 1 — Sun disc polish — SPEC'd + PLANNED, ready to implement (2026-06-19).** The sun is a flat
-  white dot (`cloud_sky.gdshader`: smoothstep disc + one `pow` glow). Replace with limb-darkened disc +
-  corona + warm atmospheric halo + horizon reddening/growth + soft optical-depth cloud occlusion, all in
-  `sky()`, all tunable + per-mood + presets. Spec `docs/superpowers/specs/2026-06-19-sun-disc-polish-design.md`,
-  plan `docs/superpowers/plans/2026-06-19-sun-disc-polish.md` (6 tasks). NEXT: execute the plan.
+- **Stage 1 — Sun disc polish — BUILT + on `experiment/presentation` (2026-06-19→20), builds clean.** The
+  flat white dot is replaced by `sun_layers(rd, aSun)` in `cloud_sky.gdshader`: limb-darkened disc + corona
+  + warm atmospheric halo + horizon reddening/growth (elev-driven, `+LIGHT0_DIRECTION.y`) + soft
+  optical-depth cloud occlusion (dim+redden). 8 new Light-tab controls (sun_size/limb/corona_size+energy/
+  halo_size+energy/redden/redden_onset/horizon_grow/cloud_redden) + per-mood pushes + slider sync + "Golden
+  Hour Sun" preset. NOTE: the old `sun_disc` control is shadow-penumbra (LightAngularDistance/PCSS), NOT the
+  visible disc — that's the new `sun_size`. Built via subagent-driven-development on a worktree branch, then
+  cherry-picked onto `experiment/presentation` (`b9cf52d..6a08f93`) to avoid the parked-Unit-4 terrain
+  shader. ⚠ EYE-GATE still owed (visual review of the disc/halo/reddening in motion). Spec/plan under
+  `docs/superpowers/{specs,plans}/2026-06-19-sun-disc-polish*`.
 - **Stage 2 — Time-of-day driver** — one `time_of_day` param moves the sun + drives whole-sky color + light
   energy/color + fog/ambient together (this IS the "overall light feel"). 6 moods fold in (open fork:
   keyframes vs. style axis). Its own spec when reached.
