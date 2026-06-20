@@ -86,6 +86,23 @@ vec2 dir_to_uv(vec3 d){
 
 float sun_hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float hash13(vec3 p3){ p3 = fract(p3 * 0.1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
+// 3D value noise + fbm — sampled directly on the view direction so it's smooth on the sphere (no
+// blocky 2D-projection artifacts the Milky Way had).
+float vnoise3(vec3 p){
+    vec3 i = floor(p), f = fract(p);
+    vec3 u = f * f * (3.0 - 2.0 * f);
+    float n000 = hash13(i), n100 = hash13(i + vec3(1,0,0));
+    float n010 = hash13(i + vec3(0,1,0)), n110 = hash13(i + vec3(1,1,0));
+    float n001 = hash13(i + vec3(0,0,1)), n101 = hash13(i + vec3(1,0,1));
+    float n011 = hash13(i + vec3(0,1,1)), n111 = hash13(i + vec3(1,1,1));
+    return mix(mix(mix(n000,n100,u.x), mix(n010,n110,u.x), u.y),
+               mix(mix(n001,n101,u.x), mix(n011,n111,u.x), u.y), u.z);
+}
+float fbm3(vec3 p){
+    float a = 0.5, s = 0.0;
+    for (int i = 0; i < 5; i++){ s += a * vnoise3(p); p *= 2.03; a *= 0.5; }
+    return s;
+}
 float sun_vnoise(vec2 p){
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -253,12 +270,14 @@ vec3 stars_layer(vec3 rd){
     float mag = mix(0.35, 1.0, hash13(cell + 12.0));      // per-star brightness variety
     vec3 star = vec3(pt * tw * mag) * star_brightness;
 
-    // MILKY WAY: a tilted great-circle band broken up by fbm into wispy clumps (not a solid beam).
+    // MILKY WAY: a tilted great-circle band broken up by 3D fbm into wispy clumps + dust lanes. Width
+    // also wobbles along the band so it isn't a clean stripe. All sampled on the direction → smooth.
     vec3 planeN = normalize(vec3(sin(mw_tilt), 0.35, cos(mw_tilt)));
-    float band = smoothstep(mw_width, 0.0, abs(dot(sr, planeN)));
-    float s1 = sun_fbm(sr.xy * 5.0 + vec2(sr.z * 4.0));
-    float s2 = sun_fbm(sr.xy * 11.0 + vec2(sr.z * 7.0 + 3.0));
-    float structure = smoothstep(0.30, 0.85, s1 * 0.7 + s2 * 0.4);   // gaps + dust lanes, not uniform
+    float wob = mw_width * (0.6 + 0.8 * fbm3(sr * 2.0 + vec3(11.0)));   // varying band thickness
+    float band = smoothstep(wob, 0.0, abs(dot(sr, planeN)));
+    float clouds = fbm3(sr * 6.0);                                     // big clumps
+    float lanes = fbm3(sr * 16.0 + vec3(5.0));                         // finer dust detail
+    float structure = smoothstep(0.32, 0.72, clouds) * mix(0.5, 1.0, lanes);
     vec3 mw = vec3(0.62, 0.70, 0.92) * band * structure * mw_brightness;
 
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
