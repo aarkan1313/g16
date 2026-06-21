@@ -17,6 +17,9 @@ public partial class TerrainLabUI : Control
     private AtmosphereCompute? _atmosphere;   // AT-1 GPU physical sky (Hillaire LUTs); default off
     private bool _atmosphereOn;               // AT-1 on-state mirror (ComposeLighting drops FogSkyAffect so fog stops washing the physical sky)
     private bool _atmoMatActivated;           // AT-1 default-on: the sky material flips to the LUT once it's computed (one-time, in _Process)
+    private AerialPerspective? _aerial;       // AT-2 screen-space aerial perspective (distance haze); default ON with the atmosphere
+    private bool _aerialOn = true;            // AT-2 on-state (default on; --aerial=0 / Light-tab toggle = off → built-in fog restored)
+    private bool _aerialActivated;            // AT-2 default-on: the pass enables once the aerial LUT RID is live (one-time, in _Process)
     private void ApplyCloudFloat(string knob, float v)
     {
         // Screen-space god-ray tunables (GPU Gems radial scatter). The froxel-fog layer was dropped
@@ -28,6 +31,7 @@ public partial class TerrainLabUI : Control
             case "godray_decay":        _godraysScreen?.SetDecay(v); return;        // shaft falloff
             case "godray_cloud_radius": _godraysScreen?.SetCloudRadius(v); return;  // cloud-detect radius around sun
             case "godray_cloud_lum":    _godraysScreen?.SetCloudLum(v); return;     // cloud darkness threshold
+            case "aerial_strength":     _aerial?.SetStrength(v); return;            // AT-2 in-scatter gain (live-tunable at the gate)
         }
         if (knob.StartsWith("cirrus_")) { _cloud?.SetCirrus(knob, v); return; }   // CO-2 cirrus sky-layer uniforms
         _cloud?.SetKnob(knob, v);
@@ -36,6 +40,10 @@ public partial class TerrainLabUI : Control
     private void ApplyCloudBool(string knob, bool on)
     {
         if (knob == "atmosphere_on") { _atmosphereOn = on; _cloud?.SetAtmosphereOn(on); _atmosphere?.SetEnabled(on); ComposeLighting(); return; }   // AT-1: ComposeLighting re-applies FogSkyAffect so fog stops washing the sky
+        // AT-2: enable only once the aerial LUT RID is live (gated like the terrain shadow map); ComposeLighting
+        // re-runs the fog handoff (drop built-in aerial fog when on; restore it when off). _aerialActivated reset
+        // so toggling back on re-arms the readiness gate.
+        if (knob == "aerial_on") { _aerialOn = on; _aerial?.SetEnabled(on && (_atmosphere?.AerialReady ?? false)); if (!on) { _aerialActivated = false; } ComposeLighting(); return; }
         if (knob == "godrays") { _godraysScreen?.SetEnabled(on); return; }   // screen-space radial beams
         if (knob == "godray_backlit") { _godraysScreen?.SetCloudInvert(on); return; }   // occluder polarity (sun behind cloud)
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)

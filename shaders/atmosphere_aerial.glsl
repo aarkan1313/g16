@@ -88,7 +88,11 @@ void main(){
         for (int s = 0; s < SUB; s++){
             float mid = mix(prevT, t_m, (float(s) + 0.5) / float(SUB));   // metres
             float dt_Mm = ((t_m - prevT) / float(SUB)) * 1e-6;
-            float alt_Mm = camY_Mm + rayDir.y * mid * 1e-6;
+            // Clamp altitude to >= sea level. Aerial rays look DOWN/along terrain, so without this the
+            // sample point dives BELOW the ground radius at large t → negative altKM → exp() density
+            // EXPLODES → runaway extinction + in-scatter that washes the whole frame. (The sky LUTs never
+            // hit this: sky rays go UP.) Real haze along the ground sits at ~sea-level density.
+            float alt_Mm = max(camY_Mm + rayDir.y * mid * 1e-6, 0.0);
             vec3 pos = vec3(0.0, groundRadiusMM + alt_Mm, 0.0);
             vec3 rs; float ms; vec3 ext; getScatteringValues(pos, rs, ms, ext);
             vec3 sampleTr = exp(-dt_Mm * ext);

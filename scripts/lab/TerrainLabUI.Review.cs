@@ -137,11 +137,12 @@ public partial class TerrainLabUI : Control
                 string[] atmoNames = { "DAWN", "NOON", "GOLDEN HOUR", "DUSK" };
                 Set("cloud_enabled", false);                              // clear sky → pure atmosphere color
                 Set("atmosphere_on", true);                               // physical sky ON (toggle OFF on the Light tab to A/B vs keyframed)
+                Set("aerial_on", true);                                   // AT-2 distance haze ON (toggle OFF on the Light tab to A/B the terrain haze)
                 Set("atmo_exposure", 12f);
                 Set("time_of_day", atmoTimes[_atmoStep]);                 // drives the sun (so LookAtSun frames the right spot)
                 if (atmoFirst) { LookAtSun(); }                           // frame the sky ONCE; re-presses keep the user's view — fly freely while cycling
-                title = $"8 · GPU ATMOSPHERE (AT-1) — {atmoNames[_atmoStep]} ({atmoTimes[_atmoStep]:0.0}h)  (press 8 to cycle)";
-                judge = "A/B: Light tab 'GPU atmosphere (AT-1)' on/off (physical vs keyframed). Press 8 to cycle dawn→noon→golden→dusk. Tune 'atmosphere exposure'. Camera reframes ONLY on the first press — fly freely while cycling. Watch the horizon for any flashing line.";
+                title = $"8 · GPU ATMOSPHERE (AT-1/AT-2) — {atmoNames[_atmoStep]} ({atmoTimes[_atmoStep]:0.0}h)  (press 8 to cycle)";
+                judge = "AT-1 A/B: Light tab 'GPU atmosphere (AT-1)' on/off (physical vs keyframed sky). AT-2 A/B: look toward DISTANT terrain/mountains and toggle 'aerial perspective (AT-2)' on/off — distant terrain should haze (warm at golden/dusk, blue at noon), near terrain stays crisp, SKY unchanged. Tune 'aerial strength' + 'atmosphere exposure'. Press 8 to cycle dawn→noon→golden→dusk; camera reframes on first press only — fly freely. Watch the horizon for any flashing line (AT-1 re-confirm).";
                 break;
             case 9: // H1 BRDF clouds-off baseline (6)
                 BaselineGround();

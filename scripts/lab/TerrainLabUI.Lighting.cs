@@ -142,6 +142,10 @@ public partial class TerrainLabUI : Control
         _baseFogColor = _weather.FogColor;
         env.FogDensity = _weather.FogDensity * 0.25f;
         env.FogAerialPerspective = Mathf.Min(_weather.FogAerial, 0.5f);
+        // AT-2: when the physical aerial froxel owns distance haze, drop the built-in aerial perspective so
+        // the two don't double-fog. Height fog / FogDensity stay (the froxel only replaces the distance/sky
+        // blend). Toggling AT-2 off restores _weather.FogAerial exactly (this re-runs on ComposeLighting).
+        if (_aerialOn) { env.FogAerialPerspective = 0.0f; }
         env.FogHeight = _weather.FogHeight;
         env.FogHeightDensity = _weather.FogHeightD * 0.3f;
         env.FogSunScatter = _weather.FogSunScatter * 0.25f;

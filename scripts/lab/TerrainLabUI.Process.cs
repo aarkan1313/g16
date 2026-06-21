@@ -91,6 +91,14 @@ public partial class TerrainLabUI : Control
             _cloud?.SetAtmosphereOn(true);
             _atmoMatActivated = true;
         }
+        // AT-2 default-on: enable the aerial composite only once the aerial LUT RID is live (avoids sampling
+        // an unbound 3D texture on frame 1). The cleared LUT is a safe identity (a=1, rgb=0) until the first
+        // recompute lands, so enabling here is harmless even a frame early.
+        if (_aerialOn && !_aerialActivated && _atmosphere != null && _atmosphere.AerialReady)
+        {
+            _aerial?.SetEnabled(true);
+            _aerialActivated = true;
+        }
         // ST4-1: auto day/night cycle — advance the Time axis + re-compose; sync the slider so manual
         // scrub still works (grab the slider to pause-and-scrub; toggle off to stop). Wraps at 24→0.
         if (_ready && _timeRunning)

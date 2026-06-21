@@ -59,6 +59,7 @@ public partial class TerrainLabUI : Control
         _cloud = new CloudVolume { Name = "CloudVolume" };
         _godraysScreen = new GodRaysScreen { Name = "GodRaysScreen" };     // screen-space radial scatter — THE god-ray layer
         _atmosphere = new AtmosphereCompute { Name = "AtmosphereCompute" };   // AT-1 GPU physical sky (deferred-add like the cloud node)
+        _aerial = new AerialPerspective { Name = "AerialPerspective" };       // AT-2 screen-space aerial perspective (deferred-add)
         CallDeferred(nameof(AttachClouds));
 
         ParseCli();
@@ -117,6 +118,15 @@ public partial class TerrainLabUI : Control
             _atmosphere.Attach();
             _cloud.SetAtmosphereSkyView(_atmosphere.SkyViewTexture);   // bind the (empty-RID) Texture2Drd now; RID fills on the render thread
         }
+        // AT-2 aerial perspective: screen-space composite that samples the atmosphere's aerial froxel LUT.
+        // Default ON (with the atmosphere); the pass stays disabled until the LUT RID is live (_Process gate).
+        if (_aerial != null && _atmosphere != null)
+        {
+            GetNode("/root/TerrainLabRoot").AddChild(_aerial);
+            _aerial.Attach(GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
+            _aerial.SetAerialTexture(_atmosphere.AerialTexture);   // bind the (empty-RID) Texture3Drd now; RID fills on the render thread
+            _aerial.SetStrength(2f);                               // in-scatter gain; ~2 reads as aerial haze (×10 washed it out). Gate-tunable via 'aerial strength'.
+        }
         // AT-1 atmosphere CLI overrides (after attach, so both nodes are live)
         if (_atmoExpCli >= 0f) { _cloud.SetKnob("atmo_exposure", _atmoExpCli); }
         if (_atmosphereCli == 1) { _atmosphereOn = true; _cloud.SetAtmosphereOn(true); _atmosphere?.SetEnabled(true); }
@@ -124,6 +134,9 @@ public partial class TerrainLabUI : Control
         if (_atmoCheckCli) { _atmosphere?.RequestCheck(); }
         // AT-2 aerial froxel self-check: needs the atmosphere on (trans/ms LUTs feed the aerial march).
         if (_aerialCheckCli) { _atmosphereOn = true; _cloud.SetAtmosphereOn(true); _atmosphere?.SetEnabled(true); _atmosphere?.RequestAerialCheck(); }
+        // AT-2 aerial perspective CLI: =0 turns it off (restores built-in fog via ComposeLighting); strength A/B.
+        if (_aerialCli == 0) { _aerialOn = false; _aerial?.SetEnabled(false); ComposeLighting(); }
+        if (_aerialStrCli >= 0f) { _aerial?.SetStrength(_aerialStrCli); }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
