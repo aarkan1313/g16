@@ -6,6 +6,16 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — Celestial C2 first piece: meteors / shooting stars BUILT (look-gate owed).** After C1's galaxy/nebula
+was rejected and the night sky settled to moon+stars, started C2 with **occasional, subtle shooting stars** (user feel:
+"subtle & occasional", not a shower). Procedural **in-shader** (`cloud_sky.gdshader` `meteors()` — 2 TIME-hashed
+channels, each cycles on a long period and only occasionally fires a ~1 s head-sweep drawing a thin head-bright/
+tail-fading streak), composited into `stars_layer`, gated night×above-horizon. **Why in-shader not CPU:** stateless,
+no per-frame CPU/uniform churn, ~free when idle (two early-outs bail before the streak math), fits the existing
+procedural night sky. 5 Night-tab tunables + a `--meteordebug` uniform/CLI (forces a streak so headless capture lands
+on one). Perf 5.4 ms night unchanged. Spec/plan `2026-06-21-celestial-c2-meteors*`; commits 29c52e4 + 14ec581. Owed:
+the user's live eye-gate (review key 2). Out of scope (later C2): planets, meteor showers, persistent trails, fireballs.
+
 **2026-06-21 — Celestial C1 (procedural fantasy night-sky) BUILT T1-T5, look-gate owed.** Replaced the uniform Milky
 Way fog band (NEEDS_REVIEW 10, user: "just a fog band, a half-circle all the way across") with a procedural fantasy
 **galaxy** (core bulge that kills the uniform arc + dust lanes + star-cloud knots + 2-color gradient) + up to **4

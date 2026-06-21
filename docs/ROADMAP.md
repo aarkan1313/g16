@@ -238,10 +238,15 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      (drives night directly + aims at the moon; robust to the ground-strip Apply.cs breakage). Commits a43515a..db0bebe
      (pushed). **The galaxy idea is parked, not deleted** — revisit only on a fresh, different concept (this one was
      rejected). Net C1 deliverable: a cleaner, tuned moon+stars night.
-   - **C2 — Celestial bodies. 🔜 NEXT.** Lead with **meteors / shooting stars** (occasional streaks across the
-     moon+stars night — small, self-contained, fits the now-clean sky), then **planets** (bright slow-moving
-     points/discs), then optional brighter named-star accents. (Distant galaxies/nebulae are NOT revisited unless a
-     fresh concept lands — the C1 galaxy/nebula look was rejected.) Each piece its own design → build → eye-gate.
+   - **C2 — Celestial bodies. 🔨 IN PROGRESS.**
+     - **Meteors / shooting stars — ⚑ BUILT 2026-06-21, look-gate owed.** Procedural in-shader (`cloud_sky.gdshader`
+       `meteors()` — 2 TIME-hashed channels, occasional ~1 s streaks, thin head-bright/tail-fading, gated night×
+       horizon, ~free when idle). 5 Night-tab tunables (`meteors on`/`rate`/`brightness`/`length`/`speed`) +
+       `--meteordebug`. Verified: clean streak renders, perf 5.4 ms night unchanged. Spec/plan `2026-06-21-celestial-c2-meteors*`.
+       Commits 29c52e4 + 14ec581. **Gate:** review key 2 — fly the night, watch for streaks (raise `meteor rate` or
+       `--meteordebug` to see on demand). On PASS → keep default-on + record.
+     - **Then:** planets (bright slow-moving points/discs) → optional brighter named-star accents. (Distant
+       galaxies/nebulae NOT revisited unless a fresh concept lands — the C1 look was rejected.) Each its own gate.
    - **C3 — N suns + N moons.** Generalize the single-sun + single-moon architecture to **arbitrary counts** — each
      with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
      and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky
