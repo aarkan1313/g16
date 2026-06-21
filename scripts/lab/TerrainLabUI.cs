@@ -120,6 +120,7 @@ public partial class TerrainLabUI : Control
         // AT-1 atmosphere CLI overrides (after attach, so both nodes are live)
         if (_atmoExpCli >= 0f) { _cloud.SetKnob("atmo_exposure", _atmoExpCli); }
         if (_atmosphereCli == 1) { _atmosphereOn = true; _cloud.SetAtmosphereOn(true); _atmosphere?.SetEnabled(true); }
+        else if (_atmosphereCli == 0) { _atmosphereOn = false; _cloud.SetAtmosphereOn(false); _atmosphere?.SetEnabled(false); ComposeLighting(); }   // explicit off (default is now ON)
         if (_atmoCheckCli) { _atmosphere?.RequestCheck(); }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }

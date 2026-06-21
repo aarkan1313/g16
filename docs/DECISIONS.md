@@ -6,6 +6,19 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #3 AT-1: flipped to DEFAULT-ON (perf verified).**
+User: "if perf is good leave the thing on." Perf measured (sun moving every frame = worst-case LUT recompute):
+atmosphere ON **5.6 ms** vs OFF **5.4 ms** = **+0.2 ms** (180 vs 184 fps) — negligible, well under the 8 ms target.
+So `atmosphere_on` default → **TRUE**: the physical Hillaire sky is the standard daytime look; the keyframed sky is
+kept as the toggle-off fallback (Light tab / `--atmosphere=0`). Robust startup: the material flips to the LUT only
+once it's computed (one-time `_Process` gate on `_atmosphere.Ready`) so frame-1 shows the keyframed sky, never an
+unbound Texture2Drd (no black flash; the cloud "binding 1/34" spam is the pre-existing benign one). **CAVEAT
+(banked follow-up):** with atmosphere on the daytime sky is physical everywhere → the 6 moods' + ST4-2 fantasy
+presets' keyframed SKY TINTS are bypassed by day (night + fantasy moon colors still apply). If the colored fantasy
+skies (review key 7) must persist, fantasy presets should flip atmosphere off OR tint the LUT — not yet handled.
+**Still owed:** live confirm the horizon flash is gone in motion (user hasn't re-checked). NEXT: AT-2 aerial OR the
+Celestial expansion (galaxy→bodies→N suns/moons).
+
 **2026-06-20 — Sun/Light #3 GPU atmosphere AT-1 (core sky color) BUILT + day look soft-PASSED (live); fog-wash + horizon-seam fixed.**
 AT-1 Hillaire LUTs (transmittance→multi-scatter→sky-view) on the CloudVolume `Texture2Drd`/`CallOnRenderThread`
 seam (new `AtmosphereCompute` node, mirrors CloudVolume; RIDs assigned once; LUTs recompute on sun-change, not

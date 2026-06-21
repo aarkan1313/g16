@@ -16,6 +16,7 @@ public partial class TerrainLabUI : Control
     private GodRaysScreen? _godraysScreen;   // screen-space radial scatter (GPU Gems 3) — THE god-ray layer
     private AtmosphereCompute? _atmosphere;   // AT-1 GPU physical sky (Hillaire LUTs); default off
     private bool _atmosphereOn;               // AT-1 on-state mirror (ComposeLighting drops FogSkyAffect so fog stops washing the physical sky)
+    private bool _atmoMatActivated;           // AT-1 default-on: the sky material flips to the LUT once it's computed (one-time, in _Process)
     private void ApplyCloudFloat(string knob, float v)
     {
         // Screen-space god-ray tunables (GPU Gems radial scatter). The froxel-fog layer was dropped

@@ -140,11 +140,16 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      Stormy Anvil, Mackerel Sky); `--preset=N`. `ApplyCloudPreset` resets the type levers first → self-contained
      presets. Verified distinct via auto-shots. **#2 Clouds overhaul ~COMPLETE pending this gate** (weather-axis
      tie-in remains DEFERRED to its own stage).
-3. **GPU-compute physical atmosphere — ✅ SPEC'd 2026-06-20** (`specs/2026-06-20-gpu-atmosphere-design.md`).
-   Hillaire LUTs on the CloudVolume **`Texture2Drd`/`CallOnRenderThread` seam, NOT FieldCompute** (memory
-   `compute-to-material-callonrenderthread`). Toggleable sky-color provider, **default OFF = approved
-   keyframed look until it wins its A/B gate**. Phased AT-1 core sky color → AT-2 aerial perspective →
-   AT-3 cloud-lighting integration (AT-3 after #2 lands). Supersedes the keyframed `day_script` for sky color.
+3. **GPU-compute physical atmosphere — 🟢 AT-1 BUILT + day-gated + DEFAULT-ON 2026-06-20**
+   (`specs/2026-06-20-gpu-atmosphere-design.md`, plan `plans/2026-06-20-gpu-atmosphere-at1-core-sky-color.md`).
+   Hillaire LUTs (transmittance→multi-scatter→sky-view) on the CloudVolume **`Texture2Drd`/`CallOnRenderThread`
+   seam** (`AtmosphereCompute` node). `cloud_sky.gdshader` `background()` samples the sky-view LUT. **AT-1 day sky
+   soft-PASSED live ("looks good") → flipped DEFAULT-ON** (perf +0.2 ms; keyframed kept as the toggle-off
+   fallback). Night hands off to the keyframed night cleanly (atmosphere bows out). Review **key 8** cycles the day
+   presets. **Follow-ups:** confirm the horizon flash gone in motion · mood/fantasy sky-tint bypassed by day (the
+   physical sky owns daytime color) — handle if the colored fantasy skies must persist · exposure default.
+   **Then AT-2 aerial perspective → AT-3 cloud-lighting** (each its own gate). Supersedes the keyframed `day_script`
+   for sky color.
 4. **Stage 4 — IN PROGRESS** (`specs/2026-06-20-stage4-cycle-and-fantasy-design.md`).
    - **ST4-1 auto day/night cycle — ✅ GATED 2026-06-20 (live, "looks pretty good").** Clock in `_Process`
      (play toggle + `cycle speed` + `--autotime`); manual scrub preserved. Follow-ups from the gate: **moon
