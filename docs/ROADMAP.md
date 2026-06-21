@@ -195,8 +195,10 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
    LUT (32³, `Texture3Drd`) + screen-space composite (`AerialPerspective`, no terrain-shader edit), A/B vs the built-in
    fog via review key 8. In-scatter is additive → recalibrated strength to 0.4 (the planned ~2/10 washed); user "a
    little better than off"; cost +0.7 ms. Spec `…at2-aerial-perspective-design.md` · plan `…at2-aerial-perspective.md`
-   (DECISIONS/NEEDS_REVIEW 11 2026-06-21). **Then AT-3 cloud-lighting** (NOT started — its own gate). Supersedes the
-   keyframed `day_script` for sky color.
+   (DECISIONS/NEEDS_REVIEW 11 2026-06-21). Supersedes the keyframed `day_script` for sky color.
+   **AT-3 cloud-lighting — 🔵 NEXT (building 2026-06-21, user's call).** Light the volumetric clouds with the physical
+   sky (sun + sky-irradiance from the atmosphere LUTs) instead of the current ad-hoc cloud lighting — touches the cloud
+   shaders. Its own spec → build → live gate.
 4. **Stage 4 — IN PROGRESS** (`specs/2026-06-20-stage4-cycle-and-fantasy-design.md`).
    - **ST4-1 auto day/night cycle — ✅ GATED 2026-06-20 (live, "looks pretty good").** Clock in `_Process`
      (play toggle + `cycle speed` + `--autotime`); manual scrub preserved. Follow-ups from the gate: **moon
@@ -223,8 +225,13 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
      and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky
      color is computed from the sun direction[s]) → **extends AT-1's LUTs.** Heaviest/architectural — last.
-
-## 🛠 Debt & Remediation backlog (from the 2026-06-21 audit — `docs/AUDIT-2026-06-21.md`)
+7. **⚙️ END-OF-ARC CODE-EFFICIENCY PASS — 🟣 LAST, after all sky/light/cloud/atmosphere work above is gated (user request 2026-06-21).**
+   A dedicated pass over the *whole* lighting + cloud + sun + atmosphere lane for **code/compute efficiency — NOT visual
+   tuning** (the user's words: "i dont want to tune, i want to look at code efficiency"). Scope: profile the real GPU/CPU
+   costs (atmosphere LUTs + per-frame aerial 32³ recompute + AT-3 cloud-lighting + cloud raymarch + god rays + shadow
+   maps), then attack redundant per-frame work, recompute-cadence (recompute only on real change; amortize/temporal where
+   safe), dead/duplicated shader math, oversized textures/dispatches, the `Std430` buffer churn, and the CallOnRenderThread
+   seams. Output: measured before/after ms per subsystem against the frame budget. No look changes — same image, fewer ms.
 Tracked so nothing is lost. Each is a fix, not a feature; sequenced cheap → structural. Most are
 default-safe and land alongside the lane work. Verdicts were adversarially verified in the audit.
 
