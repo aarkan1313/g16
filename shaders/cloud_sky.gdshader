@@ -336,13 +336,15 @@ vec3 galaxy_color(vec3 d){
     float w = width * (0.6 + 0.8 * fbm3(d * 4.0 + vec3(11.0)));
     float bandDist = abs(dot(d, planeN) + curve * along * along * sign(dot(d, planeN)));
     float band = smoothstep(w, 0.0, bandDist);
-    float clouds = fbm3(d * 18.0);
-    float lanes = fbm3(d * 34.0 + vec3(5.0));
-    float fil = fbm3(d * 46.0 + vec3(7.0));
-    float structure = smoothstep(0.44, 0.76, clouds) * mix(1.0 - dust, 1.0, lanes) * smoothstep(0.38, 0.66, fil);
-    float knots = smoothstep(0.64, 0.90, clouds) * env * env;
-    float lum = band * structure * env + knots * 0.5;
-    vec3 col = mix(gx_arm_color, gx_core_color, clamp(env * 0.55 + band * 0.20, 0.0, 1.0));
+    float clouds = fbm3(d * 16.0);
+    float lanes = fbm3(d * 30.0 + vec3(5.0));
+    float dustCarve = mix(1.0, smoothstep(0.30, 0.62, lanes), dust);
+    float texv = mix(0.5, 1.2, smoothstep(0.35, 0.70, clouds));
+    float body = band * env * texv * dustCarve;
+    float knots = smoothstep(0.62, 0.90, fbm3(d * 22.0)) * env * 0.8;
+    float core = pow(cd, mix(300.0, 900.0, 1.0 - coreSize)) * 0.5;
+    float lum = body + knots + core;
+    vec3 col = mix(gx_arm_color, gx_core_color, clamp(core * 0.8 + env * 0.5, 0.0, 1.0));
     return col * lum;
 }
 // NEBULAE (Celestial C1) — up to 4 procedural colored gas clouds; mirror of night_sky_bake.glsl.

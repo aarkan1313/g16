@@ -62,12 +62,13 @@ public partial class TerrainLabUI : Control
                 LoadNightSkyPresets();
                 if (_lastPreset != 2)
                 {
-                    // NOTE: deliberately NOT calling ApplyMood here — the night sky doesn't need a daytime
-                    // grade, and ApplyMood currently throws (the ground strip removed controls it references).
+                    // Drive night DIRECTLY (robust to the ground strip's Apply.cs scenef-path breakage) + lock
+                    // the clock so it can't tick back to day. NOT calling ApplyMood (it throws post-strip).
+                    DriveTime(0f); _timeRunning = false;
+                    if (_byId.TryGetValue("time_of_day", out var tod)) { SetWidgetValueSilent(tod, 0f); }
                     Set("cloud_enabled", false);                // clear sky so the galaxy/stars read
-                    Set("time_of_day", 0.0f);                   // midnight = full night (night_factor 1)
-                    Set("moon_energy", 0.0f);                   // moon DISC off — it's a bright glow that washes the galaxy
-                    Set("moonlight_energy", 0.0f);              // moonlight off (clean dark sky for the galaxy)
+                    Set("moon_energy", 0.0f);                   // moon disc off — don't wash the galaxy
+                    Set("moonlight_energy", 0.0f);              // moonlight off (clean dark sky)
                     LookUpAtNightSky();                         // aim the camera straight at the galaxy core
                     _nsReviewIdx = _nsPresets.Count > 2 ? 2 : 0; // first press leads with the hero preset (Aurora Veil)
                 }
