@@ -90,9 +90,16 @@ void vertex() {
     if (use_chunk > 0.5) {
         // S2a CDLOD chunk: world-XZ from the instance transform (unit grid * MODEL_MATRIX).
         vec2 wxz = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
+        float chunk_size = length(MODEL_MATRIX[0].xyz);    // X-basis length = chunk world size
         float e = analytic_spacing;
         float h0 = analytic_h(wxz);
-        VERTEX.y = h0;                                     // world-unit height (instance Y scale = 1)
+        // Skirt: drop the chunk's BORDER ring so it tucks under any (coarser) neighbor, plugging
+        // LOD-seam cracks. Depth scales with the chunk's vertex spacing so big coarse chunks (whose
+        // edges can disagree more with a finer neighbor) skirt deeper. Border = unit pos at +/-0.5.
+        vec2 u01 = VERTEX.xz + vec2(0.5);
+        float edge = min(min(u01.x, 1.0 - u01.x), min(u01.y, 1.0 - u01.y));
+        float skirt = (edge < 0.001) ? (chunk_size / 32.0 + 4.0) : 0.0;   // ~one vertex-span + margin
+        VERTEX.y = h0 - skirt;                             // world-unit height (instance Y scale = 1)
         float hx = analytic_h(wxz + vec2(e, 0.0));
         float hz = analytic_h(wxz + vec2(0.0, e));
         v_normal = normalize(vec3(h0 - hx, e, h0 - hz));
