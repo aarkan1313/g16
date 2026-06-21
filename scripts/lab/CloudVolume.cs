@@ -58,6 +58,12 @@ public partial class CloudVolume : Node
     // buffer contents change via BufferUpdate). Avoids per-frame UniformSetCreate/FreeRid churn.
     private Rid _cloudSet, _shadowSet;
     private bool _setsBuilt;
+    // AT-3: atmosphere LUTs bound into the raymarch set (same render-thread RD as AtmosphereCompute).
+    private Rid _atmoSkyRid, _atmoTransRid;
+    private bool _atmoLutsDirty;              // rebuild the raymarch uniform set once the real RIDs arrive
+    private float _atmoCloudStrength;         // 0 = off (mood path); >0 = physical cloud lighting at this gain
+    public void SetAtmosphereLuts(Rid skyView, Rid trans) { _atmoSkyRid = skyView; _atmoTransRid = trans; _atmoLutsDirty = true; }
+    public void SetCloudAtmoLight(float strength) { _atmoCloudStrength = Mathf.Max(0f, strength); }
     private Texture2Drd? _shadowRd;
     private float _shadowStrength = 0.45f;   // was 0.7 — clouds are sparse; subtler ground shadow
     private bool _computeReady;
@@ -276,12 +282,7 @@ public partial class CloudVolume : Node
     private void EnsureUniformSets()
     {
         if (_setsBuilt) { return; }
-        var uOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; uOut.AddId(_outTex);
-        var uShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; uShape.AddId(_sampler); uShape.AddId(_shapeTex);
-        var uDetail = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; uDetail.AddId(_sampler); uDetail.AddId(_detailTex);
-        var uWeather = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 3 }; uWeather.AddId(_sampler); uWeather.AddId(_weatherTex);
-        var uParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; uParam.AddId(_paramBuf);
-        _cloudSet = _rd.UniformSetCreate(new Array<RDUniform> { uOut, uShape, uDetail, uWeather, uParam }, _shader, 0);
+        BuildCloudSet();
 
         var sOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; sOut.AddId(_shadowTex);
         var sShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; sShape.AddId(_sampler); sShape.AddId(_shapeTex);
@@ -292,9 +293,30 @@ public partial class CloudVolume : Node
         _setsBuilt = true;
     }
 
+    // AT-3: the raymarch uniform set, rebuildable so the atmosphere LUTs (bindings 5/6) can be swapped in
+    // once they go live (a different node's render-thread InitCompute may run after ours). Bindings 5/6
+    // fall back to _weatherTex (a valid sampler2D) until then; the shader never samples them while the
+    // atmo cloud-light strength (sun_color.a) is 0, so the placeholder is harmless.
+    private void BuildCloudSet()
+    {
+        var uOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; uOut.AddId(_outTex);
+        var uShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; uShape.AddId(_sampler); uShape.AddId(_shapeTex);
+        var uDetail = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; uDetail.AddId(_sampler); uDetail.AddId(_detailTex);
+        var uWeather = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 3 }; uWeather.AddId(_sampler); uWeather.AddId(_weatherTex);
+        var uParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; uParam.AddId(_paramBuf);
+        Rid sky = _atmoSkyRid.IsValid ? _atmoSkyRid : _weatherTex;     // placeholder until the atmosphere is live
+        Rid trn = _atmoTransRid.IsValid ? _atmoTransRid : _weatherTex;
+        var uSky = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 5 }; uSky.AddId(_sampler); uSky.AddId(sky);
+        var uTrn = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 6 }; uTrn.AddId(_sampler); uTrn.AddId(trn);
+        if (_cloudSet.IsValid) { _rd.FreeRid(_cloudSet); }
+        _cloudSet = _rd.UniformSetCreate(new Array<RDUniform> { uOut, uShape, uDetail, uWeather, uParam, uSky, uTrn }, _shader, 0);
+    }
+
     private void RenderProcess()
     {
         if (!_computeReady) { return; }
+        // AT-3: bind the real atmosphere LUTs into the raymarch set once they go live (one-time rebuild).
+        if (_atmoLutsDirty && _atmoSkyRid.IsValid && _setsBuilt) { BuildCloudSet(); _atmoLutsDirty = false; }
         CloudParams p = _p;
         int stride = Math.Clamp(p.TemporalFrames, 1, 64);
         int offset = _frame % stride;
@@ -438,7 +460,7 @@ public partial class CloudVolume : Node
         float[] layerData = PackLayers(out _layerCount);
         return new Std430Writer()
             .Vec4(_sunDir, _sunEnergy)                  // sun_dir
-            .Vec4(_sunColor)                            // sun_color
+            .Vec4(_sunColor.R, _sunColor.G, _sunColor.B, _atmoCloudStrength)   // sun_color.rgb mood; a = AT-3 strength (0 = off)
             .Vec4(_skyTop)                              // sky_top (mood)
             .Vec4(_skyHorizon)                          // sky_horizon (mood)
             .Vec4(_camWorld, 0f)                        // cam_world (ray origin)

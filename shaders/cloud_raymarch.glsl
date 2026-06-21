@@ -45,6 +45,10 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     // 19-21 = vertical profile (CO-1, also byte-identical to the shadow shader).
     vec4 layers[48];
 } P;
+// AT-3 physical cloud lighting: the atmosphere LUTs (same render-thread RD). Sampled only when
+// P.sun_color.a > 0 (the atmo cloud-light strength); a == 0 → the mood path below, unchanged.
+layout(set = 0, binding = 5) uniform sampler2D atmo_skyview;        // Hillaire sky-view radiance (az, sqrt-el)
+layout(set = 0, binding = 6) uniform sampler2D atmo_transmittance;  // sun transmittance (cosSunZenith, altitude)
 #define WIND vec2(P.tail.x, P.tail.y)
 #define CELL_SCALE P.tail.z
 #define LAYER_COUNT P.tail.w
@@ -57,6 +61,14 @@ const float PLANET_R = 200000.0;
 const float PI = 3.14159265;
 
 float remap(float v, float a, float b, float c, float d){ return c + (v - a) * (d - c) / max(b - a, 1e-5); }
+
+// AT-3: MUST match atmosphere_skyview.glsl's per-texel ray build (az = u*2π, el = v²·π/2) — copied
+// verbatim from cloud_sky.gdshader atmo_dir_to_uv. Keep in sync if either changes.
+vec2 atmo_dir_to_uv(vec3 d){
+    float az = atan(d.z, d.x); if (az < 0.0) az += 2.0 * PI;
+    float el = asin(clamp(d.y, 0.0, 1.0));
+    return vec2(az / (2.0 * PI), sqrt(el / (0.5 * PI)));
+}
 
 float type_gradient(float h, float type){
     float baseRound = smoothstep(0.0, 0.15, h);
@@ -318,9 +330,23 @@ void main(){
         vec3 L = normalize(P.sun_dir.xyz);
         float cosA = dot(rd, L);
         float globalPhase = phase_dual(cosA);   // legacy uniform phase (P.perdeck blends away from it)
-        vec3 sunCol = P.sun_color.rgb * P.sun_dir.w;
-        // Mood sky fill; modulated per-voxel by height (base-occluded) below.
-        vec3 skyAmbient = mix(P.sky_horizon.rgb, P.sky_top.rgb, clamp(rd.y, 0.0, 1.0));
+
+        // AT-3: physical cloud lighting when the atmo cloud-light strength (sun_color.a) > 0. Sun color =
+        // neutral star × atmospheric transmittance toward the sun (Rayleigh reddening); ambient colors come
+        // from the sky-view LUT at the zenith (top fill) and the horizon-toward-the-sun (underside fill).
+        // a == 0 → the mood path (unchanged). Computed once per ray; the per-sample blend is below.
+        float atmoStr = P.sun_color.a;
+        vec3 sunCol = P.sun_color.rgb * P.sun_dir.w;        // mood sun (a == 0 path)
+        vec3 skyTopC = P.sky_top.rgb, skyHorC = P.sky_horizon.rgb;   // mood ambient endpoints (a == 0 path)
+        if (atmoStr > 0.0){
+            vec3 sunTr = texture(atmo_transmittance, vec2(clamp(0.5 + 0.5 * L.y, 0.0, 1.0), 0.02)).rgb;
+            sunCol = sunTr * P.sun_dir.w;                   // neutral white × transmittance × energy
+            skyTopC = texture(atmo_skyview, atmo_dir_to_uv(vec3(0.0, 1.0, 0.0))).rgb * atmoStr;
+            vec3 horizonToSun = normalize(vec3(L.x, 0.05, L.z));
+            skyHorC = texture(atmo_skyview, atmo_dir_to_uv(horizonToSun)).rgb * atmoStr;
+        }
+        // ambient endpoints (mood or physical) blended by view elevation, same structure as before.
+        vec3 skyAmbient = mix(skyHorC, skyTopC, clamp(rd.y, 0.0, 1.0));
         float forward = pow(max(cosA, 0.0), 6.0);   // for view-gated powder (back-lit only)
 
         float T = 1.0;
@@ -349,9 +375,12 @@ void main(){
                 // with weak extinction decay so cores stayed lit (flat). This separates the
                 // crisp sun-modeling (direct) from the soft body fill (MS).
                 float sun = exp(-od) * phase + 0.45 * exp(-od * 0.25);
-                // BASE-OCCLUDED ambient: base dark (sky-occluded), tops bright → 3D form.
+                // BASE-OCCLUDED ambient: base dark (sky-occluded), tops bright → 3D form. AT-3: when physical,
+                // also tint bases toward the horizon color and tops toward the zenith color (warm undersides
+                // at sunset). a == 0 → skyHorC/skyTopC are the mood endpoints, so this equals the old skyAmbient.
                 float h = height_frac(p);
-                vec3 amb = skyAmbient * P.ambient * mix(0.25, 1.0, h);
+                vec3 ambEnd = (atmoStr > 0.0) ? mix(skyHorC, skyTopC, h) : skyAmbient;
+                vec3 amb = ambEnd * P.ambient * mix(0.25, 1.0, h);
                 // powder (dark edges) only when looking TOWARD the sun (back-lit); gated.
                 float powder = mix(1.0, 1.0 - exp(-dens * 2.0 * P.powder), forward);
                 // VIEW-ray extinction. Was 0.02 → meanAlpha only ~0.52 (clouds half-transparent,

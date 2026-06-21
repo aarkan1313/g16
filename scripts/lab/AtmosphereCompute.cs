@@ -45,6 +45,11 @@ public partial class AtmosphereCompute : Node
     public Texture2Drd? SkyViewTexture => _skyViewRd;
     public bool Ready => _ready;
 
+    // AT-3: the cloud raymarch (CloudVolume, same render-thread RD) binds these LUT RIDs to light clouds physically.
+    public Rid SkyViewTexRid => _skyTex;
+    public Rid TransTexRid => _transTex;
+    public bool ReadyForCloudLight => _ready;   // _skyTex/_transTex exist after InitCompute
+
     public Texture3Drd? AerialTexture => _aerialRd;
     public bool AerialReady => _ready && _aerialRd != null;
     /// Push the camera each frame (cheap aerial-only recompute path). farDist = max aerial range (m).
