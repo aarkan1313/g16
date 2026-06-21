@@ -157,8 +157,8 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
 > (auto cycle + fantasy) ✅ — all eye-gated/soft-gated live.** Moon now on its OWN arc (decoupled). **Galaxy/Milky
 > Way reviewed live 2026-06-20 → NEEDS WORK** (fog band + uniform half-circle arc) → folded into the new
 > **Celestial expansion (#6)** below. **STATUS 2026-06-21: #3 GPU atmosphere (AT-1/2/3) ✅ arc complete · #6 C1
-> (procedural fantasy night-sky) ⚑ BUILT, look-gate owed. REMAINING: C1 look-gate → C2 bodies → C3 N suns/moons.**
-> Review keys: 6 = cloud types · 7 = fantasy skies.
+> ✅ CLOSED (galaxy/nebula SHELVED — rejected; night sky = tuned moon+stars). NEXT: C2 bodies (meteors → planets) →
+> C3 N suns/moons.** Review keys: 2 = night sky (moon+stars) · 6 = cloud types · 7 = fantasy skies.
 
 Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
 Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
@@ -228,19 +228,20 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
 6. **Celestial / Night-Sky expansion — 🆕 ROADMAPPED 2026-06-20** (user scope-up during the galaxy review).
    Built **AFTER #3 atmosphere** (the physical sky is the backdrop the celestial work sits on; and C3 feeds it).
    Each piece its own spec → plan → eye-gate, built one phase past the last pass (discipline rule).
-   - **C1 — Procedural fantasy night-sky. ⚑ BUILT + LIVE-REVIEWED 2026-06-21; galaxy PAUSED, nebulae CUT, stars PASS.**
-     Built T1-T5 (galaxy + nebulae + reworked starfield, all **baked** to one texture tap; 11 Night-tab knobs + 4
-     presets; baked==proc verified). **Live review (user, key 2) drove several fixes:** localized the galaxy to a patch
-     (killed the world-spanning "fog half-circle"), removed the core-bulge **bloom glow**, pushed it smaller/finer
-     (less cloud-like), switched nebulae to **ridged filaments**. Verdicts: **stars GOOD** (tuned −60% count, −70%
-     slower blink); **nebulae BAD → CUT** (`neb_count` default 0, machinery kept/tunable); **galaxy** = localized streak,
-     user **paused** further iteration ("waste of time right now"). Commits a43515a..c806120 (pushed). **Open:** settle
-     the galaxy look (or drop it too) when the user returns to it. **Review-key 2 caveat:** currently lands on a daytime
-     sky because the parallel **ground strip** modified the shared `Apply.cs` scenef/time path (KeyNotFoundException);
-     the night sky itself renders correctly via `--time=0` — clears when the ground refactor settles.
-   - **C2 — Celestial bodies.** Planets (bright moving discs/points) · meteors / shooting stars · brighter named-star
-     realism · optional distant nebulae/galaxies · **animated/parallax nebulae** (deferred from C1's static bake —
-     the C1 night sky is baked structure; drifting/parallaxing nebulae would layer on here). Scope settled at its spec.
+   - **C1 — Procedural night-sky. ✅ CLOSED 2026-06-21: galaxy + nebulae SHELVED, night sky = MOON + STARS.**
+     Built the full baked galaxy/nebula/starfield system (T1-T5, baked==proc verified) + iterated it live over many
+     rounds (localized the galaxy, killed the bloom glow, ridged nebulae, made the galaxy body read). **User verdict:
+     the galaxy/nebula direction "doesn't work" → killed it.** Final night sky = the **tuned starfield** (−60% count,
+     −70% slower blink — user PASS) + the **moon** (Stage 3, brought back). Galaxy `mw_brightness` default 0, nebulae
+     `neb_count` 0; the bake/shader machinery is **dormant + zero per-frame cost** (early-out skips the sample at
+     brightness 0), fully tunable back via the Night tab if ever wanted. Review **key 2** = "night sky — stars + moon"
+     (drives night directly + aims at the moon; robust to the ground-strip Apply.cs breakage). Commits a43515a..db0bebe
+     (pushed). **The galaxy idea is parked, not deleted** — revisit only on a fresh, different concept (this one was
+     rejected). Net C1 deliverable: a cleaner, tuned moon+stars night.
+   - **C2 — Celestial bodies. 🔜 NEXT.** Lead with **meteors / shooting stars** (occasional streaks across the
+     moon+stars night — small, self-contained, fits the now-clean sky), then **planets** (bright slow-moving
+     points/discs), then optional brighter named-star accents. (Distant galaxies/nebulae are NOT revisited unless a
+     fresh concept lands — the C1 galaxy/nebula look was rejected.) Each piece its own design → build → eye-gate.
    - **C3 — N suns + N moons.** Generalize the single-sun + single-moon architecture to **arbitrary counts** — each
      with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
      and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky
