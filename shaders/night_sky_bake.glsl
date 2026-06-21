@@ -44,6 +44,14 @@ float fbm3(vec3 p){
 }
 // ===== end copied block =====
 
+// ridged noise: sharp bright filaments (folded |noise| over octaves) — cosmic gas tendrils, NOT puffy
+// clouds. KEEP BYTE-IDENTICAL to cloud_sky.gdshader's copy.
+float ridge(vec3 p){
+    float s = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++){ float nn = 1.0 - abs(2.0 * vnoise3(p) - 1.0); s += nn * nn * a; p *= 2.1; a *= 0.5; }
+    return s;
+}
+
 // galaxy color at a (un-rotated) direction d. Core = a bright bulge concentrated around coreDir (not a
 // uniform band → kills the old uniform arc); band = a great circle through the core plane, carved by
 // dust-lane fbm; star clouds = bright fbm knots; color = mix(armColor, coreColor) by core proximity.
@@ -89,14 +97,14 @@ vec3 nebula_color(vec3 d){
     for (int i = 0; i < n; i++){
         vec3 nd = normalize(P.neb_dir_scale[i].xyz); float sc = P.neb_dir_scale[i].w;
         float prox = max(dot(d, nd), 0.0);
-        float falloff = pow(prox, mix(170.0, 60.0, sc));                  // small → distant nebula
-        // FILAMENTARY structure: a coarse shape carved by fine filaments + sharpened → wisps with dark
-        // voids (reads as a nebula), NOT a soft puffy fbm cloud. The dark gaps are the key difference.
-        float base = fbm3(d * mix(26.0, 12.0, sc) + vec3(float(i) * 13.7));
-        float fil  = fbm3(d * mix(64.0, 34.0, sc) + vec3(float(i) * 7.3));
-        float shape = smoothstep(0.46, 0.74, base) * smoothstep(0.42, 0.70, fil);
-        float a = falloff * shape * P.neb_color_dens[i].w;
-        acc += P.neb_color_dens[i].rgb * a * (1.0 + 1.6 * falloff);       // brighter glowing core toward the centre
+        float falloff = pow(prox, mix(170.0, 70.0, sc));
+        // RIDGED filaments → sharp glowing tendrils with black voids between them (an emission nebula) —
+        // a totally different generator from the soft fbm clouds.
+        float r = ridge(d * mix(34.0, 18.0, sc) + vec3(float(i) * 9.1));
+        float tendril = smoothstep(0.50, 0.95, r);
+        float a = falloff * tendril * P.neb_color_dens[i].w;
+        vec3 c = mix(P.neb_color_dens[i].rgb, vec3(1.0), falloff * falloff * 0.4);   // hotter/whiter core
+        acc += c * a * (0.5 + 2.2 * falloff);
     }
     return acc;
 }

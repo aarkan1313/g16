@@ -307,6 +307,14 @@ vec3 moon_layers(vec3 rd) {
     return moon_disc_energy * vis * (core + glow);
 }
 
+// ridged noise: sharp bright filaments (folded |noise| over octaves) — cosmic gas tendrils, NOT puffy
+// clouds. KEEP BYTE-IDENTICAL to night_sky_bake.glsl's copy.
+float ridge(vec3 p){
+    float s = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++){ float nn = 1.0 - abs(2.0 * vnoise3(p) - 1.0); s += nn * nn * a; p *= 2.1; a *= 0.5; }
+    return s;
+}
+
 // GALAXY (Celestial C1) — procedural reference; night_sky_bake.glsl bakes the SAME math (keep byte-
 // identical so baked == procedural under pixel-diff). Core bulge concentrates brightness on one side
 // (kills the old uniform arc); band = tilted great circle carved by dust fbm; star-clouds = bright fbm
@@ -343,12 +351,12 @@ vec3 nebula_color(vec3 d){
     for (int i = 0; i < neb_count; i++){
         vec3 nd = normalize(neb_dir_scale[i].xyz); float sc = neb_dir_scale[i].w;
         float prox = max(dot(d, nd), 0.0);
-        float falloff = pow(prox, mix(170.0, 60.0, sc));
-        float base = fbm3(d * mix(26.0, 12.0, sc) + vec3(float(i) * 13.7));
-        float fil  = fbm3(d * mix(64.0, 34.0, sc) + vec3(float(i) * 7.3));
-        float shape = smoothstep(0.46, 0.74, base) * smoothstep(0.42, 0.70, fil);
-        float a = falloff * shape * neb_color_dens[i].w;
-        acc += neb_color_dens[i].rgb * a * (1.0 + 1.6 * falloff);
+        float falloff = pow(prox, mix(170.0, 70.0, sc));
+        float r = ridge(d * mix(34.0, 18.0, sc) + vec3(float(i) * 9.1));
+        float tendril = smoothstep(0.50, 0.95, r);
+        float a = falloff * tendril * neb_color_dens[i].w;
+        vec3 c = mix(neb_color_dens[i].rgb, vec3(1.0), falloff * falloff * 0.4);
+        acc += c * a * (0.5 + 2.2 * falloff);
     }
     return acc;
 }
@@ -363,12 +371,12 @@ vec3 star_field(vec3 sr){
         float bright = (L == 0) ? 0.55 : 1.5;
         vec3 cell = floor(sr * scale); vec3 f = fract(sr * scale) - 0.5;
         float h = hash13(cell + float(L) * 7.0);
-        float present = step(1.0 - star_density * (L == 0 ? 0.16 : 0.045), h);   // denser field → reads as space
+        float present = step(1.0 - star_density * (L == 0 ? 0.06 : 0.018), h);   // ~60% fewer stars (user)
         vec3 jit = (vec3(hash13(cell + 1.7), hash13(cell + 4.3), hash13(cell + 8.1)) - 0.5) * 0.7;
         float d = length(f - jit);
         float sz = mix(0.10, 0.20, hash13(cell + 20.0));                   // size variety
         float pt = present * smoothstep(sz, 0.0, d);
-        float tw = mix(1.0, 0.5 + 0.5 * sin(TIME * 3.0 + h * 62.8), star_twinkle);
+        float tw = mix(1.0, 0.5 + 0.5 * sin(TIME * 0.9 + h * 62.8), star_twinkle);   // ~70% slower blink (user)
         float temp = hash13(cell + 30.0);                                  // 0 warm .. 1 cool
         vec3 tint = mix(vec3(1.0, 0.82, 0.7), vec3(0.75, 0.85, 1.0), temp);
         acc += tint * (pt * tw * mix(0.35, 1.0, hash13(cell + 12.0)) * bright);
