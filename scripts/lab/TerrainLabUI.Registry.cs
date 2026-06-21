@@ -209,6 +209,8 @@ public partial class TerrainLabUI : Control
             {
                 col.AddChild(new Label { Text = "CELESTIAL PRESET (moon + stars + night)" });
                 BuildCelestialPresetPicker(col);
+                col.AddChild(new Label { Text = "NIGHT SKY PRESET (galaxy + nebulae)" });
+                BuildNightSkyPresetPicker(col);
                 col.AddChild(new Label { Text = "FANTASY / EXOTIC SKY (cross-system)" });
                 BuildFantasyPresetPicker(col);
                 col.AddChild(new HSeparator());
