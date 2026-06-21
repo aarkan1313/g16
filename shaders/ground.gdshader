@@ -39,11 +39,72 @@ void vertex() {
     v_curv = (hl + hr + hd + hu) * 0.25 - VERTEX.y;
 }
 
+// ============================================================================
+// UNIT 2 — per-pixel procedural PLACEMENT (the blockiness killer).
+// Material weights are evaluated PER FRAGMENT from the world-space terrain fields
+// (height / slope) + domain-warped world-position noise. There is NO baked splat,
+// so boundaries are as fine as the screen — no 4 m grid to snap to. All knobs are
+// data-driven uniforms (data/ground_materials.json 'placement' block), not magic numbers.
+// ============================================================================
+
+uniform int   mat_count = 0;
+uniform vec4  rule_bands[32];   // per material: xy=hmin/hmax (m), zw=slopemin/slopemax (0-1)
+uniform int   gv2_debug = 0;    // 0 off, 1 placement-viz (flat per-material color)
+
+// Placement tunables (pushed from the manifest by AttachGroundArrays).
+uniform float p_band_soft_m = 60.0;   // height-band edge softness (m)
+uniform float p_slope_soft  = 0.08;   // slope-band edge softness (0-1)
+uniform float p_warp_m      = 120.0;  // domain-warp wavelength (m)
+uniform float p_warp_amp_m  = 80.0;   // domain-warp amplitude (m)
+uniform float p_patch_m     = 40.0;   // within-area variation patch wavelength (m)
+uniform float p_noise_gain  = 0.8;    // how strongly patch noise modulates each weight (0 = uniform)
+
+// Re-host of terrain_lab.gdshader hash2 + vnoise (identical character to the approved ground path).
+float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 w, float wl){ vec2 p = w / max(wl, 1e-3); vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash2(i), hash2(i + vec2(1, 0)), f.x), mix(hash2(i + vec2(0, 1)), hash2(i + vec2(1, 1)), f.x), f.y); }
+
+// Per-material placement weight from its rule (height/slope band) + warped patch noise.
+// Soft band edges (smoothstep) keep boundaries gradual; the warped noise IS the within-area
+// variation (drier/wetter patches) so no separate variation unit is needed.
+float rule_weight(int i, float h, float slope, vec2 wxz){
+    vec4 b = rule_bands[i];
+    float hw = smoothstep(b.x - p_band_soft_m, b.x + p_band_soft_m, h)
+             * (1.0 - smoothstep(b.y - p_band_soft_m, b.y + p_band_soft_m, h));
+    float sw = smoothstep(b.z - p_slope_soft, b.z + p_slope_soft, slope)
+             * (1.0 - smoothstep(b.w - p_slope_soft, b.w + p_slope_soft, slope));
+    vec2 warp = vec2(vnoise(wxz + vec2(31.0, 17.0), p_warp_m),
+                     vnoise(wxz + vec2(7.0, 91.0), p_warp_m)) - 0.5;
+    float n = vnoise(wxz + warp * p_warp_amp_m + float(i) * 53.0, p_patch_m);  // i offset = decorrelate materials
+    float patch = mix(1.0, 2.0 * n, p_noise_gain);   // n mean 0.5 -> 2n mean 1.0; gain scales the variation
+    return max(hw * sw * patch, 0.0);
+}
+
+// Top-4 materials by placement weight at this fragment (descending), weights normalized to sum 1.
+void placement(out ivec4 idx, out vec4 w){
+    idx = ivec4(0); w = vec4(0.0);
+    for(int i = 0; i < mat_count && i < 32; i++){
+        float wi = rule_weight(i, v_h, v_slope, v_world.xz);
+        if(wi > w.x){ w = vec4(wi, w.x, w.y, w.z); idx = ivec4(i, idx.x, idx.y, idx.z); }
+        else if(wi > w.y){ w = vec4(w.x, wi, w.y, w.z); idx = ivec4(idx.x, i, idx.y, idx.z); }
+        else if(wi > w.z){ w = vec4(w.x, w.y, wi, w.z); idx = ivec4(idx.x, idx.y, i, idx.z); }
+        else if(wi > w.w){ w = vec4(w.x, w.y, w.z, wi); idx = ivec4(idx.x, idx.y, idx.z, i); }
+    }
+    float s = w.x + w.y + w.z + w.w;
+    w = (s > 1e-5) ? w / s : vec4(1.0, 0.0, 0.0, 0.0);
+}
+
+vec3 dbg_mat_color(int i){
+    return 0.5 + 0.5 * vec3(hash2(vec2(float(i), 1.0)), hash2(vec2(float(i), 2.0)), hash2(vec2(float(i), 3.0)));
+}
+
 void fragment() {
-    // Task 0: flat tint so the swap is visible but unmistakably "new path". Shape comes from the
-    // re-hosted vertex displacement above. Real material (placement -> sample -> blend) in Tasks 2-4.
     v_ao = 1.0;
     NORMAL = v_normal;
-    ALBEDO = vec3(0.45, 0.40, 0.35);
-    ROUGHNESS = 0.9;
+    ivec4 idx; vec4 w; placement(idx, w);
+    // Task 2: dominant-material flat color on BOTH paths (gv2_debug just forces matte). Tasks 3-4
+    // replace the non-debug branch with real array sampling + height-aware blend.
+    // NOTE: no 'return' in fragment() — Godot forbids it; branch by writing different values.
+    ALBEDO = dbg_mat_color(idx.x);
+    ROUGHNESS = (gv2_debug == 1) ? 1.0 : 0.9;
 }

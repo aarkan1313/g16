@@ -45,6 +45,7 @@ public partial class TerrainLabUI : Control
                 int iv = c.Value.AsInt32();
                 if (c.Setter == "mask") { _terrain.SetMaskMode(iv); }
                 else if (c.Setter == "blend") { _terrain.SetBlendMode(iv); }
+                else if (c.Setter == "gv2debug") { _terrain.SetGv2Debug(iv); }
                 else if (c.Param != null) { _terrain.SetInt(c.Param, iv); }
                 break;
             case "material":

@@ -263,6 +263,9 @@ public partial class TerrainLab : MeshInstance3D
     };
     public bool GroundV2On => _groundV2On;
 
+    /// Ground v2 debug view: 0 = normal, 1 = placement viz (flat per-material color). Persists on the material.
+    public void SetGv2Debug(int v) => GroundV2Material.SetShaderParameter("gv2_debug", v);
+
     /// Swap the terrain mesh material between the old (terrain_lab) and new (ground v2) skin for A/B.
     /// Default is OFF (old look). The new shader displaces from the SAME heightmap, so only the
     /// material skin changes — a fair parity comparison.

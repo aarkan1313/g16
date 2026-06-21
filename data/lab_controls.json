@@ -281,6 +281,8 @@
     { "id": "gi_proxy", "label": "GI/shadow proxy (perf)", "tab": "Debug", "type": "toggle",
       "field": "UseGiProxy", "default": false, "rand": false },
     { "id": "ground_v2", "label": "ground v2 (new core)", "tab": "Debug", "type": "toggle",
-      "field": "GroundV2", "default": false, "rand": false }
+      "field": "GroundV2", "default": false, "rand": false },
+    { "id": "gv2_debug", "label": "gv2 debug (new core)", "tab": "Debug", "type": "enum", "setter": "gv2debug",
+      "options": ["off", "placement"], "default": 0, "rand": false }
   ]
 }
