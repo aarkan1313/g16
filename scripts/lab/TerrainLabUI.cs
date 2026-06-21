@@ -176,6 +176,7 @@ public partial class TerrainLabUI : Control
             float[] checkLayers = _cloud.PackedLayers(out int checkCount);   // production layer stack (profile/shape/anti applied)
             CloudShadowCheck.Run(_cloud.Params, toSun, _cloud.RegionSize, _terrain.MidHeight, Vector2.Zero, checkLayers, checkCount);
         }
+        if (_fieldCheckCli) { FieldCheck.Run(_fc, _params); }   // S1: field determinism/parity self-check
         if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");

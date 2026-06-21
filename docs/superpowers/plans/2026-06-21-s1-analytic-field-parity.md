@@ -17,6 +17,12 @@
 - **Perf budget:** 8 ms in-motion (`--profile --profmove`). The current single no-LOD mesh is ~3.8 ms of that floor. S1 must not regress frame time materially; a large regression is the "no-go" that forces a height-source pivot before any quadtree work.
 - **NO TDD** (standing project rule — GPU/visual). "Test" here = build clean → `--headless --import` (shader compile-check) → `--fieldcheck` mechanical PASS/FAIL → `--profile --profmove` number → the user's live eye in motion. Auto-shots are a SANITY check only, never a look-gate (downscaled shots hid artifacts before).
 - **ONE Godot at a time** (two contend for the GPU → grey hang). Kill strays first: `taskkill //F //IM Godot_v4.6.2-stable_mono_win64.exe`.
+- **⚠ RUN-INVOCATION RULE (learned the hard way this session — every run command MUST follow it or it SILENTLY no-ops):**
+  1. **All `--flag` user args go AFTER a bare `--` separator.** `OS.GetCmdlineUserArgs()` returns ONLY args after `--`; without it the list is EMPTY and every `--fieldcheck` / `--analytic` / `--profile` / `--cam` / `--auto-shot` is silently ignored (the scene runs the DEFAULT path and never quits). Canonical form:
+     `Godot…exe --rendering-driver vulkan --path /c/Wg16/wg-16-project scenes/terrain_lab.tscn -- <USER FLAGS HERE>`
+  2. **`--auto-shot=` needs a real OS path, NOT `user://`.** The shot code calls .NET `System.IO.Directory.CreateDirectory`, which can't parse `user://` and throws an `IOException` EVERY FRAME (so the quit line after it never runs). Use e.g. `--auto-shot=C:/tmp/wg16shots/<name>.png` (mkdir the dir first).
+  3. **Don't pipe Godot stdout to `grep` in the background for a quit-on-shot run** — the pipe fully buffers and shows nothing until exit. Redirect to a file (`> /tmp/run.log 2>&1`) and grep the file after.
+  4. A correct run quits ON ITS OWN within a few seconds (auto-shot/profile call `GetTree().Quit()`); if it's still alive at ~20s, a flag silently no-op'd — check the `--` separator first.
 - **The scene cannot run `--headless`** (`FieldCompute`'s local RenderingDevice NullRefs without a GPU context). Run windowed to execute; `--headless --import` only compile-checks.
 - **Git:** work on `experiment/presentation`. Stage ONLY this plan's files (`git add <paths>`, NEVER `git add -A`) — the user edits the sky lane live in parallel. Commit per task. Push only when asked.
 - **Commit message footer:** end every commit body with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
