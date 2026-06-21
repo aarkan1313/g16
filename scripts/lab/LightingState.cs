@@ -81,12 +81,26 @@ public sealed class MoonState
     public MoonState Clone() => (MoonState)MemberwiseClone();
 }
 
-/// CELESTIAL — STARS + MILKY WAY (Stage 3d). Pure data; procedural field rendered in cloud_sky.gdshader,
-/// faded in at night. No real constellations (user's call).
+/// CELESTIAL — STARS + NIGHT SKY (Stage 3d / Celestial C1). Pure data; procedural galaxy + nebulae baked
+/// (night_sky_bake.glsl) + live starfield, rendered in cloud_sky.gdshader, faded in at night. Fantasy,
+/// tunable — no real constellations (user's call). MwBrightness/MwWidth/MwTilt = the galaxy brightness/
+/// width/tilt (control ids kept mw_* so celestial_presets.json still routes).
 public sealed class StarsState
 {
+    // Live starfield (not baked).
     public float Brightness = 1.0f, Density = 0.5f, Twinkle = 0.5f, Rotation = 0.003f;
-    public float MwBrightness = 0.25f, MwWidth = 0.10f, MwTilt = 0.6f;
+    // Galaxy (baked). MwBrightness is LIVE (a shader multiplier); the rest re-bake on change.
+    public float MwBrightness = 0.25f, MwWidth = 0.12f, MwTilt = 0.6f;
+    public float CoreAz = 1.26f, CoreElev = 0.2f;          // core direction as azimuth/elevation (rad)
+    public float CoreSize = 0.5f, Curve = 0.0f, Dust = 0.5f;
+    public Color CoreColor = new(0.95f, 0.75f, 0.55f);
+    public Color ArmColor = new(0.45f, 0.55f, 0.85f);
+    // Nebulae (baked). Count + a global density + the two lead colors are tunable; directions/scales are
+    // fixed demo positions (preset territory) so the Night tab stays manageable.
+    public int NebCount = 2;
+    public float NebDensity = 0.55f;
+    public Color Neb1Color = new(0.18f, 0.55f, 0.65f);     // teal
+    public Color Neb2Color = new(0.65f, 0.22f, 0.6f);      // magenta
     public StarsState Clone() => (StarsState)MemberwiseClone();
 }
 

@@ -79,8 +79,8 @@ uniform float gx_tilt = 0.6;
 uniform float gx_width : hint_range(0.02, 0.4) = 0.12;
 uniform float gx_curve : hint_range(-1.0, 1.0) = 0.0;
 uniform float gx_dust : hint_range(0.0, 1.0) = 0.5;
-uniform vec3 gx_core_color : source_color = vec3(0.95, 0.75, 0.55);
-uniform vec3 gx_arm_color : source_color = vec3(0.45, 0.55, 0.85);
+uniform vec3 gx_core_color = vec3(0.95, 0.75, 0.55);   // plain vec3 (not source_color) → no sRGB conversion, so baked == proc
+uniform vec3 gx_arm_color = vec3(0.45, 0.55, 0.85);
 uniform int neb_count = 0;
 uniform vec4 neb_dir_scale[4];
 uniform vec4 neb_color_dens[4];

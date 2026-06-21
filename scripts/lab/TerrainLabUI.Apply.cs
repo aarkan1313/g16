@@ -98,6 +98,10 @@ public partial class TerrainLabUI : Control
             case "moon_color":      _moon.Color = col; ComposeLighting(); break;
             case "moonlight_color": _moon.LightColor = col; ComposeLighting(); break;
             case "sky_tint":        _skyTint = col; ComposeLighting(); break;   // ST4-2 fantasy sky tint
+            case "gx_core_color":   _stars.CoreColor = col; ComposeLighting(); break;   // galaxy core hue (re-bake)
+            case "gx_arm_color":    _stars.ArmColor = col; ComposeLighting(); break;    // galaxy arm hue (re-bake)
+            case "neb1_color":      _stars.Neb1Color = col; ComposeLighting(); break;   // nebula 1 hue (re-bake)
+            case "neb2_color":      _stars.Neb2Color = col; ComposeLighting(); break;   // nebula 2 hue (re-bake)
         }
     }
 
@@ -155,9 +159,16 @@ public partial class TerrainLabUI : Control
             case "star_density":        _stars.Density = v; ComposeLighting(); break;
             case "star_twinkle":        _stars.Twinkle = v; ComposeLighting(); break;
             case "star_rotation":       _stars.Rotation = v; ComposeLighting(); break;
-            case "mw_brightness":       _stars.MwBrightness = v; ComposeLighting(); break;
-            case "mw_width":            _stars.MwWidth = v; ComposeLighting(); break;
-            case "mw_tilt":             _stars.MwTilt = v; ComposeLighting(); break;
+            case "mw_brightness":       _stars.MwBrightness = v; ComposeLighting(); break;   // galaxy brightness (live)
+            case "mw_width":            _stars.MwWidth = v; ComposeLighting(); break;        // galaxy band width
+            case "mw_tilt":             _stars.MwTilt = v; ComposeLighting(); break;         // galaxy band tilt
+            case "gx_core_size":        _stars.CoreSize = v; ComposeLighting(); break;       // galaxy core concentration
+            case "gx_core_az":          _stars.CoreAz = v; ComposeLighting(); break;         // core direction azimuth
+            case "gx_core_elev":        _stars.CoreElev = v; ComposeLighting(); break;       // core direction elevation
+            case "gx_curve":            _stars.Curve = v; ComposeLighting(); break;          // band S-curve
+            case "gx_dust":             _stars.Dust = v; ComposeLighting(); break;           // dust-lane amount
+            case "neb_count":           _stars.NebCount = Mathf.RoundToInt(v); ComposeLighting(); break;
+            case "neb_density":         _stars.NebDensity = v; ComposeLighting(); break;
             case "inspect_energy":      _inspectEnergy = v; if (_inspectLight != null) { _inspectLight.LightEnergy = v; } break;
             case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
             case "ssao_intensity":  env.SsaoIntensity = v; break;

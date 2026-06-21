@@ -23,19 +23,38 @@ public partial class TerrainLabUI : Control
     private GradeState _grade = new();
     private MoonState _moon = new();
     private StarsState _stars = new();
-    // Demo nebulae (C1-2): a broad teal cloud + a tighter magenta one. A working v1 the user tunes at the
-    // T6 look-gate (C1-4 adds Night-tab controls). Both the bake and the proc reference read these.
-    private AtmosphereCompute.NebulaParams[] _nightNebs = {
-        new() { Dir = new Vector3(-0.4f, 0.5f, 0.6f).Normalized(), Color = new Vector3(0.18f, 0.55f, 0.65f), Scale = 0.72f, Density = 0.55f },
-        new() { Dir = new Vector3(0.6f, 0.35f, -0.5f).Normalized(), Color = new Vector3(0.65f, 0.22f, 0.6f), Scale = 0.5f, Density = 0.5f },
+    // Fixed demo nebula directions/scales (preset territory); color/density/count tune via the Night tab.
+    private static readonly Vector3[] _nebDirs = {
+        new Vector3(-0.4f, 0.5f, 0.6f).Normalized(), new Vector3(0.6f, 0.35f, -0.5f).Normalized(),
+        new Vector3(0.1f, 0.7f, -0.7f).Normalized(), new Vector3(-0.7f, 0.3f, 0.2f).Normalized(),
     };
-    // Build the night-sky galaxy params from the current star/MW state (+ C1 galaxy defaults). C1-T4 will
-    // replace the MW tilt/width/brightness mapping with full Night-tab galaxy controls + a NightSkyState.
-    private AtmosphereCompute.GalaxyParams BuildGalaxyParams() => new AtmosphereCompute.GalaxyParams {
-        CoreDir = new Vector3(0.3f, 0.2f, 0.93f).Normalized(), CoreSize = 0.5f,
-        Tilt = _stars.MwTilt, Width = Mathf.Max(_stars.MwWidth, 0.02f), Curve = 0f, Dust = 0.5f,
-        CoreColor = new Vector3(0.95f, 0.75f, 0.55f), ArmColor = new Vector3(0.45f, 0.55f, 0.85f),
-        Brightness = _stars.MwBrightness };
+    private static readonly float[] _nebScales = { 0.72f, 0.5f, 0.6f, 0.45f };
+
+    // Build the night-sky galaxy params from the Night-tab state. Core direction from az/elev; brightness
+    // stays live (excluded from the bake's dirty check). Re-bakes only when a baked field actually changes.
+    private AtmosphereCompute.GalaxyParams BuildGalaxyParams()
+    {
+        float ce = Mathf.Cos(_stars.CoreElev);
+        var dir = new Vector3(ce * Mathf.Cos(_stars.CoreAz), Mathf.Sin(_stars.CoreElev), ce * Mathf.Sin(_stars.CoreAz));
+        return new AtmosphereCompute.GalaxyParams {
+            CoreDir = dir.Normalized(), CoreSize = _stars.CoreSize,
+            Tilt = _stars.MwTilt, Width = Mathf.Max(_stars.MwWidth, 0.02f), Curve = _stars.Curve, Dust = _stars.Dust,
+            CoreColor = new Vector3(_stars.CoreColor.R, _stars.CoreColor.G, _stars.CoreColor.B),
+            ArmColor = new Vector3(_stars.ArmColor.R, _stars.ArmColor.G, _stars.ArmColor.B),
+            Brightness = _stars.MwBrightness };
+    }
+    // Build the nebula array from state: count + global density + the two lead colors (alternating).
+    private AtmosphereCompute.NebulaParams[] BuildNebulae()
+    {
+        int n = Mathf.Clamp(_stars.NebCount, 0, 4);
+        Color[] cols = { _stars.Neb1Color, _stars.Neb2Color, _stars.Neb1Color, _stars.Neb2Color };
+        var arr = new AtmosphereCompute.NebulaParams[n];
+        for (int i = 0; i < n; i++)
+            arr[i] = new AtmosphereCompute.NebulaParams {
+                Dir = _nebDirs[i], Color = new Vector3(cols[i].R, cols[i].G, cols[i].B),
+                Scale = _nebScales[i], Density = _stars.NebDensity };
+        return arr;
+    }
     private Vector3 _lastMoonDir = Vector3.Zero;   // last composed moon direction (for --lookatmoon)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
@@ -147,10 +166,11 @@ public partial class TerrainLabUI : Control
             // ── STARS + NIGHT SKY (Stage 3d / Celestial C1): procedural, faded in at night by the sky shader. ──
             _cloud.SetStars(_stars.Brightness, _stars.Density, _stars.Twinkle, _stars.Rotation);
             var gx = BuildGalaxyParams();
+            var nebs = BuildNebulae();
             _cloud.SetNightSky(gx);             // live brightness + procedural-reference galaxy uniforms
-            _cloud.SetNebulae(_nightNebs);      // proc-reference nebulae (empty until C1-T4 controls)
+            _cloud.SetNebulae(nebs);            // proc-reference nebula uniforms
             _atmosphere?.SetNightSky(gx);       // re-bake the night-sky texture if structure/color changed
-            _atmosphere?.SetNebulae(_nightNebs);
+            _atmosphere?.SetNebulae(nebs);      // re-bake on a nebula change
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by
