@@ -63,6 +63,19 @@ public partial class AtmosphereCompute : Node
     private Vector3 _lastCloudColorSun = new Vector3(2f, 2f, 2f);   // != any unit sun → forces the first readback
     public void SetCloudLightWanted(bool on) { _cloudLightWanted = on; if (on) { _lastCloudColorSun = new Vector3(2f, 2f, 2f); } }
 
+    // --- Milky Way structure bake (sky perf): static band*structure as f(direction, tilt, width), baked
+    // once (+ on a mw-param change) so cloud_sky samples it instead of 3 per-pixel 5-octave fbm3. ---
+    private const int MwW = 1024, MwH = 512;
+    private Rid _mwShader, _mwPipe, _mwTex, _mwSet, _mwParamBuf;
+    private Texture2Drd? _mwRd;
+    private bool _mwDirty = true;
+    private float _mwTilt = 0.6f, _mwWidth = 0.18f;   // placeholders; TerrainLabUI pushes the real sky-shader values
+    public Texture2Drd? MilkyWayTexture => _mwRd;
+    public void SetMilkyWay(float tilt, float width)
+    {
+        if (Mathf.Abs(tilt - _mwTilt) > 1e-4f || Mathf.Abs(width - _mwWidth) > 1e-4f) { _mwTilt = tilt; _mwWidth = width; _mwDirty = true; }
+    }
+
     public Texture3Drd? AerialTexture => _aerialRd;
     public bool AerialReady => _ready && _aerialRd != null;
     /// Push the camera each frame (cheap aerial-only recompute path). farDist = max aerial range (m).
@@ -80,6 +93,7 @@ public partial class AtmosphereCompute : Node
     {
         _skyViewRd = new Texture2Drd();   // empty RID now; filled on the render thread in InitCompute
         _aerialRd  = new Texture3Drd();   // AT-2 aerial froxel (3D); RID filled in InitCompute
+        _mwRd      = new Texture2Drd();   // Milky Way structure bake; RID filled in InitCompute
         RenderingServer.CallOnRenderThread(Callable.From(InitCompute));
     }
 
@@ -98,7 +112,11 @@ public partial class AtmosphereCompute : Node
 
     public override void _Process(double delta)
     {
-        if (!_ready || !_enabled) { return; }
+        if (!_ready) { return; }
+        // Milky Way re-bake on a mw-param change (independent of the atmosphere being enabled — night stars
+        // exist regardless). Rare; the initial bake is in InitCompute.
+        if (_mwDirty) { _mwDirty = false; RenderingServer.CallOnRenderThread(Callable.From(BakeMilkyWay)); }
+        if (!_enabled) { return; }
         // Sun/param change → recompute all four LUTs. Camera-only change → cheap aerial-only recompute.
         if (_dirty) { _dirty = false; _camDirty = false; RenderingServer.CallOnRenderThread(Callable.From(RecomputeAll)); }
         else if (_camDirty) { _camDirty = false; RenderingServer.CallOnRenderThread(Callable.From(RecomputeAerial)); }
@@ -117,10 +135,14 @@ public partial class AtmosphereCompute : Node
         if (_msShader.IsValid)  { _msPipe  = _rd.ComputePipelineCreate(_msShader); }
         if (_skyShader.IsValid) { _skyPipe = _rd.ComputePipelineCreate(_skyShader); }
         if (_aerialShader.IsValid) { _aerialPipe = _rd.ComputePipelineCreate(_aerialShader); }
+        _mwShader = Compile("res://shaders/milkyway_bake.glsl", "milkyway_bake");
+        if (_mwShader.IsValid) { _mwPipe = _rd.ComputePipelineCreate(_mwShader); }
         _transTex = CreateTex(TransW, TransH);
         _msTex    = CreateTex(MsW, MsH);
         _skyTex   = CreateTex(SkyW, SkyH);
         _aerialTex = CreateTex3D(AerialW, AerialH, AerialD);
+        _mwTex     = CreateTex(MwW, MwH);
+        _mwParamBuf = _rd.StorageBufferCreate((uint)MwParams().Length);
         var ss = new RDSamplerState
         {
             MagFilter = RenderingDevice.SamplerFilter.Linear, MinFilter = RenderingDevice.SamplerFilter.Linear,
@@ -130,7 +152,9 @@ public partial class AtmosphereCompute : Node
         _paramBuf = _rd.StorageBufferCreate((uint)BuildParams().Length);
         if (_skyViewRd != null) { _skyViewRd.TextureRdRid = _skyTex; }   // assign ONCE, before any sampling
         if (_aerialRd != null) { _aerialRd.TextureRdRid = _aerialTex; }  // assign ONCE (3D RID → Texture3Drd)
+        if (_mwRd != null) { _mwRd.TextureRdRid = _mwTex; }              // assign ONCE
         _ready = true;
+        BakeMilkyWay();   // bake the static Milky Way structure once now (re-baked on a mw-param change)
         GD.Print("AtmosphereCompute: LUT compute initialized on render thread");
     }
 
@@ -181,6 +205,22 @@ public partial class AtmosphereCompute : Node
         return w.ToArray();
     }
 
+    private byte[] MwParams() => new Std430Writer().Vec4(_mwTilt, _mwWidth, 0f, 0f).ToArray();
+
+    // Bake the static Milky Way band*structure to _mwTex (render thread). Once at init + on a mw-param change.
+    private void BakeMilkyWay()
+    {
+        if (!_ready || !_mwShader.IsValid) { return; }
+        byte[] pb = MwParams(); _rd.BufferUpdate(_mwParamBuf, 0, (uint)pb.Length, pb);
+        EnsureSets();
+        long l = _rd.ComputeListBegin();
+        _rd.ComputeListBindComputePipeline(l, _mwPipe);
+        _rd.ComputeListBindUniformSet(l, _mwSet, 0);
+        _rd.ComputeListDispatch(l, (uint)((MwW + 7) / 8), (uint)((MwH + 7) / 8), 1);
+        _rd.ComputeListEnd();
+        _mwDirty = false;
+    }
+
     private void EnsureSets()
     {
         if (_setsBuilt) { return; }
@@ -210,6 +250,12 @@ public partial class AtmosphereCompute : Node
             var aM   = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; aM.AddId(_sampler); aM.AddId(_msTex);
             var aP   = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 3 }; aP.AddId(_paramBuf);
             _aerialSet = _rd.UniformSetCreate(new Array<RDUniform> { aImg, aT, aM, aP }, _aerialShader, 0);
+        }
+        if (_mwShader.IsValid)
+        {
+            var mwImg = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; mwImg.AddId(_mwTex);
+            var mwP   = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 1 }; mwP.AddId(_mwParamBuf);
+            _mwSet = _rd.UniformSetCreate(new Array<RDUniform> { mwImg, mwP }, _mwShader, 0);
         }
         _setsBuilt = true;
     }
@@ -362,11 +408,11 @@ public partial class AtmosphereCompute : Node
         {
             RenderingServer.CallOnRenderThread(Callable.From(() =>
             {
-                if (_setsBuilt) { _rd.FreeRid(_transSet); if (_msSet.IsValid) { _rd.FreeRid(_msSet); } if (_skySet.IsValid) { _rd.FreeRid(_skySet); } if (_aerialSet.IsValid) { _rd.FreeRid(_aerialSet); } }
-                _rd.FreeRid(_sampler); _rd.FreeRid(_paramBuf);
-                _rd.FreeRid(_transTex); _rd.FreeRid(_msTex); _rd.FreeRid(_skyTex); if (_aerialTex.IsValid) { _rd.FreeRid(_aerialTex); }
-                _rd.FreeRid(_transPipe); if (_msPipe.IsValid) { _rd.FreeRid(_msPipe); } if (_skyPipe.IsValid) { _rd.FreeRid(_skyPipe); } if (_aerialPipe.IsValid) { _rd.FreeRid(_aerialPipe); }
-                _rd.FreeRid(_transShader); if (_msShader.IsValid) { _rd.FreeRid(_msShader); } if (_skyShader.IsValid) { _rd.FreeRid(_skyShader); } if (_aerialShader.IsValid) { _rd.FreeRid(_aerialShader); }
+                if (_setsBuilt) { _rd.FreeRid(_transSet); if (_msSet.IsValid) { _rd.FreeRid(_msSet); } if (_skySet.IsValid) { _rd.FreeRid(_skySet); } if (_aerialSet.IsValid) { _rd.FreeRid(_aerialSet); } if (_mwSet.IsValid) { _rd.FreeRid(_mwSet); } }
+                _rd.FreeRid(_sampler); _rd.FreeRid(_paramBuf); if (_mwParamBuf.IsValid) { _rd.FreeRid(_mwParamBuf); }
+                _rd.FreeRid(_transTex); _rd.FreeRid(_msTex); _rd.FreeRid(_skyTex); if (_aerialTex.IsValid) { _rd.FreeRid(_aerialTex); } if (_mwTex.IsValid) { _rd.FreeRid(_mwTex); }
+                _rd.FreeRid(_transPipe); if (_msPipe.IsValid) { _rd.FreeRid(_msPipe); } if (_skyPipe.IsValid) { _rd.FreeRid(_skyPipe); } if (_aerialPipe.IsValid) { _rd.FreeRid(_aerialPipe); } if (_mwPipe.IsValid) { _rd.FreeRid(_mwPipe); }
+                _rd.FreeRid(_transShader); if (_msShader.IsValid) { _rd.FreeRid(_msShader); } if (_skyShader.IsValid) { _rd.FreeRid(_skyShader); } if (_aerialShader.IsValid) { _rd.FreeRid(_aerialShader); } if (_mwShader.IsValid) { _rd.FreeRid(_mwShader); }
             }));
         }
     }
