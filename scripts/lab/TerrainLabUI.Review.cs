@@ -58,7 +58,7 @@ public partial class TerrainLabUI : Control
                 title = $"1 · Sun disc + surface  [{sunName}]  (press 1 to cycle)";
                 judge = "Fly CLOSE to the sun. Surface believable (granulation, churn, spots), not a flat circle? No swimming or pole-spin (raise sun high). No clip-to-white. Press 1 to cycle presets; tune 'sun surface *' on the Light tab.";
                 break;
-            case 2: // Night sky — stars + MOON (galaxy + nebulae killed per user 2026-06-21)
+            case 2: // Night sky — moon + stars + meteors
                 // Drive night DIRECTLY (robust to the ground strip's Apply.cs scenef-path breakage) + lock the
                 // clock so it can't tick back to day. NOT calling ApplyMood (it throws post-strip).
                 DriveTime(0f); _timeRunning = false;
@@ -75,7 +75,7 @@ public partial class TerrainLabUI : Control
                     }
                 }
                 title = "2 · Night sky — stars + moon";
-                judge = "Clear night: the moon + stars (galaxy/nebulae removed). Tune 'star *' (brightness/density/twinkle) and the 'moon *' knobs on the Night tab; moon phase/size/halo + moonlight on the ground.";
+                judge = "Clear night: moon + stars + meteors. Tune 'star *' (brightness/density/twinkle), 'meteor *', and the 'moon *' knobs on the Night tab; moon phase/size/halo + moonlight on the ground.";
                 break;
             // cases 3-5 (ground G-0 / v2 parity / variation) removed in the 2026-06-21 ground strip.
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle: cumulus(profile off→on) → stratus → cirrus
