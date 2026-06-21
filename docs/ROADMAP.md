@@ -102,9 +102,10 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
 
 #### ☀️🌙 FINISH THE FULL SKY SYSTEM (user's call 2026-06-20: "plan it all, make a roadmap, lets do it")
 > **SKY LANE 2026-06-20: Stage 3 (Night & Celestial) ✅ · #2 Clouds overhaul (CO-1..CO-4) ✅ · #4 Stage 4
-> (auto cycle + fantasy) ✅ — all eye-gated/soft-gated live.** Moon now on its OWN arc (decoupled). **REMAINING:
-> #3 GPU atmosphere (AT-1, the last big item, now unblocked) + the galaxy/Milky Way review (NEEDS_REVIEW 10).**
-> Review keys: 6 = cloud types · 7 = fantasy skies.
+> (auto cycle + fantasy) ✅ — all eye-gated/soft-gated live.** Moon now on its OWN arc (decoupled). **Galaxy/Milky
+> Way reviewed live 2026-06-20 → NEEDS WORK** (fog band + uniform half-circle arc) → folded into the new
+> **Celestial expansion (#6)** below. **REMAINING, IN ORDER (user's call): #3 GPU atmosphere (AT-1) NEXT → then
+> #6 Celestial expansion (C1 galaxy → C2 bodies → C3 N suns/moons).** Review keys: 6 = cloud types · 7 = fantasy skies.
 
 Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
 Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
@@ -153,9 +154,23 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      Cross-system presets (`fantasy_presets.json` + `FantasyPresets.cs` + Night-tab picker + `--fantasy=N`,
      **review key 7 cycles them**) composing a sun preset + celestial preset + persistent `sky_tint` +
      moon/moonlight colors: blood_moon, alien_green, violet_night, harvest, ember_dusk.
-   **Multiple suns/moons DEFERRED** (own spec). **#4 Stage 4 COMPLETE.**
+   **Multiple suns/moons → UN-DEFERRED as #6 C3** (user's call 2026-06-20; see below). **#4 Stage 4 COMPLETE.**
 5. **Shadow & Lighting pass** — CSM/cascade tuning, contact + soft (PCSS) shadows, the proxy-on cheap-
    shadow perf lever (~2.8 vs ~4.7 ms), SSIL re-check. Pairs with Stage-3 moonlight shadows.
+6. **Celestial / Night-Sky expansion — 🆕 ROADMAPPED 2026-06-20** (user scope-up during the galaxy review).
+   Built **AFTER #3 atmosphere** (the physical sky is the backdrop the celestial work sits on; and C3 feeds it).
+   Each piece its own spec → plan → eye-gate, built one phase past the last pass (discipline rule).
+   - **C1 — Galaxy / Milky Way redesign.** Today's `stars_layer()` reads as a uniform fog half-circle (DECISIONS
+     2026-06-20). Redesign: bright galactic **core/bulge** (kills the uniform arc) · sharp dark **dust lanes** (Great
+     Rift) · **resolved star clouds** in the band · subtle warm-core/cool-arm **color** · **pulled back** to a smaller
+     apparent scale (not in the player's face). Tunable/modular + **presets**. Replaces the fog band as the default
+     night look (re-gate). Lightest piece — first in this sub-lane.
+   - **C2 — Celestial bodies.** Planets (bright moving discs/points) · meteors / shooting stars · brighter named-star
+     realism · optional distant nebulae/galaxies. Scope settled at its spec.
+   - **C3 — N suns + N moons.** Generalize the single-sun + single-moon architecture to **arbitrary counts** — each
+     with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
+     and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky
+     color is computed from the sun direction[s]) → **extends AT-1's LUTs.** Heaviest/architectural — last.
 
 ## 🌍 Phase B — make it a WORLD (after Phase A is done)
 Gated by the scale infra; hybrid build (spine first, content designed region-first + stream-aware).

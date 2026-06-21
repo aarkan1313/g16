@@ -311,12 +311,15 @@ is default-off so the approved look is untouched.
 - Mechanically: cumulus no-op (terrain pixel-identical); `--shadowcheck` PASS r=0.811 (stratus); cirrus appears
   (sky diff 2.0) + night-fades. Plan `plans/2026-06-20-clouds-co2-types.md`. **On PASS → CO-3 anti-repetition/horizon.**
 
-### 10. Stars + Milky Way (galaxy) — ⚑ user-flagged needs review (2026-06-20, during the ST4-1 cycle gate)
-Surfaced while running the auto day/night cycle: the **galaxy/Milky Way (and stars) need a proper look-pass**.
-3d was given a conditional "pass for now"; the running cycle makes the night sky easier to scrutinize.
-- **See it:** run a night (`--time=23` or `--autotime=1` and wait for night), look up. Stars tab knobs on the **Night** tab (`star *`, `mw *`).
-- **Judge:** Milky Way band believable (not blocky/banded/too uniform)? star density/twinkle/brightness right? rotation rate? does it read good in motion as the cycle runs? Any crawl/shimmer.
-- **Unblocks:** finalizing the night sky. Likely needs its own small spec→build if the look needs real work.
+### 10. Stars + Milky Way (galaxy) — ✅ REVIEWED 2026-06-20 (live) → ❌ NEEDS WORK → folded into Celestial #6 C1
+- **Verdict (user, live, `--time=23 --celestial=1` = moonless dark, MW boosted):** needs work — "not terrible but
+  just a fog band, and a band that goes all the way across in a half-circle." Reviewed → **no longer "owed."** Now
+  **C1 of the Celestial expansion** (ROADMAP #6), **sequenced AFTER #3 GPU atmosphere (AT-1)** per the user.
+- **Root cause (code):** `stars_layer()` in `cloud_sky.gdshader` — a **uniform great-circle band** (no along-band
+  core → the uniform arc) + **smooth low-freq fbm + flat blue-white color + no embedded stars** (→ fog). C1 fix:
+  galactic **core/bulge** + Great-Rift **dust lanes** + **resolved star clouds** + subtle **color** + **pulled-back**
+  apparent scale; tunable + presets. (DECISIONS 2026-06-20.)
+- **See it (for C1 when it's built):** `--time=23 --celestial=1` → Night tab `mw *` / `star *` knobs.
 
 ---
 

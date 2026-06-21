@@ -6,6 +6,21 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Galaxy/Milky Way review: NEEDS WORK → scope expanded into a Celestial sub-lane; atmosphere (AT-1) sequenced FIRST.**
+Drove the live galaxy gate (`review.tscn`, `--time=23 --celestial=1` new_moon_dark, MW boosted). **User verdict (live):
+needs work** — "not terrible but just a fog band, and a band that goes all the way across in a half-circle." Root cause
+(code, `stars_layer()` in `cloud_sky.gdshader`): the MW is a **uniform great-circle band** (`abs(dot(dir,planeN))<width`,
+no along-band brightness variation → the uniform arc) textured by **smooth low-freq fbm with a flat blue-white color and
+no embedded stars** (→ reads as fog). Missing: bright galactic **core/bulge**, sharp dark **dust lanes** (Great Rift),
+**resolved star clouds** in the band, subtle color. **User expanded scope** (brainstorm) into a **Celestial / Night-Sky
+sub-lane:** **C1** galaxy redesign (better + **pulled back** to a smaller apparent scale, realistic-cinematic, tunable/
+modular + presets) · **C2** celestial bodies (planets/meteors/named-star realism/optional nebulae) · **C3** **N suns +
+N moons** (un-deferred — generalize the single-luminary architecture). **Sequencing decision (user): GPU atmosphere
+(AT-1) FIRST, then the Celestial expansion (C1→C2→C3).** Dependency banked: **C3 N-suns feeds the atmosphere scattering**
+(sky color is computed from the sun direction[s]) → atmosphere foundation first, extend its LUTs for N-suns later.
+Roadmapped thin (no full C1/C2/C3 specs yet — spec each at its turn, per the doc-sprawl discipline). NEEDS_REVIEW 10
+updated (reviewed → needs work → C1). NEXT: **AT-1** (spec `specs/2026-06-20-gpu-atmosphere-design.md`, already approved) → writing-plans.
+
 **2026-06-20 — Sun/Light #4 ST4-2 (fantasy presets) GATED (soft) + review key 7; #4 Stage 4 COMPLETE.**
 ST4-2 soft-passed live (user: "pretty good, good enough for now") + wired to review key 7 (cycles the 5 fantasy
 presets). **Stage 4 done; the core sky system is now built end-to-end: Stage 3 Night/Celestial ✅ · #2 Clouds
