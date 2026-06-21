@@ -45,10 +45,14 @@ public partial class AtmosphereCompute : Node
     public Texture2Drd? SkyViewTexture => _skyViewRd;
     public bool Ready => _ready;
 
-    // AT-3: the cloud raymarch (CloudVolume, same render-thread RD) binds these LUT RIDs to light clouds physically.
-    public Rid SkyViewTexRid => _skyTex;
-    public Rid TransTexRid => _transTex;
-    public bool ReadyForCloudLight => _ready;   // _skyTex/_transTex exist after InitCompute
+    // AT-3 physical cloud lighting: 3 sun-dependent colors read back from the LUTs on the CPU each sun-change
+    // (cross-node GPU sampling of these textures hazards the render device — seam-law). CloudVolume pushes
+    // these as params. CloudZenith = sky radiance at the zenith; CloudHorizonSun = at the horizon toward the
+    // sun; CloudSunTrans = sun transmittance toward the sun. Pre-multiplied by NOTHING (the shader scales).
+    public Vector3 CloudZenith { get; private set; } = Vector3.One;
+    public Vector3 CloudHorizonSun { get; private set; } = Vector3.One;
+    public Vector3 CloudSunTrans { get; private set; } = Vector3.One;
+    public bool CloudLightReady { get; private set; }
 
     public Texture3Drd? AerialTexture => _aerialRd;
     public bool AerialReady => _ready && _aerialRd != null;
@@ -209,6 +213,7 @@ public partial class AtmosphereCompute : Node
         if (_msShader.IsValid)  { Dispatch(_msPipe, _msSet, MsW, MsH); }  // 2. multiscatter (reads transmittance)
         if (_skyShader.IsValid) { Dispatch(_skyPipe, _skySet, SkyW, SkyH); } // 3. skyview (reads both)
         DispatchAerial();                                                 // 4. aerial froxel (reads trans + ms)
+        ComputeCloudLightColors();                                        // AT-3: read back the 3 cloud-light colors
         if (_checkRequested) { _checkRequested = false; DumpCheck(); }
         if (_aerialCheckRequested) { _aerialCheckRequested = false; DumpAerialCheck(); }
     }
@@ -284,6 +289,33 @@ public partial class AtmosphereCompute : Node
             GD.Print($"[atmocheck] skyview: horizonLuma={hor / Math.Max(1, hc):F4} zenithLuma={zen / Math.Max(1, zc):F4} min={smin:F4} max={smax:F4} finite={sfin} -> {(spass ? "PASS" : "FAIL")}");
         }
     }
+
+    // AT-3: read back the 3 sun-dependent colors the clouds need (zenith sky, horizon-toward-sun sky, sun
+    // transmittance). Indexes the LUTs the same way atmo_dir_to_uv / getValFromLUT do. Sun-change cadence.
+    private void ComputeCloudLightColors()
+    {
+        if (!_skyShader.IsValid) { return; }
+        byte[] sky = _rd.TextureGetData(_skyTex, 0);     // SkyW×SkyH rgba16f
+        byte[] tr  = _rd.TextureGetData(_transTex, 0);   // TransW×TransH rgba16f
+        // zenith: atmo_dir_to_uv(0,1,0) → uv (0,1) → texel (0, SkyH-1)
+        CloudZenith = SkyTexel(sky, 0, SkyH - 1);
+        // horizon toward the sun: dir = normalize(sunDir.x, 0.05, sunDir.z); el small → low v row
+        Vector3 hd = new Vector3(_sunDir.X, 0.05f, _sunDir.Z);
+        if (hd.LengthSquared() < 1e-6f) { hd = new Vector3(0f, 0.05f, 1f); }
+        hd = hd.Normalized();
+        float az = Mathf.Atan2(hd.Z, hd.X); if (az < 0f) { az += 2f * Mathf.Pi; }
+        float el = Mathf.Asin(Mathf.Clamp(hd.Y, 0f, 1f));
+        int hx = Mathf.Clamp((int)(az / (2f * Mathf.Pi) * SkyW), 0, SkyW - 1);
+        int hy = Mathf.Clamp((int)(Mathf.Sqrt(el / (0.5f * Mathf.Pi)) * SkyH), 0, SkyH - 1);
+        CloudHorizonSun = SkyTexel(sky, hx, hy);
+        // sun transmittance: uv = (0.5 + 0.5*sunCosZenith, ~0 altitude) (getValFromLUT, up = +Y)
+        int tx = Mathf.Clamp((int)((0.5f + 0.5f * _sunDir.Y) * TransW), 0, TransW - 1);
+        int ty = Mathf.Clamp((int)(0.02f * TransH), 0, TransH - 1);
+        CloudSunTrans = TransTexel(tr, tx, ty);
+        CloudLightReady = true;
+    }
+    private static Vector3 SkyTexel(byte[] d, int x, int y) { int o = (y * SkyW + x) * 8; return new Vector3(Half(d, o), Half(d, o + 2), Half(d, o + 4)); }
+    private static Vector3 TransTexel(byte[] d, int x, int y) { int o = (y * TransW + x) * 8; return new Vector3(Half(d, o), Half(d, o + 2), Half(d, o + 4)); }
 
     // AT-2 aerial froxel self-check (analog of --atmoscheck): readback the 32³ LUT, assert finite,
     // non-negative in-scatter, and transmittance in [0,1]. Run via --aerialcheck.

@@ -67,13 +67,36 @@ public partial class TerrainLabUI : Control
                 title = "2 · Time-of-day / daylight (Stage 2)";
                 judge = "Scrub Light tab 'time of day' 5->19: sun arc low-E -> high -> low-W, cohesive sky/light/ambient shift, no pops? Switch the 6 moods (dropdown) — do they still match their old looks?";
                 break;
-            case 3: // Ground GM1 — palette (1c)
-                BaselineGround();
-                CyclePalette(advance: _lastPreset == 3);
-                string palName = (_palNames != null && _palNames.Count > 0) ? _palNames[_palIdx] : "?";
-                title = $"3 · GM1 palette  [{palName}]  (press 3 again to cycle)";
-                judge = "Reads photoreal/varied across cliffs/peaks under neutral light, not drab? Press 3 to A/B palettes. Isolate drab = lighting vs material saturation vs placement.";
+            case 3: // Ground G-0 — isolate the "wrong-defaults" levers ONE at a time (cumulative). Press 3 to step.
+            {
+                if (_lastPreset != 3)
+                {
+                    BaselineGround();              // clouds off + neutral grade + GM features off = the CURRENT baseline
+                    _timeRunning = false;          // LOCK the sun (no auto-cycle) so the A/B isn't confounded by drifting light
+                    Set("time_of_day", 16.0f);     // fixed mid-afternoon sun (grazing → reveals relief + specular)
+                    CloseGround();                 // frame the ground (fly the last bit to a cliff/slope)
+                    _g0Step = 0;                   // start on the clean CURRENT baseline
+                }
+                else { _g0Step = (_g0Step + 1) % 6; }   // re-press: add the next lever (cumulative), wrap back to CURRENT
+                // cumulative — each step turns ON one more lever so you see exactly which one introduces an artifact
+                Set("rough_floor",      _g0Step >= 1 ? 0.15f : 0.5f);
+                Set("tex_scale_m",      _g0Step >= 2 ? 11f   : 28f);
+                Set("height_from_maps", _g0Step >= 3);
+                Set("variation_on",     _g0Step >= 4);
+                ApplyPaletteByName(     _g0Step >= 5 ? "alpine_stone" : "alpine_green");
+                string[] g0Names = { "CURRENT (baseline)", "+rough_floor 0.15 (specular)", "+tex_scale 11 (finer)", "+real height (GM2)", "+within-area variation", "+alpine_stone palette = FULL FIXED" };
+                string[] g0Judge = {
+                    "Clean baseline — your current look. Sun is LOCKED (no drift) so the A/B is fair. Press 3 to add levers one at a time and spot which one artifacts.",
+                    "ROUGH_FLOOR unclamped 0.5->0.15 → specular returns. Fly the lit/grazing faces: do they SPARKLE / FUZZ / crawl in motion? (#1 suspect for the artifacting.)",
+                    "TEX_SCALE 28->11 (~3x finer) → more texture detail. More shimmer/aliasing, or visible tiling repetition?",
+                    "REAL HEIGHT now drives the blend interlock (vs inverted-roughness). New artifacts at material BOUNDARIES / transitions?",
+                    "WITHIN-AREA VARIATION modulates roughness/value/normal. Noise, squares, or blotchy patches?",
+                    "FULL FIXED + contrast-rich palette. Net better or worse than step 0 (CURRENT)?"
+                };
+                title = $"3 · Ground G-0 isolate [{_g0Step}/5] — {g0Names[_g0Step]}  (press 3 to step)";
+                judge = g0Judge[_g0Step];
                 break;
+            }
             case 4: // Ground GM2 — real height + POM (1c)
                 BaselineGround();
                 Set("height_from_maps", true); Set("pom_on", true);
@@ -127,26 +150,26 @@ public partial class TerrainLabUI : Control
                 title = $"7 · Fantasy / exotic sky  [{fname}]  (press 7 to cycle)";
                 judge = "Cohesive believable exotic sky? Scrub 'time of day' or press 'play day/night' (Light tab) — the look should HOLD as the cycle runs. blood_moon/violet_night read at NIGHT (moon up), alien_green/ember_dusk by day/dusk. Tune 'sky tint' (Light) + moon colors (Night).";
                 break;
-            case 8: // AT-2 AERIAL PERSPECTIVE gate (also AT-1). Press 8 to walk an A/B sequence: each press flips
-                    // aerial ON↔OFF (a direct A/B at a FIXED frame), advancing the time of day every 2 presses.
-                    // 8 steps: GOLDEN on/off → DUSK on/off → NOON on/off → DAWN on/off (warm-first; strongest haze
-                    // up front). Camera frames the HORIZON UNDER THE SUN once (distant terrain in the lower frame,
-                    // sky above) — so the same view shows the distance haze AND the AT-1 horizon line.
+            case 8: // AT-3 PHYSICAL CLOUD LIGHTING gate (atmosphere + aerial stay on — the passed stack). Press 8 to
+                    // walk an A/B sequence: each press flips 'physical cloud light' ON↔OFF at a FIXED frame, advancing
+                    // the time every 2 presses (golden→noon→dusk→dawn; warm-first, where cloud reddening reads best).
+                    // Camera tilts UP at the cloud deck once so undersides are visible. (The AT-2 aerial A/B harness
+                    // is in git history — d7474e6 — if it needs revisiting; AT-2 passed 2026-06-21.)
                 bool atmoFirst = _lastPreset != 8;                        // only the FIRST press reframes (no teleport while A/B-ing)
-                if (atmoFirst) { _atmoStep = 0; ApplyMood(5); }           // first press: step 0 (golden, ON) + neutral grade
-                else { _atmoStep = (_atmoStep + 1) % 8; }                 // re-press: flip aerial / advance time
+                if (atmoFirst) { _atmoStep = 0; ApplyMood(5); }           // first press: step 0 (golden, cloud-light ON) + neutral grade
+                else { _atmoStep = (_atmoStep + 1) % 8; }                 // re-press: flip cloud light / advance time
                 float[] atmoTimes = { 17.5f, 12f, 19.5f, 6.5f };         // golden, noon, dusk, dawn (index = step/2)
                 string[] atmoNames = { "GOLDEN HOUR", "NOON", "DUSK", "DAWN" };
                 int tIdx = _atmoStep / 2;
-                bool aerialStep = (_atmoStep % 2) == 0;                   // even step = aerial ON, odd = OFF (the A/B)
-                Set("cloud_enabled", false);                              // clear sky → pure atmosphere + isolate the terrain haze
-                Set("atmosphere_on", true);                              // physical sky ON throughout
-                Set("aerial_on", aerialStep);                           // THE A/B: flips each press
+                bool clStep = (_atmoStep % 2) == 0;                       // even step = cloud light ON, odd = OFF (the A/B)
+                Set("cloud_enabled", true); Set("cloud_coverage", 0.55f); // clouds IN VIEW (this gate is about lighting them)
+                Set("atmosphere_on", true); Set("aerial_on", true);      // the passed AT-1/AT-2 stack stays on
+                Set("cloud_light", clStep);                              // THE A/B: physical cloud lighting flips each press
                 Set("atmo_exposure", 12f);
                 Set("time_of_day", atmoTimes[tIdx]);
-                if (atmoFirst) { LookHorizonSun(); }                     // frame horizon+terrain ONCE; re-presses keep the view
-                title = $"8 · AERIAL (AT-2) — {atmoNames[tIdx]} ({atmoTimes[tIdx]:0.0}h) · aerial {(aerialStep ? "ON" : "OFF")}   (press 8: A/B, then next time)";
-                judge = "Each press 8 flips aerial ON↔OFF at a fixed frame (A/B), advancing the time every 2 presses: golden→noon→dusk→dawn. JUDGE: distant terrain should haze believably (warm at golden/dusk, blue at noon), near terrain stays CRISP, the SKY is unchanged between on/off (no double-haze), and it ties cleanly with no double-fog or popping while time-cycling. Tune 'aerial strength' (Light tab, default 2). Also watch the horizon LINE for any flashing (AT-1 re-confirm). Fly freely between presses.";
+                if (atmoFirst) { LookUpAtClouds(); }                     // tilt up at the cloud deck ONCE; re-presses keep the view
+                title = $"8 · CLOUD LIGHT (AT-3) — {atmoNames[tIdx]} ({atmoTimes[tIdx]:0.0}h) · cloud light {(clStep ? "ON" : "OFF")}   (press 8: A/B, then next time)";
+                judge = "Each press 8 flips 'physical cloud light (AT-3)' ON↔OFF at a fixed frame (A/B), advancing the time every 2 presses: golden→noon→dusk→dawn. JUDGE: clouds should be lit by the REAL sky — cool/sky-colored ambient at noon, warm-reddened undersides + cooler tops at golden/dusk — consistent with the sky behind them; NO over-bright/over-red double-count vs OFF; no popping while time-cycling. Tune 'cloud light strength' (Light tab, default 10). Fly freely between presses.";
                 break;
             case 9: // H1 BRDF clouds-off baseline (6)
                 BaselineGround();

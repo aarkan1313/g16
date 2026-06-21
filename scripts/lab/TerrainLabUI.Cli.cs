@@ -50,6 +50,8 @@ public partial class TerrainLabUI : Control
     private bool _aerialCheckCli;        // --aerialcheck → one-shot AT-2 aerial froxel self-check (readback)
     private int _aerialCli = -1;         // --aerial[=1] → AT-2 aerial perspective on/off at startup (default ON; =0 restores built-in fog)
     private float _aerialStrCli = -1f;   // --aerialstr=N → AT-2 in-scatter strength override at startup (A/B)
+    private int _cloudLightCli = -1;     // --cloudlight[=1] → AT-3 physical cloud lighting on at startup (default off)
+    private float _cloudLightStrCli = -1f; // --cloudlightstr=N → AT-3 cloud-light strength override
     private float _atmoExpCli = -1f;     // --atmoexp=N → AT-1 atmosphere exposure override
     private int _reviewCli = -1;         // --review=N → run ApplyReview(N) at startup (drive/verify a review preset headlessly)
     private int _greviewCli = -1;        // --greview=N → run ApplyGroundReview(N) at startup (Shift+N ground bank; auto-shoot the ground gates)
@@ -128,6 +130,8 @@ public partial class TerrainLabUI : Control
             else if (a == "--aerialcheck") { _aerialCheckCli = true; }
             else if (a.StartsWith("--aerialstr=")) { float.TryParse(a.Substring("--aerialstr=".Length), out _aerialStrCli); }
             else if (a.StartsWith("--aerial")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _aerialCli = (s == "1") ? 1 : 0; }
+            else if (a.StartsWith("--cloudlightstr=")) { float.TryParse(a.Substring("--cloudlightstr=".Length), out _cloudLightStrCli); }
+            else if (a.StartsWith("--cloudlight")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cloudLightCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--atmoexp=")) { float.TryParse(a.Substring("--atmoexp=".Length), out _atmoExpCli); }
             else if (a.StartsWith("--greview=")) { int.TryParse(a.Substring("--greview=".Length), out _greviewCli); }
             else if (a.StartsWith("--review=")) { int.TryParse(a.Substring("--review=".Length), out _reviewCli); }

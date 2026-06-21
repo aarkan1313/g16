@@ -99,6 +99,14 @@ public partial class TerrainLabUI : Control
             _aerial?.SetEnabled(true);
             _aerialActivated = true;
         }
+        // AT-3 default-gated: once the atmosphere has read back its cloud-light colors AND the cloud compute
+        // is ready, enable physical cloud lighting at the current strength. While active, keep the 3 colors
+        // current as the sun moves (cheap — they're cached Vector3s pushed into the cloud param buffer).
+        if (_cloudLightOn && _atmosphere != null && _atmosphere.CloudLightReady && _cloud != null && _cloud.ComputeReady)
+        {
+            if (!_cloudLightActivated) { _cloud.SetCloudAtmoLight(_cloudLightStr); _cloudLightActivated = true; }
+            _cloud.SetCloudAtmoColors(_atmosphere.CloudZenith, _atmosphere.CloudHorizonSun, _atmosphere.CloudSunTrans);
+        }
         // ST4-1: auto day/night cycle — advance the Time axis + re-compose; sync the slider so manual
         // scrub still works (grab the slider to pause-and-scrub; toggle off to stop). Wraps at 24→0.
         if (_ready && _timeRunning)

@@ -20,6 +20,9 @@ public partial class TerrainLabUI : Control
     private AerialPerspective? _aerial;       // AT-2 screen-space aerial perspective (distance haze); default ON with the atmosphere
     private bool _aerialOn = true;            // AT-2 on-state (default on; --aerial=0 / Light-tab toggle = off → built-in fog restored)
     private bool _aerialActivated;            // AT-2 default-on: the pass enables once the aerial LUT RID is live (one-time, in _Process)
+    private bool _cloudLightOn;               // AT-3 physical cloud lighting; default OFF until the eye-gate passes
+    private bool _cloudLightActivated;        // one-time RID+strength push once both nodes are ready (_Process gate)
+    private float _cloudLightStr = 10f;       // atmo cloud-light gain (LUT radiance → ambient); gate-tunable
     private void ApplyCloudFloat(string knob, float v)
     {
         // Screen-space god-ray tunables (GPU Gems radial scatter). The froxel-fog layer was dropped
@@ -32,6 +35,7 @@ public partial class TerrainLabUI : Control
             case "godray_cloud_radius": _godraysScreen?.SetCloudRadius(v); return;  // cloud-detect radius around sun
             case "godray_cloud_lum":    _godraysScreen?.SetCloudLum(v); return;     // cloud darkness threshold
             case "aerial_strength":     _aerial?.SetStrength(v); return;            // AT-2 in-scatter gain (live-tunable at the gate)
+            case "cloud_light_strength": _cloudLightStr = Mathf.Max(0f, v); if (_cloudLightOn && _cloudLightActivated) { _cloud?.SetCloudAtmoLight(v); } return;   // AT-3 cloud-light gain
         }
         if (knob.StartsWith("cirrus_")) { _cloud?.SetCirrus(knob, v); return; }   // CO-2 cirrus sky-layer uniforms
         _cloud?.SetKnob(knob, v);
@@ -44,6 +48,8 @@ public partial class TerrainLabUI : Control
         // re-runs the fog handoff (drop built-in aerial fog when on; restore it when off). _aerialActivated reset
         // so toggling back on re-arms the readiness gate.
         if (knob == "aerial_on") { _aerialOn = on; _aerial?.SetEnabled(on && (_atmosphere?.AerialReady ?? false)); if (!on) { _aerialActivated = false; } ComposeLighting(); return; }
+        // AT-3 physical cloud lighting: off → push strength 0 (mood path); on → re-arm the readiness gate (_Process pushes RIDs+strength when both nodes ready).
+        if (knob == "cloud_light") { _cloudLightOn = on; if (!on) { _cloud?.SetCloudAtmoLight(0f); } _cloudLightActivated = false; return; }
         if (knob == "godrays") { _godraysScreen?.SetEnabled(on); return; }   // screen-space radial beams
         if (knob == "godray_backlit") { _godraysScreen?.SetCloudInvert(on); return; }   // occluder polarity (sun behind cloud)
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)

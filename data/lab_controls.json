@@ -161,6 +161,8 @@
     { "id": "atmo_exposure", "label": "atmosphere exposure", "tab": "Light", "type": "cloudf", "cloud": "atmo_exposure", "min": 0.0, "max": 60.0, "default": 10.0, "rand": false },
     { "id": "aerial_on", "label": "aerial perspective (AT-2)", "tab": "Light", "type": "cloud", "cloud": "aerial_on", "default": true, "rand": false },
     { "id": "aerial_strength", "label": "aerial strength", "tab": "Light", "type": "cloudf", "cloud": "aerial_strength", "min": 0.0, "max": 6.0, "default": 0.4, "rand": false },
+    { "id": "cloud_light", "label": "physical cloud light (AT-3)", "tab": "Light", "type": "cloud", "cloud": "cloud_light", "default": false, "rand": false },
+    { "id": "cloud_light_strength", "label": "cloud light strength", "tab": "Light", "type": "cloudf", "cloud": "cloud_light_strength", "min": 0.0, "max": 30.0, "default": 10.0, "rand": false },
     { "id": "night_darkness", "label": "night darkness", "tab": "Night", "type": "scenef", "scene": "night_darkness", "min": 0.0, "max": 2.0, "default": 1.0, "rand": false },
     { "id": "night_ambient_floor", "label": "night ambient floor", "tab": "Night", "type": "scenef", "scene": "night_ambient_floor", "min": 0.0, "max": 0.4, "default": 0.02, "rand": false },
     { "id": "moon_phase", "label": "moon phase", "tab": "Night", "type": "scenef", "scene": "moon_phase", "min": 0.0, "max": 1.0, "default": 1.0, "rand": false },

@@ -44,11 +44,13 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     // fields 0-11 = density (byte-identical to cloud_shadow.glsl); 12-18 = per-deck lighting;
     // 19-21 = vertical profile (CO-1, also byte-identical to the shadow shader).
     vec4 layers[48];
+    // AT-3 physical cloud lighting: 3 sun-dependent colors read back from the atmosphere LUTs (CPU, on
+    // sun change) and pushed as params — NOT sampled cross-node in this compute (that hazards the GPU; the
+    // values are per-frame constants anyway). Used only when P.sun_color.a > 0; a == 0 → the mood path.
+    vec4 atmo_zenith;     // sky-view radiance at the zenith (cloud-top ambient)
+    vec4 atmo_horizon;    // sky-view radiance at the horizon toward the sun (cloud-underside ambient)
+    vec4 atmo_suntrans;   // sun transmittance toward the sun (reddened direct-light color)
 } P;
-// AT-3 physical cloud lighting: the atmosphere LUTs (same render-thread RD). Sampled only when
-// P.sun_color.a > 0 (the atmo cloud-light strength); a == 0 → the mood path below, unchanged.
-layout(set = 0, binding = 5) uniform sampler2D atmo_skyview;        // Hillaire sky-view radiance (az, sqrt-el)
-layout(set = 0, binding = 6) uniform sampler2D atmo_transmittance;  // sun transmittance (cosSunZenith, altitude)
 #define WIND vec2(P.tail.x, P.tail.y)
 #define CELL_SCALE P.tail.z
 #define LAYER_COUNT P.tail.w
@@ -61,14 +63,6 @@ const float PLANET_R = 200000.0;
 const float PI = 3.14159265;
 
 float remap(float v, float a, float b, float c, float d){ return c + (v - a) * (d - c) / max(b - a, 1e-5); }
-
-// AT-3: MUST match atmosphere_skyview.glsl's per-texel ray build (az = u*2π, el = v²·π/2) — copied
-// verbatim from cloud_sky.gdshader atmo_dir_to_uv. Keep in sync if either changes.
-vec2 atmo_dir_to_uv(vec3 d){
-    float az = atan(d.z, d.x); if (az < 0.0) az += 2.0 * PI;
-    float el = asin(clamp(d.y, 0.0, 1.0));
-    return vec2(az / (2.0 * PI), sqrt(el / (0.5 * PI)));
-}
 
 float type_gradient(float h, float type){
     float baseRound = smoothstep(0.0, 0.15, h);
@@ -332,18 +326,17 @@ void main(){
         float globalPhase = phase_dual(cosA);   // legacy uniform phase (P.perdeck blends away from it)
 
         // AT-3: physical cloud lighting when the atmo cloud-light strength (sun_color.a) > 0. Sun color =
-        // neutral star × atmospheric transmittance toward the sun (Rayleigh reddening); ambient colors come
-        // from the sky-view LUT at the zenith (top fill) and the horizon-toward-the-sun (underside fill).
-        // a == 0 → the mood path (unchanged). Computed once per ray; the per-sample blend is below.
+        // neutral star × atmospheric transmittance toward the sun (Rayleigh reddening); ambient endpoints =
+        // the physical sky radiance at the zenith (top fill) + the horizon toward the sun (underside fill).
+        // All three colors are pushed as params (read back from the LUTs on the CPU, sun-change cadence) —
+        // they're per-frame constants, so no per-pixel cross-node LUT sampling. a == 0 → the mood path.
         float atmoStr = P.sun_color.a;
         vec3 sunCol = P.sun_color.rgb * P.sun_dir.w;        // mood sun (a == 0 path)
         vec3 skyTopC = P.sky_top.rgb, skyHorC = P.sky_horizon.rgb;   // mood ambient endpoints (a == 0 path)
         if (atmoStr > 0.0){
-            vec3 sunTr = texture(atmo_transmittance, vec2(clamp(0.5 + 0.5 * L.y, 0.0, 1.0), 0.02)).rgb;
-            sunCol = sunTr * P.sun_dir.w;                   // neutral white × transmittance × energy
-            skyTopC = texture(atmo_skyview, atmo_dir_to_uv(vec3(0.0, 1.0, 0.0))).rgb * atmoStr;
-            vec3 horizonToSun = normalize(vec3(L.x, 0.05, L.z));
-            skyHorC = texture(atmo_skyview, atmo_dir_to_uv(horizonToSun)).rgb * atmoStr;
+            sunCol = P.atmo_suntrans.rgb * P.sun_dir.w;     // neutral white × transmittance × energy
+            skyTopC = P.atmo_zenith.rgb * atmoStr;          // physical zenith → cloud tops
+            skyHorC = P.atmo_horizon.rgb * atmoStr;         // physical horizon-toward-sun → cloud undersides
         }
         // ambient endpoints (mood or physical) blended by view elevation, same structure as before.
         vec3 skyAmbient = mix(skyHorC, skyTopC, clamp(rd.y, 0.0, 1.0));
