@@ -1,0 +1,102 @@
+using Godot;
+using System.Collections.Generic;
+
+namespace WG16.Lab;
+
+/// CDLOD quadtree over stable world-XZ. Each frame, Select() walks from the root
+/// square and returns leaf chunks (large-far / small-near) by camera distance.
+/// Pure logic — no rendering. Level 0 = finest (smallest chunks).
+public struct CdlodChunk
+{
+    public Vector2 OriginXZ;   // world-XZ min corner
+    public float Size;         // side length (m)
+    public int Level;          // 0 = finest
+}
+
+public sealed class CdlodQuadtree
+{
+    private readonly float _rootX, _rootZ, _rootSize;
+    private readonly int _maxDepth;
+    private readonly float _splitFactor;   // subdivide when camDist < size*splitFactor
+
+    public CdlodQuadtree(float rootOriginX, float rootOriginZ, float rootSize, int maxDepth, float splitFactor)
+    {
+        _rootX = rootOriginX; _rootZ = rootOriginZ; _rootSize = rootSize;
+        _maxDepth = Mathf.Max(0, maxDepth); _splitFactor = Mathf.Max(0.01f, splitFactor);
+    }
+
+    public List<CdlodChunk> Select(Vector3 camPos)
+    {
+        var leaves = new List<CdlodChunk>();
+        Recurse(_rootX, _rootZ, _rootSize, 0, camPos, leaves);
+        return leaves;
+    }
+
+    private void Recurse(float x, float z, float size, int depth, Vector3 cam, List<CdlodChunk> outLeaves)
+    {
+        bool canSplit = depth < _maxDepth;
+        float d = DistanceToCellXZ(x, z, size, cam);
+        if (canSplit && d < size * _splitFactor)
+        {
+            float h = size * 0.5f;
+            Recurse(x,     z,     h, depth + 1, cam, outLeaves);
+            Recurse(x + h, z,     h, depth + 1, cam, outLeaves);
+            Recurse(x,     z + h, h, depth + 1, cam, outLeaves);
+            Recurse(x + h, z + h, h, depth + 1, cam, outLeaves);
+        }
+        else
+        {
+            outLeaves.Add(new CdlodChunk { OriginXZ = new Vector2(x, z), Size = size, Level = _maxDepth - depth });
+        }
+    }
+
+    /// Nearest-point XZ distance from the camera to a cell (ignores Y so altitude doesn't starve LOD).
+    private static float DistanceToCellXZ(float x, float z, float size, Vector3 cam)
+    {
+        float cx = Mathf.Clamp(cam.X, x, x + size);
+        float cz = Mathf.Clamp(cam.Z, z, z + size);
+        float dx = cam.X - cx, dz = cam.Z - cz;
+        return Mathf.Sqrt(dx * dx + dz * dz);
+    }
+
+    /// <=1-level neighbor invariant: any two EDGE-ADJACENT leaves differ by <=1 level.
+    /// Conservative O(n^2) check (fine for a self-check; the runtime build relies on the
+    /// restricted-quadtree property, but this verifies it empirically).
+    public bool NeighborInvariantHolds(List<CdlodChunk> leaves, out string msg)
+    {
+        for (int i = 0; i < leaves.Count; i++)
+        for (int j = i + 1; j < leaves.Count; j++)
+        {
+            if (EdgeAdjacent(leaves[i], leaves[j]) && Mathf.Abs(leaves[i].Level - leaves[j].Level) > 1)
+            {
+                msg = $"levels {leaves[i].Level} vs {leaves[j].Level} adjacent at " +
+                      $"({leaves[i].OriginXZ}) / ({leaves[j].OriginXZ})";
+                return false;
+            }
+        }
+        msg = "ok";
+        return true;
+    }
+
+    private static bool EdgeAdjacent(CdlodChunk a, CdlodChunk b)
+    {
+        float ax0 = a.OriginXZ.X, ax1 = ax0 + a.Size, az0 = a.OriginXZ.Y, az1 = az0 + a.Size;
+        float bx0 = b.OriginXZ.X, bx1 = bx0 + b.Size, bz0 = b.OriginXZ.Y, bz1 = bz0 + b.Size;
+        const float e = 0.5f;
+        bool xTouch = Mathf.Abs(ax1 - bx0) < e || Mathf.Abs(bx1 - ax0) < e;
+        bool zTouch = Mathf.Abs(az1 - bz0) < e || Mathf.Abs(bz1 - az0) < e;
+        bool zOverlap = az0 < bz1 - e && bz0 < az1 - e;
+        bool xOverlap = ax0 < bx1 - e && bx0 < ax1 - e;
+        return (xTouch && zOverlap) || (zTouch && xOverlap);
+    }
+
+    public static void SelfCheck(float regionSize, int maxDepth, float splitFactor, Vector3 camPos)
+    {
+        var qt = new CdlodQuadtree(-regionSize * 0.5f, -regionSize * 0.5f, regionSize, maxDepth, splitFactor);
+        var leaves = qt.Select(camPos);
+        bool inv = qt.NeighborInvariantHolds(leaves, out string msg);
+        int minL = int.MaxValue, maxL = int.MinValue;
+        foreach (var c in leaves) { minL = Mathf.Min(minL, c.Level); maxL = Mathf.Max(maxL, c.Level); }
+        GD.Print($"CDLODCHECK: {(inv ? "PASS" : "FAIL")}  leaves={leaves.Count}  levels={minL}..{maxL}  invariant={msg}  cam=({camPos.X:F0},{camPos.Z:F0})");
+    }
+}

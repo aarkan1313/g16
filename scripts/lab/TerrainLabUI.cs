@@ -174,6 +174,11 @@ public partial class TerrainLabUI : Control
             CloudShadowCheck.Run(_cloud.Params, toSun, _cloud.RegionSize, _terrain.MidHeight, Vector2.Zero, checkLayers, checkCount);
         }
         if (_fieldCheckCli) { FieldCheck.Run(_fc, _params); }   // S1: field determinism/parity self-check
+        if (_cdlodCheckCli)   // S2a: quadtree neighbor-invariant + stats
+        {
+            var camCdlod = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+            CdlodQuadtree.SelfCheck(_params.RegionSizeM, 6, 2.5f, camCdlod.GlobalPosition);
+        }
         if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");

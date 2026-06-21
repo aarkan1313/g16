@@ -132,6 +132,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--profmove") { _profMove = true; }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--fieldcheck") { _fieldCheckCli = true; }
+            else if (a == "--cdlodcheck") { _cdlodCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }
             else if (a == "--cloudstats") { _cloudStatsCli = true; }
             else if (a.StartsWith("--preset=")) { int.TryParse(a.Substring("--preset=".Length), out _presetCli); }
@@ -194,6 +195,7 @@ public partial class TerrainLabUI : Control
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)
     private bool _shadowCheckCli;     // --shadowcheck → numeric correlation test, PASS/FAIL to console
     private bool _fieldCheckCli;      // --fieldcheck → one-shot field determinism/parity self-check (S1)
+    private bool _cdlodCheckCli;      // --cdlodcheck → quadtree neighbor-invariant + stats self-check (S2a)
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;
