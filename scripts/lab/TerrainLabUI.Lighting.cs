@@ -150,6 +150,9 @@ public partial class TerrainLabUI : Control
         // its own dark night gradient and the moon/stars read against black (the atmosphere stage will own
         // sky haze later). Also dim the base fog color cool so terrain aerial-perspective stays night-right.
         env.FogSkyAffect = Mathf.Lerp(1.0f, 0.05f, _nightFactor);
+        // AT-1: when the GPU atmosphere owns the sky, stop the depth fog washing the sky dome toward
+        // fog-grey (it was masking the physical sky color → "not much going on"). Terrain aerial fog stays.
+        if (_atmosphereOn) { env.FogSkyAffect = Mathf.Lerp(0.1f, 0.05f, _nightFactor); }
         _baseFogColor = _baseFogColor.Lerp(NightFogColor, _nightFactor);
 
         // ── GRADE: tonemap + color adjustments + glow ──
