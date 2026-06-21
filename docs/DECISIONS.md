@@ -20,8 +20,9 @@ in-scatter is additive and at the planned strength (~2, let alone the sky-matche
 **~0.4** reads as gentle physical distance haze (warm sunset / blue noon), near terrain stays crisp; >1 washes. User
 verdict at 0.4: "a little better than off" → **soft-pass, keep default-ON subtle.** Cost (`--profmove`): **+0.7 ms**
 (114 vs 124 fps), within budget. Self-checks PASS (`--aerialcheck` inscatter[0..0.13] T[0.466..0.999], `--atmoscheck`,
-`--shadowcheck`). **Still owed:** the AT-1 horizon-flash in-motion re-confirm (folded into key 8's new horizon framing;
-user watching). AT-3 (cloud-lighting) NOT started (disciplined — one sub-phase). Lane stays paused for the re-roadmap.
+`--shadowcheck`). **AT-1 horizon-flash re-confirmed CLEAN in motion 2026-06-21** (user flew key 8's horizon framing —
+"didnt see it, looked good"; the fog/seam fix holds in motion, closing the last owed AT-1 item). AT-3 (cloud-lighting)
+NOT started (disciplined — one sub-phase). Lane stays paused for the re-roadmap.
 
 **2026-06-21 — Full project audit + ground/texture iterate-vs-rebuild review; docs reconciled; sky lane pushed to origin.**
 Ran a 7-subsystem project audit (`AUDIT-2026-06-21.md`, committed) + a focused ground review (both multi-agent,

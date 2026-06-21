@@ -347,12 +347,11 @@ is default-off so the approved look is untouched.
   default-ON subtle. Cost **+0.7 ms** (`--profmove`, 114 vs 124 fps). Self-checks PASS. (DECISIONS 2026-06-21; commits
   af07b5d/505ba07/d7474e6.) *Note: it's a marginal gain over the built-in fog — revisit if you later want it punchier
   (soften extinction so distant contrast survives) or default-off.*
-- **AT-1 horizon flash — ⏳ STILL OWED (in-motion re-confirm):** the flash/seam fix was only confirmed on stills. Review
-  **key 8**'s new framing centers the horizon for exactly this — watch the `dir.y≈0` line in motion while cycling times.
-  If it flashes, suspect the `sqrt` elevation-warp near `dir.y=0` in the sky-view UV mapping. (AT-1 sky itself soft-passed
-  off cycling presets 2026-06-20.)
-- **Unblocks:** an honest perf budget + Celestial C1 (the roadmap's next sky item). On the horizon-flash confirm:
-  record + update performance.md with the +0.7 ms.
+- **AT-1 horizon flash — ✅ RESOLVED 2026-06-21 (in-motion re-confirm):** user flew the review key-8 horizon-framed view
+  and confirmed the `dir.y≈0` line is clean ("didnt see it, looked good") — the flash/seam fix holds in motion, not just
+  on stills. (AT-1 sky itself soft-passed off cycling presets 2026-06-20.)
+- **Item 11 status:** both sub-items gated → effectively RESOLVED; left here as the record. **Owed:** update
+  performance.md with the AT-2 +0.7 ms. **Unblocks:** Celestial C1 (the roadmap's next sky item).
 
 ---
 
