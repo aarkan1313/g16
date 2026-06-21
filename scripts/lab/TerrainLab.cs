@@ -13,6 +13,8 @@ public partial class TerrainLab : MeshInstance3D
     // Default stays the old look; SetGroundV2 swaps the mesh material for the parity A/B.
     private ShaderMaterial? _groundV2Mat;
     private bool _groundV2On;
+    private GroundArrays? _gArrays;      // packed material texture arrays + rule table (lazy, built on first v2 use)
+    private const string GroundManifest = "res://data/ground_materials.json";
     private ImageTexture? _heightTex;   // the base heightfield tex, shared old<->new for displacement
     private float[]? _heights;
     private int _res;
@@ -269,6 +271,7 @@ public partial class TerrainLab : MeshInstance3D
         _groundV2On = on;
         if (on)
         {
+            EnsureGroundArrays();   // lazy: build+bind the material arrays on first switch (default path untaxed)
             var mat = GroundV2Material;
             if (_heightTex != null) { mat.SetShaderParameter("heightmap", _heightTex); }
             mat.SetShaderParameter("region_size", _regionSize);
@@ -280,6 +283,51 @@ public partial class TerrainLab : MeshInstance3D
             MaterialOverride = _mat;
         }
         GD.Print($"TerrainLab: ground v2 {(on ? "ON (new per-pixel skin)" : "off (old terrain_lab)")}");
+    }
+
+    /// Lazily build the ground v2 texture arrays from the manifest and bind them, once.
+    /// Build cost (incl. the windowed Poisson height bake) is paid on first v2 use, not at startup.
+    private void EnsureGroundArrays()
+    {
+        if (_gArrays != null) { return; }
+        try { AttachGroundArrays(GroundMaterialArrays.Build(GroundManifest)); }
+        catch (System.Exception e) { GD.PushWarning($"TerrainLab: ground v2 array build failed: {e.Message}"); }
+    }
+
+    /// Bind the packed material arrays + rule table + placement tunables to the v2 material.
+    /// Rule table is pushed as vec4[] (no float[] std-layout surprises): rule_bands.xy=hmin/hmax,
+    /// .zw=slopemin/slopemax; rule_amp.x=height_amp. Placement knobs are scalar uniforms (data-driven).
+    public void AttachGroundArrays(GroundArrays g)
+    {
+        _gArrays = g;
+        var mat = GroundV2Material;
+        mat.SetShaderParameter("albedo_arr", g.Albedo);
+        mat.SetShaderParameter("normal_arr", g.Normal);
+        mat.SetShaderParameter("orm_arr", g.Orm);
+        mat.SetShaderParameter("height_arr", g.Height);
+        mat.SetShaderParameter("mat_count", g.Count);
+        mat.SetShaderParameter("tex_scale_m", g.TexScaleM);
+
+        var bands = new Godot.Collections.Array();
+        var amps = new Godot.Collections.Array();
+        foreach (var r in g.Rules)
+        {
+            bands.Add(new Vector4(r.HMin, r.HMax, r.SlopeMin, r.SlopeMax));
+            amps.Add(new Vector4(r.HeightAmp, 0f, 0f, 0f));
+        }
+        mat.SetShaderParameter("rule_bands", bands);
+        mat.SetShaderParameter("rule_amp", amps);
+
+        // Placement tunables (promoted out of GLSL; data-driven, eye-tunable).
+        var p = g.Placement;
+        mat.SetShaderParameter("p_band_soft_m", p.BandSoftM);
+        mat.SetShaderParameter("p_slope_soft", p.SlopeSoft);
+        mat.SetShaderParameter("p_warp_m", p.WarpM);
+        mat.SetShaderParameter("p_warp_amp_m", p.WarpAmpM);
+        mat.SetShaderParameter("p_patch_m", p.PatchM);
+        mat.SetShaderParameter("p_noise_gain", p.NoiseGain);
+        mat.SetShaderParameter("p_height_bias", p.HeightBias);
+        GD.Print($"TerrainLab: ground v2 arrays bound ({g.Count} materials, {g.TexRes}px, scale {g.TexScaleM:F1} m)");
     }
 
     public void SetMaskMode(int mode) => _mat.SetShaderParameter("mask_mode", mode);
