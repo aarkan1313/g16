@@ -279,6 +279,13 @@ public partial class TerrainLab : MeshInstance3D
             if (_heightTex != null) { mat.SetShaderParameter("heightmap", _heightTex); }
             mat.SetShaderParameter("region_size", _regionSize);
             mat.SetShaderParameter("texel_world", _spacing);
+            // Snapshot current cloud-shadow state from the old material (for live toggles after the
+            // clouds are set up). Frame-1 auto-shots get it later via the dual-push in AttachClouds.
+            foreach (var key in new[] { "cloud_shadow_tex", "cloud_shadow_region", "cloud_shadow_on" })
+            {
+                var val = _mat.GetShaderParameter(key);
+                if (val.VariantType != Variant.Type.Nil) { mat.SetShaderParameter(key, val); }
+            }
             MaterialOverride = mat;
         }
         else
@@ -332,16 +339,21 @@ public partial class TerrainLab : MeshInstance3D
         mat.SetShaderParameter("p_height_bias", p.HeightBias);
         mat.SetShaderParameter("p_rough_floor", p.RoughFloor);
         mat.SetShaderParameter("p_nrm_strength", p.NrmStrength);
+        mat.SetShaderParameter("p_blend_aa", p.BlendAa);
         GD.Print($"TerrainLab: ground v2 arrays bound ({g.Count} materials, {g.TexRes}px, scale {g.TexScaleM:F1} m)");
     }
 
     public void SetMaskMode(int mode) => _mat.SetShaderParameter("mask_mode", mode);
     public void SetBlendMode(int mode) => _mat.SetShaderParameter("blend_mode", mode);
-    public void SetFloat(string param, float v) => _mat.SetShaderParameter(param, v);
     public void SetInt(string param, int v) => _mat.SetShaderParameter(param, v);
-    public void SetBool(string param, bool v) => _mat.SetShaderParameter(param, v);
-    public void SetTexture(string param, Texture2D tex) => _mat.SetShaderParameter(param, tex);
-    public void SetCameraWorld(Vector3 p) => _mat.SetShaderParameter("cam_world", p);
+    // The shared lighting uniforms (cloud_shadow_*, cam_world) are pushed to BOTH materials so the
+    // v2 BRDF gets identical cloud-shadow input -> a fair A/B. Surface-slider params (tex_scale_m,
+    // ar_on, tri_sharpness, ...) stay old-path-only so they don't override v2's manifest values.
+    private static bool IsShared(string param) => param.StartsWith("cloud_shadow");
+    public void SetFloat(string param, float v) { _mat.SetShaderParameter(param, v); if (IsShared(param)) { _groundV2Mat?.SetShaderParameter(param, v); } }
+    public void SetBool(string param, bool v) { _mat.SetShaderParameter(param, v); if (IsShared(param)) { _groundV2Mat?.SetShaderParameter(param, v); } }
+    public void SetTexture(string param, Texture2D tex) { _mat.SetShaderParameter(param, tex); if (IsShared(param)) { _groundV2Mat?.SetShaderParameter(param, tex); } }
+    public void SetCameraWorld(Vector3 p) { _mat.SetShaderParameter("cam_world", p); _groundV2Mat?.SetShaderParameter("cam_world", p); }
 
     private readonly int[] _secZone = { 1, 2, 1, 4, 5, 4, 5 }; // default companion per zone
     /// Set which zone's textures act as the companion blended into zone `zone`.

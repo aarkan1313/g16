@@ -49,7 +49,10 @@ void vertex() {
 
 uniform int   mat_count = 0;
 uniform vec4  rule_bands[32];   // per material: xy=hmin/hmax (m), zw=slopemin/slopemax (0-1)
+uniform vec4  rule_amp[32];     // per material: x=height_amp (Unit-4 height-bias multiplier)
 uniform int   gv2_debug = 0;    // 0 off, 1 placement-viz (flat per-material color)
+uniform float p_height_bias = 1.0;  // Unit-4: how strongly real height biases the boundary
+uniform float p_blend_aa    = 0.02; // Unit-4: min height-blend AA band (fwidth widens it; floor here)
 
 // Placement tunables (pushed from the manifest by AttachGroundArrays).
 uniform float p_band_soft_m = 60.0;   // height-band edge softness (m)
@@ -185,14 +188,77 @@ void fragment() {
         ROUGHNESS = 1.0; AO = 1.0; v_ao = 1.0;
         NORMAL = normalize((VIEW_MATRIX * vec4(nr, 0.0)).xyz);
     } else {
-        // Task 3: dominant material, REAL array textures through anti-tiling + triplanar.
-        // (Top-4 height-aware blend lands in Task 4 — hard material edges are expected here.)
-        int i = idx.x;
-        vec3 orm = tp_orm_arr(i, v_world, nr);
-        ALBEDO = tp_alb_arr(i, v_world, nr);
+        // Task 4: top-4 HEIGHT-AWARE blend. Each PLACED material's contribution = placement weight
+        // biased by its real height (taller wins the boundary — rock pokes through sand), with a
+        // fwidth-widened selection band so transitions are per-pixel soft (no aliased grid facets).
+        const float EPS = 0.0001;
+        vec4 placed = step(vec4(EPS), w);          // only materials actually placed here are eligible
+        vec4 hh = vec4(0.0);                        // real height per slot (branch-guarded fetch)
+        if (w.x > EPS) hh.x = tp_hgt_arr(idx.x, v_world, nr) * rule_amp[idx.x].x;
+        if (w.y > EPS) hh.y = tp_hgt_arr(idx.y, v_world, nr) * rule_amp[idx.y].x;
+        if (w.z > EPS) hh.z = tp_hgt_arr(idx.z, v_world, nr) * rule_amp[idx.z].x;
+        if (w.w > EPS) hh.w = tp_hgt_arr(idx.w, v_world, nr) * rule_amp[idx.w].x;
+        vec4 hb = mix(vec4(-1.0), w + hh * p_height_bias, placed);   // unplaced excluded (hb = -1)
+        float top = max(max(hb.x, hb.y), max(hb.z, hb.w));
+        // fwidth AA: widen the band to >=1px so a hard height threshold can't collapse to a facet (G-1 lesson).
+        float aa = max(fwidth(hb.x - max(max(hb.y, hb.z), hb.w)), p_blend_aa);
+        vec4 bw = max(hb - (top - aa), 0.0);
+        float bs = bw.x + bw.y + bw.z + bw.w; bw = (bs > 1e-5) ? bw / bs : vec4(1.0, 0.0, 0.0, 0.0);
+
+        vec3 alb = vec3(0.0), orm = vec3(0.0), nm = vec3(0.0);   // branch-guarded top-4 fetch (perf)
+        if (bw.x > EPS) { alb += tp_alb_arr(idx.x, v_world, nr) * bw.x; orm += tp_orm_arr(idx.x, v_world, nr) * bw.x; nm += tp_nrm_arr(idx.x, v_world, nr) * bw.x; }
+        if (bw.y > EPS) { alb += tp_alb_arr(idx.y, v_world, nr) * bw.y; orm += tp_orm_arr(idx.y, v_world, nr) * bw.y; nm += tp_nrm_arr(idx.y, v_world, nr) * bw.y; }
+        if (bw.z > EPS) { alb += tp_alb_arr(idx.z, v_world, nr) * bw.z; orm += tp_orm_arr(idx.z, v_world, nr) * bw.z; nm += tp_nrm_arr(idx.z, v_world, nr) * bw.z; }
+        if (bw.w > EPS) { alb += tp_alb_arr(idx.w, v_world, nr) * bw.w; orm += tp_orm_arr(idx.w, v_world, nr) * bw.w; nm += tp_nrm_arr(idx.w, v_world, nr) * bw.w; }
+
+        ALBEDO = alb;
         ROUGHNESS = clamp(orm.g, p_rough_floor, 1.0);
         AO = orm.r; AO_LIGHT_AFFECT = 1.0; v_ao = orm.r;
-        vec3 wn = perturb_normal_world(nr, tp_nrm_arr(i, v_world, nr));
+        vec3 wn = perturb_normal_world(nr, nm);
         NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
     }
+}
+
+// ============================================================================
+// BRDF — verbatim re-host of terrain_lab.gdshader light() (~1013-1068): Burley diffuse + GGX
+// specular (the approved "really good" look) + the cloud-shadow hook on the DIRECT term only.
+// Keeping this identical means the A/B compares the MATERIAL skin, not the lighting model.
+// ============================================================================
+uniform sampler2D cloud_shadow_tex : filter_linear, repeat_disable, hint_default_white;
+uniform bool cloud_shadow_on = false;       // dual-pushed from the old path by TerrainLab (fair A/B)
+uniform float cloud_shadow_region = 8192.0;
+
+float cloud_shadow_factor(vec3 wp){
+    if (!cloud_shadow_on) { return 1.0; }
+    vec2 uv = wp.xz / cloud_shadow_region + 0.5;   // [-R/2,R/2] -> [0,1] (matches the bake)
+    return texture(cloud_shadow_tex, uv).r;
+}
+float pow5(float x){ float x2 = x * x; return x2 * x2 * x; }
+
+void light() {
+    float cloud = cloud_shadow_factor(v_world);
+    vec3 N = NORMAL; vec3 V = VIEW; vec3 L = LIGHT; vec3 H = normalize(V + L);
+    float NoL = clamp(dot(N, L), 0.0, 1.0);
+    float NoV = clamp(dot(N, V), 1e-4, 1.0);
+    float NoH = clamp(dot(N, H), 0.0, 1.0);
+    float LoH = clamp(dot(L, H), 0.0, 1.0);
+    float rough = clamp(ROUGHNESS, 0.02, 1.0);
+    float a = rough * rough; float a2 = a * a;
+    vec3 radiance = LIGHT_COLOR * ATTENUATION * cloud * NoL;   // cloud scales the direct sun only
+    // Burley (Disney) diffuse — matches Godot's DIFFUSE_BURLEY default.
+    float fd90 = 0.5 + 2.0 * rough * LoH * LoH;
+    float lightScatter = 1.0 + (fd90 - 1.0) * pow5(1.0 - NoL);
+    float viewScatter  = 1.0 + (fd90 - 1.0) * pow5(1.0 - NoV);
+    float burley = lightScatter * viewScatter * (1.0 / 3.14159265);
+    DIFFUSE_LIGHT += ALBEDO * radiance * burley * v_ao;
+    // GGX specular: D (Trowbridge-Reitz) * V (correlated Smith) * F (Schlick).
+    float d = NoH * NoH * (a2 - 1.0) + 1.0;
+    float D = a2 / (3.14159265 * d * d);
+    float k = a * 0.5;
+    float visL = NoL * (NoV * (1.0 - k) + k);
+    float visV = NoV * (NoL * (1.0 - k) + k);
+    float Vis = 0.5 / max(visL + visV, 1e-4);
+    vec3 f0 = vec3(0.04);   // dielectric (terrain is non-metal)
+    vec3 F = f0 + (vec3(1.0) - f0) * pow5(1.0 - LoH);
+    SPECULAR_LIGHT += radiance * (D * Vis) * F * v_ao;
 }
