@@ -344,9 +344,32 @@ vec3 nebula_color(vec3 d){
     return acc;
 }
 
-// STARS + NIGHT SKY (Stage 3d / Celestial C1): procedural points on a slowly-rotating celestial sphere +
-// a baked procedural galaxy/nebula color, faded in by night_factor and above the horizon. Direction-only
-// (EYEDIR), so they stay locked to the sky as the camera moves (no crawl); twinkle is a smooth TIME phase.
+// STARFIELD (Celestial C1) — magnitude-stratified live point-stars: a dense FAINT grid + a sparse BRIGHT
+// grid layered over it (few-bright/many-faint), each star with size variety + a warm/cool color-temp tint
+// + smooth twinkle. Live (not baked) so the twinkle animates. sr = the (rotated) celestial direction.
+vec3 star_field(vec3 sr){
+    vec3 acc = vec3(0.0);
+    for (int L = 0; L < 2; L++){
+        float scale = (L == 0) ? 250.0 : 90.0;                            // dense faint / sparse bright
+        float bright = (L == 0) ? 0.5 : 1.4;
+        vec3 cell = floor(sr * scale); vec3 f = fract(sr * scale) - 0.5;
+        float h = hash13(cell + float(L) * 7.0);
+        float present = step(1.0 - star_density * (L == 0 ? 0.09 : 0.03), h);
+        vec3 jit = (vec3(hash13(cell + 1.7), hash13(cell + 4.3), hash13(cell + 8.1)) - 0.5) * 0.7;
+        float d = length(f - jit);
+        float sz = mix(0.10, 0.20, hash13(cell + 20.0));                   // size variety
+        float pt = present * smoothstep(sz, 0.0, d);
+        float tw = mix(1.0, 0.5 + 0.5 * sin(TIME * 3.0 + h * 62.8), star_twinkle);
+        float temp = hash13(cell + 30.0);                                  // 0 warm .. 1 cool
+        vec3 tint = mix(vec3(1.0, 0.82, 0.7), vec3(0.75, 0.85, 1.0), temp);
+        acc += tint * (pt * tw * mix(0.35, 1.0, hash13(cell + 12.0)) * bright);
+    }
+    return acc * star_brightness;
+}
+
+// STARS + NIGHT SKY (Stage 3d / Celestial C1): a reworked magnitude-stratified starfield + a baked
+// procedural galaxy/nebula color, on a slowly-rotating celestial sphere, faded in by night_factor and
+// above the horizon. Direction-only (EYEDIR), so they stay locked to the sky as the camera moves.
 vec3 stars_layer(vec3 rd){
     if (night_factor <= 0.001) { return vec3(0.0); }
     vec3 sr = normalize(rd);
@@ -354,18 +377,8 @@ vec3 stars_layer(vec3 rd){
     float ca = cos(a), sa = sin(a);
     sr = vec3(ca * sr.x - sa * sr.z, sr.y, sa * sr.x + ca * sr.z);
 
-    // STARS: sparse soft points from a 3D hash grid.
-    float scale = 250.0;
-    vec3 cell = floor(sr * scale);
-    vec3 f = fract(sr * scale) - 0.5;
-    float h = hash13(cell);
-    float present = step(1.0 - star_density * 0.09, h);   // top fraction of cells get a star
-    vec3 jit = (vec3(hash13(cell + 1.7), hash13(cell + 4.3), hash13(cell + 8.1)) - 0.5) * 0.7;
-    float d = length(f - jit);
-    float pt = present * smoothstep(0.16, 0.0, d);
-    float tw = mix(1.0, 0.5 + 0.5 * sin(TIME * 3.0 + h * 62.8), star_twinkle);   // temporally smooth twinkle
-    float mag = mix(0.35, 1.0, hash13(cell + 12.0));      // per-star brightness variety
-    vec3 star = vec3(pt * tw * mag) * star_brightness;
+    // STARS: magnitude-stratified live point-stars (few-bright/many-faint, size + color-temp variety).
+    vec3 star = star_field(sr);
 
     // GALAXY + NEBULAE: when night_sky_baked, the full galaxy+nebula COLOR is read from the prebaked
     // lat-long texture (1 tap) — sampled at the SAME rotated direction sr so it matches the procedural
