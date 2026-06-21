@@ -107,6 +107,7 @@ public partial class TerrainLabUI : Control
                     Set("time_of_day", 16.0f);        // fixed mid-afternoon sun (grazing → reveals relief + transitions)
                     CloseGround();                     // frame the ground (fly the last bit to a slope/transition)
                     _terrain.PrewarmGroundV2();        // build the v2 arrays NOW so the A/B toggle is instant (no bake hitch)
+                    _terrain.SetGv2Debug(0);           // textured (clear any placement-viz left on from the Shift+N bank)
                     _gv2On = false;                    // start on the OLD path (the parity baseline)
                 }
                 else { _gv2On = !_gv2On; }

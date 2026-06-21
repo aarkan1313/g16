@@ -136,6 +136,12 @@ vec3 tri_w(vec3 nr){ vec3 bw = pow(abs(nr), vec3(tri_sharpness)); return bw / (b
 // histo_sample_wp. SIMPLIFICATION (per plan): no per-slot inverse-histogram LUT yet (the variance
 // restore preserves contrast on its own; LUT is a refinement if a material washes) and no distance
 // LOD (always 3-tap; cam_world isn't wired to the v2 material — a perf follow-up).
+// NOTE on derivatives in branches: this is called inside the per-material `if(bw>EPS)` guards
+// (divergent flow). dFdx/dFdy(uv) is spec-"undefined" there, BUT uv derives only from v_world (a
+// VARYING, present in every quad lane regardless of branching), so the gradient is well-defined in
+// practice on desktop Vulkan — same pattern the proven terrain_lab.gdshader ships. The only symptom
+// if a driver disagreed would be over-sharp mip selection / shimmer at material seams in motion; if
+// that ever appears, hoist dFdx(v_world) to fragment scope and thread it in.
 vec4 ar_arr(sampler2DArray tex, vec2 uv, float layer, vec3 wp){
     vec2 dx = dFdx(uv), dy = dFdy(uv);
     vec4 plain = textureGrad(tex, vec3(uv, layer), dx, dy);

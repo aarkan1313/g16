@@ -18,12 +18,13 @@
   },
 
   "_height_range_note": "Bands fit the lab field's actual elevation (~ -180..639 m). Retune per biome/terrain; the field range is printed at startup as 'TerrainLab: built ... (h MIN..MAX m)'.",
+  "_coverage_note": "Bands must TILE the (height x slope) space — if some (h,slope) is in no material's band, placement falls back to material index 0 (clay), which looks wrong on e.g. a steep low face. basalt is the universal cliff (full height range, slope>=0.5) so steep faces are always covered at any elevation.",
   "materials": [
     { "name": "13_sun_baked_clay",                "hmin": -220, "hmax": 140, "slopemin": 0.0, "slopemax": 0.35, "height_amp": 1.0 },
     { "name": "01_fine_sand",                      "hmin": 60,  "hmax": 300, "slopemin": 0.0, "slopemax": 0.40, "height_amp": 1.0 },
     { "name": "13_dry_loose_scree",               "hmin": 200, "hmax": 460, "slopemin": 0.2, "slopemax": 0.65, "height_amp": 1.1 },
     { "name": "02_coarse_talus",                  "hmin": 360, "hmax": 600, "slopemin": 0.3, "slopemax": 0.75, "height_amp": 1.2 },
-    { "name": "01_columnar_basalt_face",          "hmin": 250, "hmax": 700, "slopemin": 0.5, "slopemax": 1.0,  "height_amp": 1.4 },
+    { "name": "01_columnar_basalt_face",          "hmin": -300, "hmax": 900, "slopemin": 0.5, "slopemax": 1.0,  "height_amp": 1.4 },
     { "name": "04_arctic_rock_with_orange_lichen", "hmin": 460, "hmax": 700, "slopemin": 0.2, "slopemax": 0.8,  "height_amp": 1.2 },
     { "name": "01_fresh_powder",                  "hmin": 560, "hmax": 900, "slopemin": 0.0, "slopemax": 0.5,  "height_amp": 0.8 }
   ]
