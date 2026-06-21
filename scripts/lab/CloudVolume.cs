@@ -564,6 +564,9 @@ public partial class CloudVolume : Node
     public void SetAtmosphereOn(bool on) { _skyMat?.SetShaderParameter("atmosphere_on", on); }
     public void SetAtmosphereSkyView(Texture2Drd? tex) { if (tex != null) { _skyMat?.SetShaderParameter("atmo_skyview_tex", tex); } }
     public void SetSkyTint(Color c) { _skyMat?.SetShaderParameter("sky_tint", new Vector3(c.R, c.G, c.B)); }   // ST4-2 fantasy/manual tint on the physical sky
+    // PERF: prebaked Milky Way structure texture + toggle (from AtmosphereCompute). CloudVolume stays the SOLE _skyMat writer.
+    public void SetMilkyWayTex(Texture2Drd? tex) { if (tex != null) { _skyMat?.SetShaderParameter("mw_baked_tex", tex); } }
+    public void SetMilkyWayBaked(bool on) { _skyMat?.SetShaderParameter("mw_baked", on); }
 
     // --- sun SURFACE (procedural granulation) — material-uniform setters ---
     public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }

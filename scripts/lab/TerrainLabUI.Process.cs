@@ -99,6 +99,13 @@ public partial class TerrainLabUI : Control
             _aerial?.SetEnabled(true);
             _aerialActivated = true;
         }
+        // PERF: enable the Milky Way baked-texture path once the bake texture RID is live (baked in InitCompute,
+        // so Ready ⇒ the bake has run). Avoids sampling an unbound texture on frame 1.
+        if (_mwBakedOn && !_mwActivated && _atmosphere != null && _atmosphere.Ready)
+        {
+            _cloud?.SetMilkyWayBaked(true);
+            _mwActivated = true;
+        }
         // AT-3 default-gated: once the atmosphere has read back its cloud-light colors AND the cloud compute
         // is ready, enable physical cloud lighting at the current strength. While active, keep the 3 colors
         // current as the sun moves (cheap — they're cached Vector3s pushed into the cloud param buffer).

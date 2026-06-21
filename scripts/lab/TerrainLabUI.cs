@@ -117,6 +117,7 @@ public partial class TerrainLabUI : Control
             GetNode("/root/TerrainLabRoot").AddChild(_atmosphere);
             _atmosphere.Attach();
             _cloud.SetAtmosphereSkyView(_atmosphere.SkyViewTexture);   // bind the (empty-RID) Texture2Drd now; RID fills on the render thread
+            _cloud.SetMilkyWayTex(_atmosphere.MilkyWayTexture);        // PERF: bind the prebaked Milky Way texture (RID fills on the render thread)
         }
         // AT-2 aerial perspective: screen-space composite that samples the atmosphere's aerial froxel LUT.
         // Default ON (with the atmosphere); the pass stays disabled until the LUT RID is live (_Process gate).
@@ -139,6 +140,7 @@ public partial class TerrainLabUI : Control
         if (_aerialStrCli >= 0f) { _aerial?.SetStrength(_aerialStrCli); }
         // AT-3 physical cloud lighting CLI (default ON): =0 turns it off; =1 on. _Process pushes once ready.
         if (_cloudLightStrCli >= 0f) { _cloudLightStr = _cloudLightStrCli; }
+        if (_mwBakedCli == 1) { _mwBakedOn = true; _mwActivated = false; }   // PERF Milky Way baked path (pixel-diff verify)
         if (_cloudLightCli == 1) { _cloudLightOn = true; _atmosphere?.SetCloudLightWanted(true); _cloudLightActivated = false; }
         else if (_cloudLightCli == 0) { _cloudLightOn = false; _atmosphere?.SetCloudLightWanted(false); _cloud.SetCloudAtmoLight(0f); _cloudLightActivated = false; }
         // cloud CLI overrides apply here (after attach, so _cloud is live)

@@ -134,6 +134,7 @@ public partial class TerrainLabUI : Control
             // ── STARS + MILKY WAY (Stage 3d): procedural, faded in at night by the sky shader. ──
             _cloud.SetStars(_stars.Brightness, _stars.Density, _stars.Twinkle, _stars.Rotation);
             _cloud.SetMilkyWay(_stars.MwBrightness, _stars.MwWidth, _stars.MwTilt);
+            _atmosphere?.SetMilkyWay(_stars.MwTilt, _stars.MwWidth);   // PERF: re-bake the Milky Way texture if tilt/width changed
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by

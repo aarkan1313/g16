@@ -69,7 +69,7 @@ public partial class AtmosphereCompute : Node
     private Rid _mwShader, _mwPipe, _mwTex, _mwSet, _mwParamBuf;
     private Texture2Drd? _mwRd;
     private bool _mwDirty = true;
-    private float _mwTilt = 0.6f, _mwWidth = 0.18f;   // placeholders; TerrainLabUI pushes the real sky-shader values
+    private float _mwTilt = 0.6f, _mwWidth = 0.10f;   // match cloud_sky.gdshader defaults; TerrainLabUI pushes live values
     public Texture2Drd? MilkyWayTexture => _mwRd;
     public void SetMilkyWay(float tilt, float width)
     {

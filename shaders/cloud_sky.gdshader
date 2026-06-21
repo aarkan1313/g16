@@ -67,6 +67,10 @@ uniform float star_rotation = 0.003;     // celestial rotation speed (rad/s)
 uniform float mw_brightness : hint_range(0.0, 2.0) = 0.25;
 uniform float mw_width : hint_range(0.02, 0.4) = 0.10;
 uniform float mw_tilt = 0.6;             // galactic-plane tilt
+// PERF: Milky Way band*structure baked to a lat-long texture (AtmosphereCompute, from mw_tilt/mw_width) —
+// one sample instead of 3 per-pixel 5-octave fbm3. mw_baked default off; flip on once pixel-diff-verified.
+uniform sampler2D mw_baked_tex : filter_linear, repeat_enable;
+uniform bool mw_baked = false;
 
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
@@ -313,15 +317,24 @@ vec3 stars_layer(vec3 rd){
     float mag = mix(0.35, 1.0, hash13(cell + 12.0));      // per-star brightness variety
     vec3 star = vec3(pt * tw * mag) * star_brightness;
 
-    // MILKY WAY: a tilted great-circle band broken up by 3D fbm into wispy clumps + dust lanes. Width
-    // also wobbles along the band so it isn't a clean stripe. All sampled on the direction → smooth.
-    vec3 planeN = normalize(vec3(sin(mw_tilt), 0.35, cos(mw_tilt)));
-    float wob = mw_width * (0.6 + 0.8 * fbm3(sr * 2.0 + vec3(11.0)));   // varying band thickness
-    float band = smoothstep(wob, 0.0, abs(dot(sr, planeN)));
-    float clouds = fbm3(sr * 6.0);                                     // big clumps
-    float lanes = fbm3(sr * 16.0 + vec3(5.0));                         // finer dust detail
-    float structure = smoothstep(0.32, 0.72, clouds) * mix(0.5, 1.0, lanes);
-    vec3 mw = vec3(0.62, 0.70, 0.92) * band * structure * mw_brightness;
+    // MILKY WAY: a tilted great-circle band broken up by 3D fbm into wispy clumps + dust lanes. PERF: when
+    // mw_baked, band*structure is read from the prebaked lat-long texture (1 tap) instead of 3 per-pixel
+    // 5-octave fbm3 — sampled at the SAME rotated direction sr so it matches the procedural exactly.
+    float mwStruct;
+    if (mw_baked) {
+        // inverse of milkyway_bake.glsl's texel→dir: u = az/2π, v = (asin(dir.y)/(π/2)+1)/2.
+        float maz = atan(sr.z, sr.x); if (maz < 0.0) maz += 2.0 * PI;
+        float mel = asin(clamp(sr.y, -1.0, 1.0));
+        mwStruct = texture(mw_baked_tex, vec2(maz / (2.0 * PI), (mel / (0.5 * PI) + 1.0) * 0.5)).r;
+    } else {
+        vec3 planeN = normalize(vec3(sin(mw_tilt), 0.35, cos(mw_tilt)));
+        float wob = mw_width * (0.6 + 0.8 * fbm3(sr * 2.0 + vec3(11.0)));   // varying band thickness
+        float band = smoothstep(wob, 0.0, abs(dot(sr, planeN)));
+        float clouds = fbm3(sr * 6.0);                                     // big clumps
+        float lanes = fbm3(sr * 16.0 + vec3(5.0));                         // finer dust detail
+        mwStruct = band * smoothstep(0.32, 0.72, clouds) * mix(0.5, 1.0, lanes);
+    }
+    vec3 mw = vec3(0.62, 0.70, 0.92) * mwStruct * mw_brightness;
 
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
     return (star + mw) * fade;
