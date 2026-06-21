@@ -157,8 +157,9 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
 > (auto cycle + fantasy) ✅ — all eye-gated/soft-gated live.** Moon now on its OWN arc (decoupled). **Galaxy/Milky
 > Way reviewed live 2026-06-20 → NEEDS WORK** (fog band + uniform half-circle arc) → folded into the new
 > **Celestial expansion (#6)** below. **STATUS 2026-06-21: #3 GPU atmosphere (AT-1/2/3) ✅ arc complete · #6 C1
-> ✅ CLOSED (galaxy/nebula SHELVED — rejected; night sky = tuned moon+stars). NEXT: C2 bodies (meteors → planets) →
-> C3 N suns/moons.** Review keys: 2 = night sky (moon+stars) · 6 = cloud types · 7 = fantasy skies.
+> ✅ CLOSED (galaxy/nebula REJECTED; night sky = tuned moon+stars). C2 meteors ✅ PASS. NEXT: **galaxy/nebula REDO
+> (C1-v2, fresh concept)** + C2 planets → #5 shadows → #7 perf.** Review keys: 2 = night sky (moon+stars+meteors) ·
+> 6 = cloud types · 7 = fantasy skies. See `handoffs/2026-06-21-sky-lane-next-steps.md`.
 
 Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
 Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
@@ -239,14 +240,18 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      (pushed). **The galaxy idea is parked, not deleted** — revisit only on a fresh, different concept (this one was
      rejected). Net C1 deliverable: a cleaner, tuned moon+stars night.
    - **C2 — Celestial bodies. 🔨 IN PROGRESS.**
-     - **Meteors / shooting stars — ⚑ BUILT 2026-06-21, look-gate owed.** Procedural in-shader (`cloud_sky.gdshader`
-       `meteors()` — 2 TIME-hashed channels, occasional ~1 s streaks, thin head-bright/tail-fading, gated night×
-       horizon, ~free when idle). 5 Night-tab tunables (`meteors on`/`rate`/`brightness`/`length`/`speed`) +
-       `--meteordebug`. Verified: clean streak renders, perf 5.4 ms night unchanged. Spec/plan `2026-06-21-celestial-c2-meteors*`.
-       Commits 29c52e4 + 14ec581. **Gate:** review key 2 — fly the night, watch for streaks (raise `meteor rate` or
-       `--meteordebug` to see on demand). On PASS → keep default-on + record.
-     - **Then:** planets (bright slow-moving points/discs) → optional brighter named-star accents. (Distant
-       galaxies/nebulae NOT revisited unless a fresh concept lands — the C1 look was rejected.) Each its own gate.
+     - **Meteors / shooting stars — ✅ PASS 2026-06-21 (eye-gate, live, review key 2), default-on.** Procedural
+       in-shader (`cloud_sky.gdshader` `meteors()` — 2 TIME-hashed channels, occasional ~1 s streaks with a glowing
+       head + trail + per-meteor color variety, gated night×horizon, ~free when idle). 7 Night-tab tunables
+       (`meteors on`/`rate`/`brightness`/`length`/`speed`/`color`/`color variety`) + `--meteordebug`. Spec/plan
+       `2026-06-21-celestial-c2-meteors*`; commits 29c52e4 · 14ec581 · 371332d. Optional follow-up: meteor presets.
+     - **Then:** planets (bright slow-moving points/discs) → optional brighter named-star accents. Each its own gate.
+
+   - **C1-v2 — Galaxy / Nebula REDO (start over). 🔜 fresh concept.** The C1 procedural-noise galaxy/nebula was
+     REJECTED ("doesn't work" — it read as clouds because it used the cloud fbm noise). Restart from scratch with a
+     **different visual direction** (painted/authored texture · structured non-noise generator · distant-galaxy
+     billboards · or drop it) — **agree a reference look first.** Own brainstorm → spec → plan → gate. C1 code parked
+     (off, zero cost), deletable when v2 lands. Failure analysis + directions: `handoffs/2026-06-21-sky-lane-next-steps.md`.
    - **C3 — N suns + N moons.** Generalize the single-sun + single-moon architecture to **arbitrary counts** — each
      with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
      and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky

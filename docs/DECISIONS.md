@@ -6,7 +6,18 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
-**2026-06-21 — Celestial C2 first piece: meteors / shooting stars BUILT (look-gate owed).** After C1's galaxy/nebula
+**2026-06-21 — Galaxy / Nebula: START OVER (fresh concept). Meteors: PASS.** User after the meteor pass: "start
+over on the nebulae and galaxy." The C1 procedural-noise galaxy/nebula is **rejected** — its root failure was using
+**fbm/ridged 3D noise (the same noise the clouds use)**, so it always read as clouds, not space; localizing/
+sharpening/ridging never escaped that. **Galaxy/Nebula v2 = a fresh spec from scratch, a genuinely different visual
+direction** (candidates: a painted/authored galaxy-nebula texture sampled as a sky layer · a structured non-noise
+generator [spiral arms / sharp emission + embedded stars] · scattered distant-galaxy billboards · or drop it) —
+**agree a reference look first** so we don't iterate blind like C1. The C1 code is parked (off at brightness 0,
+zero cost), deletable when v2 lands. Next-steps + failure analysis: `handoffs/2026-06-21-sky-lane-next-steps.md`.
+**Meteors (C2 first piece): user "pretty good" → PASS, default-on.** (after the glowing-head + color-variety pass,
+commit 371332d.) Optional follow-up: meteor presets.
+
+**2026-06-21 — Celestial C2 first piece: meteors / shooting stars BUILT (look-gate owed → PASSED, see above).** After C1's galaxy/nebula
 was rejected and the night sky settled to moon+stars, started C2 with **occasional, subtle shooting stars** (user feel:
 "subtle & occasional", not a shower). Procedural **in-shader** (`cloud_sky.gdshader` `meteors()` — 2 TIME-hashed
 channels, each cycles on a long period and only occasionally fires a ~1 s head-sweep drawing a thin head-bright/

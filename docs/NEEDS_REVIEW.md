@@ -328,20 +328,17 @@ is default-off so the approved look is untouched.
 - Mechanically: cumulus no-op (terrain pixel-identical); `--shadowcheck` PASS r=0.811 (stratus); cirrus appears
   (sky diff 2.0) + night-fades. Plan `plans/2026-06-20-clouds-co2-types.md`. **On PASS → CO-3 anti-repetition/horizon.**
 
-### 10. Stars + Milky Way → Celestial C1 procedural fantasy night-sky — ⚑ BUILT 2026-06-21, **LOOK-GATE OWED**
-- **Original verdict (user, live, 2026-06-20):** the old `stars_layer()` MW was "not terrible but just a fog band, a
-  band that goes all the way across in a half-circle." → folded into **Celestial C1** (ROADMAP #6), sequenced after #3.
-- **C1 BUILT 2026-06-21 (T1-T5, commits a43515a..a09672a):** replaced the uniform band with a procedural fantasy
-  **galaxy** (core bulge kills the arc + dust lanes + star-cloud knots + 2-color gradient) + up to **4 nebulae** +
-  reworked **magnitude/size/color-temp starfield**, all **baked** to one runtime texture tap (cheaper than the old 3
-  fbm3). Tunable (11 new Night knobs) + **4 presets** (Subtle / Crimson Rift / Aurora Veil / Deep Field). Mechanically
-  verified: baked==procedural pixel-diff ≤0.0005, presets bake distinct skies, perf 5.9 ms (≤ pre-C1).
-- **See it / gate it:** `--time=0 --celestial=1` (night). **Night tab → "NIGHT SKY PRESET (galaxy + nebulae)"** picker
-  (or `--nspreset=1..4`); fine-tune with the `galaxy *` / `nebula *` / `star *` knobs; `night sky baked (perf)` on/off
-  must look identical. **Judge:** no longer a uniform fog band (core reads as a focal point); nebulae "cool"; stars
-  varied; presets distinct + tie with the night mood. Tune to taste, pick a default preset. **PASS → default-on + record.**
-- **Mechanical screenshots (not a substitute for the live gate):** `/c/tmp/preset{1..4}.png` — Aurora reads as a
-  structured teal galaxy with dust lanes. The default look is dim (galaxy brightness 0.25) — likely a T6 tune-up.
+### 10. Galaxy / Nebula — ❌ C1 REJECTED 2026-06-21 (live) → **REDO from scratch (C1-v2)**; not in the review queue
+- **C1 procedural-noise galaxy/nebula was built + iterated live many rounds → user: "it doesn't work."** Root cause:
+  it used fbm/ridged 3D noise (the cloud noise) so it always read as **clouds**, not space. Killed it — night sky =
+  **moon + tuned starfield + meteors** (all gated). Galaxy/nebula code parked (off at brightness 0, zero cost).
+- **NOT a review item** — it's a **fresh design** (C1-v2): start over with a different visual direction (painted
+  texture · structured non-noise generator · distant-galaxy billboards · or drop it), agree a reference look first.
+  See `handoffs/2026-06-21-sky-lane-next-steps.md` (failure analysis + directions) + DECISIONS/ROADMAP 2026-06-21.
+
+### 10b. Celestial C2 meteors / shooting stars — ✅ PASS 2026-06-21 (eye-gate, live, review key 2)
+- User "pretty good" → PASS, default-on. Occasional ~1 s streaks with a glowing head + trail + per-meteor color
+  variety; gated night×horizon, free when idle. Tune on the Night tab (`meteors *`). Commits 29c52e4 · 14ec581 · 371332d.
 
 ---
 
