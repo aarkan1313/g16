@@ -59,7 +59,11 @@ public partial class TerrainLabUI : Control
         string abs = ProjectSettings.GlobalizePath(RegistryPath);
         using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(abs));
         JsonElement root = doc.RootElement;
-        _zoneNames = root.GetProperty("zone_names").EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
+        // zone_names was removed in the 2026-06-21 ground strip (no more material/companion zone controls);
+        // tolerate its absence so the registry still loads the sky/light/debug controls.
+        _zoneNames = root.TryGetProperty("zone_names", out var zn)
+            ? zn.EnumerateArray().Select(e => e.GetString() ?? "").ToArray()
+            : System.Array.Empty<string>();
 
         foreach (JsonElement c in root.GetProperty("controls").EnumerateArray())
         {
