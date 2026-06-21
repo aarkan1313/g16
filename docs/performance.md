@@ -1,5 +1,13 @@
 # WG16 Performance — profiling + optimization pass (2026-06-18)
 
+> **⚠ 2026-06-21 CORRECTION (read before trusting the numbers below — from `AUDIT-2026-06-21.md`).** Two staleness
+> items: **(1) GI/shadow proxy + SDFGI are DEFAULT-OFF now** (the 0b eye-gate, 2026-06-20). Every "proxy ON / SDFGI ON"
+> figure below (incl. the 9.9/9.6 ms clouds-on decomposition) describes a config the shipped default no longer uses;
+> the shipped default is SDFGI-off + proxy-off sharp detail-mesh shadows (~4.7 ms clouds-off). **(2) The 9.6 ms budget
+> predates AT-1 + AT-2** (both now default-on); **AT-2 aerial was never profiled.** TODO: re-decompose the in-motion
+> frame for the actual shipped default and measure AT-2 (`--profmove`). The relative costs + the "8 ms is unreachable
+> on the single 4.19M-vert mesh" conclusion still hold; the absolute default-config attribution does not.
+
 The reference for "where the frame goes" and what's been optimized. Numbers are RTX 5090
 laptop, **uncapped** (`--profile=N` disables vsync + uncaps fps), so absolute ms are dev-machine
 values — the **relative costs and before/after deltas** are the takeaway. Scale ~2.5–4× for a

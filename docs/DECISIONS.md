@@ -6,6 +6,24 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — Full project audit + ground/texture iterate-vs-rebuild review; docs reconciled; sky lane pushed to origin.**
+Ran a 7-subsystem project audit (`AUDIT-2026-06-21.md`, committed) + a focused ground review (both multi-agent,
+adversarially verified). **(1)** Pushed `experiment/presentation` (was 179 commits ahead) + 6 backup tags to origin —
+the post-reset sky lane finally has an off-machine copy. **(2) Ground verdict: ITERATE, do NOT rebuild.** The
+"drab/flat" look is a cluster of suppressed-good-tech defaults (roughness force-clamped ≥0.5 with no UI control →
+dead-matte; real height + macro + within-area variation all default-off; palette is the drab `alpine_green`;
+`tex_scale_m` 28 vs 9; + the default-on atmosphere warm-washing the surface), NOT a rotten foundation — the two hardest
+pieces (half-float weights + histogram anti-tiling) are already built/PASSED, so a teardown re-risks solved work and
+re-enters the WG15 graveyard. The from-scratch redesign already exists (the ground master design); execute it surgically.
+Next ground step = a **G-0 "wrong-defaults" eye-gate** (flip the cluster behind toggles, A/B live) before any building.
+**(3)** Honest correction: the sky lane was NOT paused after 06-20 — it built a burst to AT-2 at user direction, and
+**AT-1 + AT-2 are default-on but never live-eye-gated** (AT-2's cost never measured) → added to NEEDS_REVIEW 11; also a
+real sky-color-ownership bug (the keyframed `day_script` is a no-op when atmosphere is on, the default). **(4)** Reconciled
+stale docs: ROADMAP gained a Debt & Remediation backlog + a rewritten Ground lane; HANDOFF §6, NEEDS_REVIEW (1e + 11),
+performance.md (proxy/SDFGI default + AT-2-unmeasured correction), and the ground master design (currency note) all
+updated to match the code. Why: the audit found the narrative was ahead of reality in specific ways and the fixes
+weren't tracked anywhere — now they are. **No code changed — docs + planning only.**
+
 **2026-06-20 — Sun/Light #3 AT-2 (aerial perspective) DESIGNED + PLANNED + handoff written; build deferred to a NEW session (user's call). Fantasy sky-tint resolved.**
 Two things. **(1) Fantasy/mood sky tint now recolors the PHYSICAL sky** (closes the AT-1 default-on caveat): `sky_tint`
 is applied to the atmosphere as a luminance-preserving recolor (white = no-op; saturated = recolor to that hue,

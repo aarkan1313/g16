@@ -36,7 +36,8 @@ baseline — toggle `GI (SDFGI)` on the **Light** tab (NOT Debug) and `GI/shadow
 wired** in the lab — judge it separately (see `performance.md`). Presets are gated on `ReviewMode`, so
 `terrain_lab.tscn` is unaffected.
 
-Last updated: 2026-06-20.
+Last updated: 2026-06-21 (added 1e ground "wrong-defaults" gate + 11 AT-1/AT-2 atmosphere — both from the
+2026-06-21 audit + ground review; see `docs/AUDIT-2026-06-21.md` and ROADMAP).
 
 ---
 
@@ -149,6 +150,20 @@ the **default** path (no toggle; placement byte-stable). Spec/plan `2026-06-20-g
   default OFF). **Judge (uniform slope, close/mid):** toggle on — does it stop reading uniform (drier-lighter-rougher
   vs damper-darker-smoother patches, organic, no squares, no shimmer)? Tune `var roughness` first. **Verdict gates
   GM3 Approach B/C** (true different-material patches via texture arrays). Plan `plans/2026-06-20-ground-gm3a-within-area-variation.md` T3.
+
+### ⚑ 1e. GROUND G-0 — the "wrong-defaults" eye-gate (NEXT for ground; from the 2026-06-21 review) — needs wiring
+The 2026-06-21 ground review found the "drab/flat" look is largely a cluster of **suppressed-good-tech defaults**,
+not a rotten foundation (verdict: **ITERATE, don't rebuild** — ROADMAP "Ground / Texture"). Before any building,
+flip the cluster behind toggles defaulting to current and **A/B it live** — it shows how much "drab" is recoverable today.
+- **The flips:** `rough_floor` → ~0.15 (needs a NEW slider — it currently has no UI control and is pinned 0.5,
+  forcing the whole ground matte: `terrain_lab.gdshader:103,987`); `height_from_maps=true` (bind GM2's real Poisson
+  relief — Detail tab); palette `active` → `alpine_stone` (one-line `ground_palette.json`); `within-area variation`
+  ON (Color tab); reconcile `tex_scale_m` (28 → ~9-12).
+- **Judge (close/mid, in motion, under SETTLED light — gate the atmosphere first):** does the ground gain specular/
+  sheen + relief + color variety + crisper texture? Or does unclamping roughness reintroduce specular shimmer/fuzz
+  (the floor was hiding it)? If shimmer appears, that's the bisect target (`dbg_fullrough`/`dbg_use_normalmap`), not a
+  reason to re-clamp.
+- **Unblocks:** the G-1 currency/finish + G-2 asset/height work (ROADMAP). **Supersedes the §1c/§1d GM-batch framing.**
 
 ## 🟧 P2 — perf default needs a fidelity confirm
 
@@ -320,6 +335,21 @@ is default-off so the approved look is untouched.
   galactic **core/bulge** + Great-Rift **dust lanes** + **resolved star clouds** + subtle **color** + **pulled-back**
   apparent scale; tunable + presets. (DECISIONS 2026-06-20.)
 - **See it (for C1 when it's built):** `--time=23 --celestial=1` → Night tab `mw *` / `star *` knobs.
+
+---
+
+### 11. GPU atmosphere AT-1 + AT-2 aerial — DEFAULT-ON but NEVER LIVE-EYE-GATED (2026-06-21 audit)
+Both shipped default-on, replacing the approved look, with no recorded live-eye PASS — against the discipline rule
+(features built ahead stay default-off). Gate them or flip default-off. (Audit BAD #1, `docs/AUDIT-2026-06-21.md`.)
+- **AT-1 (physical Hillaire sky):** review **key 8** A/B (physical vs keyframed; Light-tab toggle + exposure).
+  **Judge IN MOTION** — the horizon flash/seam fix was only confirmed on stills (DECISIONS: "user hasn't re-checked");
+  confirm the day sky reads better than the keyframed look it replaced. AT-1 was only soft-passed off cycling presets.
+- **AT-2 (screen-space aerial perspective):** Light-tab `aerial` toggle / `--aerial=0`. **Judge:** does distant haze
+  read as physical aerial perspective and **fade into the sky color at the horizon**? (Audit found the in-scatter gain
+  ~2 vs the sky-view exposure ~10-12, so haze may NOT resolve into the sky — a known tuning gap to fix at the source.)
+  **Measure its in-motion cost** (`--profmove`) — never profiled; the 9.6 ms budget predates it.
+- **Unblocks:** an honest perf budget + Celestial C1 (the roadmap's next sky item, currently queued ON this un-gated
+  stack). On PASS: record + update performance.md. On fail/uncertain: flip both default-off.
 
 ---
 

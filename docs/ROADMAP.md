@@ -4,7 +4,9 @@ The single source of truth for what's done, what's being judged, and what's next
 design. Pairs with `NEEDS_REVIEW.md` (the eye-gate queue), `DECISIONS.md` (the why, per
 decision), and `HANDOFF.md` (orientation). Superseded designs are frozen in `docs/archive/`.
 
-Last updated: 2026-06-20 (full-scope re-roadmap: finish both lanes → make it a world → climate/elements).
+Last updated: 2026-06-21 (full project audit + ground/texture iterate-vs-rebuild review reconciled in:
+see `docs/AUDIT-2026-06-21.md`, the new **🛠 Debt & Remediation backlog** below, and the rewritten
+**Ground / Texture** lane). Prior: 2026-06-20 full-scope re-roadmap.
 
 **Pillars:** quality = performance = AAA-ish = best-long-term — regardless of time cost. Lead
 with the better option, not the cheap shortcut.
@@ -51,37 +53,78 @@ region look is *done*, the priority pivots hard to scale/biomes/procedural, then
 
 ---
 
-## ▶ NOW — finish Phase A · the combined eye-gate session (lanes PAUSED here)
+## ▶ NOW — finish Phase A · the combined eye-gate session
 
-Everything built so far is **default-off / approved-look, awaiting the user's live eye.** Both
-lanes are parked until this batch is judged; then we act on results and continue Phase A.
-**Run `scenes/review.tscn` — number keys 1-9 jump to each gate item** (guide + per-item judge
-criteria in `NEEDS_REVIEW.md`). **Run the gates upstream → downstream so judgments aren't
-contaminated:**
+> **2026-06-21 — full project audit + ground/texture review done.** Detailed findings:
+> `docs/AUDIT-2026-06-21.md`. Folded into this roadmap: (1) a new **🛠 Debt & Remediation backlog**
+> (below) tracks every audit fix; (2) the **Ground / Texture lane is rewritten** to the review's
+> verdict — **ITERATE, don't rebuild** (the from-scratch redesign already exists as the ground master
+> design; execute it surgically — the WG15 graveyard was teardowns). **Honest status correction:** the
+> sky lane was NOT "paused" after 2026-06-20 — at user direction it built a full burst (Stage 3 →
+> CO-1..4 → Stage 4 → AT-1 → AT-2). **AT-1 atmosphere AND AT-2 aerial are now DEFAULT-ON but were never
+> live-eye-gated** (and AT-2's frame cost was never measured) — both added to the gate below + NEEDS_REVIEW 11.
 
-1. **Light first** (it washes everything): GI/SDFGI default decision (0b) → Sun disc Stage 1 (3b)
-   → Lighting decouple + time-of-day Stage 2 (3c).
-2. **Base shading:** H1 BRDF clouds-off regression (6).
-3. **Ground under settled light:** GM batch GM1 + GM2 + GM3-A (1c) → Unit 2 distance-detail (4) if base reads good.
-4. **Sky:** Clouds feature review (5) → god rays final (3) → sun-cloud occlusion.
+Most look work built so far is **awaiting the user's live eye** (the discipline rule is aspirational —
+several pieces shipped default-on un-gated; this batch closes that gap). **Run `scenes/review.tscn` —
+number keys 1-9 jump to each gate item** (guide + per-item judge criteria in `NEEDS_REVIEW.md`). **Run
+the gates upstream → downstream so judgments aren't contaminated:**
+
+1. **Light first** (it washes everything): GI/SDFGI default (0b ✅) → Sun disc Stage 1 (3b ✅) →
+   time-of-day Stage 2 (3c ✅) → **AT-1 atmosphere in motion + AT-2 aerial (11) — both default-on,
+   never gated; confirm or flip to default-off** + measure AT-2 (`--profmove`).
+2. **Base shading:** H1 BRDF clouds-off regression (6 ✅).
+3. **Ground under SETTLED light:** the GM1/GM2/GM3-A batch is **superseded by the ground redesign** —
+   run the **Step-0 "wrong-defaults" ground gate (1e)** first (shows how much "drab" is just suppressed
+   defaults), then iterate per the rewritten **Ground / Texture** lane below. *(Part of the "drab" is the
+   default-on atmosphere warm-washing the surface — judge ground only after the sky lane settles.)*
+4. **Sky:** Clouds feature review (5 ✅) → god rays (3 ✅) → **galaxy/Milky Way C1** (10, needs work).
 5. **Whole-scene last:** AA in motion (7) + GI-proxy fidelity (2).
 
 ## ⏸ Phase A — the two lanes (FULL scope; finish before Phase B)
 
-### GROUND / TEXTURE — roadmap to AAA
-Lane roadmap: `specs/2026-06-20-ground-roadmap-to-aaa-design.md`.
-- **Built, awaiting the gate (1c):** GM1 palette, GM2 surface-height maps, GM3-A within-area
-  variation (all default-off). Specs `specs/2026-06-20-ground-gm2-*`, `specs/2026-06-20-ground-gm3-*`.
-- **Then (one phase past the gate at a time):** GM3 B/C true material patches (if A isn't enough)
-  · GM5 detail layers — rock/pebble/debris scatter, decals, wetness · G3 placement realism
-  (snow-on-shade, green-in-drainage) · macro color/value.
-- **The big one — Terrain depth & hydrology (erosion + water-flow + surface height):** needs a
-  **fresh brainstorm → spec → plan → review** (user's call). The water-coupled redesign of the
-  erosion arc (`specs/2026-06-17-erosion-arc-design.md` is the base — already diagnoses the
-  water-coupling root cause; the new spec elevates visible water to a co-designed output of one
-  hydrology field). Pairs with the **material surface-height / POM** write-up (the "we didn't have
-  height setup" fix — GM2, built fast, owes a proper spec + its eye-gate). **Build gated behind the
-  GM eye-gate** (don't carve terrain before the material batch is judged).
+### GROUND / TEXTURE — the weak spot · VERDICT (2026-06-21 review): ITERATE, do not rebuild
+Authoritative design: `specs/2026-06-20-ground-rendering-system-master-design.md` (the from-scratch,
+game-agnostic redesign — it ALREADY IS the "start over," to be executed surgically). Full review +
+both adversarial briefs: `docs/AUDIT-2026-06-21.md` is the project audit; the ground iterate-vs-rebuild
+review confirmed the code does NOT support a teardown — the two hardest pieces (half-float weight field
++ histogram anti-tiling, the one user-PASSED ground feature) are already built well; a rewrite re-risks
+solved problems and re-enters the WG15 teardown graveyard. The "drab/flat" look traces to a small set of
+concrete causes, ranked below by look-per-effort.
+
+**Why it reads drab (code-confirmed root causes):** (1) `ROUGHNESS` is force-clamped `>=0.5` with NO UI
+control (`terrain_lab.gdshader:103,987`) → whole ground dead-matte, zero specular/sheen. (2) NO real
+surface height in the active look — height is the inverted-roughness proxy; GM2's genuine Poisson relief
+defaults OFF; POM is UV-only (zero depth/silhouette); **the material library has zero height maps on disk**.
+(3) active palette is the old drab `alpine_green`, not contrast-rich `alpine_stone`. (4) `tex_scale_m`
+runs at 28 m vs the shader's 9 m → textures stretched ~3×. (5) macro-color AND within-area variation both
+default OFF → a slope is unmitigated-uniform. (6) part of "drab" is the default-on atmosphere warm-washing
+the surface — judge ground under settled light.
+
+**Sequence (each behind a toggle defaulting to current, eye-gated):**
+- **G-0 · the "wrong-defaults" gate (NEXT, cheap, reversible — NEEDS_REVIEW 1e).** Flip the suppressed
+  cluster and fly the A/B: add a `rough_floor` slider → ~0.15 (⚠ it was set high to hide specular fuzz —
+  watch for shimmer), bind GM2 real height (`height_from_maps=true`), switch palette to `alpine_stone`,
+  turn on GM3-A variation, reconcile `tex_scale_m`. One session shows how much "drab" is just suppressed
+  good-tech vs genuinely-missing capability — **before** building anything.
+- **G-1 · compositing-core currency + honest-finish.** Half-float weights + histogram anti-tiling already
+  shipped+PASSED (the G-1 spec is STALE — mark them DONE). Real remaining G-1: the missing `fwidth`-based
+  transition AA + the promised reversible `hq_blend` A/B toggle (the half-float flip shipped un-A/B-able — a
+  guardrail slip); single-source the **drifted duplicate `zone_weights`** (band_soft_mult — a real bake-vs-
+  live correctness bug); the **tile_mode dropdown cleanup** (dead IQ/hex options + `hex_contrast` — one
+  eye-verified change). Spec `specs/2026-06-20-ground-g1-compositing-core-design.md` (needs the currency pass).
+- **G-2 · material data + surface depth (the real long pole).** Add a **first-class height channel** to the
+  material schema; fix `MaterialBoard` (mis-binds AO→height, judges with a height-ignoring technique); source/
+  author materials **with real height/displacement**; then POM-with-depth or heightblend that reads as 3D.
+  The asset gap — not shader tuning — is the genuine prerequisite for the Skyrim/NMS bar. GM2/GM3-A built work
+  reabsorbs here + G-3.
+- **G-3 · placement + within-area variation.** Reabsorb GM3-A (correctly built world-pos noise) + re-tune;
+  G3 aspect/moisture/flow rules. **The one genuine structural rebuild:** the active weight/placement field is
+  baked at **4.0 m/texel** (8192 m / 2048 res) — the exact resolution the Unit-4 lesson declared fatal for
+  close work, now governing the LIVE blend. Bake finer and/or move high-frequency placement fragment-side.
+- **G-4/G-5 · detail scatter + lighting response** (master-design components 7-8), then the **big one —
+  Terrain depth & hydrology (erosion + water-flow + surface height)** — a fresh brainstorm → spec → plan →
+  review (`specs/2026-06-17-erosion-arc-design.md` is the base; geometry erosion is scoped OUT of the surface
+  redesign and is its own arc). Build gated, one phase past the last pass.
 
 ### SUN & LIGHT — full sky system
 Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
@@ -180,6 +223,37 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
      and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky
      color is computed from the sun direction[s]) → **extends AT-1's LUTs.** Heaviest/architectural — last.
+
+## 🛠 Debt & Remediation backlog (from the 2026-06-21 audit — `docs/AUDIT-2026-06-21.md`)
+Tracked so nothing is lost. Each is a fix, not a feature; sequenced cheap → structural. Most are
+default-safe and land alongside the lane work. Verdicts were adversarially verified in the audit.
+
+**Done / now (cheap correctness + doc reconciles):**
+- ✅ **Pushed** `experiment/presentation` + 6 backup tags to origin (2026-06-21) — the day's sky lane is now off-machine.
+- ✅ **Doc reconcile** (2026-06-21): this ROADMAP, HANDOFF §6, NEEDS_REVIEW, performance.md, the ground master
+  design + DECISIONS updated to match reality (the audit found HANDOFF "PAUSED" + performance.md proxy-defaults stale).
+- **Sky-color ownership** (BAD): when `atmosphere_on` (default), the keyframed `day_script` daytime sky colors are
+  a no-op — `ComposeLighting` still pushes `SetSkyColors` every frame + writes a now-dead `ProceduralSkyMaterial`.
+  Make day_script a grade/tint OVER the LUT (the spec's stated intent) or stop pushing it; drop the dead write.
+- **Measure AT-2 + re-decompose the frame:** performance.md's 9.6 ms predates AT-1/AT-2 and assumed proxy/SDFGI
+  ON (they're OFF since 0b). Profile AT-2 in motion (`--profmove`) and write a current "perf state of record."
+- **`copy_materials.py`** regenerates all 738 (not the 108) + hardcoded `D:\assets`, silent no-op if absent —
+  filter to the library, parameterize the root, fail loud.
+- **`FieldParams.Load`** throws on any missing/renamed key (unlike the graceful loaders) — guard it.
+
+**Structural (before / alongside Phase B):**
+- **Extract `LightingComposer` + `SkySubsystems` facade out of `TerrainLabUI`** (2599-line god-object, ~245
+  fields, 18 partials) and a **`SkyMaterial` facade out of `CloudVolume`** (691 lines, ~40% sky pass-through).
+  The unit that will otherwise resist the Phase-B "make it a world" refactor.
+- **N-suns / N-moons (Celestial C3) needs a luminary-abstraction refactor** of `ComposeLighting` +
+  `cloud_sky.gdshader` (single-luminary is baked deep) — budget it as a refactor, not an additive unit.
+- **Dead-code sweep:** `project.godot` boots the frozen `lab.tscn` not the active scene; retire
+  `godray_test.tscn` / `lab_experiment.tscn` / the dormant occ_mode-3 god-ray path; cache the ~37 per-frame
+  `GetNode("/root/...")` string-walks.
+- **Cloud detail-erosion divergence** (raymarch erodes edges harder than the shadow/check shaders; `--shadowcheck`
+  is blind to it) — owed its own gate; unify or make the check see it.
+- **No headless correctness gate** (`FieldCompute` NullRefs under `--headless`) — guard it; add a CI lint for
+  registry `param`↔shader-uniform + scene/cloud target↔C#-case so a dead control fails fast.
 
 ## 🌍 Phase B — make it a WORLD (after Phase A is done)
 Gated by the scale infra; hybrid build (spine first, content designed region-first + stream-aware).

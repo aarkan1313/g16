@@ -4,6 +4,21 @@ Date: 2026-06-20. **This is the authoritative ground design.** It supersedes the
 in `2026-06-20-ground-roadmap-to-aaa-design.md` (that doc's 7-layer *inventory* stays valid as
 reference; this fixes the *north star, scope, keep/rebuild calls, and foundation-first order*).
 
+> **⮕ CURRENCY UPDATE (2026-06-21 review — `../../AUDIT-2026-06-21.md`).** A code-grounded iterate-vs-rebuild
+> review confirmed this design's verdict (**ITERATE / surgical execution, do NOT rebuild**) and updated its status:
+> - **G-1 (compositing core) is ~done; the G-1 spec is STALE:** the float/half weight field AND histogram anti-tiling
+>   (this design's two "rebuild" items) already SHIPPED + PASSED on 2026-06-20. Real remaining G-1: the `fwidth`
+>   transition AA + a reversible `hq_blend` A/B toggle (the half-float flip shipped un-gated), single-sourcing the
+>   **drifted duplicate `zone_weights`** (a band_soft_mult bake-vs-live correctness bug), and the tile_mode dropdown cleanup.
+> - **Run a "G-0 wrong-defaults" gate FIRST** (NEEDS_REVIEW 1e): `rough_floor` is pinned 0.5 (no UI control) forcing the
+>   ground dead-matte; real height + within-area variation default OFF; the active palette is the drab one. Flipping these
+>   is the biggest immediate look lift and is pure iterate — judge it before building.
+> - **Two genuine structural items** (so "execution not structure" is half-right): (a) the active placement/weight field
+>   is **4.0 m/texel** — the Unit-4-fatal resolution, now on the LIVE blend path → component 4 needs a resolution/space
+>   rebuild; (b) component 1 (real height as a first-class material channel) is still unaddressed at the DATA layer — the
+>   library has **zero height maps** and `MaterialBoard` mis-binds AO→height, so the 108 accepted materials were never
+>   judged for relief. **Sourcing/authoring height-bearing assets is the real G-2 long pole, not shader tuning.**
+
 ## Why this exists (the foundation reset)
 
 The user stepped back and asked the right question: *"are we building more and more on a bad

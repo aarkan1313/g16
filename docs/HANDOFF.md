@@ -81,6 +81,16 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
+> **2026-06-21 — FULL AUDIT + GROUND REVIEW DONE; docs reconciled.** A 7-subsystem project audit
+> (`docs/AUDIT-2026-06-21.md`) + a ground/texture iterate-vs-rebuild review ran (both multi-agent, verified).
+> Outcomes: **(1)** the day's sky lane + 6 backup tags were **pushed to origin** (were 179 commits local-only);
+> **(2) ROADMAP now carries a 🛠 Debt & Remediation backlog** (every audit fix) + a **rewritten Ground / Texture
+> lane** — verdict **ITERATE, not rebuild** (execute the existing ground master design surgically; a **G-0
+> "wrong-defaults" gate** is NEXT for ground — NEEDS_REVIEW 1e); **(3)** the sky lane is NOT paused — it built a
+> burst to AT-2, and **AT-1 + AT-2 are DEFAULT-ON but un-eye-gated** (NEEDS_REVIEW 11; AT-2's cost never measured).
+> **The "both lanes PAUSED" block below is the prior (2026-06-20) state, kept for history.** Live state: run the
+> combined eye-gate (now incl. AT-1/AT-2 + the ground G-0 gate), then iterate ground G-0 → G-1 → G-2 per ROADMAP.
+
 > **⮕ TAKING OVER AS IMPLEMENTOR?** Start with
 > `docs/superpowers/handoffs/2026-06-20-lanes-implementor-handoff.md` — it covers BOTH lanes
 > (Ground/Texture + Sun/Light), their built-but-ungated state, the gated build order, and your
