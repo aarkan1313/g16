@@ -6,6 +6,21 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — Galaxy / Nebula v2: KILLED (feature dropped; night sky = moon + stars + meteors).** After the
+C1 procedural-noise rejection we rebuilt from scratch as **billboards**: a structured non-noise generator
+(log-spiral arms + bulge + dust + HII knots), then a richer flocculent/domain-warped version, then — after
+research showed *flat noise on a billboard is the documented wrong primitive* — a **volumetric raymarch**
+(Beer-law extinction + domain-warped density + photo-derived color ramp), and finally a **lit, self-shadowed**
+volumetric (Shot 2). User verdict at each: "not good / looks fake." User's call: **two volumetric shots within
+a ~1 ms budget, else kill it.** Both shots failed the look bar, so the whole galaxy/nebula lane was **removed
+completely** (commit 62a3835): all billboard shader code + `night_sky_brightness`, `CloudVolume.SetBillboards`,
+`BuildBillboards`, `NightBillboards.cs`, the dead Night-tab galaxy/nebula controls + Apply cases + `StarsState`
+fields, and the `NightSkyPresets` subsystem (`.cs` + `night_sky_presets.json` + `--nspreset` + picker).
+**Lesson:** procedural galaxies/nebulae (flat OR cheap-volumetric) did not reach the quality bar; the research
+path that might (authored/offline-generated **textures**, or expensive lit volumetrics > 1 ms) was out of scope
+for a night-sky accent. **Do not re-attempt procedurally without an authored-asset plan.** Spec/plan/research
+under `docs/superpowers/specs|plans` (2026-06-21 galaxy-nebula-billboards). Moon + stars + meteors stand.
+
 **2026-06-21 — Galaxy / Nebula: START OVER (fresh concept). Meteors: PASS.** User after the meteor pass: "start
 over on the nebulae and galaxy." The C1 procedural-noise galaxy/nebula is **rejected** — its root failure was using
 **fbm/ridged 3D noise (the same noise the clouds use)**, so it always read as clouds, not space; localizing/

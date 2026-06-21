@@ -77,7 +77,7 @@ the gates upstream → downstream so judgments aren't contaminated:**
    run the **Step-0 "wrong-defaults" ground gate (1e)** first (shows how much "drab" is just suppressed
    defaults), then iterate per the rewritten **Ground / Texture** lane below. *(Part of the "drab" is the
    default-on atmosphere warm-washing the surface — judge ground only after the sky lane settles.)*
-4. **Sky:** Clouds feature review (5 ✅) → god rays (3 ✅) → **Celestial C1 night-sky** (10, ⚑ built 2026-06-21, look-gate owed).
+4. **Sky:** Clouds feature review (5 ✅) → god rays (3 ✅) → Celestial C1 night-sky (galaxy/nebula REJECTED + v2 REDO KILLED 2026-06-21; night sky = moon+stars+meteors).
 5. **Whole-scene last:** AA in motion (7) + GI-proxy fidelity (2).
 
 ## ⏸ Phase A — the two lanes (FULL scope; finish before Phase B)
@@ -157,8 +157,9 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
 > (auto cycle + fantasy) ✅ — all eye-gated/soft-gated live.** Moon now on its OWN arc (decoupled). **Galaxy/Milky
 > Way reviewed live 2026-06-20 → NEEDS WORK** (fog band + uniform half-circle arc) → folded into the new
 > **Celestial expansion (#6)** below. **STATUS 2026-06-21: #3 GPU atmosphere (AT-1/2/3) ✅ arc complete · #6 C1
-> ✅ CLOSED (galaxy/nebula REJECTED; night sky = tuned moon+stars). C2 meteors ✅ PASS. NEXT: **galaxy/nebula REDO
-> (C1-v2, fresh concept)** + C2 planets → #5 shadows → #7 perf.** Review keys: 2 = night sky (moon+stars+meteors) ·
+> ✅ CLOSED (galaxy/nebula REJECTED; night sky = tuned moon+stars). C2 meteors ✅ PASS. **C1-v2 galaxy/nebula REDO
+> ❌ KILLED 2026-06-21** (billboards: procedural + volumetric both failed the look within budget — feature removed).
+> NEXT: C2 planets → #5 shadows → #7 perf.** Review keys: 2 = night sky (moon+stars+meteors) ·
 > 6 = cloud types · 7 = fantasy skies. See `handoffs/2026-06-21-sky-lane-next-steps.md`.
 
 Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
@@ -247,11 +248,13 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
        `2026-06-21-celestial-c2-meteors*`; commits 29c52e4 · 14ec581 · 371332d. Optional follow-up: meteor presets.
      - **Then:** planets (bright slow-moving points/discs) → optional brighter named-star accents. Each its own gate.
 
-   - **C1-v2 — Galaxy / Nebula REDO (start over). 🔜 fresh concept.** The C1 procedural-noise galaxy/nebula was
-     REJECTED ("doesn't work" — it read as clouds because it used the cloud fbm noise). Restart from scratch with a
-     **different visual direction** (painted/authored texture · structured non-noise generator · distant-galaxy
-     billboards · or drop it) — **agree a reference look first.** Own brainstorm → spec → plan → gate. C1 code parked
-     (off, zero cost), deletable when v2 lands. Failure analysis + directions: `handoffs/2026-06-21-sky-lane-next-steps.md`.
+   - **C1-v2 — Galaxy / Nebula. ❌ KILLED 2026-06-21 (feature dropped).** Rebuilt as billboards: structured
+     non-noise generator → flocculent/domain-warped → **volumetric raymarch** (Beer + color ramp) → **lit
+     self-shadowed** volumetric. All read "fake/not good." User's call: two volumetric shots within ~1 ms, else
+     kill — both failed, so the lane was **removed completely** (commit 62a3835; shader + C# + controls + presets).
+     **Do not re-attempt procedurally** — the only paths research suggests would clear the bar are authored/offline
+     **textures** or expensive (>1 ms) lit volumetrics, neither in scope for a night-sky accent. See DECISIONS +
+     `docs/superpowers/specs|plans/2026-06-21-celestial-galaxy-nebula-billboards*`. Night sky = moon + stars + meteors.
    - **C3 — N suns + N moons.** Generalize the single-sun + single-moon architecture to **arbitrary counts** — each
      with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
      and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky
