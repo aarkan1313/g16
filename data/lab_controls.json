@@ -208,6 +208,7 @@
     { "id": "fog_aerial", "label": "aerial persp", "tab": "Light", "type": "scenef", "scene": "fog_aerial", "min": 0.0, "max": 1.0, "default": 0.85, "rand": false },
     { "id": "fog_heightd", "label": "valley fog", "tab": "Light", "type": "scenef", "scene": "fog_heightd", "min": 0.0, "max": 0.2, "default": 0.04, "rand": false },
     { "id": "exposure", "label": "exposure", "tab": "Light", "type": "scenef", "scene": "exposure", "min": 0.3, "max": 2.5, "default": 1.0, "rand": false },
+    { "id": "sky_tint", "label": "sky tint (fantasy)", "tab": "Light", "type": "scenecolor", "scene": "sky_tint", "default": [1.0, 1.0, 1.0], "rand": false },
     { "id": "sdfgi_on", "label": "GI (SDFGI)", "tab": "Light", "type": "scene", "scene": "sdfgi", "default": false, "rand": false },
     { "id": "volfog_on", "label": "volumetric fog", "tab": "Light", "type": "scene", "scene": "volfog", "default": true, "rand": false },
     { "id": "volfog_dens", "label": "vol fog amt", "tab": "Light", "type": "scenef", "scene": "volfog_d", "min": 0.0, "max": 0.06, "default": 0.012, "rand": false },

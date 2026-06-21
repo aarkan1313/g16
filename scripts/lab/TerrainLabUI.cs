@@ -160,6 +160,7 @@ public partial class TerrainLabUI : Control
         if (_presetCli >= 0) { ApplyCloudPreset(_presetCli); }
         if (_sunPresetCli >= 0) { ApplySunPreset(_sunPresetCli); } else { ApplyActiveSunPreset(); }
         if (_celestialCli >= 0) { ApplyCelestialPreset(_celestialCli); } else { ApplyActiveCelestialPreset(); }
+        if (_fantasyCli >= 0) { ApplyFantasyPreset(_fantasyCli); }   // ST4-2 exotic sky override at launch
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }   // --coverage still overrides the preset
         PushSunToCloud(GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
         // --godrays drives the screen-space beam layer (GodRaysScreen reads the sun per-frame).

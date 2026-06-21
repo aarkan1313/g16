@@ -15,6 +15,9 @@ public partial class TerrainLabUI : Control
     // _timeSpeed hours per real second and re-DriveTime()s — manual scrub via the time-of-day slider still works.
     private bool _timeRunning = false;
     private float _timeSpeed = 1.0f;   // in-world hours per real second
+    // ST4-2 fantasy: multiplies the sky gradient (white = no tint). Applied in ComposeLighting so it
+    // persists through the running day/night cycle (DriveTime rewrites the base sky colors each frame).
+    private Color _skyTint = Colors.White;
     private SunDiscState _sunDisc = new();
     private WeatherState _weather = new();
     private GradeState _grade = new();
@@ -70,18 +73,21 @@ public partial class TerrainLabUI : Control
         // AmbientLightColor is BLACK, so without this the night ambient ENERGY lever multiplies by black
         // and never reaches the screen — this is what makes night_darkness actually visible on terrain.
         env.AmbientLightColor = new Color(1f, 1f, 1f).Lerp(NightAmbientTint, _nightFactor);
+        // ST4-2 fantasy sky tint: multiply the sky gradient (white = no-op) → exotic presets recolor the
+        // whole sky and the tint persists through the running cycle. Used by both sky paths below.
+        Color tTop = _time.SkyTop * _skyTint, tHor = _time.SkyHorizon * _skyTint, tGnd = _time.SkyGround * _skyTint;
         if (env.Sky?.SkyMaterial is ProceduralSkyMaterial psky)
         {
-            psky.SkyTopColor = _time.SkyTop;
-            psky.SkyHorizonColor = _time.SkyHorizon; psky.GroundHorizonColor = _time.SkyHorizon;
-            psky.GroundBottomColor = _time.SkyGround;
+            psky.SkyTopColor = tTop;
+            psky.SkyHorizonColor = tHor; psky.GroundHorizonColor = tHor;
+            psky.GroundBottomColor = tGnd;
         }
         // ── SUN DISC (Stage-1 appearance) + shadow softness ──
         sun.ShadowBlur = _sunDisc.ShadowSoft;
         sun.LightAngularDistance = _sunDisc.DiscAngular;
         if (_cloud != null)
         {
-            _cloud.SetSkyColors(_time.SkyTop, _time.SkyHorizon, _time.SkyGround);
+            _cloud.SetSkyColors(tTop, tHor, tGnd);   // tinted (ST4-2)
             _cloud.SetSunSize(_sunDisc.Size); _cloud.SetSunLimb(_sunDisc.Limb);
             _cloud.SetSunCoronaSize(_sunDisc.CoronaSize); _cloud.SetSunCoronaEnergy(_sunDisc.CoronaEnergy);
             _cloud.SetSunHaloSize(_sunDisc.HaloSize); _cloud.SetSunHaloEnergy(_sunDisc.HaloEnergy);

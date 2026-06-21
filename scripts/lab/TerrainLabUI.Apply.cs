@@ -95,6 +95,7 @@ public partial class TerrainLabUI : Control
         {
             case "moon_color":      _moon.Color = col; ComposeLighting(); break;
             case "moonlight_color": _moon.LightColor = col; ComposeLighting(); break;
+            case "sky_tint":        _skyTint = col; ComposeLighting(); break;   // ST4-2 fantasy sky tint
         }
     }
 
