@@ -75,9 +75,17 @@ uniform vec3 meteor_color = vec3(0.85, 0.92, 1.0);          // base streak color
 uniform float meteor_color_var : hint_range(0.0, 1.0) = 0.25;  // 0 = all base color · 1 = vivid fantasy hues per meteor
 uniform bool meteor_debug = false;
 // NIGHT SKY (Celestial Galaxy/Nebula v2): the global brightness multiplier for the billboard layer.
-// LIVE master on/off for the whole galaxy/nebula lane (0 = truly free). The billboard slot uniforms
-// are declared below near the billboard functions.
+// LIVE master on/off for the whole galaxy/nebula lane (0 = truly free).
 uniform float night_sky_brightness : hint_range(0.0, 3.0) = 0.25;
+// CELESTIAL BILLBOARDS (Galaxy/Nebula v2): up to 8 discrete objects, each rendered in a local 2D
+// tangent-plane disc (structure, not 3D fbm). Pushed from C# on change only. type in color_type.w:
+// 0 = spiral galaxy, 1 = elliptical galaxy, 2 = nebula.
+const int MAX_BILLBOARDS = 8;
+uniform int  bb_count = 0;
+uniform vec4 bb_dir_size[MAX_BILLBOARDS];    // xyz = sky dir (unit), w = angular radius (radians)
+uniform vec4 bb_color_type[MAX_BILLBOARDS];  // rgb = primary/core color, w = type
+uniform vec4 bb_color2[MAX_BILLBOARDS];      // rgb = secondary/arm color, w = brightness
+uniform vec4 bb_params[MAX_BILLBOARDS];      // x = rotation(rad), y = tilt(0..1 squash), z = arms, w = seed
 
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
@@ -373,6 +381,57 @@ vec3 meteors(vec3 rd){
     return acc;
 }
 
+// CELESTIAL BILLBOARDS (Galaxy/Nebula v2) — each object is a direction-anchored 2D disc. Structure,
+// not 3D fbm: spiral arms / elliptical cores / (Phase 3) nebula lobes + dust lanes. Cheap: a pixel only
+// pays for objects whose disc it's inside (per-object dot-product early-out).
+
+// Project a sky dir `d` into a billboard's local disc centered on `dir`. Returns uv where |uv|~0 at
+// center and ~1 at the rim (reach). `rot` spins the disc; `tilt` squashes one axis (disc inclination).
+vec2 bb_disc_uv(vec3 d, vec3 dir, float reach, float rot, float tilt){
+    vec3 up = abs(dir.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    vec3 ax = normalize(cross(up, dir));
+    vec3 ay = cross(dir, ax);
+    vec3 rel = d - dir * dot(d, dir);            // tangent-plane component
+    vec2 uv = vec2(dot(rel, ax), dot(rel, ay)) / max(sin(reach), 1e-4);
+    float cs = cos(rot), sn = sin(rot);
+    uv = vec2(cs * uv.x - sn * uv.y, sn * uv.x + cs * uv.y);
+    uv.y /= max(1.0 - 0.85 * tilt, 0.15);        // squash → inclined disc
+    return uv;
+}
+
+// Spiral/elliptical galaxy in disc-uv space: bright Gaussian core + log-spiral arms + radial falloff.
+vec3 galaxy_billboard(vec2 uv, vec3 coreCol, vec3 armCol, float arms, float isSpiral, float seed){
+    float r = length(uv);
+    if (r > 1.0) return vec3(0.0);
+    float rim = smoothstep(1.0, 0.75, r);                       // soft edge
+    float core = exp(-r * r * 9.0);                             // bright bulge
+    float theta = atan(uv.y, uv.x);
+    // log-spiral arm intensity (no arms in the core; fade at the rim)
+    float spiral = cos(arms * theta - 6.0 * log(r + 0.12) + seed * 6.2831);
+    float armBand = smoothstep(0.2, 0.95, spiral) * smoothstep(0.05, 0.4, r) * (1.0 - core);
+    armBand *= isSpiral;                                        // elliptical → no arms
+    float disc = exp(-r * r * 2.2) * (0.35 + 0.65 * armBand);   // smooth disc * arm modulation
+    float lum = (core * 1.6 + disc) * rim;
+    vec3 col = mix(armCol, coreCol, clamp(core * 1.2, 0.0, 1.0));
+    return col * lum;
+}
+
+vec3 billboards(vec3 sr){
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < bb_count; i++){
+        vec3 dir = bb_dir_size[i].xyz; float reach = bb_dir_size[i].w;
+        if (dot(sr, dir) < cos(reach)) continue;               // EARLY-OUT: one dot product
+        float type = bb_color_type[i].w;
+        float rot = bb_params[i].x, tilt = bb_params[i].y, arms = bb_params[i].z, seed = bb_params[i].w;
+        vec2 uv = bb_disc_uv(sr, dir, reach, rot, tilt);
+        vec3 c;
+        if (type < 1.5) c = galaxy_billboard(uv, bb_color_type[i].rgb, bb_color2[i].rgb, arms, type < 0.5 ? 1.0 : 0.0, seed);
+        else            c = vec3(0.0);                          // nebula: Phase 3
+        acc += c * bb_color2[i].w;                              // per-slot brightness
+    }
+    return acc;
+}
+
 // STARS + NIGHT SKY (Stage 3d / Celestial C1): a reworked magnitude-stratified starfield + a baked
 // procedural galaxy/nebula color, on a slowly-rotating celestial sphere, faded in by night_factor and
 // above the horizon. Direction-only (EYEDIR), so they stay locked to the sky as the camera moves.
@@ -386,8 +445,13 @@ vec3 stars_layer(vec3 rd){
     // STARS: magnitude-stratified live point-stars (few-bright/many-faint, size + color-temp variety).
     vec3 star = star_field(sr);
 
+    // BILLBOARDS: galaxy/nebula objects (early-out at brightness 0 → lane is free). Global multiplier
+    // + fade applied once here (per-slot brightness is inside billboards()).
+    vec3 bb = vec3(0.0);
+    if (night_sky_brightness > 0.0001) { bb = billboards(sr) * night_sky_brightness; }
+
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
-    return (star + meteors(rd)) * fade;
+    return (star + meteors(rd) + bb) * fade;
 }
 
 // CIRRUS (CO-2): anisotropic wind-stretched fbm3 → high thin filaments. Streaks run ALONG the wind
