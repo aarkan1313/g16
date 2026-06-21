@@ -94,10 +94,10 @@ public sealed class StarsState
     public float MeteorRate = 0.2f, MeteorBrightness = 1.1f, MeteorLength = 0.5f, MeteorSpeed = 0.5f;
     public Color MeteorColor = new(0.85f, 0.92f, 1.0f);   // base streak color
     public float MeteorColorVar = 0.25f;                  // 0 = uniform · 1 = vivid fantasy hues per meteor
-    // Galaxy (baked). MwBrightness is LIVE (a shader multiplier); the rest re-bake on change.
-    public float MwBrightness = 0.0f, MwWidth = 0.11f, MwTilt = 0.6f;   // galaxy OFF by default (user 2026-06-21); machinery dormant, tunable back up
+    // Galaxy/Nebula v2 billboards. MwBrightness is the LIVE global master multiplier for the lane.
+    public float MwBrightness = 0.8f, MwWidth = 0.11f, MwTilt = 0.6f;   // billboards visible by default (galaxy/nebula v2)
     public float CoreAz = 1.26f, CoreElev = 0.5f;          // core direction az/elev (rad); elev ~29° = galaxy sits up in the sky
-    public float CoreSize = 0.5f, Curve = 0.0f, Dust = 0.5f;
+    public float CoreSize = 0.85f, Curve = 0.0f, Dust = 0.5f;   // big, clearly-visible galaxy out of the box (≈19° radius)
     public Color CoreColor = new(0.95f, 0.75f, 0.55f);
     public Color ArmColor = new(0.45f, 0.55f, 0.85f);
     // Nebulae (baked). Count + a global density + the two lead colors are tunable; directions/scales are

@@ -548,6 +548,36 @@ public partial class CloudVolume : Node
         _skyMat?.SetShaderParameter("meteor_color_var", Mathf.Clamp(colorVar, 0f, 1f));
     }
     public void SetMeteorDebug(bool on) { _skyMat?.SetShaderParameter("meteor_debug", on); }
+    // Celestial billboards (galaxy/nebula v2): push the packed slot arrays + the live global brightness.
+    // CloudVolume stays the SOLE _skyMat writer. Called on config change only (not per frame).
+    public void SetBillboards(System.Collections.Generic.IReadOnlyList<Billboard> slots, float globalBrightness)
+    {
+        const int MAX = 8;
+        int n = Mathf.Min(slots.Count, MAX);
+        var dirSize = new Vector4[MAX];
+        var colType = new Vector4[MAX];
+        var col2    = new Vector4[MAX];
+        var prm     = new Vector4[MAX];
+        for (int i = 0; i < MAX; i++)
+        {
+            if (i < n)
+            {
+                var b = slots[i]; var d = b.Dir.Normalized();
+                dirSize[i] = new Vector4(d.X, d.Y, d.Z, Mathf.Max(b.Size, 1e-3f));
+                colType[i] = new Vector4(b.Color.X, b.Color.Y, b.Color.Z, b.Type);
+                col2[i]    = new Vector4(b.Color2.X, b.Color2.Y, b.Color2.Z, Mathf.Max(b.Brightness, 0f));
+                prm[i]     = new Vector4(b.Rotation, Mathf.Clamp(b.Tilt, 0f, 1f), Mathf.Max(b.Arms, 0f), b.Seed);
+            }
+            else { dirSize[i] = new Vector4(0, 1, 0, 0.001f); colType[i] = Vector4.Zero; col2[i] = Vector4.Zero; prm[i] = Vector4.Zero; }
+        }
+        _skyMat?.SetShaderParameter("bb_count", n);
+        _skyMat?.SetShaderParameter("bb_dir_size", dirSize);
+        _skyMat?.SetShaderParameter("bb_color_type", colType);
+        _skyMat?.SetShaderParameter("bb_color2", col2);
+        _skyMat?.SetShaderParameter("bb_params", prm);
+        _skyMat?.SetShaderParameter("night_sky_brightness", Mathf.Max(globalBrightness, 0f));
+    }
+
     // --- CIRRUS (CO-2): 2D sky-layer uniforms (default off) ---
     public void SetCirrusOn(bool on) { _skyMat?.SetShaderParameter("cirrus_on", on); }
     public void SetCirrus(string knob, float v)

@@ -399,21 +399,109 @@ vec2 bb_disc_uv(vec3 d, vec3 dir, float reach, float rot, float tilt){
     return uv;
 }
 
-// Spiral/elliptical galaxy in disc-uv space: bright Gaussian core + log-spiral arms + radial falloff.
+// Realistic spiral/elliptical galaxy in disc-uv space (Hubble-reference look). Organic FLOCCULENT arms via
+// domain-warped log-spiral (not clean cosine arms), golden HDR bulge + blinding nucleus, reddish-brown dust
+// lanes threading the arms, faint inter-arm disk glow, pink/blue star-cluster knots, fine field stars, halo.
+// coreCol = warm bulge, armCol = blue arms. Calibrated so arms keep color at brightness ~0.8 (nucleus clips).
 vec3 galaxy_billboard(vec2 uv, vec3 coreCol, vec3 armCol, float arms, float isSpiral, float seed){
     float r = length(uv);
     if (r > 1.0) return vec3(0.0);
-    float rim = smoothstep(1.0, 0.75, r);                       // soft edge
-    float core = exp(-r * r * 9.0);                             // bright bulge
+    float rim = smoothstep(1.0, 0.80, r);
     float theta = atan(uv.y, uv.x);
-    // log-spiral arm intensity (no arms in the core; fade at the rim)
-    float spiral = cos(arms * theta - 6.0 * log(r + 0.12) + seed * 6.2831);
-    float armBand = smoothstep(0.2, 0.95, spiral) * smoothstep(0.05, 0.4, r) * (1.0 - core);
-    armBand *= isSpiral;                                        // elliptical → no arms
-    float disc = exp(-r * r * 2.2) * (0.35 + 0.65 * armBand);   // smooth disc * arm modulation
-    float lum = (core * 1.6 + disc) * rim;
-    vec3 col = mix(armCol, coreCol, clamp(core * 1.2, 0.0, 1.0));
-    return col * lum;
+
+    // DOMAIN WARP — perturb angle + radius with noise so the structure is organic, not mathematical.
+    float nA = vnoise3(vec3(uv * 2.0, seed));
+    float nB = vnoise3(vec3(uv * 2.1 + 5.0, seed * 1.3));
+    float wTheta = theta + (nA - 0.5) * 0.9;
+    float wR     = r * (1.0 + (nB - 0.5) * 0.28);
+
+    // radial light profiles: blinding nucleus, golden bulge, warped exponential disk, faint halo
+    float nucleus = exp(-r * r * 90.0);
+    float bulge   = exp(-r * r * 7.0);
+    float disc    = exp(-wR * 3.0);
+    float halo    = exp(-r * 1.2) * 0.12;
+
+    // spiral arms (warped coords) — broad arms broken into flocculent patches along their length
+    float wind = 4.5;
+    float phase = arms * wTheta - wind * log(r + 0.06) + seed * 6.2831;
+    float arm = pow(0.5 + 0.5 * cos(phase), 3.0);
+    float flock = 0.35 + 0.95 * vnoise3(vec3(cos(phase), sin(phase), r * 9.0 + seed * 4.0) * 3.0);
+    float armEnv = smoothstep(0.03, 0.18, r) * smoothstep(1.0, 0.50, r);
+    float armLight = disc * arm * flock * armEnv;
+
+    // multi-octave filigree modulating the faint inter-arm disk
+    float fil = 0.6 + 0.4 * (vnoise3(vec3(uv * 8.0, seed)) * 0.6 + vnoise3(vec3(uv * 18.0, seed * 2.0)) * 0.4);
+    float diskGlow = disc * 0.16 * fil;
+
+    // dust lanes — dark reddish-brown, follow the arms (offset phase) + fine dust grain, inner-to-mid disk
+    float dphase = arms * wTheta - wind * log(r + 0.06) + seed * 6.2831 + 0.5;
+    float dustArm = pow(max(cos(dphase), 0.0), 3.0);
+    float dustGrain = vnoise3(vec3(uv * 14.0 + 9.0, seed));
+    float dust = clamp(dustArm * 0.8 + (dustGrain - 0.45) * 0.7, 0.0, 1.0) * smoothstep(0.85, 0.07, r) * armEnv;
+
+    // assemble luminance: spiral (arms dominate) vs elliptical (smooth)
+    float spiralLum = bulge * 0.5 + armLight * 1.35 + diskGlow;
+    spiralLum *= 1.0 - 0.85 * dust;
+    float ellipLum = bulge * 0.7 + disc * 0.3;
+    float lum = (nucleus * 2.5 + mix(ellipLum, spiralLum, isSpiral)) * rim;
+
+    // color: golden bulge → blue arms; white-hot nucleus; dust reddens/darkens
+    vec3 col = mix(armCol, coreCol, clamp(bulge * 1.3, 0.0, 1.0));
+    col = mix(col, armCol * vec3(0.9, 0.95, 1.1), clamp(armLight * 1.5, 0.0, 0.55) * isSpiral);
+    col = mix(col, vec3(1.0, 0.97, 0.9), nucleus * 0.8);
+    col = mix(col, col * vec3(0.72, 0.52, 0.40), dust * 0.6 * isSpiral);
+
+    // star clusters along arms (pink HII + blue OB associations)
+    vec2 cell = floor(uv * 26.0); vec2 f = fract(uv * 26.0) - 0.5;
+    float h = hash13(vec3(cell + seed * 9.0, seed));
+    float knot = step(0.82, h) * smoothstep(0.22, 0.0, length(f)) * arm * armEnv;
+    vec3 knotCol = mix(vec3(1.0, 0.5, 0.6), vec3(0.6, 0.8, 1.0), hash13(vec3(cell, seed)));
+
+    // fine field stars across the disk
+    vec2 c2 = floor(uv * 12.0); vec2 f2 = fract(uv * 12.0) - 0.5;
+    float h2 = hash13(vec3(c2 + seed * 3.0, seed * 1.7));
+    float spark = step(0.92, h2) * smoothstep(0.12, 0.0, length(f2)) * (disc * 0.6 + 0.15) * armEnv;
+
+    return (col * lum + knotCol * knot * 1.3 + vec3(0.9, 0.95, 1.0) * spark) * rim;
+}
+
+// Emission nebula in disc-uv space (Hubble-reference look: Omega/Horsehead/NGC604). Domain-warped turbulent
+// gas, dark dust PILLARS/voids carving it, saturated two-color emission with hot bright cores, embedded
+// star cluster. The black-space context + stars + dust + saturated color make turbulence read as a NEBULA,
+// not a terrestrial cloud (the C1 failure was using cloud-style fbm with weak color/structure on a galaxy).
+vec3 nebula_billboard(vec2 uv, vec3 col1, vec3 col2, float seed){
+    float r = length(uv);
+    if (r > 1.0) return vec3(0.0);
+    float rim = smoothstep(1.0, 0.62, r);
+
+    // domain-warped billowing gas
+    vec2 p = uv * 2.2;
+    float w1 = vnoise3(vec3(p, seed));
+    float w2 = vnoise3(vec3(p.yx * 1.4 + 7.0, seed * 1.7));
+    p += (vec2(w1, w2) - 0.5) * 1.2;
+    float f = 0.0, a = 0.55; vec2 q = p;
+    for (int i = 0; i < 5; i++) { f += a * vnoise3(vec3(q, seed + float(i) * 1.3)); q *= 2.07; a *= 0.5; }
+    float fall = exp(-r * r * 1.8);                              // localize to a patch
+    float density = clamp(f * 1.55 * fall - 0.12, 0.0, 1.0);
+    float glow = pow(density, 1.6);                              // hot bright cores
+
+    // dark dust pillars/voids carve the gas (low-freq mask) — the Horsehead silhouette element
+    float dustMask = smoothstep(0.55, 0.28, vnoise3(vec3(uv * 3.0 + 21.0, seed * 0.7)));
+    density *= mix(1.0, 0.20, dustMask);
+
+    // saturated two-color emission; hot cores brighten + warm-shift
+    float cmap = clamp(vnoise3(vec3(uv * 1.6 + 3.0, seed)) * 1.3, 0.0, 1.0);
+    vec3 gas = mix(col1, col2, cmap);
+    gas = mix(gas, gas + vec3(0.28, 0.13, -0.04), glow * 0.6);
+
+    float lum = density * 1.5 * rim;
+
+    // embedded star cluster — brighter/denser where the gas glows (OB associations light the nebula)
+    vec2 cell = floor(uv * 20.0); vec2 cf = fract(uv * 20.0) - 0.5;
+    float h = hash13(vec3(cell + seed * 4.0, seed));
+    float star = step(0.86, h) * smoothstep(0.16, 0.0, length(cf)) * (0.35 + density);
+
+    return gas * lum + vec3(0.9, 0.95, 1.0) * star * rim;
 }
 
 vec3 billboards(vec3 sr){
@@ -426,7 +514,7 @@ vec3 billboards(vec3 sr){
         vec2 uv = bb_disc_uv(sr, dir, reach, rot, tilt);
         vec3 c;
         if (type < 1.5) c = galaxy_billboard(uv, bb_color_type[i].rgb, bb_color2[i].rgb, arms, type < 0.5 ? 1.0 : 0.0, seed);
-        else            c = vec3(0.0);                          // nebula: Phase 3
+        else            c = nebula_billboard(uv, bb_color_type[i].rgb, bb_color2[i].rgb, seed);
         acc += c * bb_color2[i].w;                              // per-slot brightness
     }
     return acc;
