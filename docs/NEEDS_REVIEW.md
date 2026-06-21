@@ -345,8 +345,10 @@ is default-off so the approved look is untouched.
   lit by the physical sky — warm undersides at dusk (horizon radiance), cooler tops (zenith), sun-transmittance reddened
   direct. User: "yep it works" → **default-ON**. **Pivoted A→param-handoff** (cross-node GPU LUT sampling crashed the RD;
   the 3 colors are per-frame constants → CPU readback + params). Effect real (cloud-band diff 1.66 vs 0.07 drift), warms
-  at golden. Strength default 10 (gate-tunable). (DECISIONS 2026-06-21; commit 6d0d590.) **Owed:** a readback throttle
-  for the running day/night cycle (per-frame CPU readback) → folded into ROADMAP #7 end-of-arc code-efficiency pass.
+  at golden. Strength default 10 (gate-tunable). (DECISIONS 2026-06-21; commit 6d0d590.) **Readback throttle DONE**
+  2026-06-21 (commit 2fc42ac): the per-frame ~296 KB GPU→CPU sync stall during a running cycle is gated (read only
+  when AT-3 on + the sun moved > ~0.6°; look-neutral, effect intact). Remaining for ROADMAP #7: the deeper fix —
+  read only the 3 needed texels via a tiny GPU output instead of two full TextureGetData.
 - **AT-2 (screen-space aerial perspective):** ✅ **soft-PASS 2026-06-21** (review **key 8** A/B, live). The audit's
   predicted gain mismatch was real — in-scatter is additive, so the planned strength (~2) WASHED the frame; recalibrated
   to **0.4** (gentle distance haze, warm sunset / blue noon, near stays crisp). User: "a little better than off" →
