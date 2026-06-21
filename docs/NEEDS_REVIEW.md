@@ -17,7 +17,7 @@ manual tuning). Press a key, fly, judge, move on:
 | Key | Item | NEEDS_REVIEW § |
 |----|------|----|
 | **1** | Sun disc (Stage 1) | 3b |
-| **2** | Time-of-day / daylight (Stage 2) | 3c |
+| **2** | **Night sky (Celestial C1)** — press 2 to cycle galaxy/nebula presets (Aurora→Deep Field→Subtle→Crimson) | 10 |
 | **3** | GM1 palette (press 3 again to A/B palettes) | 1c |
 | **4** | GM2 real height + POM | 1c |
 | **5** | GM3-A within-area variation | 1c |

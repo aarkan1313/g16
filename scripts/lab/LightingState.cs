@@ -90,7 +90,7 @@ public sealed class StarsState
     // Live starfield (not baked).
     public float Brightness = 1.0f, Density = 0.5f, Twinkle = 0.5f, Rotation = 0.003f;
     // Galaxy (baked). MwBrightness is LIVE (a shader multiplier); the rest re-bake on change.
-    public float MwBrightness = 0.25f, MwWidth = 0.12f, MwTilt = 0.6f;
+    public float MwBrightness = 0.55f, MwWidth = 0.12f, MwTilt = 0.6f;   // galaxy brightness tuned up from 0.25 (was too dim)
     public float CoreAz = 1.26f, CoreElev = 0.2f;          // core direction as azimuth/elevation (rad)
     public float CoreSize = 0.5f, Curve = 0.0f, Dust = 0.5f;
     public Color CoreColor = new(0.95f, 0.75f, 0.55f);

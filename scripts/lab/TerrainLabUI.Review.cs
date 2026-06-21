@@ -21,6 +21,7 @@ public partial class TerrainLabUI : Control
     private int _co2Type;         // CO-2 type on review key 6: 0 cumulus · 1 stratus · 2 cirrus
     private int _fantasyIdx;      // ST4-2 fantasy preset on review key 7 (cycles)
     private int _atmoStep;        // AT-1 atmosphere time-of-day preset on review key 8 (cycles dawn→noon→golden→dusk→night)
+    private int _nsReviewIdx = -1; // Celestial C1 night-sky preset on review key 2 (-1 = tuned default, then cycles the 4)
     private bool _gv2On;          // ground-v2 parity A/B state (review key 4 toggles old↔new)
     private List<string> _palNames;
     private Dictionary<string, string[]> _palRoles;
@@ -61,12 +62,21 @@ public partial class TerrainLabUI : Control
                 title = $"1 · Sun disc + surface  [{sunName}]  (press 1 to cycle)";
                 judge = "Fly CLOSE to the sun. Surface believable (granulation, churn, spots), not a flat circle? No swimming or pole-spin (raise sun high). No clip-to-white. Press 1 to cycle presets; tune 'sun surface *' on the Light tab.";
                 break;
-            case 2: // Lighting decouple + time-of-day — Stage 2 (3c)
-                ApplyMood(5);                                   // clear alpine = neutral
-                Set("cloud_enabled", true); Set("cloud_coverage", 0.40f);
-                Set("time_of_day", 12.0f);
-                title = "2 · Time-of-day / daylight (Stage 2)";
-                judge = "Scrub Light tab 'time of day' 5->19: sun arc low-E -> high -> low-W, cohesive sky/light/ambient shift, no pops? Switch the 6 moods (dropdown) — do they still match their old looks?";
+            case 2: // Celestial C1 — procedural fantasy night sky (galaxy + nebulae + stars). Press 2 to cycle presets.
+                LoadNightSkyPresets();
+                if (_lastPreset != 2)
+                {
+                    ApplyMood(5);                               // neutral grade
+                    Set("cloud_enabled", false);                // clear sky so the galaxy/nebulae read
+                    Set("time_of_day", 0.0f);                   // midnight = full night (night_factor 1)
+                    LookUpAtNightSky();                         // aim the camera up at the galaxy core
+                    _nsReviewIdx = _nsPresets.Count > 2 ? 2 : 0; // first press leads with the hero preset (Aurora Veil)
+                }
+                else if (_nsPresets.Count > 0) { _nsReviewIdx = (_nsReviewIdx + 1) % _nsPresets.Count; }
+                if (_nsPresets.Count > 0) { ApplyNightSkyPreset(_nsReviewIdx); }
+                string nsName = (_nsReviewIdx >= 0 && _nsReviewIdx < _nsPresets.Count) ? _nsPresets[_nsReviewIdx].name : "default";
+                title = $"2 · Night sky (Celestial C1)  [{nsName}]  (press 2 to cycle presets)";
+                judge = "Fantasy night sky: a galaxy with a bright CORE (not a uniform fog band), dust lanes, colored nebulae, varied stars. Press 2 to cycle default→Subtle→Crimson Rift→Aurora Veil→Deep Field. Tune 'galaxy *' / 'nebula *' / 'star *' on the Night tab; 'night sky baked (perf)' on/off must look identical. Fly to look around the sky.";
                 break;
             case 3: // Ground G-0 — isolate the "wrong-defaults" levers ONE at a time (cumulative). Press 3 to step.
             {
@@ -281,6 +291,18 @@ public partial class TerrainLabUI : Control
     {
         var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
         if (cam != null) { cam.Position = new Vector3(0, 280, 520); cam.RotationDegrees = new Vector3(16, 0, 0); }
+    }
+
+    // Vantage for judging the night sky: a mid-altitude camera tilted UP so a wide band of sky (where the
+    // galaxy + nebulae live) fills the frame, with a sliver of horizon for grounding. Fly to look around.
+    private void LookUpAtNightSky()
+    {
+        var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+        if (cam == null) return;
+        cam.Position = new Vector3(0, 280, 200);
+        // aim up TOWARD the galaxy core (default core dir ≈ +x/+z at low elevation) so the band + bright
+        // core fill the frame — the default yaw faces -z, away from the core, and read as empty dark sky.
+        cam.LookAt(cam.GlobalPosition + new Vector3(0.30f, 0.62f, 0.72f), Vector3.Up);
     }
 
     private void LookAtSun()
