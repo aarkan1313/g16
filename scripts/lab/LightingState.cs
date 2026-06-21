@@ -64,7 +64,11 @@ public sealed class MoonState
 {
     public string Name = "";
     public float Phase = 1.0f;            // 0 = new (dark) · 0.5 = half · 1 = full
-    public float ElevOffset = 0f, AzOffset = 0f;   // degrees off the anti-solar default
+    // The moon follows its OWN arc (not the sun's). AzOffset ROTATES the moon's azimuth sweep off the sun's
+    // (degrees), DeclScale sets its peak-elevation as a fraction of the sun's (own declination), ElevOffset
+    // shifts it up/down — so its path + landing differ from the sun's even at full phase. Defaults = a distinct arc.
+    public float ElevOffset = 0f, AzOffset = 35f;
+    public float DeclScale = 0.72f;       // moon arc peak height as a fraction of the sun's peak elevation
     public float Size = 1.2f, Limb = 0.6f;         // angular radius (deg) + limb darkening
     public float DiscEnergy = 0.9f;                // overall brightness (cool, dimmer than the sun)
     public float HaloSize = 140f, HaloEnergy = 0.2f;

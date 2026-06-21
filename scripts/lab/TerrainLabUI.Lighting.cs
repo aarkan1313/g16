@@ -101,8 +101,8 @@ public partial class TerrainLabUI : Control
             float moonHour = _time.TimeOfDay - _moon.Phase * 12f;        // lag the sun by phase*12 hours
             moonHour -= Mathf.Floor(moonHour / 24f) * 24f;              // wrap to [0,24)
             float mf = (moonHour - _time.SunriseH) / moonDayLen;        // 0 at moon-rise .. 1 at moon-set
-            float moonElev = _time.PeakElev * Mathf.Sin(Mathf.Pi * mf) + _moon.ElevOffset;
-            float moonAz = Mathf.Lerp(_time.AzStart, _time.AzEnd, mf) + _moon.AzOffset;
+            float moonElev = _time.PeakElev * _moon.DeclScale * Mathf.Sin(Mathf.Pi * mf) + _moon.ElevOffset;  // own declination → different peak height
+            float moonAz = Mathf.Lerp(_time.AzStart, _time.AzEnd, mf) + _moon.AzOffset;                       // AzOffset rotates the whole path off the sun's
             // Set LOCAL rotation (valid even before the deferred parent-add lands) and read the LOCAL basis.Z.
             // The MoonLight parents to TerrainLabRoot (identity transform), so local basis == world toward-moon —
             // same convention as the sun, but no GlobalTransform read that would error while not yet in the tree.
