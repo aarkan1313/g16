@@ -1,0 +1,48 @@
+{
+  "_comment": "Ground v2 verification bank — press Shift+1..N in the review scene (scenes/review.tscn) to step through and verify the per-pixel material reset. Each state sets a clean baseline (clouds off, neutral midday, sun LOCKED), a camera, and the v2 toggle/debug, plus a 'what to judge' banner. 'ab':true = re-pressing that key flips NEW<->OLD (starts NEW). cam=[x,y,z,pitchDeg,yawDeg]. gv2_debug: 0 normal, 1 placement-viz (flat per-material color). Edit freely + re-press (reloaded each press); slots not listed fall back to the hardcoded bank (Shift+3 old anti-tiling A/B).",
+  "states": [
+    {
+      "key": 1,
+      "label": "Ground v2 PARITY (wide) — press ⇧1 to flip NEW↔OLD",
+      "judge": "The headline check. NEW (per-pixel procedural) must beat OLD (terrain_lab): NO blocky rectangular facets at material transitions, materials placed sensibly by height/slope, anti-tiling intact, no fuzz in motion. Sun is LOCKED. Fly in close. Perf top-right (NEW was ~7.3ms vs OLD ~10.4ms).",
+      "ab": true,
+      "cam": [0, 360, -1100, -12, 0],
+      "time": 16
+    },
+    {
+      "key": 2,
+      "label": "Ground v2 PARITY (close) — press ⇧2 to flip NEW↔OLD",
+      "judge": "Same A/B up close on a slope. NEW: transitions are smooth per-pixel (fwidth AA) with NO grid facets, real relief from the height-biased blend, textures sharp (no shimmer fuzz), no obvious tiling repetition. This is where the OLD 4 m blockiness was worst.",
+      "ab": true,
+      "cam": [0, 150, -820, -16, 0],
+      "time": 16
+    },
+    {
+      "key": 3,
+      "label": "Ground v2 PLACEMENT VIZ — per-pixel material regions",
+      "judge": "Each pixel painted by its DOMINANT material (flat color). The boundaries must be ORGANIC / warped and follow the terrain — NO rectangular grid blocks anywhere. This is the blockiness killer: placement is computed per fragment, so there is no low-res field to snap to. Speckle at extreme distance is just the dominant-only viz (the blend smooths it).",
+      "groundv2": true,
+      "gv2_debug": 1,
+      "cam": [0, 360, -1100, -12, 0],
+      "time": 16
+    },
+    {
+      "key": 4,
+      "label": "Ground v2 PLACEMENT MAP — top-down (no grid anywhere)",
+      "judge": "Top-down map of placement over the whole region. Flowing organic material regions, no grid blocks at any scale — the structural fix vs the old 4 m baked splat. Use this to sanity-check the height/slope bands cover the terrain (edit data/ground_materials.json 'materials' + 'placement' to tune, then re-press).",
+      "groundv2": true,
+      "gv2_debug": 1,
+      "cam": [0, 1900, 200, -78, 0],
+      "time": 16
+    },
+    {
+      "key": 5,
+      "label": "Ground v2 RESULT — textured, free look",
+      "judge": "The new core, textured, no debug. Fly freely and judge the overall look: material spread by elevation (low clay/sand → scree/talus slopes → basalt cliffs → lichen/snow high), believable, varied, readable. The bands are APPROXIMATE (fit to the field's -180..639 m range, not yet eye-tuned) — if a band reads wrong, tune data/ground_materials.json and re-press.",
+      "groundv2": true,
+      "gv2_debug": 0,
+      "cam": [0, 360, -1100, -12, 0],
+      "time": 16
+    }
+  ]
+}
