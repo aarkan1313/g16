@@ -28,7 +28,7 @@ public partial class TerrainLabUI : Control
         new Vector3(-0.4f, 0.5f, 0.6f).Normalized(), new Vector3(0.6f, 0.35f, -0.5f).Normalized(),
         new Vector3(0.1f, 0.7f, -0.7f).Normalized(), new Vector3(-0.7f, 0.3f, 0.2f).Normalized(),
     };
-    private static readonly float[] _nebScales = { 0.72f, 0.5f, 0.6f, 0.45f };
+    private static readonly float[] _nebScales = { 0.5f, 0.32f, 0.42f, 0.28f };   // smaller/finer nebulae (was too big + cloud-like)
 
     // Build the night-sky galaxy params from the Night-tab state. Core direction from az/elev; brightness
     // stays live (excluded from the bake's dirty check). Re-bakes only when a baked field actually changes.
