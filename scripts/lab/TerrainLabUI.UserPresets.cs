@@ -49,7 +49,6 @@ public partial class TerrainLabUI : Control
             if (kv.Value.LockBox != null) { kv.Value.LockBox.ButtonPressed = lk; }
         }
         _ready = wasReady;
-        _terrain.RebakeSplat();
         GD.Print($"TerrainLab: loaded preset '{name}'");
     }
 

@@ -47,13 +47,11 @@ public partial class TerrainLabUI : Control
     /// handled COHERENTLY (preset + jitter), not rolled independently.
     private void Randomize()
     {
-        bool needRebake = false;
         foreach (LabControl c in _controls)
         {
             if (c.Locked || !c.Rand) { continue; }
-            if (RandomizeControl(c)) { needRebake = true; }
+            RandomizeControl(c);
         }
-        if (needRebake) { _terrain.RebakeSplat(); }
         RandomizeClouds();
         GD.Print("TerrainLab: randomized (unlocked controls)");
     }
@@ -63,13 +61,11 @@ public partial class TerrainLabUI : Control
     private void RandomizeTab(string tab)
     {
         if (tab == "Clouds") { RandomizeClouds(); GD.Print("TerrainLab: randomized tab 'Clouds' (coherent surprise-me)"); return; }
-        bool needRebake = false;
         foreach (LabControl c in _controls)
         {
             if (c.Tab != tab || c.Locked) { continue; }
-            if (RandomizeControl(c)) { needRebake = true; }
+            RandomizeControl(c);
         }
-        if (needRebake) { _terrain.RebakeSplat(); }
         GD.Print($"TerrainLab: randomized tab '{tab}'");
     }
 

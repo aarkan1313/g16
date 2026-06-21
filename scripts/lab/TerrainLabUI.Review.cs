@@ -22,10 +22,6 @@ public partial class TerrainLabUI : Control
     private int _fantasyIdx;      // ST4-2 fantasy preset on review key 7 (cycles)
     private int _atmoStep;        // AT-1 atmosphere time-of-day preset on review key 8 (cycles dawn→noon→golden→dusk→night)
     private int _nsReviewIdx = -1; // Celestial C1 night-sky preset on review key 2 (-1 = tuned default, then cycles the 4)
-    private bool _gv2On;          // ground-v2 parity A/B state (review key 4 toggles old↔new)
-    private List<string> _palNames;
-    private Dictionary<string, string[]> _palRoles;
-    private int _palIdx;
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -80,60 +76,7 @@ public partial class TerrainLabUI : Control
                 title = $"2 · Night sky (Celestial C1)  [{nsName}]  (press 2 to cycle presets)";
                 judge = "Fantasy night sky: a galaxy with a bright CORE (not a uniform fog band), dust lanes, colored nebulae, varied stars. Press 2 to cycle default→Subtle→Crimson Rift→Aurora Veil→Deep Field. Tune 'galaxy *' / 'nebula *' / 'star *' on the Night tab; 'night sky baked (perf)' on/off must look identical. Fly to look around the sky.";
                 break;
-            case 3: // Ground G-0 — isolate the "wrong-defaults" levers ONE at a time (cumulative). Press 3 to step.
-            {
-                if (_lastPreset != 3)
-                {
-                    BaselineGround();              // clouds off + neutral grade + GM features off = the CURRENT baseline
-                    _timeRunning = false;          // LOCK the sun (no auto-cycle) so the A/B isn't confounded by drifting light
-                    Set("time_of_day", 16.0f);     // fixed mid-afternoon sun (grazing → reveals relief + specular)
-                    CloseGround();                 // frame the ground (fly the last bit to a cliff/slope)
-                    _g0Step = 0;                   // start on the clean CURRENT baseline
-                }
-                else { _g0Step = (_g0Step + 1) % 6; }   // re-press: add the next lever (cumulative), wrap back to CURRENT
-                // cumulative — each step turns ON one more lever so you see exactly which one introduces an artifact
-                Set("rough_floor",      _g0Step >= 1 ? 0.15f : 0.5f);
-                Set("tex_scale_m",      _g0Step >= 2 ? 11f   : 28f);
-                Set("height_from_maps", _g0Step >= 3);
-                Set("variation_on",     _g0Step >= 4);
-                ApplyPaletteByName(     _g0Step >= 5 ? "alpine_stone" : "alpine_green");
-                string[] g0Names = { "CURRENT (baseline)", "+rough_floor 0.15 (specular)", "+tex_scale 11 (finer)", "+real height (GM2)", "+within-area variation", "+alpine_stone palette = FULL FIXED" };
-                string[] g0Judge = {
-                    "Clean baseline — your current look. Sun is LOCKED (no drift) so the A/B is fair. Press 3 to add levers one at a time and spot which one artifacts.",
-                    "ROUGH_FLOOR unclamped 0.5->0.15 → specular returns. Fly the lit/grazing faces: do they SPARKLE / FUZZ / crawl in motion? (#1 suspect for the artifacting.)",
-                    "TEX_SCALE 28->11 (~3x finer) → more texture detail. More shimmer/aliasing, or visible tiling repetition?",
-                    "REAL HEIGHT now drives the blend interlock (vs inverted-roughness). New artifacts at material BOUNDARIES / transitions?",
-                    "WITHIN-AREA VARIATION modulates roughness/value/normal. Noise, squares, or blotchy patches?",
-                    "FULL FIXED + contrast-rich palette. Net better or worse than step 0 (CURRENT)?"
-                };
-                title = $"3 · Ground G-0 isolate [{_g0Step}/5] — {g0Names[_g0Step]}  (press 3 to step)";
-                judge = g0Judge[_g0Step];
-                break;
-            }
-            case 4: // Ground v2 (new core) PARITY A/B — press 4 to toggle old↔new. Reset spec 2026-06-21.
-            {
-                if (_lastPreset != 4)
-                {
-                    BaselineGround();                 // clouds off + neutral grade + old GM features off
-                    _timeRunning = false;             // LOCK the sun so the A/B isn't confounded by drifting light
-                    Set("time_of_day", 16.0f);        // fixed mid-afternoon sun (grazing → reveals relief + transitions)
-                    CloseGround();                     // frame the ground (fly the last bit to a slope/transition)
-                    _terrain.PrewarmGroundV2();        // build the v2 arrays NOW so the A/B toggle is instant (no bake hitch)
-                    _terrain.SetGv2Debug(0);           // textured (clear any placement-viz left on from the Shift+N bank)
-                    _gv2On = false;                    // start on the OLD path (the parity baseline)
-                }
-                else { _gv2On = !_gv2On; }
-                _terrain.SetGroundV2(_gv2On);
-                title = $"4 · Ground v2 (new core) — {(_gv2On ? "NEW (per-pixel procedural)" : "OLD (terrain_lab)")}  (press 4 to A/B)";
-                judge = "Fly close/mid. NEW must beat OLD: NO blocky facets at material transitions, materials placed sensibly (clay low / scree & talus slopes / basalt cliffs / lichen & snow high), within-area variation native, anti-tiling intact, no fuzz in motion. Sun is LOCKED. This is the parity gate — tune via data/ground_materials.json (bands/placement) or the Debug 'gv2 debug' viz.";
-                break;
-            }
-            case 5: // Ground GM3-A — within-area variation (1c)
-                BaselineGround();
-                Set("variation_on", true);
-                title = "5 · GM3-A within-area variation";
-                judge = "On a uniform slope: stops reading uniform — drier-lighter-rougher vs damper-darker-smoother patches, organic, no squares/shimmer? Far ~unchanged. Toggle 'within-area variation' (Color tab).";
-                break;
+            // cases 3-5 (ground G-0 / v2 parity / variation) removed in the 2026-06-21 ground strip.
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle: cumulus(profile off→on) → stratus → cirrus
                 if (_lastPreset != 6)
                 {
@@ -263,14 +206,11 @@ public partial class TerrainLabUI : Control
         else GD.PushWarning($"[review] unknown control id '{id}' (skipped)");
     }
 
-    /// Approved-era ground baseline: neutral midday light, clouds off, all new GM features off.
+    /// Neutral ground baseline: midday light, clouds off. (Ground material levers were stripped 2026-06-21.)
     private void BaselineGround()
     {
         ApplyMood(2);                                           // midday = neutral
         Set("cloud_enabled", false);
-        Set("variation_on", false);
-        Set("height_from_maps", false);
-        Set("pom_on", false);
     }
 
     private void CloseGround()
@@ -333,44 +273,6 @@ public partial class TerrainLabUI : Control
         // below horizontal so distant terrain fills the lower ~2/3 and the sky/sun sits in the upper third.
         var flat = new Vector3(toSun.X, toSun.Y * 0.12f - 0.06f, toSun.Z).Normalized();
         cam.LookAt(cam.GlobalPosition + flat, Vector3.Up);
-    }
-
-    private void CyclePalette(bool advance)
-    {
-        if (_palRoles == null) LoadPalettes();
-        if (_palNames == null || _palNames.Count == 0) return;
-        if (advance) _palIdx = (_palIdx + 1) % _palNames.Count;
-        var name = _palNames[_palIdx];
-        if (_palRoles.TryGetValue(name, out var roles) && _terrain != null)
-            for (int z = 0; z < roles.Length && z < 7; z++)
-                _terrain.SetZoneMaterial(z, roles[z]);
-    }
-
-    private void LoadPalettes()
-    {
-        _palNames = new List<string>();
-        _palRoles = new Dictionary<string, string[]>();
-        using var f = Godot.FileAccess.Open("res://data/ground_palette.json", Godot.FileAccess.ModeFlags.Read);
-        if (f == null) return;
-        var parsed = Json.ParseString(f.GetAsText());
-        if (parsed.VariantType != Variant.Type.Dictionary) return;
-        var root = parsed.AsGodotDictionary();
-        if (!root.ContainsKey("palettes")) return;
-        var pals = root["palettes"].AsGodotDictionary();
-        foreach (var key in pals.Keys)
-        {
-            var name = key.AsString();
-            var roleArr = pals[key].AsGodotDictionary();
-            if (!roleArr.ContainsKey("roles")) continue;
-            var arr = roleArr["roles"].AsGodotArray();
-            var roles = new string[arr.Count];
-            for (int i = 0; i < arr.Count; i++) roles[i] = arr[i].AsString();
-            _palNames.Add(name);
-            _palRoles[name] = roles;
-        }
-        var active = root.ContainsKey("active") ? root["active"].AsString() : "";
-        var ai = _palNames.IndexOf(active);
-        if (ai >= 0) _palIdx = ai;
     }
 
     private void BuildReviewLabel()

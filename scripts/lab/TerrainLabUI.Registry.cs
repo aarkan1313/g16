@@ -325,10 +325,6 @@ public partial class TerrainLabUI : Control
         var vb = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         scroll.AddChild(vb);
 
-        var rebakeBtn = new Button { Text = "Rebake splat" };
-        rebakeBtn.Pressed += () => _terrain.RebakeSplat();
-        vb.AddChild(rebakeBtn);
-
         var prow = new HBoxContainer();
         _presetName = new LineEdit { PlaceholderText = "preset name", CustomMinimumSize = new Vector2(160, 0) };
         prow.AddChild(_presetName);

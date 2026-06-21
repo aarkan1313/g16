@@ -223,13 +223,8 @@ public partial class TerrainLabUI : Control
             var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
             camN.LookAt(camN.GlobalPosition + _lastMoonDir, Vector3.Up);
         }
-        // --groundv2[=1]: swap to the new per-pixel ground skin at startup (A/B auto-shots). Default stays old.
-        if (_groundV2Cli >= 0) { _terrain.SetGroundV2(_groundV2Cli == 1); }
-        if (_gv2DebugCli >= 0) { _terrain.SetGv2Debug(_gv2DebugCli); }   // --gv2debug=N: placement-viz at startup
         // --review=N: drive a review preset at startup (verify/screenshot the keypress path headlessly). LAST so it wins.
         if (_reviewCli > 0) { ApplyReview(_reviewCli); }
-        // --greview=N: drive a ground-bank (Shift+N) gate at startup — e.g. --greview=1 = the G-0 "wrong-defaults" A/B FIXED state.
-        if (_greviewCli > 0) { ApplyGroundReview(_greviewCli); }
     }
 
     public override void _ExitTree() => _fc?.Dispose();

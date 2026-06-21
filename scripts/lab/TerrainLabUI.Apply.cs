@@ -14,8 +14,6 @@ public partial class TerrainLabUI : Control
     private void ApplyAll()
     {
         foreach (LabControl c in _controls) { ApplyControl(c, false); }
-        _terrain.PushSecondaryZones();
-        _terrain.RebakeSplat();
     }
 
     /// Push one control's current value to the shader/terrain. rebakeIfNeeded: when
@@ -25,8 +23,7 @@ public partial class TerrainLabUI : Control
         switch (c.Type)
         {
             case "slider":
-                if (c.Field != null) { SetTerrainField(c.Field, c.Value.AsSingle()); }
-                else if (c.Param != null) { _terrain.SetFloat(c.Param, c.Value.AsSingle()); }
+                if (c.Param != null) { _terrain.SetFloat(c.Param, c.Value.AsSingle()); }
                 break;
             case "cloudf":
                 if (c.Cloud != null) { ApplyCloudFloat(c.Cloud, c.Value.AsSingle()); }
@@ -43,16 +40,7 @@ public partial class TerrainLabUI : Control
                 break;
             case "enum":
                 int iv = c.Value.AsInt32();
-                if (c.Setter == "mask") { _terrain.SetMaskMode(iv); }
-                else if (c.Setter == "blend") { _terrain.SetBlendMode(iv); }
-                else if (c.Setter == "gv2debug") { _terrain.SetGv2Debug(iv); }
-                else if (c.Param != null) { _terrain.SetInt(c.Param, iv); }
-                break;
-            case "material":
-                _terrain.SetZoneMaterial(c.Zone, _materials[Math.Clamp(c.Value.AsInt32(), 0, _materials.Count - 1)]);
-                break;
-            case "companion":
-                _terrain.SetSecondaryZone(c.Zone, c.Value.AsInt32());
+                if (c.Param != null) { _terrain.SetInt(c.Param, iv); }
                 break;
             case "scene":
                 ApplyScene(c.Scene, c.Value.AsBool());
@@ -64,31 +52,11 @@ public partial class TerrainLabUI : Control
                 ApplySceneColor(c.Scene, c.Value.AsColor());
                 break;
         }
-        if (rebakeIfNeeded && c.Rebake) { _terrain.RebakeSplat(); }
-    }
-
-    private void SetTerrainField(string field, float v)
-    {
-        if (field == "MixScaleM") { _terrain.MixScaleM = v; }
-        else if (field == "MixBias") { _terrain.MixBias = v; }
-        else if (field == "CurvK") { _terrain.CurvK = v; }
-        else if (field == "HValley") { _terrain.HValley = v; }
-        else if (field == "HHigh") { _terrain.HHigh = v; }
-        else if (field == "HPeak") { _terrain.HPeak = v; }
-        else if (field == "SlopeCliffLo") { _terrain.SlopeCliffLo = v; }
-        else if (field == "SlopeCliffHi") { _terrain.SlopeCliffHi = v; }
-        else if (field == "BandSoftnessM") { _terrain.BandSoftnessM = v; }
-        else if (field == "BkCurvScale")  { _terrain.BkCurvScale = v; }
-        else if (field == "BkCavityGain") { _terrain.BkCavityGain = v; }
-        else if (field == "BkSunAzimuth") { _terrain.BkSunAzimuth = v; }
-        else if (field == "BkFlowIters")  { _terrain.BkFlowIters = Mathf.RoundToInt(v); }
     }
 
     private void SetTerrainBoolField(string field, bool v)
     {
-        if (field == "RuleBased") { _terrain.RuleBased = v; }
-        else if (field == "UseGiProxy") { _terrain.SetGiProxy(v); }
-        else if (field == "GroundV2") { _terrain.SetGroundV2(v); }
+        if (field == "UseGiProxy") { _terrain.SetGiProxy(v); }
     }
 
     private void ApplySceneColor(string? target, Color col)

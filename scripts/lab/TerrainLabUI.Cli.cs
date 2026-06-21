@@ -69,37 +69,7 @@ public partial class TerrainLabUI : Control
     {
         foreach (string a in OS.GetCmdlineUserArgs())
         {
-            if (a.StartsWith("--histcheck"))
-            {
-                // Bake one material's albedo histogram LUTs and print the T⁻¹(T(v)) round-trip error, then quit.
-                string mat = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "13_sun_baked_clay";
-                string hp = ProjectSettings.GlobalizePath($"res://assets/materials/{mat}/albedo.png");
-                if (!System.IO.File.Exists(hp)) { GD.Print($"[histcheck] no albedo for {mat}"); GetTree().Quit(); return; }
-                var himg = Image.LoadFromFile(hp);
-                var luts = HistogramCompute.ComputeLuts(himg);
-                var (maxe, meane) = HistogramCompute.RoundTripError(luts, himg);
-                // PASS on bulk fidelity (meanErr). maxErr is the inherent ±3σ tail-clamp on the
-                // most-extreme ~0.1% of pixels (sub-perceptible) — reported, not gated.
-                GD.Print($"[histcheck] {mat}: roundtrip meanErr={meane * 255f:F3}/255 (maxErr={maxe * 255f:F1}/255 = ±3σ tail-clamp, expected)  -> {(meane < 1f / 255f ? "PASS" : "FAIL")}");
-                GetTree().Quit();
-                return;
-            }
-            else if (a.StartsWith("--groundarraycheck"))
-            {
-                // Build the ground v2 texture arrays standalone, print layer counts + PASS/FAIL, quit.
-                // Windowed bakes real Poisson height; headless falls back to the flat height proxy (still PASS).
-                var g = GroundMaterialArrays.Build("res://data/ground_materials.json");
-                bool ok = g.Count > 0 && g.Albedo.GetLayers() == g.Count && g.Normal.GetLayers() == g.Count
-                          && g.Orm.GetLayers() == g.Count && g.Height.GetLayers() == g.Count;
-                GD.Print($"[groundarraycheck] count={g.Count} res={g.TexRes} scale={g.TexScaleM:F1} " +
-                         $"albLayers={g.Albedo.GetLayers()} nrmLayers={g.Normal.GetLayers()} " +
-                         $"ormLayers={g.Orm.GetLayers()} hgtLayers={g.Height.GetLayers()} -> {(ok ? "PASS" : "FAIL")}");
-                GetTree().Quit();
-                return;
-            }
-            else if (a.StartsWith("--groundv2")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _groundV2Cli = (s == "1") ? 1 : 0; }
-            else if (a.StartsWith("--gv2debug=")) { int.TryParse(a.Substring("--gv2debug=".Length), out _gv2DebugCli); }
-            else if (a.StartsWith("--auto-shot=")) { _autoShotPath = a.Substring("--auto-shot=".Length); _autoShotT = 0.0; }
+            if (a.StartsWith("--auto-shot=")) { _autoShotPath = a.Substring("--auto-shot=".Length); _autoShotT = 0.0; }
             else if (a.StartsWith("--blend=")) { int.TryParse(a.Substring("--blend=".Length), out _overrideBlend); }
             else if (a.StartsWith("--mask=")) { int.TryParse(a.Substring("--mask=".Length), out _overrideMask); }
             else if (a.StartsWith("--tile=")) { int.TryParse(a.Substring("--tile=".Length), out _overrideTile); }
@@ -210,9 +180,6 @@ public partial class TerrainLabUI : Control
         if (_probeRoughFloor >= 0f) { _terrain.SetFloat("rough_floor", _probeRoughFloor); }
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
-        if (_terrainArCli >= 0) { _terrain.SetBool("ar_on", _terrainArCli == 1); }
-        if (_terrainDetailCli >= 0) { _terrain.SetBool("detail_on", _terrainDetailCli == 1); }
-        if (_groundRulesCli >= 0) { _terrain.RuleBased = _groundRulesCli == 1; _terrain.RebakeSplat(); }
         if (_proxyResCli >= 0) { _terrain.SetProxyRes(_proxyResCli); }
         if (_giProxyCli >= 0) { _terrain.SetGiProxy(_giProxyCli == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }

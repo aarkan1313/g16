@@ -1,270 +1,51 @@
 shader_type spatial;
-// GROUND v2 — per-pixel procedural material skin (2026-06-21 reset). Built ALONGSIDE
-// terrain_lab.gdshader; swapped in via TerrainLab.SetGroundV2 for A/B. Units land here in order:
-//   0 scaffold · 1 arrays · 2 placement · 3 sampling+anti-tile · 4 blend.
-// See docs/superpowers/plans/2026-06-21-ground-material-system-core.md.
-//
-// NOTE: NO render_mode — terrain_lab.gdshader has none, so VERTEX is object space and the
-// TerrainLab node is at identity (origin), making object space == world space. Mirrored here
-// EXACTLY (re-host, don't re-derive) so the A/B compares only the material skin, not the geometry.
+// GROUND — minimal height-color PLACEHOLDER (2026-06-21 strip).
+// The full per-pixel material system (placement / arrays / blend / splat / old terrain_lab) was
+// stripped back to a clean base. This just displaces the mesh from the heightfield and paints a
+// height + slope color ramp, lit by Godot's default lighting (the sky/sun). Not blank; the base
+// we plan CDLOD / infinite terrain on. NO render_mode — object space == world at identity, matching
+// the field. Everything tunable is a uniform.
 
 uniform sampler2D heightmap : repeat_disable, filter_linear;
 uniform float region_size = 8192.0;
 uniform float texel_world = 4.0;
 
-varying vec2  v_uv;
-varying vec3  v_world;
-varying vec3  v_normal;   // world-space geometric normal from neighbour height taps
-varying float v_h;        // height (m)
-varying float v_slope;    // 0 flat .. 1 vertical
-varying float v_curv;     // local curvature: concave/hollow > 0, convex/ridge < 0 (meters)
-varying float v_ao;       // material AO carried fragment -> light() for the DIRECT term
+// height-color ramp (meters -> color) + slope->rock. Placeholder palette; tune freely.
+uniform vec3  col_low  : source_color = vec3(0.34, 0.40, 0.24);   // valley grass/dirt
+uniform vec3  col_mid  : source_color = vec3(0.46, 0.39, 0.28);   // slope earth
+uniform vec3  col_high : source_color = vec3(0.43, 0.43, 0.45);   // rock
+uniform vec3  col_peak : source_color = vec3(0.93, 0.94, 0.97);   // snow
+uniform vec3  col_cliff: source_color = vec3(0.34, 0.33, 0.34);   // steep rock
+uniform float h_low  = 40.0;
+uniform float h_mid  = 280.0;
+uniform float h_high = 500.0;
+uniform float h_peak = 600.0;
+uniform float cliff_lo = 0.45;
+uniform float cliff_hi = 0.72;
+uniform float ground_rough = 0.92;
+
+varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
+varying float v_h;       // height (m)
 
 float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 
 void vertex() {
-    // Re-host of terrain_lab.gdshader vertex() (the proven displacement + field derivation).
-    // The mesh is a flat PlaneMesh; the heightfield is applied here, so ground v2 must displace
-    // it too or the terrain would render flat.
-    v_uv = (VERTEX.xz + vec2(region_size * 0.5)) / region_size;
-    VERTEX.y = height_at(v_uv);
-    v_world = VERTEX;
+    vec2 uv = (VERTEX.xz + vec2(region_size * 0.5)) / region_size;
+    VERTEX.y = height_at(uv);
     float t = texel_world / region_size;
-    float hl = height_at(v_uv - vec2(t, 0)), hr = height_at(v_uv + vec2(t, 0));
-    float hd = height_at(v_uv - vec2(0, t)), hu = height_at(v_uv + vec2(0, t));
+    float hl = height_at(uv - vec2(t, 0.0)), hr = height_at(uv + vec2(t, 0.0));
+    float hd = height_at(uv - vec2(0.0, t)), hu = height_at(uv + vec2(0.0, t));
     v_normal = normalize(vec3(hl - hr, 2.0 * texel_world, hd - hu));
-    NORMAL = v_normal;
+    NORMAL = v_normal;   // object-space (== world at identity) -> Godot transforms to view for lighting
     v_h = VERTEX.y;
-    v_slope = 1.0 - v_normal.y;
-    v_curv = (hl + hr + hd + hu) * 0.25 - VERTEX.y;
-}
-
-// ============================================================================
-// UNIT 2 — per-pixel procedural PLACEMENT (the blockiness killer).
-// Material weights are evaluated PER FRAGMENT from the world-space terrain fields
-// (height / slope) + domain-warped world-position noise. There is NO baked splat,
-// so boundaries are as fine as the screen — no 4 m grid to snap to. All knobs are
-// data-driven uniforms (data/ground_materials.json 'placement' block), not magic numbers.
-// ============================================================================
-
-uniform int   mat_count = 0;
-uniform vec4  rule_bands[32];   // per material: xy=hmin/hmax (m), zw=slopemin/slopemax (0-1)
-uniform vec4  rule_amp[32];     // per material: x=height_amp (Unit-4 height-bias multiplier)
-uniform int   gv2_debug = 0;    // 0 off, 1 placement-viz (flat per-material color)
-uniform float p_height_bias = 1.0;  // Unit-4: how strongly real height biases the boundary
-uniform float p_blend_aa    = 0.02; // Unit-4: min height-blend AA band (fwidth widens it; floor here)
-
-// Placement tunables (pushed from the manifest by AttachGroundArrays).
-uniform float p_band_soft_m = 60.0;   // height-band edge softness (m)
-uniform float p_slope_soft  = 0.08;   // slope-band edge softness (0-1)
-uniform float p_warp_m      = 120.0;  // domain-warp wavelength (m)
-uniform float p_warp_amp_m  = 80.0;   // domain-warp amplitude (m)
-uniform float p_patch_m     = 40.0;   // within-area variation patch wavelength (m)
-uniform float p_noise_gain  = 0.8;    // how strongly patch noise modulates each weight (0 = uniform)
-
-// Re-host of terrain_lab.gdshader hash2 + vnoise (identical character to the approved ground path).
-float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float vnoise(vec2 w, float wl){ vec2 p = w / max(wl, 1e-3); vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash2(i), hash2(i + vec2(1, 0)), f.x), mix(hash2(i + vec2(0, 1)), hash2(i + vec2(1, 1)), f.x), f.y); }
-
-// Per-material placement weight from its rule (height/slope band) + warped patch noise.
-// Soft band edges (smoothstep) keep boundaries gradual; the warped noise IS the within-area
-// variation (drier/wetter patches) so no separate variation unit is needed.
-float rule_weight(int i, float h, float slope, vec2 wxz){
-    vec4 b = rule_bands[i];
-    float hw = smoothstep(b.x - p_band_soft_m, b.x + p_band_soft_m, h)
-             * (1.0 - smoothstep(b.y - p_band_soft_m, b.y + p_band_soft_m, h));
-    float sw = smoothstep(b.z - p_slope_soft, b.z + p_slope_soft, slope)
-             * (1.0 - smoothstep(b.w - p_slope_soft, b.w + p_slope_soft, slope));
-    vec2 warp = vec2(vnoise(wxz + vec2(31.0, 17.0), p_warp_m),
-                     vnoise(wxz + vec2(7.0, 91.0), p_warp_m)) - 0.5;
-    float n = vnoise(wxz + warp * p_warp_amp_m + float(i) * 53.0, p_patch_m);  // i offset = decorrelate materials
-    float patch = mix(1.0, 2.0 * n, p_noise_gain);   // n mean 0.5 -> 2n mean 1.0; gain scales the variation
-    return max(hw * sw * patch, 0.0);
-}
-
-// Top-4 materials by placement weight at this fragment (descending), weights normalized to sum 1.
-void placement(out ivec4 idx, out vec4 w){
-    idx = ivec4(0); w = vec4(0.0);
-    for(int i = 0; i < mat_count && i < 32; i++){
-        float wi = rule_weight(i, v_h, v_slope, v_world.xz);
-        if(wi > w.x){ w = vec4(wi, w.x, w.y, w.z); idx = ivec4(i, idx.x, idx.y, idx.z); }
-        else if(wi > w.y){ w = vec4(w.x, wi, w.y, w.z); idx = ivec4(idx.x, i, idx.y, idx.z); }
-        else if(wi > w.z){ w = vec4(w.x, w.y, wi, w.z); idx = ivec4(idx.x, idx.y, i, idx.z); }
-        else if(wi > w.w){ w = vec4(w.x, w.y, w.z, wi); idx = ivec4(idx.x, idx.y, idx.z, i); }
-    }
-    float s = w.x + w.y + w.z + w.w;
-    w = (s > 1e-5) ? w / s : vec4(1.0, 0.0, 0.0, 0.0);
-}
-
-vec3 dbg_mat_color(int i){
-    return 0.5 + 0.5 * vec3(hash2(vec2(float(i), 1.0)), hash2(vec2(float(i), 2.0)), hash2(vec2(float(i), 3.0)));
-}
-
-// ============================================================================
-// UNIT 3 — SAMPLING + ANTI-TILING. Each top material's array slot is sampled through the
-// re-hosted histogram-preserving stochastic bombing (albedo) + branched triplanar. Mip/aniso
-// filtering is asserted on the array uniforms (the documented "fuzz = no mipmaps" gotcha).
-// ============================================================================
-
-uniform sampler2DArray albedo_arr : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2DArray normal_arr : filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2DArray orm_arr    : filter_linear_mipmap_anisotropic, repeat_enable;  // R=AO G=rough B=metal
-uniform sampler2DArray height_arr : filter_linear_mipmap_anisotropic, repeat_enable;  // Rf (in .r)
-uniform float tex_scale_m   = 11.0;   // world meters per texture tile (bound by AttachGroundArrays)
-uniform bool  ar_on         = true;   // master toggle for the stochastic anti-tiling bombing
-uniform float tri_sharpness = 8.0;    // triplanar blend exponent
-uniform float p_rough_floor  = 0.15;  // min roughness (tunable; keeps the matte ground from going glossy)
-uniform float p_nrm_strength = 0.7;   // normal-map perturbation strength (world XZ tilt)
-
-const float TRI_EPS = 0.004;   // branched-triplanar skip threshold (a plane below this is ~free to skip)
-
-// tri-grid + hash helpers re-hosted from terrain_lab.gdshader (shared by the bombing).
-vec2 hash2v(vec2 p){ mat2 m = mat2(vec2(127.1, 269.5), vec2(311.7, 183.3)); return fract(sin(m * p) * 43758.5453); }
-void tri_grid(vec2 st, out float w1, out float w2, out float w3, out vec2 v1, out vec2 v2, out vec2 v3){
-    const mat2 skew = mat2(vec2(1.0, 0.0), vec2(-0.57735027, 1.15470054));
-    const mat2 unsk = mat2(vec2(1.0, 0.0), vec2(0.5, 0.86602540));
-    vec2 p = skew * st; vec2 i = floor(p); vec2 f = fract(p); float tmp = f.x + f.y;
-    if (tmp < 1.0){ v1 = i; w1 = 1.0 - tmp; v2 = i + vec2(1, 0); w2 = f.x; v3 = i + vec2(0, 1); w3 = f.y; }
-    else          { v1 = i + vec2(1, 1); w1 = tmp - 1.0; v2 = i + vec2(1, 0); w2 = 1.0 - f.y; v3 = i + vec2(0, 1); w3 = 1.0 - f.x; }
-    v1 = unsk * v1; v2 = unsk * v2; v3 = unsk * v3;
-}
-vec3 tri_w(vec3 nr){ vec3 bw = pow(abs(nr), vec3(tri_sharpness)); return bw / (bw.x + bw.y + bw.z); }
-
-// Histogram-preserving stochastic bombing for one ARRAY LAYER. Translation-only 3 taps on a
-// triangle grid + variance-restore blend (inversesqrt(dot(w,w)) keeps contrast). Re-host of
-// histo_sample_wp. SIMPLIFICATION (per plan): no per-slot inverse-histogram LUT yet (the variance
-// restore preserves contrast on its own; LUT is a refinement if a material washes) and no distance
-// LOD (always 3-tap; cam_world isn't wired to the v2 material — a perf follow-up).
-// NOTE on derivatives in branches: this is called inside the per-material `if(bw>EPS)` guards
-// (divergent flow). dFdx/dFdy(uv) is spec-"undefined" there, BUT uv derives only from v_world (a
-// VARYING, present in every quad lane regardless of branching), so the gradient is well-defined in
-// practice on desktop Vulkan — same pattern the proven terrain_lab.gdshader ships. The only symptom
-// if a driver disagreed would be over-sharp mip selection / shimmer at material seams in motion; if
-// that ever appears, hoist dFdx(v_world) to fragment scope and thread it in.
-vec4 ar_arr(sampler2DArray tex, vec2 uv, float layer, vec3 wp){
-    vec2 dx = dFdx(uv), dy = dFdy(uv);
-    vec4 plain = textureGrad(tex, vec3(uv, layer), dx, dy);
-    if (!ar_on) return plain;
-    float w1, w2, w3; vec2 v1, v2, v3; tri_grid(uv, w1, w2, w3, v1, v2, v3);
-    vec4 t1 = textureGrad(tex, vec3(uv + hash2v(v1), layer), dx, dy);
-    vec4 t2 = textureGrad(tex, vec3(uv + hash2v(v2), layer), dx, dy);
-    vec4 t3 = textureGrad(tex, vec3(uv + hash2v(v3), layer), dx, dy);
-    vec3 w = vec3(w1, w2, w3); w *= w; w /= max(w.x + w.y + w.z, 1e-5);
-    vec4 mean = (t1 + t2 + t3) / 3.0;
-    vec4 blend = t1 * w.x + t2 * w.y + t3 * w.z;
-    float vc = inversesqrt(max(dot(w, w), 1e-5));
-    return mean + (blend - mean) * vc;
-}
-vec4 tap_arr(sampler2DArray tex, vec2 uv, float layer){ return textureGrad(tex, vec3(uv, layer), dFdx(uv), dFdy(uv)); }
-
-// Branched triplanar per array slot. Albedo through the bombing; normal/orm/height plain single
-// tap (proven call: bombing flattens normals + their tiling is imperceptible at terrain range).
-vec3 tp_alb_arr(int i, vec3 wp, vec3 nr){ vec3 bw = tri_w(nr); float L = float(i); vec3 c = vec3(0.0);
-    if (bw.x > TRI_EPS) c += ar_arr(albedo_arr, wp.zy / tex_scale_m, L, wp).rgb * bw.x;
-    if (bw.y > TRI_EPS) c += ar_arr(albedo_arr, wp.xz / tex_scale_m, L, wp).rgb * bw.y;
-    if (bw.z > TRI_EPS) c += ar_arr(albedo_arr, wp.xy / tex_scale_m, L, wp).rgb * bw.z; return c; }
-vec3 tp_nrm_arr(int i, vec3 wp, vec3 nr){ vec3 bw = tri_w(nr); float L = float(i); vec3 c = vec3(0.0);
-    if (bw.x > TRI_EPS) c += tap_arr(normal_arr, wp.zy / tex_scale_m, L).rgb * bw.x;
-    if (bw.y > TRI_EPS) c += tap_arr(normal_arr, wp.xz / tex_scale_m, L).rgb * bw.y;
-    if (bw.z > TRI_EPS) c += tap_arr(normal_arr, wp.xy / tex_scale_m, L).rgb * bw.z; return c; }
-vec3 tp_orm_arr(int i, vec3 wp, vec3 nr){ vec3 bw = tri_w(nr); float L = float(i); vec3 c = vec3(0.0);
-    if (bw.x > TRI_EPS) c += tap_arr(orm_arr, wp.zy / tex_scale_m, L).rgb * bw.x;
-    if (bw.y > TRI_EPS) c += tap_arr(orm_arr, wp.xz / tex_scale_m, L).rgb * bw.y;
-    if (bw.z > TRI_EPS) c += tap_arr(orm_arr, wp.xy / tex_scale_m, L).rgb * bw.z; return c; }
-float tp_hgt_arr(int i, vec3 wp, vec3 nr){ vec3 bw = tri_w(nr); float L = float(i); float h = 0.0;
-    if (bw.x > TRI_EPS) h += tap_arr(height_arr, wp.zy / tex_scale_m, L).r * bw.x;
-    if (bw.y > TRI_EPS) h += tap_arr(height_arr, wp.xz / tex_scale_m, L).r * bw.y;
-    if (bw.z > TRI_EPS) h += tap_arr(height_arr, wp.xy / tex_scale_m, L).r * bw.z; return h; }
-
-// Geometric world normal perturbed by a tangent-space normal-map xy (world XZ tilt) — the proven
-// terrain_lab.gdshader approach (NO NORMAL_MAP/TBN; triplanar tangents diverge). Returns a WORLD
-// normal; fragment() does the VIEW_MATRIX transform (built-ins aren't visible in helper functions).
-vec3 perturb_normal_world(vec3 nr, vec3 nrm01){
-    vec3 nrm = nrm01 * 2.0 - 1.0;
-    return normalize(nr + vec3(nrm.x, 0.0, nrm.y) * p_nrm_strength);
 }
 
 void fragment() {
-    ivec4 idx; vec4 w; placement(idx, w);
-    vec3 nr = normalize(v_normal);
-    // NOTE: no 'return' in fragment() — Godot forbids it; branch by writing different values.
-    if (gv2_debug == 1) {                       // placement viz: dominant material flat color
-        ALBEDO = dbg_mat_color(idx.x);
-        ROUGHNESS = 1.0; AO = 1.0; v_ao = 1.0;
-        NORMAL = normalize((VIEW_MATRIX * vec4(nr, 0.0)).xyz);
-    } else {
-        // Task 4: top-4 HEIGHT-AWARE blend. Each PLACED material's contribution = placement weight
-        // biased by its real height (taller wins the boundary — rock pokes through sand), with a
-        // fwidth-widened selection band so transitions are per-pixel soft (no aliased grid facets).
-        const float EPS = 0.0001;
-        vec4 placed = step(vec4(EPS), w);          // only materials actually placed here are eligible
-        vec4 hh = vec4(0.0);                        // real height per slot (branch-guarded fetch)
-        if (w.x > EPS) hh.x = tp_hgt_arr(idx.x, v_world, nr) * rule_amp[idx.x].x;
-        if (w.y > EPS) hh.y = tp_hgt_arr(idx.y, v_world, nr) * rule_amp[idx.y].x;
-        if (w.z > EPS) hh.z = tp_hgt_arr(idx.z, v_world, nr) * rule_amp[idx.z].x;
-        if (w.w > EPS) hh.w = tp_hgt_arr(idx.w, v_world, nr) * rule_amp[idx.w].x;
-        vec4 hb = mix(vec4(-1.0), w + hh * p_height_bias, placed);   // unplaced excluded (hb = -1)
-        float top = max(max(hb.x, hb.y), max(hb.z, hb.w));
-        // fwidth AA: widen the band to >=1px so a hard height threshold can't collapse to a facet (G-1 lesson).
-        float aa = max(fwidth(hb.x - max(max(hb.y, hb.z), hb.w)), p_blend_aa);
-        vec4 bw = max(hb - (top - aa), 0.0);
-        float bs = bw.x + bw.y + bw.z + bw.w; bw = (bs > 1e-5) ? bw / bs : vec4(1.0, 0.0, 0.0, 0.0);
-
-        vec3 alb = vec3(0.0), orm = vec3(0.0), nm = vec3(0.0);   // branch-guarded top-4 fetch (perf)
-        if (bw.x > EPS) { alb += tp_alb_arr(idx.x, v_world, nr) * bw.x; orm += tp_orm_arr(idx.x, v_world, nr) * bw.x; nm += tp_nrm_arr(idx.x, v_world, nr) * bw.x; }
-        if (bw.y > EPS) { alb += tp_alb_arr(idx.y, v_world, nr) * bw.y; orm += tp_orm_arr(idx.y, v_world, nr) * bw.y; nm += tp_nrm_arr(idx.y, v_world, nr) * bw.y; }
-        if (bw.z > EPS) { alb += tp_alb_arr(idx.z, v_world, nr) * bw.z; orm += tp_orm_arr(idx.z, v_world, nr) * bw.z; nm += tp_nrm_arr(idx.z, v_world, nr) * bw.z; }
-        if (bw.w > EPS) { alb += tp_alb_arr(idx.w, v_world, nr) * bw.w; orm += tp_orm_arr(idx.w, v_world, nr) * bw.w; nm += tp_nrm_arr(idx.w, v_world, nr) * bw.w; }
-
-        ALBEDO = alb;
-        ROUGHNESS = clamp(orm.g, p_rough_floor, 1.0);
-        AO = orm.r; AO_LIGHT_AFFECT = 1.0; v_ao = orm.r;
-        vec3 wn = perturb_normal_world(nr, nm);
-        NORMAL = normalize((VIEW_MATRIX * vec4(wn, 0.0)).xyz);
-    }
-}
-
-// ============================================================================
-// BRDF — verbatim re-host of terrain_lab.gdshader light() (~1013-1068): Burley diffuse + GGX
-// specular (the approved "really good" look) + the cloud-shadow hook on the DIRECT term only.
-// Keeping this identical means the A/B compares the MATERIAL skin, not the lighting model.
-// ============================================================================
-uniform sampler2D cloud_shadow_tex : filter_linear, repeat_disable, hint_default_white;
-uniform bool cloud_shadow_on = false;       // dual-pushed from the old path by TerrainLab (fair A/B)
-uniform float cloud_shadow_region = 8192.0;
-
-float cloud_shadow_factor(vec3 wp){
-    if (!cloud_shadow_on) { return 1.0; }
-    vec2 uv = wp.xz / cloud_shadow_region + 0.5;   // [-R/2,R/2] -> [0,1] (matches the bake)
-    return texture(cloud_shadow_tex, uv).r;
-}
-float pow5(float x){ float x2 = x * x; return x2 * x2 * x; }
-
-void light() {
-    float cloud = cloud_shadow_factor(v_world);
-    vec3 N = NORMAL; vec3 V = VIEW; vec3 L = LIGHT; vec3 H = normalize(V + L);
-    float NoL = clamp(dot(N, L), 0.0, 1.0);
-    float NoV = clamp(dot(N, V), 1e-4, 1.0);
-    float NoH = clamp(dot(N, H), 0.0, 1.0);
-    float LoH = clamp(dot(L, H), 0.0, 1.0);
-    float rough = clamp(ROUGHNESS, 0.02, 1.0);
-    float a = rough * rough; float a2 = a * a;
-    vec3 radiance = LIGHT_COLOR * ATTENUATION * cloud * NoL;   // cloud scales the direct sun only
-    // Burley (Disney) diffuse — matches Godot's DIFFUSE_BURLEY default.
-    float fd90 = 0.5 + 2.0 * rough * LoH * LoH;
-    float lightScatter = 1.0 + (fd90 - 1.0) * pow5(1.0 - NoL);
-    float viewScatter  = 1.0 + (fd90 - 1.0) * pow5(1.0 - NoV);
-    float burley = lightScatter * viewScatter * (1.0 / 3.14159265);
-    DIFFUSE_LIGHT += ALBEDO * radiance * burley * v_ao;
-    // GGX specular: D (Trowbridge-Reitz) * V (correlated Smith) * F (Schlick).
-    float d = NoH * NoH * (a2 - 1.0) + 1.0;
-    float D = a2 / (3.14159265 * d * d);
-    float k = a * 0.5;
-    float visL = NoL * (NoV * (1.0 - k) + k);
-    float visV = NoV * (NoL * (1.0 - k) + k);
-    float Vis = 0.5 / max(visL + visV, 1e-4);
-    vec3 f0 = vec3(0.04);   // dielectric (terrain is non-metal)
-    vec3 F = f0 + (vec3(1.0) - f0) * pow5(1.0 - LoH);
-    SPECULAR_LIGHT += radiance * (D * Vis) * F * v_ao;
+    vec3 c = mix(col_low, col_mid, smoothstep(h_low, h_mid, v_h));
+    c = mix(c, col_high, smoothstep(h_mid, h_high, v_h));
+    c = mix(c, col_peak, smoothstep(h_high, h_peak, v_h));
+    float slope = 1.0 - v_normal.y;                       // 0 flat .. 1 vertical
+    c = mix(c, col_cliff, smoothstep(cliff_lo, cliff_hi, slope));   // steep faces -> rock
+    ALBEDO = c;
+    ROUGHNESS = ground_rough;
 }
