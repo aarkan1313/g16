@@ -87,7 +87,8 @@ public partial class TerrainLabUI : Control
         sun.LightAngularDistance = _sunDisc.DiscAngular;
         if (_cloud != null)
         {
-            _cloud.SetSkyColors(tTop, tHor, tGnd);   // tinted (ST4-2)
+            _cloud.SetSkyColors(tTop, tHor, tGnd);   // tinted keyframed gradient (ST4-2)
+            _cloud.SetSkyTint(_skyTint);             // ST4-2 fantasy/manual tint also modulates the physical (atmosphere) sky
             _cloud.SetSunSize(_sunDisc.Size); _cloud.SetSunLimb(_sunDisc.Limb);
             _cloud.SetSunCoronaSize(_sunDisc.CoronaSize); _cloud.SetSunCoronaEnergy(_sunDisc.CoronaEnergy);
             _cloud.SetSunHaloSize(_sunDisc.HaloSize); _cloud.SetSunHaloEnergy(_sunDisc.HaloEnergy);

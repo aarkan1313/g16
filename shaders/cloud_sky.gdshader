@@ -16,6 +16,7 @@ uniform int cloud_debug = 0;   // 0 normal | 1 show raw cloud tex
 uniform bool atmosphere_on = false;
 uniform sampler2D atmo_skyview_tex : filter_linear, repeat_enable;   // Hillaire sky-view LUT (az, sqrt-warped el)
 uniform float atmo_exposure : hint_range(0.0, 60.0) = 10.0;          // scales LUT radiance into the tonemapper (gate-tuned)
+uniform vec3  sky_tint : source_color = vec3(1.0);                   // ST4-2 fantasy/manual tint applied to the physical sky (white = no-op)
 
 // Sun-disc brightness, decoupled from LIGHT0_ENERGY: the overcast proxy dims the directional
 // light's energy globally (terrain gloom), but the VISIBLE sun disc must stay bright — a cloud
@@ -104,6 +105,12 @@ vec3 background(vec3 dir){
         // CONTINUOUS across dir.y=0 (no hard "line where the sky ends" when the finite terrain doesn't fill
         // the lower hemisphere). Below the horizon, fade that physical horizon color toward the ground tint.
         vec3 atmo = texture(atmo_skyview_tex, atmo_dir_to_uv(dir)).rgb * atmo_exposure;
+        // sky_tint: white = physical sky unchanged; a saturated (fantasy) tint RECOLORS the sky to that hue while
+        // keeping the physical brightness / gradient / sun-halo structure (luminance-preserving, no-op at white).
+        float tintSat = max(max(sky_tint.r, sky_tint.g), sky_tint.b) - min(min(sky_tint.r, sky_tint.g), sky_tint.b);
+        vec3 tintN = sky_tint / max(dot(sky_tint, vec3(0.2126, 0.7152, 0.0722)), 1e-3);   // luminance-normalized hue
+        vec3 recolored = dot(atmo, vec3(0.2126, 0.7152, 0.0722)) * tintN;
+        atmo = mix(atmo, recolored, clamp(tintSat * 2.0, 0.0, 1.0));
         vec3 sky = (dir.y >= 0.0) ? atmo : mix(atmo, ground_color, clamp(-dir.y * 4.0, 0.0, 1.0));
         // DAY = physical atmosphere; blend to the approved keyframed gradient as night falls so the
         // gated night look (moon/stars/night-grade) is regression-free + the dusk→night tail is clean.

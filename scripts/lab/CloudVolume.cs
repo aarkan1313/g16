@@ -553,6 +553,7 @@ public partial class CloudVolume : Node
     private float _atmoExposure = 10.0f;
     public void SetAtmosphereOn(bool on) { _skyMat?.SetShaderParameter("atmosphere_on", on); }
     public void SetAtmosphereSkyView(Texture2Drd? tex) { if (tex != null) { _skyMat?.SetShaderParameter("atmo_skyview_tex", tex); } }
+    public void SetSkyTint(Color c) { _skyMat?.SetShaderParameter("sky_tint", new Vector3(c.R, c.G, c.B)); }   // ST4-2 fantasy/manual tint on the physical sky
 
     // --- sun SURFACE (procedural granulation) — material-uniform setters ---
     public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }
