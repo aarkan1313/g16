@@ -10,7 +10,7 @@ namespace WG16.Lab;
 public partial class TerrainLabUI : Control
 {
     private bool _gTileHisto;   // Shift+3 A/B state: false = IQ 2-tap (1), true = histogram (3)
-    private bool _gFixedDefaults;   // Shift+1 A/B state: false = current (drab) defaults, true = G-0 "wrong-defaults" cluster
+    private int _g0Step;        // review-key-3 cumulative isolation step for the G-0 cluster (0=current .. 5=full fixed)
 
     public override void _ShortcutInput(InputEvent @event)
     {
@@ -33,22 +33,6 @@ public partial class TerrainLabUI : Control
         if (_reviewLabel == null) BuildReviewLabel();
         switch (n)
         {
-            case 1: // G-0 "wrong-defaults" A/B — flip the whole suppressed-good-tech cluster as one before/after.
-            {
-                _gFixedDefaults = !_gFixedDefaults;
-                bool g0 = _gFixedDefaults;
-                Set("rough_floor", g0 ? 0.15f : 0.5f);   // #1 lever: unclamp roughness (was pinned 0.5 = dead-matte)
-                Set("tex_scale_m", g0 ? 11f : 28f);       // un-stretch textures (~3x finer; anti-tiling hides the repeat)
-                Set("height_from_maps", g0);              // bind GM2 real Poisson relief
-                Set("variation_on", g0);                  // GM3-A within-area variation
-                ApplyPaletteByName(g0 ? "alpine_stone" : "alpine_green");  // contrast-rich vs the drab prior default
-                _reviewLabel.Text =
-                    $"GROUND ⇧1 · 'WRONG-DEFAULTS' A/B: {(g0 ? "FIXED (rough0.15·texscale11·real-height·variation·alpine_stone)" : "CURRENT (drab baseline)")}\n" +
-                    "Fly CLOSE/MID under settled light. Does the ground gain specular/sheen + relief + color variety + crisper texture? " +
-                    "WATCH for specular shimmer/fuzz as roughness unclamps (the floor was hiding it) — if it appears that's the bisect target, not a re-clamp. Toggle ⇧1 in motion.";
-                GD.Print($"[ground-review] G-0 wrong-defaults -> {(g0 ? "FIXED" : "CURRENT")}");
-                break;
-            }
             case 3: // GM1 surface — AAA anti-tiling A/B: IQ 2-tap (old, blocky) <-> histogram-preserving
                 _gTileHisto = !_gTileHisto;
                 Set("tile_mode", _gTileHisto ? 3 : 1);

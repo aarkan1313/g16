@@ -437,7 +437,11 @@ void splat_weights7(out float w[7], vec2 uv){
 float interlock_blend(float hA, float hB, float t, float sharp){
     float a = hA + (1.0 - t);
     float b = hB + t;
-    float ma = max(a, b) - max(sharp, 1e-3);
+    // G-1 AA: widen the transition band to at least the screen-space rate of change of the
+    // boundary signal, so a hard height threshold on the LOW-RES (4 m) weight field can't
+    // collapse to <1px and show as blocky grid facets (worst with high-contrast real height).
+    float s = max(sharp, fwidth(b - a) * 1.5);
+    float ma = max(a, b) - max(s, 1e-3);
     float wa2 = max(a - ma, 0.0);
     float wb2 = max(b - ma, 0.0);
     return clamp(wb2 / max(wa2 + wb2, 1e-5), 0.0, 1.0);
