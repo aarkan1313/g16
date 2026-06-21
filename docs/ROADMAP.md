@@ -228,13 +228,16 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
 6. **Celestial / Night-Sky expansion — 🆕 ROADMAPPED 2026-06-20** (user scope-up during the galaxy review).
    Built **AFTER #3 atmosphere** (the physical sky is the backdrop the celestial work sits on; and C3 feeds it).
    Each piece its own spec → plan → eye-gate, built one phase past the last pass (discipline rule).
-   - **C1 — Procedural fantasy night-sky. ⚑ BUILT 2026-06-21 (T1-T5), LOOK-GATE OWED.** Replaced the uniform fog
-     half-circle with a procedural fantasy **galaxy** (core bulge kills the arc + dust lanes + star-cloud knots +
-     2-color gradient) + up to **4 nebulae** + reworked **magnitude/size/color-temp starfield**, all **baked** to one
-     runtime texture tap (evolves the MW-bake seam; cheaper than the old 3 fbm3). 11 Night-tab knobs + **4 presets**
-     (Subtle / Crimson Rift / Aurora Veil / Deep Field, `--nspreset=N`). Mechanically verified (baked==proc ≤0.0005,
-     distinct presets, 5.9 ms). Commits a43515a..a09672a; spec/plan `2026-06-21-celestial-c1-*`. **Gate:** NEEDS_REVIEW
-     10 — `--time=0 --celestial=1`, Night-tab "NIGHT SKY PRESET" picker. On PASS → default-on (wired) + record.
+   - **C1 — Procedural fantasy night-sky. ⚑ BUILT + LIVE-REVIEWED 2026-06-21; galaxy PAUSED, nebulae CUT, stars PASS.**
+     Built T1-T5 (galaxy + nebulae + reworked starfield, all **baked** to one texture tap; 11 Night-tab knobs + 4
+     presets; baked==proc verified). **Live review (user, key 2) drove several fixes:** localized the galaxy to a patch
+     (killed the world-spanning "fog half-circle"), removed the core-bulge **bloom glow**, pushed it smaller/finer
+     (less cloud-like), switched nebulae to **ridged filaments**. Verdicts: **stars GOOD** (tuned −60% count, −70%
+     slower blink); **nebulae BAD → CUT** (`neb_count` default 0, machinery kept/tunable); **galaxy** = localized streak,
+     user **paused** further iteration ("waste of time right now"). Commits a43515a..c806120 (pushed). **Open:** settle
+     the galaxy look (or drop it too) when the user returns to it. **Review-key 2 caveat:** currently lands on a daytime
+     sky because the parallel **ground strip** modified the shared `Apply.cs` scenef/time path (KeyNotFoundException);
+     the night sky itself renders correctly via `--time=0` — clears when the ground refactor settles.
    - **C2 — Celestial bodies.** Planets (bright moving discs/points) · meteors / shooting stars · brighter named-star
      realism · optional distant nebulae/galaxies · **animated/parallax nebulae** (deferred from C1's static bake —
      the C1 night sky is baked structure; drifting/parallaxing nebulae would layer on here). Scope settled at its spec.
