@@ -69,7 +69,9 @@ public partial class TerrainLabUI : Control
                     ApplyMood(5);                               // neutral grade
                     Set("cloud_enabled", false);                // clear sky so the galaxy/nebulae read
                     Set("time_of_day", 0.0f);                   // midnight = full night (night_factor 1)
-                    LookUpAtNightSky();                         // aim the camera up at the galaxy core
+                    Set("moon_energy", 0.0f);                   // moon DISC off — it's a bright glow that washes the galaxy
+                    Set("moonlight_energy", 0.0f);              // moonlight off (clean dark sky for the galaxy)
+                    LookUpAtNightSky();                         // aim the camera straight at the galaxy core
                     _nsReviewIdx = _nsPresets.Count > 2 ? 2 : 0; // first press leads with the hero preset (Aurora Veil)
                 }
                 else if (_nsPresets.Count > 0) { _nsReviewIdx = (_nsReviewIdx + 1) % _nsPresets.Count; }
@@ -300,9 +302,11 @@ public partial class TerrainLabUI : Control
         var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
         if (cam == null) return;
         cam.Position = new Vector3(0, 280, 200);
-        // aim up TOWARD the galaxy core (default core dir ≈ +x/+z at low elevation) so the band + bright
-        // core fill the frame — the default yaw faces -z, away from the core, and read as empty dark sky.
-        cam.LookAt(cam.GlobalPosition + new Vector3(0.30f, 0.62f, 0.72f), Vector3.Up);
+        // aim straight at the galaxy core (computed from the live core az/elev) so the localized patch is
+        // centred in the frame — it no longer spans the sky, so the framing must point right at it.
+        float ce = Mathf.Cos(_stars.CoreElev);
+        var core = new Vector3(ce * Mathf.Cos(_stars.CoreAz), Mathf.Sin(_stars.CoreElev), ce * Mathf.Sin(_stars.CoreAz));
+        cam.LookAt(cam.GlobalPosition + core, Vector3.Up);
     }
 
     private void LookAtSun()

@@ -54,21 +54,29 @@ vec3 galaxy_color(vec3 d){
     float coreSize = P.coreDir_size.w;
     float tilt = P.tilt_width_curve_dust.x, width = P.tilt_width_curve_dust.y;
     float curve = P.tilt_width_curve_dust.z, dust = P.tilt_width_curve_dust.w;
-    // band plane (tilted), thickness wobbling along it; warp the band toward a slight S-curve by `curve`.
+    // LOCALIZE: the galaxy is a PATCH around coreDir, NOT a world-spanning great-circle band. Hard-cut the
+    // far hemisphere + fade by angular distance from the centre so it reads as a distant galaxy you look AT.
+    float cd = dot(d, coreDir);
+    if (cd <= 0.0) return vec3(0.0);
+    float ang = acos(clamp(cd, 0.0, 1.0));                                 // angular distance from the centre
+    float reach = mix(0.45, 1.15, coreSize);                              // localized angular radius (~26°..66°)
+    float env = smoothstep(reach, reach * 0.22, ang);                     // 1 at centre → 0 by reach
+    if (env <= 0.0) return vec3(0.0);
+    // band/streak THROUGH the centre → an elongated lens shape (localized by env, not a full ring).
     vec3 planeN = normalize(vec3(sin(tilt), 0.35, cos(tilt)));
-    float along = dot(normalize(cross(planeN, vec3(0,1,0))), d);          // position along the band
-    float w = width * (0.6 + 0.8 * fbm3(d * 2.0 + vec3(11.0)));
+    float along = dot(normalize(cross(planeN, vec3(0.0, 1.0, 0.0))), d);
+    float w = width * (0.6 + 0.8 * fbm3(d * 4.0 + vec3(11.0)));
     float bandDist = abs(dot(d, planeN) + curve * along * along * sign(dot(d, planeN)));
     float band = smoothstep(w, 0.0, bandDist);
-    // core bulge: a bright gaussian-ish glow around coreDir, falling off; concentrates brightness on one side.
-    float cd = max(dot(d, coreDir), 0.0);
-    float core = pow(cd, max(1.0, 60.0 * coreSize));                       // tighter as coreSize→0
-    // star clouds + dust within the band.
-    float clouds = fbm3(d * 6.0);
-    float lanes = fbm3(d * 16.0 + vec3(5.0));
-    float structure = smoothstep(0.30, 0.72, clouds) * mix(1.0 - dust, 1.0, lanes);
-    float lum = band * structure + core * 0.8;                            // core also lifts off-band
-    vec3 col = mix(P.armColor.rgb, P.coreColor_bright.rgb, clamp(core * 1.5 + band * 0.3, 0.0, 1.0));
+    // FINER structure (higher freq → reads small/distant, not in-your-face).
+    float clouds = fbm3(d * 13.0);
+    float lanes = fbm3(d * 26.0 + vec3(5.0));
+    float structure = smoothstep(0.44, 0.76, clouds) * mix(1.0 - dust, 1.0, lanes);   // knottier (sparser bright bits → not a smooth glow)
+    // bright star-cloud KNOTS concentrated toward the centre — a focal point WITHOUT a smooth core glow (the
+    // old pow(cd) bulge read as a big soft light). knots only fire on high-fbm spots, so it stays textured.
+    float knots = smoothstep(0.64, 0.90, clouds) * env * env;
+    float lum = band * structure * env + knots * 0.5;
+    vec3 col = mix(P.armColor.rgb, P.coreColor_bright.rgb, clamp(env * 0.55 + band * 0.20, 0.0, 1.0));
     return col * lum;
 }
 
@@ -80,9 +88,9 @@ vec3 nebula_color(vec3 d){
     for (int i = 0; i < n; i++){
         vec3 nd = normalize(P.neb_dir_scale[i].xyz); float sc = P.neb_dir_scale[i].w;
         float prox = max(dot(d, nd), 0.0);
-        float falloff = pow(prox, mix(40.0, 6.0, sc));                    // bigger sc = broader cloud
-        float nz = fbm3(d * mix(8.0, 3.0, sc) + vec3(float(i) * 13.7));   // cloud shape
-        float a = falloff * smoothstep(0.35, 0.8, nz) * P.neb_color_dens[i].w;
+        float falloff = pow(prox, mix(90.0, 22.0, sc));                   // tighter → smaller, contained clouds
+        float nz = fbm3(d * mix(12.0, 5.0, sc) + vec3(float(i) * 13.7));  // finer cloud shape
+        float a = falloff * smoothstep(0.40, 0.82, nz) * P.neb_color_dens[i].w;
         acc += P.neb_color_dens[i].rgb * a;
     }
     return acc;
