@@ -71,7 +71,8 @@ vec3 galaxy_color(vec3 d){
     // FINER structure (higher freq → reads small/distant, not in-your-face).
     float clouds = fbm3(d * 18.0);                                        // finer → smaller/more distant, less cloud-like
     float lanes = fbm3(d * 34.0 + vec3(5.0));
-    float structure = smoothstep(0.44, 0.76, clouds) * mix(1.0 - dust, 1.0, lanes);   // knottier (sparser bright bits → not a smooth glow)
+    float fil = fbm3(d * 46.0 + vec3(7.0));                               // fine filaments carve the galaxy (less cloud-like)
+    float structure = smoothstep(0.44, 0.76, clouds) * mix(1.0 - dust, 1.0, lanes) * smoothstep(0.38, 0.66, fil);
     // bright star-cloud KNOTS concentrated toward the centre — a focal point WITHOUT a smooth core glow (the
     // old pow(cd) bulge read as a big soft light). knots only fire on high-fbm spots, so it stays textured.
     float knots = smoothstep(0.64, 0.90, clouds) * env * env;
@@ -88,10 +89,14 @@ vec3 nebula_color(vec3 d){
     for (int i = 0; i < n; i++){
         vec3 nd = normalize(P.neb_dir_scale[i].xyz); float sc = P.neb_dir_scale[i].w;
         float prox = max(dot(d, nd), 0.0);
-        float falloff = pow(prox, mix(170.0, 60.0, sc));                  // much smaller → distant nebulae, not big near clouds
-        float nz = fbm3(d * mix(26.0, 12.0, sc) + vec3(float(i) * 13.7)); // finer/wispier → reads as space, not clouds
-        float a = falloff * smoothstep(0.46, 0.86, nz) * P.neb_color_dens[i].w;
-        acc += P.neb_color_dens[i].rgb * a;
+        float falloff = pow(prox, mix(170.0, 60.0, sc));                  // small → distant nebula
+        // FILAMENTARY structure: a coarse shape carved by fine filaments + sharpened → wisps with dark
+        // voids (reads as a nebula), NOT a soft puffy fbm cloud. The dark gaps are the key difference.
+        float base = fbm3(d * mix(26.0, 12.0, sc) + vec3(float(i) * 13.7));
+        float fil  = fbm3(d * mix(64.0, 34.0, sc) + vec3(float(i) * 7.3));
+        float shape = smoothstep(0.46, 0.74, base) * smoothstep(0.42, 0.70, fil);
+        float a = falloff * shape * P.neb_color_dens[i].w;
+        acc += P.neb_color_dens[i].rgb * a * (1.0 + 1.6 * falloff);       // brighter glowing core toward the centre
     }
     return acc;
 }

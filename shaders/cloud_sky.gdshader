@@ -330,7 +330,8 @@ vec3 galaxy_color(vec3 d){
     float band = smoothstep(w, 0.0, bandDist);
     float clouds = fbm3(d * 18.0);
     float lanes = fbm3(d * 34.0 + vec3(5.0));
-    float structure = smoothstep(0.44, 0.76, clouds) * mix(1.0 - dust, 1.0, lanes);
+    float fil = fbm3(d * 46.0 + vec3(7.0));
+    float structure = smoothstep(0.44, 0.76, clouds) * mix(1.0 - dust, 1.0, lanes) * smoothstep(0.38, 0.66, fil);
     float knots = smoothstep(0.64, 0.90, clouds) * env * env;
     float lum = band * structure * env + knots * 0.5;
     vec3 col = mix(gx_arm_color, gx_core_color, clamp(env * 0.55 + band * 0.20, 0.0, 1.0));
@@ -343,9 +344,11 @@ vec3 nebula_color(vec3 d){
         vec3 nd = normalize(neb_dir_scale[i].xyz); float sc = neb_dir_scale[i].w;
         float prox = max(dot(d, nd), 0.0);
         float falloff = pow(prox, mix(170.0, 60.0, sc));
-        float nz = fbm3(d * mix(26.0, 12.0, sc) + vec3(float(i) * 13.7));
-        float a = falloff * smoothstep(0.46, 0.86, nz) * neb_color_dens[i].w;
-        acc += neb_color_dens[i].rgb * a;
+        float base = fbm3(d * mix(26.0, 12.0, sc) + vec3(float(i) * 13.7));
+        float fil  = fbm3(d * mix(64.0, 34.0, sc) + vec3(float(i) * 7.3));
+        float shape = smoothstep(0.46, 0.74, base) * smoothstep(0.42, 0.70, fil);
+        float a = falloff * shape * neb_color_dens[i].w;
+        acc += neb_color_dens[i].rgb * a * (1.0 + 1.6 * falloff);
     }
     return acc;
 }
@@ -356,11 +359,11 @@ vec3 nebula_color(vec3 d){
 vec3 star_field(vec3 sr){
     vec3 acc = vec3(0.0);
     for (int L = 0; L < 2; L++){
-        float scale = (L == 0) ? 250.0 : 90.0;                            // dense faint / sparse bright
-        float bright = (L == 0) ? 0.5 : 1.4;
+        float scale = (L == 0) ? 320.0 : 95.0;                            // dense faint / sparse bright
+        float bright = (L == 0) ? 0.55 : 1.5;
         vec3 cell = floor(sr * scale); vec3 f = fract(sr * scale) - 0.5;
         float h = hash13(cell + float(L) * 7.0);
-        float present = step(1.0 - star_density * (L == 0 ? 0.09 : 0.03), h);
+        float present = step(1.0 - star_density * (L == 0 ? 0.16 : 0.045), h);   // denser field → reads as space
         vec3 jit = (vec3(hash13(cell + 1.7), hash13(cell + 4.3), hash13(cell + 8.1)) - 0.5) * 0.7;
         float d = length(f - jit);
         float sz = mix(0.10, 0.20, hash13(cell + 20.0));                   // size variety
