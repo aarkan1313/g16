@@ -64,6 +64,8 @@ public partial class TerrainLabUI : Control
     private int _proxyResCli = -1;
     private int _analyticCli = -1;   // --analytic[=0|1] → S1 ground source: live field vs baked (default: leave shader default ON)
     private bool _cdlodTestCli;      // --cdlodtest → S2a Task-1 sanity: one full-region chunk instance
+    private int _cdlodCli = -1;      // --cdlod[=1] → S2a quadtree terrain instead of the single mesh
+    private int _lodVizCli = -1;     // --lodviz[=1] → tint chunks by LOD level
     private int _groundV2Cli = -1;   // --groundv2[=1] → swap to the new per-pixel ground skin at startup (A/B / auto-shots)
     private int _gv2DebugCli = -1;   // --gv2debug=N → ground v2 debug view (1 = placement viz) at startup
 
@@ -116,6 +118,9 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--giproxy=")) { _giProxyCli = a.Substring("--giproxy=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--proxyres=")) { if (int.TryParse(a.Substring("--proxyres=".Length), out int pr)) _proxyResCli = pr; }
             else if (a == "--cdlodtest") { _cdlodTestCli = true; }
+            else if (a == "--cdlodcheck") { _cdlodCheckCli = true; }   // exact-match BEFORE StartsWith("--cdlod") or it gets shadowed
+            else if (a.StartsWith("--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
+            else if (a.StartsWith("--lodviz")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _lodVizCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--analytic")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _analyticCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
@@ -132,7 +137,6 @@ public partial class TerrainLabUI : Control
             else if (a == "--profmove") { _profMove = true; }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--fieldcheck") { _fieldCheckCli = true; }
-            else if (a == "--cdlodcheck") { _cdlodCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }
             else if (a == "--cloudstats") { _cloudStatsCli = true; }
             else if (a.StartsWith("--preset=")) { int.TryParse(a.Substring("--preset=".Length), out _presetCli); }
@@ -190,6 +194,8 @@ public partial class TerrainLabUI : Control
         if (_giProxyCli >= 0) { _terrain.SetGiProxy(_giProxyCli == 1); }
         if (_analyticCli >= 0) { _analyticOn = _analyticCli == 1; _terrain.SetAnalytic(_analyticOn); }   // keep key-1 toggle in sync with the CLI default
         if (_cdlodTestCli) { _terrain.SetAnalytic(true); _terrain.CdlodTestOneChunk(_params); }   // S2a Task-1 sanity
+        if (_cdlodCli >= 0) { _terrain.SetAnalytic(true); _terrain.SetCdlod(_cdlodCli == 1); }   // S2a quadtree terrain
+        if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
     }
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)

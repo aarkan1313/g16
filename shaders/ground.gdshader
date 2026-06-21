@@ -17,7 +17,8 @@ uniform float texel_world = 4.0;
 uniform bool  use_analytic = true;
 uniform int   analytic_seed = 0;
 uniform float analytic_spacing = 4.0;
-instance uniform float use_chunk = 0.0;   // S2a: 1.0 = CDLOD chunk, derive world-XZ from MODEL_MATRIX
+uniform float use_chunk = 0.0;             // S2a: 1.0 = CDLOD chunk-mode (set once on the shared material)
+instance uniform float lod_viz = -1.0;     // S2a debug: >=0 tints this chunk by LOD level; <0 = normal
 // Godot's shading language requires ONE variable per uniform statement (no comma lists).
 uniform float fp_base_freq;
 uniform float fp_amplitude;
@@ -125,6 +126,11 @@ void fragment() {
     c = mix(c, col_peak, smoothstep(h_high, h_peak, v_h));
     float slope = 1.0 - v_normal.y;                       // 0 flat .. 1 vertical
     c = mix(c, col_cliff, smoothstep(cliff_lo, cliff_hi, slope));   // steep faces -> rock
+    if (lod_viz >= 0.0) {   // S2a debug: distinct hue per LOD level so the bands are visible
+        float L = lod_viz;
+        vec3 tint = vec3(fract(L * 0.27), fract(L * 0.53 + 0.33), fract(L * 0.81 + 0.66));
+        c = mix(c, 0.5 + 0.5 * tint, 0.55);
+    }
     ALBEDO = c;
     ROUGHNESS = ground_rough;
 }

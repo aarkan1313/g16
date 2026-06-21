@@ -126,6 +126,7 @@ public partial class TerrainLabUI : Control
             var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
             Vector3 camPos = camN.GlobalPosition;
             _terrain.SetCameraWorld(camPos);
+            _terrain.CdlodTick(camPos);   // S2a: rebuild the visible chunk set from the quadtree
             _cloud?.SetCameraWorld(camPos);
 
             // AT-2: push the camera to the atmosphere so the aerial froxel LUT (camera-frustum aligned)

@@ -105,6 +105,20 @@ public partial class TerrainLab : MeshInstance3D
         if (_giProxy != null) { _giProxy.CustomAabb = CustomAabb; }
         SetGiProxy(UseGiProxy);
         GD.Print($"TerrainLab: built {p.HeightmapRes}x{p.HeightmapRes} (h {_minBase:F0}..{_maxBase:F0} m)");
+
+        // CdlodTerrain is a SIBLING (added to our parent), NOT our child — else hiding this
+        // MeshInstance3D (Visible=false in SetCdlod) would also hide every chunk in the subtree.
+        _cdlod ??= new CdlodTerrain { Name = "CdlodTerrain" };
+        if (_cdlod.GetParent() == null)
+        {
+            // The tree is mid-setup when Build() runs from TerrainLabUI._Ready, so a direct
+            // AddChild fails with "parent busy setting up children" and leaves _cdlod orphaned
+            // (its chunk instances then never enter a viewport → nothing renders). Defer the add
+            // to the next idle frame — same pattern the cloud/atmosphere sibling nodes use in
+            // TerrainLabUI._Ready. Setup() needs no in-tree state, so it can run immediately.
+            (GetParent() ?? (Node)this).CallDeferred(Node.MethodName.AddChild, _cdlod);
+            _cdlod.Setup(_mat, p, _minBase, _maxBase, heights);
+        }
     }
 
     /// S1: flip the ground material between the live analytic field and the baked heightmap (A/B).
@@ -124,7 +138,7 @@ public partial class TerrainLab : MeshInstance3D
         _cdlodTest = new MeshInstance3D { Mesh = grid, MaterialOverride = _mat };
         // unit grid centered at origin -> scale X/Z to region, Y scale 1 (height is world units)
         _cdlodTest.Scale = new Vector3(p.RegionSizeM, 1f, p.RegionSizeM);
-        _cdlodTest.SetInstanceShaderParameter("use_chunk", 1.0f);
+        _mat?.SetShaderParameter("use_chunk", 1.0f);   // chunk-mode on the shared material
         _cdlodTest.CustomAabb = new Aabb(
             new Vector3(-0.5f, _minBase - AabbMarginM, -0.5f),     // unit-space AABB (pre-scale); Godot scales X/Z
             new Vector3(1f, (_maxBase - _minBase) + 2f * AabbMarginM, 1f));
@@ -132,6 +146,20 @@ public partial class TerrainLab : MeshInstance3D
         Visible = false;                       // hide the original full mesh so we see ONLY the chunk
         GD.Print("TerrainLab: CDLOD one-chunk test instance added (full region)");
     }
+
+    private CdlodTerrain? _cdlod;
+    /// S2a: switch between the quadtree CDLOD terrain and the single full mesh (A/B).
+    public void SetCdlod(bool on)
+    {
+        if (_cdlod == null) { return; }
+        _mat?.SetShaderParameter("use_chunk", on ? 1.0f : 0.0f);   // chunk-mode on the shared material
+        _cdlod.SetEnabled(on);
+        Visible = !on;                          // hide the single full mesh (CdlodTerrain is a sibling, unaffected)
+        if (_giProxy != null) { _giProxy.Visible = !on; }
+        GD.Print($"TerrainLab: CDLOD {(on ? "ON (quadtree)" : "off (single mesh)")}");
+    }
+    public void SetCdlodViz(bool on) { _cdlod?.SetLodViz(on); }
+    public void CdlodTick(Vector3 camPos) { _cdlod?.Tick(camPos); }
 
     /// Toggle the GI/shadow proxy. ON: the coarse proxy feeds SDFGI + casts shadows; the detail mesh
     /// renders the view only. OFF: detail mesh feeds both; proxy inert.
