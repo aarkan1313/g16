@@ -346,3 +346,30 @@ live field under budget." Three honable paths, weighed against the pillars:
 
 S1 did its job: it surfaced the cost cheaply, on one mesh, BEFORE any quadtree was built — the
 anti-WG1-15 discipline working as intended.
+
+### S1 perf audit (independent, 2026-06-21) — the 34 ms is genuine but ~85% reducible
+
+A separate-chat audit (brief: `docs/superpowers/handoffs/2026-06-21-s1-perf-audit-brief.md`), normalized
+against the matched 5.9 ms baked anchor and verified here (no-dead-octaves arithmetic re-checked
+independently — all octaves weight≈1.0 at 4 m spacing, confirmed), found the 34 ms is real GPU vertex
+work but **NOT irreducible** — two look-neutral wins, separable and additive:
+
+| Lever | Win | Safe? |
+|---|---|---|
+| **Cheaper normal** — `ground.gdshader` does **5 `field_height` evals/vertex** (1 height + 4 normal taps); the field already computes analytic derivatives (`value_noise_d`, `slope_damped_fbm`'s `dsum`) → exact gradient in ~1 eval | ~54% (53.8→25.0 ms on the audit's hot run) | Yes — analytic gradient is *more* correct than 4-tap finite diff (no ±spacing smoothing) |
+| **Proxy shadows** — main 4.19M-vert mesh casts into all 4 PSSM cascades (analytic field runs ×~5 total); the existing coarse `_giProxy` is built for this but inert by default | ~21% (additional) | Yes — terrain directional shadows are low-frequency; 512² proxy silhouette ≈ 2048² at cascade distances |
+
+Combined ≈ **7.5 ms** on the full un-LOD'd mesh (audit Test D). **Bottom line: the pure-analytic field is
+affordable; the hybrid sampled-height fallback is NOT needed on cost grounds** (reserve it only if S2's
+LOD morph needs a sampled tier for *correctness*, not perf). The quadtree (S2) thus becomes **headroom**
+(draw distance / detail / stability), not the sole thing standing between the field and budget.
+
+**Sequencing decision (made by the implementer, pillar-reasoned):**
+- **S1.5 (next, small): land the cheaper normal only.** S2-independent (per-vertex waste regardless of
+  vertex count), the biggest single lever, and pillar-*best* (exact normal). Eye-gate the normal change.
+  Caveat: "1 eval exact" needs derivatives threaded through `continent`/`uplift`/`ridged_fbm` (which
+  don't accumulate gradients today) — non-trivial; the 2-tap (3-eval) interim is the fallback.
+- **Finding 2 (proxy shadows) → folded into S2, NOT now.** Fixing the proxy's shared `use_analytic`
+  needs a separate shadow material/override — and S2 rewrites the shadow story anyway ("shadow pass uses
+  the LOD'd mesh"). Doing it now then reworking it for the quadtree is building throwaway infra. It
+  belongs in the S2 shadow design.
