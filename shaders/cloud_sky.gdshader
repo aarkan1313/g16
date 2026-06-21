@@ -402,16 +402,20 @@ vec3 stars_layer(vec3 rd){
     // GALAXY + NEBULAE: when night_sky_baked, the full galaxy+nebula COLOR is read from the prebaked
     // lat-long texture (1 tap) — sampled at the SAME rotated direction sr so it matches the procedural
     // reference exactly. Otherwise compute it inline (the reference; the bake mirrors this math).
-    vec3 ns;
-    if (night_sky_baked) {
-        // inverse of night_sky_bake.glsl's texel→dir: u = az/2π, v = (asin(dir.y)/(π/2)+1)/2.
-        float maz = atan(sr.z, sr.x); if (maz < 0.0) maz += 2.0 * PI;
-        float mel = asin(clamp(sr.y, -1.0, 1.0));
-        ns = texture(night_sky_tex, vec2(maz / (2.0 * PI), (mel / (0.5 * PI) + 1.0) * 0.5)).rgb;
-    } else {
-        ns = galaxy_color(sr) + nebula_color(sr);
+    // EARLY-OUT: brightness 0 (galaxy off, the default) → skip the sample entirely (truly zero per-frame cost).
+    vec3 mw = vec3(0.0);
+    if (night_sky_brightness > 0.0001) {
+        vec3 ns;
+        if (night_sky_baked) {
+            // inverse of night_sky_bake.glsl's texel→dir: u = az/2π, v = (asin(dir.y)/(π/2)+1)/2.
+            float maz = atan(sr.z, sr.x); if (maz < 0.0) maz += 2.0 * PI;
+            float mel = asin(clamp(sr.y, -1.0, 1.0));
+            ns = texture(night_sky_tex, vec2(maz / (2.0 * PI), (mel / (0.5 * PI) + 1.0) * 0.5)).rgb;
+        } else {
+            ns = galaxy_color(sr) + nebula_color(sr);
+        }
+        mw = ns * night_sky_brightness;
     }
-    vec3 mw = ns * night_sky_brightness;
 
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
     return (star + mw) * fade;
