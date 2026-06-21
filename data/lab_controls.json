@@ -268,7 +268,7 @@
     { "id": "cloud_godray_backlit", "label": "god ray backlit (sun behind cloud)", "tab": "Clouds", "type": "cloud", "cloud": "godray_backlit", "default": false, "rand": false },
     { "id": "cloud_deckdbg", "label": "deck-ID overlay (debug)", "tab": "Clouds", "type": "cloud", "cloud": "deck_debug", "default": false, "rand": false },
     { "id": "cloud_steps", "label": "raymarch steps (perf)", "tab": "Clouds", "type": "cloudi", "cloud": "raymarch_steps", "min": 16, "max": 160, "default": 128, "rand": false },
-    { "id": "cloud_temporal", "label": "temporal frames (perf, 1=off)", "tab": "Clouds", "type": "cloudi", "cloud": "temporal_frames", "min": 1, "max": 16, "default": 1, "rand": false },
+    { "id": "cloud_temporal", "label": "temporal frames (perf, 1=off)", "tab": "Clouds", "type": "cloudi", "cloud": "temporal_frames", "min": 1, "max": 16, "default": 2, "rand": false },
 
     { "id": "dbg_normalmap", "label": "normal maps", "tab": "Debug", "type": "toggle",
       "param": "dbg_use_normalmap", "default": true, "rand": false },
