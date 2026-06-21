@@ -125,7 +125,7 @@ public partial class TerrainLabUI : Control
             GetNode("/root/TerrainLabRoot").AddChild(_aerial);
             _aerial.Attach(GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
             _aerial.SetAerialTexture(_atmosphere.AerialTexture);   // bind the (empty-RID) Texture3Drd now; RID fills on the render thread
-            _aerial.SetStrength(2f);                               // in-scatter gain; ~2 reads as aerial haze (×10 washed it out). Gate-tunable via 'aerial strength'.
+            _aerial.SetStrength(0.4f);                             // in-scatter gain. Subtle: ~0.4 reads as gentle distance haze; >1 washes (the inscatter is additive). Gate-tunable via 'aerial strength'.
         }
         // AT-1 atmosphere CLI overrides (after attach, so both nodes are live)
         if (_atmoExpCli >= 0f) { _cloud.SetKnob("atmo_exposure", _atmoExpCli); }

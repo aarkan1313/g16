@@ -127,22 +127,26 @@ public partial class TerrainLabUI : Control
                 title = $"7 · Fantasy / exotic sky  [{fname}]  (press 7 to cycle)";
                 judge = "Cohesive believable exotic sky? Scrub 'time of day' or press 'play day/night' (Light tab) — the look should HOLD as the cycle runs. blood_moon/violet_night read at NIGHT (moon up), alien_green/ember_dusk by day/dusk. Tune 'sky tint' (Light) + moon colors (Night).";
                 break;
-            case 8: // AT-1 GPU ATMOSPHERE — press 8 to CYCLE the daytime sky (dawn→noon→golden→dusk). Night is
-                    // left out (it hands off to the keyframed night — atmosphere does nothing there, user's call).
-                    // Repurposed from the GI gate (decision LANDED; SDFGI A/B still on the Light tab).
-                bool atmoFirst = _lastPreset != 8;                        // only the FIRST press reframes the camera (no teleport while cycling)
-                if (atmoFirst) { _atmoStep = 0; ApplyMood(5); }           // first press: dawn + neutral grade
-                else { _atmoStep = (_atmoStep + 1) % 4; }                  // re-press: advance the time of day
-                float[] atmoTimes = { 6.5f, 12f, 17.5f, 19.5f };
-                string[] atmoNames = { "DAWN", "NOON", "GOLDEN HOUR", "DUSK" };
-                Set("cloud_enabled", false);                              // clear sky → pure atmosphere color
-                Set("atmosphere_on", true);                               // physical sky ON (toggle OFF on the Light tab to A/B vs keyframed)
-                Set("aerial_on", true);                                   // AT-2 distance haze ON (toggle OFF on the Light tab to A/B the terrain haze)
+            case 8: // AT-2 AERIAL PERSPECTIVE gate (also AT-1). Press 8 to walk an A/B sequence: each press flips
+                    // aerial ON↔OFF (a direct A/B at a FIXED frame), advancing the time of day every 2 presses.
+                    // 8 steps: GOLDEN on/off → DUSK on/off → NOON on/off → DAWN on/off (warm-first; strongest haze
+                    // up front). Camera frames the HORIZON UNDER THE SUN once (distant terrain in the lower frame,
+                    // sky above) — so the same view shows the distance haze AND the AT-1 horizon line.
+                bool atmoFirst = _lastPreset != 8;                        // only the FIRST press reframes (no teleport while A/B-ing)
+                if (atmoFirst) { _atmoStep = 0; ApplyMood(5); }           // first press: step 0 (golden, ON) + neutral grade
+                else { _atmoStep = (_atmoStep + 1) % 8; }                 // re-press: flip aerial / advance time
+                float[] atmoTimes = { 17.5f, 12f, 19.5f, 6.5f };         // golden, noon, dusk, dawn (index = step/2)
+                string[] atmoNames = { "GOLDEN HOUR", "NOON", "DUSK", "DAWN" };
+                int tIdx = _atmoStep / 2;
+                bool aerialStep = (_atmoStep % 2) == 0;                   // even step = aerial ON, odd = OFF (the A/B)
+                Set("cloud_enabled", false);                              // clear sky → pure atmosphere + isolate the terrain haze
+                Set("atmosphere_on", true);                              // physical sky ON throughout
+                Set("aerial_on", aerialStep);                           // THE A/B: flips each press
                 Set("atmo_exposure", 12f);
-                Set("time_of_day", atmoTimes[_atmoStep]);                 // drives the sun (so LookAtSun frames the right spot)
-                if (atmoFirst) { LookAtSun(); }                           // frame the sky ONCE; re-presses keep the user's view — fly freely while cycling
-                title = $"8 · GPU ATMOSPHERE (AT-1/AT-2) — {atmoNames[_atmoStep]} ({atmoTimes[_atmoStep]:0.0}h)  (press 8 to cycle)";
-                judge = "AT-1 A/B: Light tab 'GPU atmosphere (AT-1)' on/off (physical vs keyframed sky). AT-2 A/B: look toward DISTANT terrain/mountains and toggle 'aerial perspective (AT-2)' on/off — distant terrain should haze (warm at golden/dusk, blue at noon), near terrain stays crisp, SKY unchanged. Tune 'aerial strength' + 'atmosphere exposure'. Press 8 to cycle dawn→noon→golden→dusk; camera reframes on first press only — fly freely. Watch the horizon for any flashing line (AT-1 re-confirm).";
+                Set("time_of_day", atmoTimes[tIdx]);
+                if (atmoFirst) { LookHorizonSun(); }                     // frame horizon+terrain ONCE; re-presses keep the view
+                title = $"8 · AERIAL (AT-2) — {atmoNames[tIdx]} ({atmoTimes[tIdx]:0.0}h) · aerial {(aerialStep ? "ON" : "OFF")}   (press 8: A/B, then next time)";
+                judge = "Each press 8 flips aerial ON↔OFF at a fixed frame (A/B), advancing the time every 2 presses: golden→noon→dusk→dawn. JUDGE: distant terrain should haze believably (warm at golden/dusk, blue at noon), near terrain stays CRISP, the SKY is unchanged between on/off (no double-haze), and it ties cleanly with no double-fog or popping while time-cycling. Tune 'aerial strength' (Light tab, default 2). Also watch the horizon LINE for any flashing (AT-1 re-confirm). Fly freely between presses.";
                 break;
             case 9: // H1 BRDF clouds-off baseline (6)
                 BaselineGround();
@@ -251,6 +255,22 @@ public partial class TerrainLabUI : Control
         cam.Position = new Vector3(0, 400, 900);
         var toSun = sun.GlobalTransform.Basis.Z.Normalized();
         cam.LookAt(cam.GlobalPosition + toSun, Vector3.Up);
+    }
+
+    // AT-2 framing: look toward the sun's AZIMUTH but near-horizontal, so distant terrain recedes to the
+    // horizon in the lower frame (where aerial haze reads) with the sky + sun glow above — at ANY time of
+    // day (LookAtSun pitches up to empty sky at noon). The horizon line is centered for the AT-1 re-confirm.
+    private void LookHorizonSun()
+    {
+        var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+        var sun = GetNodeOrNull<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        if (cam == null || sun == null) return;
+        cam.Position = new Vector3(0, 520, 1100);
+        var toSun = sun.GlobalTransform.Basis.Z.Normalized();
+        // flatten the sun direction toward the horizon (keep azimuth, damp the elevation) and aim a touch
+        // below horizontal so distant terrain fills the lower ~2/3 and the sky/sun sits in the upper third.
+        var flat = new Vector3(toSun.X, toSun.Y * 0.12f - 0.06f, toSun.Z).Normalized();
+        cam.LookAt(cam.GlobalPosition + flat, Vector3.Up);
     }
 
     private void CyclePalette(bool advance)
