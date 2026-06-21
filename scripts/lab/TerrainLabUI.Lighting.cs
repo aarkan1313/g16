@@ -23,7 +23,12 @@ public partial class TerrainLabUI : Control
     private GradeState _grade = new();
     private MoonState _moon = new();
     private StarsState _stars = new();
-    private AtmosphereCompute.NebulaParams[] _nightNebs = System.Array.Empty<AtmosphereCompute.NebulaParams>();
+    // Demo nebulae (C1-2): a broad teal cloud + a tighter magenta one. A working v1 the user tunes at the
+    // T6 look-gate (C1-4 adds Night-tab controls). Both the bake and the proc reference read these.
+    private AtmosphereCompute.NebulaParams[] _nightNebs = {
+        new() { Dir = new Vector3(-0.4f, 0.5f, 0.6f).Normalized(), Color = new Vector3(0.18f, 0.55f, 0.65f), Scale = 0.72f, Density = 0.55f },
+        new() { Dir = new Vector3(0.6f, 0.35f, -0.5f).Normalized(), Color = new Vector3(0.65f, 0.22f, 0.6f), Scale = 0.5f, Density = 0.5f },
+    };
     // Build the night-sky galaxy params from the current star/MW state (+ C1 galaxy defaults). C1-T4 will
     // replace the MW tilt/width/brightness mapping with full Night-tab galaxy controls + a NightSkyState.
     private AtmosphereCompute.GalaxyParams BuildGalaxyParams() => new AtmosphereCompute.GalaxyParams {
