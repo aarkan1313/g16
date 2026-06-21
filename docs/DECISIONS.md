@@ -6,6 +6,22 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #3 AT-2 (aerial perspective) DESIGNED + PLANNED + handoff written; build deferred to a NEW session (user's call). Fantasy sky-tint resolved.**
+Two things. **(1) Fantasy/mood sky tint now recolors the PHYSICAL sky** (closes the AT-1 default-on caveat): `sky_tint`
+is applied to the atmosphere as a luminance-preserving recolor (white = no-op; saturated = recolor to that hue,
+keeping the physical gradient/halo). alien_green → green sky, normal day unchanged. Commit `98b6da4`. (Deeper
+"alien-air" via per-channel Rayleigh params = a future option.) **(2) AT-2 approach = B (froxel aerial LUT +
+screen-space composite)** — user chose the AAA route ("pillars") over the cheaper "drive the built-in fog." A 3D
+camera-aligned froxel LUT in AtmosphereCompute (rgb in-scatter + a transmittance, recomputed per-frame) + a NEW
+clip-space fullscreen-quad pass (`AerialPerspective.cs` + `aerial_screen.gdshader`, mirrors GodRaysScreen) that
+reads frame+depth and composites `color·T + inscatter` on geometry (sky skipped, no double-count); built-in aerial
+fog drops when AT-2 owns it. **No terrain/godray shader edits** (coordination). Spec
+`specs/2026-06-20-gpu-atmosphere-at2-aerial-perspective-design.md`, plan
+`plans/2026-06-20-gpu-atmosphere-at2-aerial-perspective.md`, build handoff
+`handoffs/2026-06-20-at2-aerial-build-start-here.md`. **User: build in a new session** → spec+plan+handoff written,
+NOT built this session. NEXT (new session): execute the plan (T1 LUT → T2 composite → live gate). Owed: AT-1
+horizon-flash live re-confirm (fold into the AT-2 gate).
+
 **2026-06-20 — Sun/Light #3 AT-1: flipped to DEFAULT-ON (perf verified).**
 User: "if perf is good leave the thing on." Perf measured (sun moving every frame = worst-case LUT recompute):
 atmosphere ON **5.6 ms** vs OFF **5.4 ms** = **+0.2 ms** (180 vs 184 fps) — negligible, well under the 8 ms target.
