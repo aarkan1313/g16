@@ -105,9 +105,20 @@ public partial class TerrainLabUI : Control
         // ground shadow map share one world frame — fixes the dome-vs-world mismatch).
         if (_ready)
         {
-            Vector3 camPos = GetNode<Camera3D>("/root/TerrainLabRoot/Camera").GlobalPosition;
+            var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+            Vector3 camPos = camN.GlobalPosition;
             _terrain.SetCameraWorld(camPos);
             _cloud?.SetCameraWorld(camPos);
+
+            // AT-2: push the camera to the atmosphere so the aerial froxel LUT (camera-frustum aligned)
+            // re-marches from the current view each frame. invViewProj reconstructs world from NDC in the
+            // aerial compute (same convention as godray_screen). Cheap aerial-only recompute (sun unchanged).
+            if (_atmosphere != null && _atmosphereOn)
+            {
+                var proj = camN.GetCameraProjection();
+                var vp = proj * new Godot.Projection(camN.GlobalTransform.AffineInverse());
+                _atmosphere.SetCamera(camPos, 32000f, vp.Inverse());
+            }
 
             // Inspection light (L): toggle a fixed-angle studio directional to check surfaces.
             bool lDown = Input.IsKeyPressed(Key.L);

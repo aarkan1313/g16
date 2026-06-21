@@ -122,6 +122,8 @@ public partial class TerrainLabUI : Control
         if (_atmosphereCli == 1) { _atmosphereOn = true; _cloud.SetAtmosphereOn(true); _atmosphere?.SetEnabled(true); }
         else if (_atmosphereCli == 0) { _atmosphereOn = false; _cloud.SetAtmosphereOn(false); _atmosphere?.SetEnabled(false); ComposeLighting(); }   // explicit off (default is now ON)
         if (_atmoCheckCli) { _atmosphere?.RequestCheck(); }
+        // AT-2 aerial froxel self-check: needs the atmosphere on (trans/ms LUTs feed the aerial march).
+        if (_aerialCheckCli) { _atmosphereOn = true; _cloud.SetAtmosphereOn(true); _atmosphere?.SetEnabled(true); _atmosphere?.RequestAerialCheck(); }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }

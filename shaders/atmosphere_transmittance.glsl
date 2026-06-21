@@ -10,7 +10,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0, rgba16f) uniform restrict writeonly image2D outTex;
 layout(set = 0, binding = 1, std430) restrict readonly buffer Params { vec4 sun_turb; } P;
 
-// ===== Hillaire shared block (KEEP IDENTICAL across atmosphere_*.glsl — edit all three together) =====
+// ===== Hillaire shared block (KEEP IDENTICAL across atmosphere_*.glsl — edit all four together) =====
 const float PI = 3.14159265358979;
 const float groundRadiusMM = 6.360;
 const float atmosphereRadiusMM = 6.460;
