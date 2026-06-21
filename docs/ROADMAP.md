@@ -83,6 +83,15 @@ the gates upstream → downstream so judgments aren't contaminated:**
 ## ⏸ Phase A — the two lanes (FULL scope; finish before Phase B)
 
 ### GROUND / TEXTURE — the weak spot · VERDICT (2026-06-21 review): ITERATE, do not rebuild
+> **⮕ SUPERSEDED later 2026-06-21 → RESET (user's call after flying it).** The G-0 probe put the levers in front of
+> the live eye; at the **real-height** step the blend broke into blocky **4 m-grid facets** — proving the base problem
+> is STRUCTURAL (the compositing core on the 4 m weight field), not surface tuning. New verdict: **reset the material
+> RENDERING** (skin, not bones) to **per-pixel procedural placement + texture arrays** (no baked splat → no blockiness;
+> scales to many materials/biomes). **Authoritative now:** `specs/2026-06-21-ground-material-system-reset-design.md`
+> (+ plan `plans/2026-06-21-ground-material-system-core.md`, handoff `handoffs/2026-06-21-ground-v2-core-start-here.md`).
+> The root-cause analysis below stays valid (it's *why* the reset); the iterate sequence under it is superseded by the
+> reset's Units 1–6. The G-0 / fwidth / rough_floor work was the diagnostic and stays.
+
 Authoritative design: `specs/2026-06-20-ground-rendering-system-master-design.md` (the from-scratch,
 game-agnostic redesign — it ALREADY IS the "start over," to be executed surgically). Full review +
 both adversarial briefs: `docs/AUDIT-2026-06-21.md` is the project audit; the ground iterate-vs-rebuild

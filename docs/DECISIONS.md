@@ -6,6 +6,21 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — GROUND lane: verdict flipped ITERATE → RESET after the live G-0 gate; reset spec + plan + handoff written.**
+The G-0 "wrong-defaults" probe (review key 3, stepped lever isolation) put the material defaults in front of the
+user's live eye. At the **real-height** step the blend broke into hard **4 m-grid rectangular facets** — confirming
+the base problem is STRUCTURAL (the audit-flagged 4 m weight field × the interlock hard-threshold), not surface
+tuning. User's call: **start over on the ground, follow pillars, get it to parity with the sky.** New architecture:
+reset the material RENDERING (skin, not bones — base-field geometry untouched) to **per-pixel procedural placement +
+texture arrays** (no baked splat → no blockiness by construction; scales to many materials/biomes). Keepers
+re-hosted: histogram anti-tiling + the BRDF. Built ALONGSIDE the old path behind a toggle, default-old, retire only
+on a passed parity eye-gate (no big-bang teardown — the WG15 graveyard). Spec
+`specs/2026-06-21-ground-material-system-reset-design.md`, plan `plans/2026-06-21-ground-material-system-core.md`,
+handoff `handoffs/2026-06-21-ground-v2-core-start-here.md`. Supersedes the 06-20 master design's iterate stance
+(keeps its north star + keepers). Brainstorm→spec→plan done via superpowers; NEXT: a fresh chat executes the plan
+from the handoff. (Banked: the fwidth AA on the old interlock_blend + the rough_floor slider + the G-0 review-key-3
+harness stay — they were the diagnostic that proved the reset.)
+
 **2026-06-21 — AT-3 physical cloud lighting BUILT + live eye-gated → PASS, default-ON. Pivoted A→param-handoff (cross-node GPU sampling crashed).**
 Light the volumetric clouds with the physical atmosphere (spec `…at3-cloud-lighting-design.md`, plan `…at3-cloud-lighting.md`):
 cloud ambient endpoints = sky-view radiance at the **zenith** (cloud tops) + the **horizon toward the sun** (cloud
