@@ -126,12 +126,17 @@ public partial class TerrainLabUI : Control
                 title = $"7 · Fantasy / exotic sky  [{fname}]  (press 7 to cycle)";
                 judge = "Cohesive believable exotic sky? Scrub 'time of day' or press 'play day/night' (Light tab) — the look should HOLD as the cycle runs. blood_moon/violet_night read at NIGHT (moon up), alien_green/ember_dusk by day/dusk. Tune 'sky tint' (Light) + moon colors (Night).";
                 break;
-            case 8: // GI / SDFGI default — DECISION LANDED 2026-06-20 (0b / 2)
+            case 8: // AT-1 GPU ATMOSPHERE A/B (repurposed from the GI gate — that decision LANDED; the SDFGI
+                    // toggle stays on the Light tab for manual A/B, so the key is free to reuse)
                 ApplyMood(5);
-                Set("cloud_enabled", false);
-                Set("sdfgi_on", false); Set("gi_proxy", false);   // the approved artifact-free baseline
-                title = "8 · GI / SDFGI — DECISION LANDED: off + proxy off";
-                judge = "Approved default: SDFGI OFF + GI proxy OFF (sharp shadows, no cascade box, ~4.7 ms). To see WHY: Light tab 'GI (SDFGI)' ON = the moving bright cascade box that brightens as you approach. Re-evaluate GI when flora / erosion canyons / night land.";
+                Set("cloud_enabled", false);                 // clear sky → judge pure atmosphere color + isolate any horizon seam from the cloud dome
+                Set("atmosphere_on", true);
+                Set("atmo_exposure", 12f);
+                Set("time_of_day", 17f);                     // low sun → prominent dawn/dusk gradient (where the horizon line shows)
+                var acam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+                if (acam != null) { acam.Position = new Vector3(0f, 220f, 420f); acam.RotationDegrees = new Vector3(-3f, 0f, 0f); }   // look ~level at the horizon
+                title = "8 · GPU ATMOSPHERE (AT-1) A/B — physical sky vs keyframed";
+                judge = "Light tab: 'GPU atmosphere (AT-1)' on/off to A/B; scrub 'time of day' dawn→noon→dusk→night; tune 'atmosphere exposure'. Judge: physical sky good-or-better? believable dawn/dusk gradient? no pops? clean dusk→night? WATCH the horizon line — toggle atmosphere on/off: if the line moves with it, it's the sky seam (fixable); if not, it's the cloud dome. Toggle clouds (Clouds tab) to see them lit by the sky.";
                 break;
             case 9: // H1 BRDF clouds-off baseline (6)
                 BaselineGround();

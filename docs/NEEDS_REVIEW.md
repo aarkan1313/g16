@@ -23,7 +23,7 @@ manual tuning). Press a key, fly, judge, move on:
 | **5** | GM3-A within-area variation | 1c |
 | **6** | Clouds types — press 6 to cycle cumulus(profile off→on)→stratus→cirrus | 9 · 9b |
 | **7** | Fantasy / exotic sky (press 7 to cycle presets) — ST4-2 | — |
-| **8** | GI / SDFGI ✅ RESOLVED → off+proxy off (toggle `GI (SDFGI)` on the **Light** tab to A/B) | 0b · 2 |
+| **8** | GPU atmosphere (AT-1) A/B — physical sky vs keyframed (Light-tab toggle + exposure). *Repurposed: GI A/B still via the Light-tab `GI (SDFGI)` toggle (0b RESOLVED).* | AT-1 |
 | **9** | BRDF / approved baseline (clouds off) | 6 |
 
 **Flow:** press a number → read the on-screen banner (what to judge) → fly **close / mid / far**, **in

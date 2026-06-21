@@ -99,11 +99,15 @@ vec3 background(vec3 dir){
     vec3 grad = (dir.y >= 0.0)
         ? mix(sky_horizon, sky_top, pow(clamp(dir.y, 0.0, 1.0), 0.5))
         : mix(sky_horizon, ground_color, clamp(-dir.y * 4.0, 0.0, 1.0));
-    if (atmosphere_on && dir.y >= 0.0){
+    if (atmosphere_on){
+        // atmo_dir_to_uv clamps el>=0, so a below-horizon dir samples the HORIZON row → the sky color is
+        // CONTINUOUS across dir.y=0 (no hard "line where the sky ends" when the finite terrain doesn't fill
+        // the lower hemisphere). Below the horizon, fade that physical horizon color toward the ground tint.
         vec3 atmo = texture(atmo_skyview_tex, atmo_dir_to_uv(dir)).rgb * atmo_exposure;
+        vec3 sky = (dir.y >= 0.0) ? atmo : mix(atmo, ground_color, clamp(-dir.y * 4.0, 0.0, 1.0));
         // DAY = physical atmosphere; blend to the approved keyframed gradient as night falls so the
         // gated night look (moon/stars/night-grade) is regression-free + the dusk→night tail is clean.
-        return mix(atmo, grad, night_factor);
+        return mix(sky, grad, night_factor);
     }
     return grad;
 }
