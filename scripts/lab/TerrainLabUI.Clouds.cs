@@ -20,7 +20,7 @@ public partial class TerrainLabUI : Control
     private AerialPerspective? _aerial;       // AT-2 screen-space aerial perspective (distance haze); default ON with the atmosphere
     private bool _aerialOn = true;            // AT-2 on-state (default on; --aerial=0 / Light-tab toggle = off → built-in fog restored)
     private bool _aerialActivated;            // AT-2 default-on: the pass enables once the aerial LUT RID is live (one-time, in _Process)
-    private bool _cloudLightOn;               // AT-3 physical cloud lighting; default OFF until the eye-gate passes
+    private bool _cloudLightOn = true;        // AT-3 physical cloud lighting; default ON (eye-gate PASSED 2026-06-21)
     private bool _cloudLightActivated;        // one-time RID+strength push once both nodes are ready (_Process gate)
     private float _cloudLightStr = 10f;       // atmo cloud-light gain (LUT radiance → ambient); gate-tunable
     private void ApplyCloudFloat(string knob, float v)

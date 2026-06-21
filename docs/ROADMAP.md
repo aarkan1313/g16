@@ -196,9 +196,13 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
    fog via review key 8. In-scatter is additive → recalibrated strength to 0.4 (the planned ~2/10 washed); user "a
    little better than off"; cost +0.7 ms. Spec `…at2-aerial-perspective-design.md` · plan `…at2-aerial-perspective.md`
    (DECISIONS/NEEDS_REVIEW 11 2026-06-21). Supersedes the keyframed `day_script` for sky color.
-   **AT-3 cloud-lighting — 🔵 NEXT (building 2026-06-21, user's call).** Light the volumetric clouds with the physical
-   sky (sun + sky-irradiance from the atmosphere LUTs) instead of the current ad-hoc cloud lighting — touches the cloud
-   shaders. Its own spec → build → live gate.
+   **AT-3 cloud-lighting — 🟢 BUILT + eye-gated → PASS 2026-06-21, default-ON.** Clouds lit by the physical sky:
+   ambient = sky-view zenith (tops) + horizon-toward-sun (warm undersides at sunset); direct = sun-transmittance
+   reddened. `physical cloud light (AT-3)` / `--cloudlight`. **Pivoted from approach A** (cross-node GPU LUT sampling
+   in the cloud raymarch crashed the render device) to a CPU readback → param-color handoff (visually identical,
+   stable; DECISIONS 2026-06-21; commit 6d0d590). User: "yep it works." **→ The GPU-atmosphere arc (#3) is COMPLETE
+   (AT-1 sky · AT-2 aerial · AT-3 cloud-light, all default-on).** Owed: a readback throttle for the running cycle →
+   ROADMAP #7 perf pass.
 4. **Stage 4 — IN PROGRESS** (`specs/2026-06-20-stage4-cycle-and-fantasy-design.md`).
    - **ST4-1 auto day/night cycle — ✅ GATED 2026-06-20 (live, "looks pretty good").** Clock in `_Process`
      (play toggle + `cycle speed` + `--autotime`); manual scrub preserved. Follow-ups from the gate: **moon

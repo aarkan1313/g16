@@ -1,6 +1,9 @@
 # Spec: GPU Atmosphere AT-3 — Cloud-Lighting Integration (Sky lane #3, sub-phase 3)
 
-Date: 2026-06-21. Status: DESIGN (brainstorm complete, user-approved). Owner: Sun/Light lane.
+Date: 2026-06-21. Status: BUILT + eye-gated PASS, default-ON (2026-06-21). Owner: Sun/Light lane.
+> AS-BUILT NOTE: approach A (sample the LUTs in the cloud raymarch) crashed the render device on cross-node texture
+> sampling; shipped as the visually-identical **CPU readback → param-color handoff** (3 sun-dependent colors pushed as
+> params). See DECISIONS 2026-06-21 + the plan's BUILT note.
 Parent: `specs/2026-06-20-gpu-atmosphere-design.md` ▸ AT-3. Follows AT-1 (core sky color, default-ON) +
 AT-2 (aerial perspective, default-ON, soft-pass 2026-06-21). Technique: light the volumetric clouds with the
 physical atmosphere LUTs (Hillaire sky-view radiance + sun transmittance) sampled inside the cloud raymarch.

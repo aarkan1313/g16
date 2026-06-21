@@ -6,6 +6,23 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — AT-3 physical cloud lighting BUILT + live eye-gated → PASS, default-ON. Pivoted A→param-handoff (cross-node GPU sampling crashed).**
+Light the volumetric clouds with the physical atmosphere (spec `…at3-cloud-lighting-design.md`, plan `…at3-cloud-lighting.md`):
+cloud ambient endpoints = sky-view radiance at the **zenith** (cloud tops) + the **horizon toward the sun** (cloud
+undersides → warm at sunset); direct sun = **sun-transmittance reddened**. Behind `physical cloud light (AT-3)` /
+`--cloudlight`, carried in the unused `sun_color.a` param slot (0 = off → mood path, no shared-block change). User
+eye-gate (review key 8 A/B, clouds tilted up at the deck): **"yep it works"** → PASS, **default-ON** (completes the
+AT-1/AT-2/AT-3 stack consistently). **PIVOT from the approved approach A** (sample the LUTs inside the cloud raymarch):
+CloudVolume's compute **HARD-CRASHES the render device** sampling AtmosphereCompute's textures cross-node (isolated:
+sampling CloudVolume's OWN texture is stable; the atmosphere's faults — a render-device sync/ownership hazard, exactly
+what the `compute-to-material-callonrenderthread` seam-law warns against). The three values are sun-dependent **per-frame
+constants**, not per-pixel — so AtmosphereCompute **reads them back on the CPU** (sun-change cadence, in `RecomputeAll`)
+and they're pushed as params. **Visually identical** to approach A (which only sampled 2 fixed sky dirs + 1 transmittance
+per ray) and stable. Verified: 0 errors, 3/3 stable, ON-vs-OFF cloud-band diff 1.66 vs 0.07 drift control, clouds warm at
+golden (R−B −10.1→−8.9). Commits abdaa0e (T1) + 6d0d590 (pivot+wiring). Strength default 10 (gate-tunable, subtle at
+golden, strongest at dusk). **Atmosphere arc (#3) COMPLETE.** Next per the user: a CPU readback throttle is owed for the
+running day/night cycle (per-frame readback) — folded into the end-of-arc code-efficiency pass (ROADMAP #7).
+
 **2026-06-21 — AT-2 aerial perspective BUILT + live eye-gated → soft-PASS, default-ON at subtle strength 0.4.**
 Built the full AT-2 stack from the approved plan (`plans/2026-06-20-gpu-atmosphere-at2-aerial-perspective.md`): a 4th
 Hillaire LUT in `AtmosphereCompute` — a 32³ camera-frustum aerial froxel (rgb in-scatter, a transmittance, `Texture3Drd`

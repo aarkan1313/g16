@@ -8,6 +8,16 @@
 
 **Tech Stack:** Godot 4.6 mono (C# + GLSL compute via `RenderingDevice`), the shared render-thread RD seam, `Std430Writer`.
 
+> **BUILT 2026-06-21 — AS-BUILT DIFFERS FROM APPROACH A (see DECISIONS 2026-06-21).** Approach A (sampling the
+> atmosphere LUTs *inside* the cloud raymarch, T1 Steps 2/3/5) **hard-crashes the render device** — CloudVolume's
+> compute cannot safely sample AtmosphereCompute's textures cross-node (isolated empirically; the seam-law hazard).
+> The 3 values needed (zenith sky, horizon-toward-sun sky, sun transmittance) are sun-dependent **per-frame
+> constants**, so the as-built **reads them back on the CPU** in `AtmosphereCompute.RecomputeAll` and pushes them as
+> 3 param `vec4`s appended to the raymarch `ParamsBuf` (after `layers[48]`); the shader uses `P.atmo_zenith/horizon/
+> suntrans` instead of `texture(atmo_skyview/transmittance, …)`. No LUT bindings (5/6), no uniform-set rebuild
+> handshake. Visually identical (A only sampled 2 fixed dirs + 1 transmittance per ray). Steps below are kept as the
+> historical plan; the param-color path is the shipped one. Default-ON (gate PASSED). Commits abdaa0e + 6d0d590.
+
 ## Global Constraints
 
 - **Pillars:** quality = AAA = long-term-best. User chose approach A (sample LUTs in the raymarch) over the cheaper C# color-handoff, for the directional-ambient win.
