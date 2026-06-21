@@ -63,6 +63,7 @@ public partial class TerrainLabUI : Control
     private int _giProxyCli = -1;
     private int _proxyResCli = -1;
     private int _analyticCli = -1;   // --analytic[=0|1] → S1 ground source: live field vs baked (default: leave shader default ON)
+    private bool _cdlodTestCli;      // --cdlodtest → S2a Task-1 sanity: one full-region chunk instance
     private int _groundV2Cli = -1;   // --groundv2[=1] → swap to the new per-pixel ground skin at startup (A/B / auto-shots)
     private int _gv2DebugCli = -1;   // --gv2debug=N → ground v2 debug view (1 = placement viz) at startup
 
@@ -114,6 +115,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--groundrules=")) { _groundRulesCli = a.Substring("--groundrules=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--giproxy=")) { _giProxyCli = a.Substring("--giproxy=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--proxyres=")) { if (int.TryParse(a.Substring("--proxyres=".Length), out int pr)) _proxyResCli = pr; }
+            else if (a == "--cdlodtest") { _cdlodTestCli = true; }
             else if (a.StartsWith("--analytic")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _analyticCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
@@ -186,6 +188,7 @@ public partial class TerrainLabUI : Control
         if (_proxyResCli >= 0) { _terrain.SetProxyRes(_proxyResCli); }
         if (_giProxyCli >= 0) { _terrain.SetGiProxy(_giProxyCli == 1); }
         if (_analyticCli >= 0) { _analyticOn = _analyticCli == 1; _terrain.SetAnalytic(_analyticOn); }   // keep key-1 toggle in sync with the CLI default
+        if (_cdlodTestCli) { _terrain.SetAnalytic(true); _terrain.CdlodTestOneChunk(_params); }   // S2a Task-1 sanity
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
     }
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)

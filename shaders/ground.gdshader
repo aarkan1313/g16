@@ -17,6 +17,7 @@ uniform float texel_world = 4.0;
 uniform bool  use_analytic = true;
 uniform int   analytic_seed = 0;
 uniform float analytic_spacing = 4.0;
+instance uniform float use_chunk = 0.0;   // S2a: 1.0 = CDLOD chunk, derive world-XZ from MODEL_MATRIX
 // Godot's shading language requires ONE variable per uniform statement (no comma lists).
 uniform float fp_base_freq;
 uniform float fp_amplitude;
@@ -85,7 +86,18 @@ varying float v_h;       // height (m)
 float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 
 void vertex() {
-    if (use_analytic) {
+    if (use_chunk > 0.5) {
+        // S2a CDLOD chunk: world-XZ from the instance transform (unit grid * MODEL_MATRIX).
+        vec2 wxz = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
+        float e = analytic_spacing;
+        float h0 = analytic_h(wxz);
+        VERTEX.y = h0;                                     // world-unit height (instance Y scale = 1)
+        float hx = analytic_h(wxz + vec2(e, 0.0));
+        float hz = analytic_h(wxz + vec2(0.0, e));
+        v_normal = normalize(vec3(h0 - hx, e, h0 - hz));
+        NORMAL = v_normal;
+        v_h = h0;
+    } else if (use_analytic) {
         vec2 wxz = VERTEX.xz;                              // object==world at identity (matches field)
         float e = analytic_spacing;
         float h0 = analytic_h(wxz);                        // center: reused for height AND the normal

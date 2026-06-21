@@ -114,6 +114,25 @@ public partial class TerrainLab : MeshInstance3D
         GD.Print($"TerrainLab: ground source = {(on ? "ANALYTIC (live field)" : "baked texture")}");
     }
 
+    private MeshInstance3D? _cdlodTest;
+    /// TASK 1 SANITY ONLY (superseded by CdlodTerrain in Task 3): one chunk instance
+    /// covering the whole region — should look identical to the single analytic mesh.
+    public void CdlodTestOneChunk(FieldParams p)
+    {
+        if (_cdlodTest != null) { return; }
+        var grid = CdlodMesh.BuildGrid(65);   // 64 quads/side
+        _cdlodTest = new MeshInstance3D { Mesh = grid, MaterialOverride = _mat };
+        // unit grid centered at origin -> scale X/Z to region, Y scale 1 (height is world units)
+        _cdlodTest.Scale = new Vector3(p.RegionSizeM, 1f, p.RegionSizeM);
+        _cdlodTest.SetInstanceShaderParameter("use_chunk", 1.0f);
+        _cdlodTest.CustomAabb = new Aabb(
+            new Vector3(-0.5f, _minBase - AabbMarginM, -0.5f),     // unit-space AABB (pre-scale); Godot scales X/Z
+            new Vector3(1f, (_maxBase - _minBase) + 2f * AabbMarginM, 1f));
+        AddChild(_cdlodTest);
+        Visible = false;                       // hide the original full mesh so we see ONLY the chunk
+        GD.Print("TerrainLab: CDLOD one-chunk test instance added (full region)");
+    }
+
     /// Toggle the GI/shadow proxy. ON: the coarse proxy feeds SDFGI + casts shadows; the detail mesh
     /// renders the view only. OFF: detail mesh feeds both; proxy inert.
     public void SetGiProxy(bool on)
