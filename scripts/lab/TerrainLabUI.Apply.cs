@@ -79,6 +79,7 @@ public partial class TerrainLabUI : Control
         {
             case "ssao":   GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SsaoEnabled = on; break;
             case "fog":    GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.FogEnabled = on; break;
+            case "meteors_on": _stars.MeteorsOn = on; ComposeLighting(); break;
             case "shadow": GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").ShadowEnabled = on; break;
             case "sun":    GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").Visible = on; break;
             case "sdfgi":  GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SdfgiEnabled = on; break;
@@ -127,6 +128,10 @@ public partial class TerrainLabUI : Control
             case "star_density":        _stars.Density = v; ComposeLighting(); break;
             case "star_twinkle":        _stars.Twinkle = v; ComposeLighting(); break;
             case "star_rotation":       _stars.Rotation = v; ComposeLighting(); break;
+            case "meteor_rate":         _stars.MeteorRate = v; ComposeLighting(); break;
+            case "meteor_brightness":   _stars.MeteorBrightness = v; ComposeLighting(); break;
+            case "meteor_length":       _stars.MeteorLength = v; ComposeLighting(); break;
+            case "meteor_speed":        _stars.MeteorSpeed = v; ComposeLighting(); break;
             case "mw_brightness":       _stars.MwBrightness = v; ComposeLighting(); break;   // galaxy brightness (live)
             case "mw_width":            _stars.MwWidth = v; ComposeLighting(); break;        // galaxy band width
             case "mw_tilt":             _stars.MwTilt = v; ComposeLighting(); break;         // galaxy band tilt

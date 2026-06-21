@@ -535,6 +535,17 @@ public partial class CloudVolume : Node
         _skyMat?.SetShaderParameter("star_twinkle", Mathf.Clamp(twinkle, 0f, 1f));
         _skyMat?.SetShaderParameter("star_rotation", rotation);
     }
+
+    // --- METEORS (Celestial C2): occasional shooting stars (in cloud_sky.gdshader). CloudVolume stays the SOLE _skyMat writer. ---
+    public void SetMeteorsOn(bool on) { _skyMat?.SetShaderParameter("meteors_on", on); }
+    public void SetMeteors(float rate, float brightness, float length, float speed)
+    {
+        _skyMat?.SetShaderParameter("meteor_rate", Mathf.Clamp(rate, 0f, 1f));
+        _skyMat?.SetShaderParameter("meteor_brightness", Mathf.Max(brightness, 0f));
+        _skyMat?.SetShaderParameter("meteor_length", Mathf.Clamp(length, 0f, 1f));
+        _skyMat?.SetShaderParameter("meteor_speed", Mathf.Clamp(speed, 0f, 1f));
+    }
+    public void SetMeteorDebug(bool on) { _skyMat?.SetShaderParameter("meteor_debug", on); }
     // Night-sky (Celestial C1): live brightness multiplier + the procedural-reference galaxy/nebula
     // uniforms (used only when night_sky_baked = false; the bake mirrors them). CloudVolume stays the
     // SOLE _skyMat writer. The DEFAULT baked path samples night_sky_tex instead.

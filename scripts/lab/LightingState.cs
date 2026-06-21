@@ -89,6 +89,9 @@ public sealed class StarsState
 {
     // Live starfield (not baked).
     public float Brightness = 1.0f, Density = 0.5f, Twinkle = 0.5f, Rotation = 0.003f;
+    // Meteors / shooting stars (Celestial C2) — live in cloud_sky.gdshader. Defaults subtle.
+    public bool MeteorsOn = true;
+    public float MeteorRate = 0.15f, MeteorBrightness = 0.8f, MeteorLength = 0.5f, MeteorSpeed = 0.5f;
     // Galaxy (baked). MwBrightness is LIVE (a shader multiplier); the rest re-bake on change.
     public float MwBrightness = 0.0f, MwWidth = 0.11f, MwTilt = 0.6f;   // galaxy OFF by default (user 2026-06-21); machinery dormant, tunable back up
     public float CoreAz = 1.26f, CoreElev = 0.5f;          // core direction az/elev (rad); elev ~29° = galaxy sits up in the sky

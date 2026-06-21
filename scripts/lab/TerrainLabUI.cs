@@ -223,6 +223,7 @@ public partial class TerrainLabUI : Control
             var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
             camN.LookAt(camN.GlobalPosition + _lastMoonDir, Vector3.Up);
         }
+        if (_meteorDebugCli) { _cloud?.SetMeteorDebug(true); }   // C2: force a meteor streak for headless capture
         // --review=N: drive a review preset at startup (verify/screenshot the keypress path headlessly). LAST so it wins.
         if (_reviewCli > 0) { ApplyReview(_reviewCli); }
     }

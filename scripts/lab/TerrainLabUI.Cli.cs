@@ -56,6 +56,7 @@ public partial class TerrainLabUI : Control
     private int _nsBakedCli = -1;        // --nsbaked[=1|0] → PERF night-sky baked-texture path at startup (pixel-diff verify)
     private float _atmoExpCli = -1f;     // --atmoexp=N → AT-1 atmosphere exposure override
     private int _reviewCli = -1;         // --review=N → run ApplyReview(N) at startup (drive/verify a review preset headlessly)
+    private bool _meteorDebugCli;        // --meteordebug → force a meteor streak (C2 headless capture)
     private int _greviewCli = -1;        // --greview=N → run ApplyGroundReview(N) at startup (Shift+N ground bank; auto-shoot the ground gates)
     private int _terrainArCli = -1;
     private int _terrainDetailCli = -1;
@@ -125,6 +126,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--atmoexp=")) { float.TryParse(a.Substring("--atmoexp=".Length), out _atmoExpCli); }
             else if (a.StartsWith("--greview=")) { int.TryParse(a.Substring("--greview=".Length), out _greviewCli); }
             else if (a.StartsWith("--review=")) { int.TryParse(a.Substring("--review=".Length), out _reviewCli); }
+            else if (a == "--meteordebug") { _meteorDebugCli = true; }
             else if (a == "--profmove") { _profMove = true; }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }
