@@ -55,6 +55,7 @@ public partial class TerrainLabUI : Control
         _timeRunning = false;                   // LOCK the sun so the A/B isn't confounded by drifting light
         Set("time_of_day", time);
         _terrain.PrewarmGroundV2();             // build the v2 arrays now so any toggle is instant (no bake hitch)
+        _terrain.ReloadGroundTuning();          // hot-reload manifest bands/knobs so eye-gate edits apply on re-press
 
         bool newOn;
         if (ab)

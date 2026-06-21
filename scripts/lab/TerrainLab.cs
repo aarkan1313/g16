@@ -319,21 +319,25 @@ public partial class TerrainLab : MeshInstance3D
         mat.SetShaderParameter("normal_arr", g.Normal);
         mat.SetShaderParameter("orm_arr", g.Orm);
         mat.SetShaderParameter("height_arr", g.Height);
-        mat.SetShaderParameter("mat_count", g.Count);
         mat.SetShaderParameter("tex_scale_m", g.TexScaleM);
+        PushRulesAndPlacement(mat, g.Rules, g.Placement);   // rule table + tunables (shared with hot-reload)
+        GD.Print($"TerrainLab: ground v2 arrays bound ({g.Count} materials, {g.TexRes}px, scale {g.TexScaleM:F1} m)");
+    }
 
+    /// Push the per-material rule table (vec4[]) + the placement tunables to the v2 material.
+    /// Shared by the full build (AttachGroundArrays) and the live tuning hot-reload (ReloadGroundTuning).
+    private static void PushRulesAndPlacement(ShaderMaterial mat, RuleData[] rules, PlacementParams p)
+    {
         var bands = new Godot.Collections.Array();
         var amps = new Godot.Collections.Array();
-        foreach (var r in g.Rules)
+        foreach (var r in rules)
         {
             bands.Add(new Vector4(r.HMin, r.HMax, r.SlopeMin, r.SlopeMax));
             amps.Add(new Vector4(r.HeightAmp, 0f, 0f, 0f));
         }
+        mat.SetShaderParameter("mat_count", rules.Length);
         mat.SetShaderParameter("rule_bands", bands);
         mat.SetShaderParameter("rule_amp", amps);
-
-        // Placement tunables (promoted out of GLSL; data-driven, eye-tunable).
-        var p = g.Placement;
         mat.SetShaderParameter("p_band_soft_m", p.BandSoftM);
         mat.SetShaderParameter("p_slope_soft", p.SlopeSoft);
         mat.SetShaderParameter("p_warp_m", p.WarpM);
@@ -344,7 +348,23 @@ public partial class TerrainLab : MeshInstance3D
         mat.SetShaderParameter("p_rough_floor", p.RoughFloor);
         mat.SetShaderParameter("p_nrm_strength", p.NrmStrength);
         mat.SetShaderParameter("p_blend_aa", p.BlendAa);
-        GD.Print($"TerrainLab: ground v2 arrays bound ({g.Count} materials, {g.TexRes}px, scale {g.TexScaleM:F1} m)");
+    }
+
+    /// Hot-reload the manifest's band/placement tuning onto the live v2 material WITHOUT rebuilding the
+    /// textures (no Poisson bake). Lets the eye-gate iterate bands/knobs by re-pressing the gate. The
+    /// material LIST must be unchanged (adding/removing a material needs a full rebuild = relaunch).
+    public void ReloadGroundTuning()
+    {
+        if (_gArrays == null) { return; }   // arrays not built yet — nothing to retune
+        try
+        {
+            var (rules, placement) = GroundMaterialArrays.ReadTuning(GroundManifest);
+            _gArrays.Rules = rules;
+            _gArrays.Placement = placement;
+            PushRulesAndPlacement(GroundV2Material, rules, placement);
+            GD.Print($"TerrainLab: ground v2 tuning reloaded ({rules.Length} mats, height_bias {placement.HeightBias:F2})");
+        }
+        catch (System.Exception e) { GD.PushWarning($"TerrainLab: ground v2 tuning reload failed: {e.Message}"); }
     }
 
     public void SetMaskMode(int mode) => _mat.SetShaderParameter("mask_mode", mode);

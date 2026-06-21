@@ -108,6 +108,27 @@ public static class GroundMaterialArrays
         return g;
     }
 
+    /// Re-read ONLY the rules + placement tunables from the manifest (no images / no Poisson bake).
+    /// For hot-reloading band/placement tuning live; the material LIST must be unchanged (same textures).
+    public static (RuleData[] Rules, PlacementParams Placement) ReadTuning(string manifestPath)
+    {
+        string abs = ProjectSettings.GlobalizePath(manifestPath);
+        using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(abs));
+        var root = doc.RootElement;
+        var placement = ParsePlacement(root);
+        var rules = new List<RuleData>();
+        foreach (var m in root.GetProperty("materials").EnumerateArray())
+        {
+            rules.Add(new RuleData
+            {
+                HMin = F(m, "hmin", 0), HMax = F(m, "hmax", 3000),
+                SlopeMin = F(m, "slopemin", 0), SlopeMax = F(m, "slopemax", 1),
+                HeightAmp = F(m, "height_amp", 1f),
+            });
+        }
+        return (rules.ToArray(), placement);
+    }
+
     private static PlacementParams ParsePlacement(JsonElement root)
     {
         var p = PlacementParams.Default;
