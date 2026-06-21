@@ -141,6 +141,8 @@ public partial class CloudVolume : Node
         _skyMat.SetShaderParameter("cloud_rd_tex", _cloudTex);
         _skyMat.SetShaderParameter("cloud_enabled", _enabled);
         _skyMat.SetShaderParameter("cloud_debug", _debug);
+        _skyMat.SetShaderParameter("atmosphere_on", false);   // AT-1: default off = approved keyframed gradient
+        _skyMat.SetShaderParameter("atmo_exposure", _atmoExposure);
         _skyMat.SetShaderParameter("sun_disc_energy", _sunDiscEnergy);
         _skyMat.SetShaderParameter("night_factor", _nightFactor);
         _cloudSky = new Sky { SkyMaterial = _skyMat, ProcessMode = Sky.ProcessModeEnum.Realtime, RadianceSize = Sky.RadianceSizeEnum.Size256 };
@@ -547,6 +549,11 @@ public partial class CloudVolume : Node
         }
     }
 
+    // --- AT-1 GPU atmosphere: sky-view LUT provider (default off). CloudVolume stays the SOLE _skyMat writer. ---
+    private float _atmoExposure = 10.0f;
+    public void SetAtmosphereOn(bool on) { _skyMat?.SetShaderParameter("atmosphere_on", on); }
+    public void SetAtmosphereSkyView(Texture2Drd? tex) { if (tex != null) { _skyMat?.SetShaderParameter("atmo_skyview_tex", tex); } }
+
     // --- sun SURFACE (procedural granulation) — material-uniform setters ---
     public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }
     public void SetSunSurfaceCells(float v)   { _skyMat?.SetShaderParameter("sun_surface_cells", v); }
@@ -646,6 +653,7 @@ public partial class CloudVolume : Node
             case "anvil":           _anvil = Mathf.Clamp(v, 0f, 1f); break;             // CO-1 cumulonimbus top spread
             case "shape_mode":      _shapeMode = Mathf.Clamp(v, 0f, 1f); break;          // CO-2 cumulus↔stratus sheet
             case "anti_repeat":     _antiRepeat = Mathf.Clamp(v, 0f, 1f); break;         // CO-3 macro coverage/size variety
+            case "atmo_exposure":   _atmoExposure = Mathf.Clamp(v, 0f, 60f); _skyMat?.SetShaderParameter("atmo_exposure", _atmoExposure); break;   // AT-1 atmosphere exposure
         }
     }
 

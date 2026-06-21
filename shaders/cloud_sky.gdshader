@@ -12,6 +12,11 @@ uniform sampler2D cloud_rd_tex : filter_linear, repeat_enable;
 uniform bool cloud_enabled = true;
 uniform int cloud_debug = 0;   // 0 normal | 1 show raw cloud tex
 
+// --- AT-1 GPU atmosphere: sky-view LUT provider (default off = approved keyframed gradient) ---
+uniform bool atmosphere_on = false;
+uniform sampler2D atmo_skyview_tex : filter_linear, repeat_enable;   // Hillaire sky-view LUT (az, sqrt-warped el)
+uniform float atmo_exposure : hint_range(0.0, 60.0) = 10.0;          // scales LUT radiance into the tonemapper (gate-tuned)
+
 // Sun-disc brightness, decoupled from LIGHT0_ENERGY: the overcast proxy dims the directional
 // light's energy globally (terrain gloom), but the VISIBLE sun disc must stay bright — a cloud
 // in front occludes it via the dome composite, total coverage elsewhere must NOT dim it.
@@ -81,12 +86,26 @@ uniform vec3  cam_world = vec3(0.0);                           // camera world p
 
 // PI is a built-in in Godot sky shaders — don't redefine it.
 
+// AT-1 sky-view sampling mapping — MUST match atmosphere_skyview.glsl's per-texel ray build
+// (az = u*2π, el = v²·π/2). repeat_enable on the sampler wraps the az seam at u=0/1.
+vec2 atmo_dir_to_uv(vec3 d){
+    float az = atan(d.z, d.x); if (az < 0.0) az += 2.0 * PI;
+    float el = asin(clamp(d.y, 0.0, 1.0));
+    return vec2(az / (2.0 * PI), sqrt(el / (0.5 * PI)));
+}
+
 vec3 background(vec3 dir){
-    if (dir.y >= 0.0){
-        float t = pow(clamp(dir.y, 0.0, 1.0), 0.5);
-        return mix(sky_horizon, sky_top, t);
+    // keyframed gradient (the approved look — also the night fallback)
+    vec3 grad = (dir.y >= 0.0)
+        ? mix(sky_horizon, sky_top, pow(clamp(dir.y, 0.0, 1.0), 0.5))
+        : mix(sky_horizon, ground_color, clamp(-dir.y * 4.0, 0.0, 1.0));
+    if (atmosphere_on && dir.y >= 0.0){
+        vec3 atmo = texture(atmo_skyview_tex, atmo_dir_to_uv(dir)).rgb * atmo_exposure;
+        // DAY = physical atmosphere; blend to the approved keyframed gradient as night falls so the
+        // gated night look (moon/stars/night-grade) is regression-free + the dusk→night tail is clean.
+        return mix(atmo, grad, night_factor);
     }
-    return mix(sky_horizon, ground_color, clamp(-dir.y * 4.0, 0.0, 1.0));
+    return grad;
 }
 
 // view dir → lat-long UV (matches dir_from_texel in cloud_raymarch.glsl)

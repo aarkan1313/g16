@@ -58,6 +58,7 @@ public partial class TerrainLabUI : Control
         // AddChild and the Attach must run after the current frame's setup.
         _cloud = new CloudVolume { Name = "CloudVolume" };
         _godraysScreen = new GodRaysScreen { Name = "GodRaysScreen" };     // screen-space radial scatter — THE god-ray layer
+        _atmosphere = new AtmosphereCompute { Name = "AtmosphereCompute" };   // AT-1 GPU physical sky (deferred-add like the cloud node)
         CallDeferred(nameof(AttachClouds));
 
         ParseCli();
@@ -108,6 +109,18 @@ public partial class TerrainLabUI : Control
             _godraysScreen.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
             _godraysScreen.SetCloudAltitude(_terrain.MidHeight + _cloud.Params.AltitudeM);
         }
+        // AT-1 GPU atmosphere: render-thread LUT producer (Hillaire). Deferred-add like the cloud node.
+        // Default OFF — produces the sky-view Texture2Drd but it's only sampled when atmosphere_on.
+        if (_atmosphere != null)
+        {
+            GetNode("/root/TerrainLabRoot").AddChild(_atmosphere);
+            _atmosphere.Attach();
+            _cloud.SetAtmosphereSkyView(_atmosphere.SkyViewTexture);   // bind the (empty-RID) Texture2Drd now; RID fills on the render thread
+        }
+        // AT-1 atmosphere CLI overrides (after attach, so both nodes are live)
+        if (_atmoExpCli >= 0f) { _cloud.SetKnob("atmo_exposure", _atmoExpCli); }
+        if (_atmosphereCli == 1) { _cloud.SetAtmosphereOn(true); _atmosphere?.SetEnabled(true); }
+        if (_atmoCheckCli) { _atmosphere?.RequestCheck(); }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }

@@ -14,6 +14,7 @@ public partial class TerrainLabUI : Control
     //      so the Clouds tab is inert (but present + tunable in state) until then. --
     private CloudVolume? _cloud;
     private GodRaysScreen? _godraysScreen;   // screen-space radial scatter (GPU Gems 3) — THE god-ray layer
+    private AtmosphereCompute? _atmosphere;   // AT-1 GPU physical sky (Hillaire LUTs); default off
     private void ApplyCloudFloat(string knob, float v)
     {
         // Screen-space god-ray tunables (GPU Gems radial scatter). The froxel-fog layer was dropped
@@ -32,6 +33,7 @@ public partial class TerrainLabUI : Control
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
     private void ApplyCloudBool(string knob, bool on)
     {
+        if (knob == "atmosphere_on") { _cloud?.SetAtmosphereOn(on); _atmosphere?.SetEnabled(on); return; }   // AT-1 GPU physical sky
         if (knob == "godrays") { _godraysScreen?.SetEnabled(on); return; }   // screen-space radial beams
         if (knob == "godray_backlit") { _godraysScreen?.SetCloudInvert(on); return; }   // occluder polarity (sun behind cloud)
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)

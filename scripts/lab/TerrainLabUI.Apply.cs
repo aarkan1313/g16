@@ -196,6 +196,7 @@ public partial class TerrainLabUI : Control
     {
         Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();   // -(-Z forward) = +Z
         _cloud?.SetSun(toSun, sun.LightColor, sun.LightEnergy);
+        _atmosphere?.SetSun(toSun);   // AT-1: recompute the sky-view LUT when the sun moves
         // the visible disc uses the BASE (un-dimmed) energy — overcast must not dim the sun in a gap.
         _cloud?.SetSunDiscEnergy(_baseSunEnergy);
         // (screen-space god rays read the sun themselves each frame in GodRaysScreen._Process.)
