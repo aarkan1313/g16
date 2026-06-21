@@ -63,17 +63,43 @@ public partial class AtmosphereCompute : Node
     private Vector3 _lastCloudColorSun = new Vector3(2f, 2f, 2f);   // != any unit sun → forces the first readback
     public void SetCloudLightWanted(bool on) { _cloudLightWanted = on; if (on) { _lastCloudColorSun = new Vector3(2f, 2f, 2f); } }
 
-    // --- Milky Way structure bake (sky perf): static band*structure as f(direction, tilt, width), baked
-    // once (+ on a mw-param change) so cloud_sky samples it instead of 3 per-pixel 5-octave fbm3. ---
+    // --- Night-sky structure+color bake (Celestial C1, sky perf): the full procedural galaxy (core bulge +
+    // dust + star-clouds + fantasy color) + up to 4 nebulae, as f(direction, tunables), baked once (+ on a
+    // tunable/preset change) to an rgba16f lat-long COLOR texture so cloud_sky samples it (1 tap) instead of
+    // 3 per-pixel 5-octave fbm3. Field names keep the _mw prefix (the seam this evolved from); the public
+    // API + shader are night-sky. Brightness is NOT baked (stays a live shader multiplier → no re-bake). ---
     private const int MwW = 1024, MwH = 512;
     private Rid _mwShader, _mwPipe, _mwTex, _mwSet, _mwParamBuf;
     private Texture2Drd? _mwRd;
     private bool _mwDirty = true;
-    private float _mwTilt = 0.6f, _mwWidth = 0.10f;   // match cloud_sky.gdshader defaults; TerrainLabUI pushes live values
-    public Texture2Drd? MilkyWayTexture => _mwRd;
-    public void SetMilkyWay(float tilt, float width)
+    public Texture2Drd? NightSkyTexture => _mwRd;
+
+    public struct GalaxyParams { public Vector3 CoreDir; public float CoreSize, Tilt, Width, Curve, Dust; public Vector3 CoreColor, ArmColor; public float Brightness; }
+    public struct NebulaParams { public Vector3 Dir, Color; public float Scale, Density; }
+    private GalaxyParams _gx = DefaultGalaxy();
+    private NebulaParams[] _nebs = System.Array.Empty<NebulaParams>();
+    private static GalaxyParams DefaultGalaxy() => new GalaxyParams {
+        CoreDir = new Vector3(0.3f, 0.2f, 0.93f).Normalized(), CoreSize = 0.5f, Tilt = 0.6f, Width = 0.12f,
+        Curve = 0.0f, Dust = 0.5f, CoreColor = new Vector3(0.95f, 0.75f, 0.55f), ArmColor = new Vector3(0.45f, 0.55f, 0.85f), Brightness = 1.0f };
+    // Re-bake only when the BAKED structure/color changes (brightness is live → excluded from the dirty check).
+    public void SetNightSky(GalaxyParams g)
     {
-        if (Mathf.Abs(tilt - _mwTilt) > 1e-4f || Mathf.Abs(width - _mwWidth) > 1e-4f) { _mwTilt = tilt; _mwWidth = width; _mwDirty = true; }
+        if (g.CoreDir != _gx.CoreDir || g.CoreColor != _gx.CoreColor || g.ArmColor != _gx.ArmColor ||
+            Mathf.Abs(g.CoreSize - _gx.CoreSize) > 1e-4f || Mathf.Abs(g.Tilt - _gx.Tilt) > 1e-4f ||
+            Mathf.Abs(g.Width - _gx.Width) > 1e-4f || Mathf.Abs(g.Curve - _gx.Curve) > 1e-4f ||
+            Mathf.Abs(g.Dust - _gx.Dust) > 1e-4f)
+        { _gx = g; _mwDirty = true; } else { _gx.Brightness = g.Brightness; }
+    }
+    public void SetNebulae(NebulaParams[] nebs)
+    {
+        nebs ??= System.Array.Empty<NebulaParams>();
+        bool changed = nebs.Length != _nebs.Length;
+        for (int i = 0; !changed && i < nebs.Length; i++)
+        {
+            var a = nebs[i]; var b = _nebs[i];
+            changed = a.Dir != b.Dir || a.Color != b.Color || Mathf.Abs(a.Scale - b.Scale) > 1e-4f || Mathf.Abs(a.Density - b.Density) > 1e-4f;
+        }
+        if (changed) { _nebs = (NebulaParams[])nebs.Clone(); _mwDirty = true; }
     }
 
     public Texture3Drd? AerialTexture => _aerialRd;
@@ -115,7 +141,7 @@ public partial class AtmosphereCompute : Node
         if (!_ready) { return; }
         // Milky Way re-bake on a mw-param change (independent of the atmosphere being enabled — night stars
         // exist regardless). Rare; the initial bake is in InitCompute.
-        if (_mwDirty) { _mwDirty = false; RenderingServer.CallOnRenderThread(Callable.From(BakeMilkyWay)); }
+        if (_mwDirty) { _mwDirty = false; RenderingServer.CallOnRenderThread(Callable.From(BakeNightSky)); }
         if (!_enabled) { return; }
         // Sun/param change → recompute all four LUTs. Camera-only change → cheap aerial-only recompute.
         if (_dirty) { _dirty = false; _camDirty = false; RenderingServer.CallOnRenderThread(Callable.From(RecomputeAll)); }
@@ -135,14 +161,14 @@ public partial class AtmosphereCompute : Node
         if (_msShader.IsValid)  { _msPipe  = _rd.ComputePipelineCreate(_msShader); }
         if (_skyShader.IsValid) { _skyPipe = _rd.ComputePipelineCreate(_skyShader); }
         if (_aerialShader.IsValid) { _aerialPipe = _rd.ComputePipelineCreate(_aerialShader); }
-        _mwShader = Compile("res://shaders/milkyway_bake.glsl", "milkyway_bake");
+        _mwShader = Compile("res://shaders/night_sky_bake.glsl", "night_sky_bake");
         if (_mwShader.IsValid) { _mwPipe = _rd.ComputePipelineCreate(_mwShader); }
         _transTex = CreateTex(TransW, TransH);
         _msTex    = CreateTex(MsW, MsH);
         _skyTex   = CreateTex(SkyW, SkyH);
         _aerialTex = CreateTex3D(AerialW, AerialH, AerialD);
         _mwTex     = CreateTex(MwW, MwH);
-        _mwParamBuf = _rd.StorageBufferCreate((uint)MwParams().Length);
+        _mwParamBuf = _rd.StorageBufferCreate((uint)NsParams().Length);
         var ss = new RDSamplerState
         {
             MagFilter = RenderingDevice.SamplerFilter.Linear, MinFilter = RenderingDevice.SamplerFilter.Linear,
@@ -154,7 +180,7 @@ public partial class AtmosphereCompute : Node
         if (_aerialRd != null) { _aerialRd.TextureRdRid = _aerialTex; }  // assign ONCE (3D RID → Texture3Drd)
         if (_mwRd != null) { _mwRd.TextureRdRid = _mwTex; }              // assign ONCE
         _ready = true;
-        BakeMilkyWay();   // bake the static Milky Way structure once now (re-baked on a mw-param change)
+        BakeNightSky();   // bake the static night-sky structure+color once now (re-baked on a tunable change)
         GD.Print("AtmosphereCompute: LUT compute initialized on render thread");
     }
 
@@ -205,13 +231,35 @@ public partial class AtmosphereCompute : Node
         return w.ToArray();
     }
 
-    private byte[] MwParams() => new Std430Writer().Vec4(_mwTilt, _mwWidth, 0f, 0f).ToArray();
+    // Night-sky bake params (std430). Layout MUST match night_sky_bake.glsl's Params block:
+    // coreDir_size, tilt_width_curve_dust, coreColor_bright (w reserved — brightness is live), armColor,
+    // neb_count, then neb_dir_scale[4] + neb_color_dens[4] (vec4[] = 16B stride). Brightness is NOT baked.
+    private byte[] NsParams()
+    {
+        var w = new Std430Writer();
+        w.Vec4(_gx.CoreDir.X, _gx.CoreDir.Y, _gx.CoreDir.Z, _gx.CoreSize)
+         .Vec4(_gx.Tilt, _gx.Width, _gx.Curve, _gx.Dust)
+         .Vec4(_gx.CoreColor.X, _gx.CoreColor.Y, _gx.CoreColor.Z, 0f)
+         .Vec4(_gx.ArmColor.X, _gx.ArmColor.Y, _gx.ArmColor.Z, 0f)
+         .Vec4(_nebs.Length, 0f, 0f, 0f);
+        for (int i = 0; i < 4; i++)
+        {
+            if (i < _nebs.Length) { var n = _nebs[i]; w.Vec4(n.Dir.X, n.Dir.Y, n.Dir.Z, n.Scale); }
+            else { w.Vec4(0f, 1f, 0f, 0f); }
+        }
+        for (int i = 0; i < 4; i++)
+        {
+            if (i < _nebs.Length) { var n = _nebs[i]; w.Vec4(n.Color.X, n.Color.Y, n.Color.Z, n.Density); }
+            else { w.Vec4(0f, 0f, 0f, 0f); }
+        }
+        return w.ToArray();
+    }
 
-    // Bake the static Milky Way band*structure to _mwTex (render thread). Once at init + on a mw-param change.
-    private void BakeMilkyWay()
+    // Bake the static night-sky structure+color to _mwTex (render thread). Once at init + on a tunable change.
+    private void BakeNightSky()
     {
         if (!_ready || !_mwShader.IsValid) { return; }
-        byte[] pb = MwParams(); _rd.BufferUpdate(_mwParamBuf, 0, (uint)pb.Length, pb);
+        byte[] pb = NsParams(); _rd.BufferUpdate(_mwParamBuf, 0, (uint)pb.Length, pb);
         EnsureSets();
         long l = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(l, _mwPipe);

@@ -23,6 +23,14 @@ public partial class TerrainLabUI : Control
     private GradeState _grade = new();
     private MoonState _moon = new();
     private StarsState _stars = new();
+    private AtmosphereCompute.NebulaParams[] _nightNebs = System.Array.Empty<AtmosphereCompute.NebulaParams>();
+    // Build the night-sky galaxy params from the current star/MW state (+ C1 galaxy defaults). C1-T4 will
+    // replace the MW tilt/width/brightness mapping with full Night-tab galaxy controls + a NightSkyState.
+    private AtmosphereCompute.GalaxyParams BuildGalaxyParams() => new AtmosphereCompute.GalaxyParams {
+        CoreDir = new Vector3(0.3f, 0.2f, 0.93f).Normalized(), CoreSize = 0.5f,
+        Tilt = _stars.MwTilt, Width = Mathf.Max(_stars.MwWidth, 0.02f), Curve = 0f, Dust = 0.5f,
+        CoreColor = new Vector3(0.95f, 0.75f, 0.55f), ArmColor = new Vector3(0.45f, 0.55f, 0.85f),
+        Brightness = _stars.MwBrightness };
     private Vector3 _lastMoonDir = Vector3.Zero;   // last composed moon direction (for --lookatmoon)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
@@ -131,10 +139,13 @@ public partial class TerrainLabUI : Control
             _moonLight.LightEnergy = mEnergy;
             _moonLight.Visible = mEnergy > 0.001f;                              // invisible = no shadow/cost in day
 
-            // ── STARS + MILKY WAY (Stage 3d): procedural, faded in at night by the sky shader. ──
+            // ── STARS + NIGHT SKY (Stage 3d / Celestial C1): procedural, faded in at night by the sky shader. ──
             _cloud.SetStars(_stars.Brightness, _stars.Density, _stars.Twinkle, _stars.Rotation);
-            _cloud.SetMilkyWay(_stars.MwBrightness, _stars.MwWidth, _stars.MwTilt);
-            _atmosphere?.SetMilkyWay(_stars.MwTilt, _stars.MwWidth);   // PERF: re-bake the Milky Way texture if tilt/width changed
+            var gx = BuildGalaxyParams();
+            _cloud.SetNightSky(gx);             // live brightness + procedural-reference galaxy uniforms
+            _cloud.SetNebulae(_nightNebs);      // proc-reference nebulae (empty until C1-T4 controls)
+            _atmosphere?.SetNightSky(gx);       // re-bake the night-sky texture if structure/color changed
+            _atmosphere?.SetNebulae(_nightNebs);
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by

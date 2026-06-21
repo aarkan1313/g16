@@ -535,11 +535,33 @@ public partial class CloudVolume : Node
         _skyMat?.SetShaderParameter("star_twinkle", Mathf.Clamp(twinkle, 0f, 1f));
         _skyMat?.SetShaderParameter("star_rotation", rotation);
     }
-    public void SetMilkyWay(float bright, float width, float tilt)
+    // Night-sky (Celestial C1): live brightness multiplier + the procedural-reference galaxy/nebula
+    // uniforms (used only when night_sky_baked = false; the bake mirrors them). CloudVolume stays the
+    // SOLE _skyMat writer. The DEFAULT baked path samples night_sky_tex instead.
+    public void SetNightSky(AtmosphereCompute.GalaxyParams g)
     {
-        _skyMat?.SetShaderParameter("mw_brightness", Mathf.Clamp(bright, 0f, 2f));
-        _skyMat?.SetShaderParameter("mw_width", Mathf.Clamp(width, 0.02f, 0.4f));
-        _skyMat?.SetShaderParameter("mw_tilt", tilt);
+        _skyMat?.SetShaderParameter("night_sky_brightness", Mathf.Max(g.Brightness, 0f));
+        _skyMat?.SetShaderParameter("gx_core_dir", g.CoreDir);
+        _skyMat?.SetShaderParameter("gx_core_size", Mathf.Clamp(g.CoreSize, 0.05f, 1f));
+        _skyMat?.SetShaderParameter("gx_tilt", g.Tilt);
+        _skyMat?.SetShaderParameter("gx_width", Mathf.Clamp(g.Width, 0.02f, 0.4f));
+        _skyMat?.SetShaderParameter("gx_curve", Mathf.Clamp(g.Curve, -1f, 1f));
+        _skyMat?.SetShaderParameter("gx_dust", Mathf.Clamp(g.Dust, 0f, 1f));
+        _skyMat?.SetShaderParameter("gx_core_color", g.CoreColor);
+        _skyMat?.SetShaderParameter("gx_arm_color", g.ArmColor);
+    }
+    public void SetNebulae(AtmosphereCompute.NebulaParams[] nebs)
+    {
+        int n = Mathf.Min(nebs?.Length ?? 0, 4);
+        _skyMat?.SetShaderParameter("neb_count", n);
+        var ds = new Vector4[4]; var cd = new Vector4[4];
+        for (int i = 0; i < 4; i++)
+        {
+            if (i < n) { var b = nebs[i]; ds[i] = new Vector4(b.Dir.X, b.Dir.Y, b.Dir.Z, b.Scale); cd[i] = new Vector4(b.Color.X, b.Color.Y, b.Color.Z, b.Density); }
+            else { ds[i] = new Vector4(0f, 1f, 0f, 0f); cd[i] = Vector4.Zero; }
+        }
+        _skyMat?.SetShaderParameter("neb_dir_scale", ds);
+        _skyMat?.SetShaderParameter("neb_color_dens", cd);
     }
 
     // --- CIRRUS (CO-2): 2D sky-layer uniforms (default off) ---
@@ -564,9 +586,9 @@ public partial class CloudVolume : Node
     public void SetAtmosphereOn(bool on) { _skyMat?.SetShaderParameter("atmosphere_on", on); }
     public void SetAtmosphereSkyView(Texture2Drd? tex) { if (tex != null) { _skyMat?.SetShaderParameter("atmo_skyview_tex", tex); } }
     public void SetSkyTint(Color c) { _skyMat?.SetShaderParameter("sky_tint", new Vector3(c.R, c.G, c.B)); }   // ST4-2 fantasy/manual tint on the physical sky
-    // PERF: prebaked Milky Way structure texture + toggle (from AtmosphereCompute). CloudVolume stays the SOLE _skyMat writer.
-    public void SetMilkyWayTex(Texture2Drd? tex) { if (tex != null) { _skyMat?.SetShaderParameter("mw_baked_tex", tex); } }
-    public void SetMilkyWayBaked(bool on) { _skyMat?.SetShaderParameter("mw_baked", on); }
+    // PERF: prebaked night-sky color texture + toggle (from AtmosphereCompute). CloudVolume stays the SOLE _skyMat writer.
+    public void SetNightSkyTex(Texture2Drd? tex) { if (tex != null) { _skyMat?.SetShaderParameter("night_sky_tex", tex); } }
+    public void SetNightSkyBaked(bool on) { _skyMat?.SetShaderParameter("night_sky_baked", on); }
 
     // --- sun SURFACE (procedural granulation) — material-uniform setters ---
     public void SetSunSurfaceOn(bool on)      { _skyMat?.SetShaderParameter("sun_surface_on", on); }

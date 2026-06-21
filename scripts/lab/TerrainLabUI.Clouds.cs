@@ -20,8 +20,8 @@ public partial class TerrainLabUI : Control
     private AerialPerspective? _aerial;       // AT-2 screen-space aerial perspective (distance haze); default ON with the atmosphere
     private bool _aerialOn = true;            // AT-2 on-state (default on; --aerial=0 / Light-tab toggle = off → built-in fog restored)
     private bool _aerialActivated;            // AT-2 default-on: the pass enables once the aerial LUT RID is live (one-time, in _Process)
-    private bool _mwBakedOn = true;            // PERF: Milky Way baked-texture path; default ON (pixel-diff-PROVEN identical to procedural 2026-06-21)
-    private bool _mwActivated;                  // one-time enable once the bake texture RID is live (_Process gate)
+    private bool _nsBakedOn = true;            // PERF: night-sky baked-texture path; default ON (pixel-diff-verified == procedural)
+    private bool _nsActivated;                  // one-time enable once the bake texture RID is live (_Process gate)
     private bool _cloudLightOn = true;        // AT-3 physical cloud lighting; default ON (eye-gate PASSED 2026-06-21)
     private bool _cloudLightActivated;        // one-time RID+strength push once both nodes are ready (_Process gate)
     private float _cloudLightStr = 10f;       // atmo cloud-light gain (LUT radiance → ambient); gate-tunable
@@ -52,8 +52,8 @@ public partial class TerrainLabUI : Control
         if (knob == "aerial_on") { _aerialOn = on; _aerial?.SetEnabled(on && (_atmosphere?.AerialReady ?? false)); if (!on) { _aerialActivated = false; } ComposeLighting(); return; }
         // AT-3 physical cloud lighting: off → push strength 0 (mood path); on → re-arm the readiness gate (_Process pushes RIDs+strength when both nodes ready).
         if (knob == "cloud_light") { _cloudLightOn = on; _atmosphere?.SetCloudLightWanted(on); if (!on) { _cloud?.SetCloudAtmoLight(0f); } _cloudLightActivated = false; return; }
-        // PERF: Milky Way baked-texture path (1 sample vs 3 per-pixel fbm3). Gated on the bake texture being live.
-        if (knob == "mw_baked") { _mwBakedOn = on; if (!on) { _cloud?.SetMilkyWayBaked(false); _mwActivated = false; } else { _mwActivated = false; } return; }
+        // PERF: night-sky baked-texture path (1 sample vs 3 per-pixel fbm3). Gated on the bake texture being live.
+        if (knob == "night_sky_baked") { _nsBakedOn = on; if (!on) { _cloud?.SetNightSkyBaked(false); _nsActivated = false; } else { _nsActivated = false; } return; }
         if (knob == "godrays") { _godraysScreen?.SetEnabled(on); return; }   // screen-space radial beams
         if (knob == "godray_backlit") { _godraysScreen?.SetCloudInvert(on); return; }   // occluder polarity (sun behind cloud)
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)

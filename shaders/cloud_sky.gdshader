@@ -64,13 +64,26 @@ uniform float star_brightness = 1.0;
 uniform float star_density : hint_range(0.0, 1.0) = 0.5;
 uniform float star_twinkle : hint_range(0.0, 1.0) = 0.5;
 uniform float star_rotation = 0.003;     // celestial rotation speed (rad/s)
-uniform float mw_brightness : hint_range(0.0, 2.0) = 0.25;
-uniform float mw_width : hint_range(0.02, 0.4) = 0.10;
-uniform float mw_tilt = 0.6;             // galactic-plane tilt
-// PERF: Milky Way band*structure baked to a lat-long texture (AtmosphereCompute, from mw_tilt/mw_width) —
-// one sample instead of 3 per-pixel 5-octave fbm3. mw_baked default off; flip on once pixel-diff-verified.
-uniform sampler2D mw_baked_tex : filter_linear, repeat_enable;
-uniform bool mw_baked = false;
+// NIGHT SKY (Celestial C1): a procedural fantasy galaxy (core bulge + dust + star-clouds + 2-color
+// gradient) + up to 4 nebulae. PERF: the galaxy+nebula COLOR is baked to a lat-long texture
+// (AtmosphereCompute) — one sample vs 3 per-pixel 5-octave fbm3. night_sky_baked default off in the
+// shader; the C# Process gate flips it on once the bake RID is live (pixel-diff-verified == procedural).
+// night_sky_brightness is a LIVE multiplier (not baked) so dragging it never re-bakes.
+uniform float night_sky_brightness : hint_range(0.0, 3.0) = 0.25;
+uniform sampler2D night_sky_tex : filter_linear, repeat_enable;
+uniform bool night_sky_baked = false;
+// Procedural reference params (used only when night_sky_baked = false; night_sky_bake.glsl mirrors these).
+uniform vec3 gx_core_dir = vec3(0.3, 0.2, 0.93);
+uniform float gx_core_size : hint_range(0.05, 1.0) = 0.5;
+uniform float gx_tilt = 0.6;
+uniform float gx_width : hint_range(0.02, 0.4) = 0.12;
+uniform float gx_curve : hint_range(-1.0, 1.0) = 0.0;
+uniform float gx_dust : hint_range(0.0, 1.0) = 0.5;
+uniform vec3 gx_core_color : source_color = vec3(0.95, 0.75, 0.55);
+uniform vec3 gx_arm_color : source_color = vec3(0.45, 0.55, 0.85);
+uniform int neb_count = 0;
+uniform vec4 neb_dir_scale[4];
+uniform vec4 neb_color_dens[4];
 
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
@@ -294,9 +307,46 @@ vec3 moon_layers(vec3 rd) {
     return moon_disc_energy * vis * (core + glow);
 }
 
-// STARS + MILKY WAY (Stage 3d): procedural points on a slowly-rotating celestial sphere + a tilted
-// great-circle band, faded in by night_factor and above the horizon. Direction-only (EYEDIR), so they
-// stay locked to the sky as the camera moves (no crawl); twinkle is a smooth TIME phase.
+// GALAXY (Celestial C1) — procedural reference; night_sky_bake.glsl bakes the SAME math (keep byte-
+// identical so baked == procedural under pixel-diff). Core bulge concentrates brightness on one side
+// (kills the old uniform arc); band = tilted great circle carved by dust fbm; star-clouds = bright fbm
+// knots; color = mix(arm, core) by core proximity. Returns col*lum (brightness applied live below).
+vec3 galaxy_color(vec3 d){
+    vec3 coreDir = normalize(gx_core_dir);
+    float coreSize = gx_core_size;
+    float tilt = gx_tilt, width = gx_width;
+    float curve = gx_curve, dust = gx_dust;
+    vec3 planeN = normalize(vec3(sin(tilt), 0.35, cos(tilt)));
+    float along = dot(normalize(cross(planeN, vec3(0,1,0))), d);
+    float w = width * (0.6 + 0.8 * fbm3(d * 2.0 + vec3(11.0)));
+    float bandDist = abs(dot(d, planeN) + curve * along * along * sign(dot(d, planeN)));
+    float band = smoothstep(w, 0.0, bandDist);
+    float cd = max(dot(d, coreDir), 0.0);
+    float core = pow(cd, max(1.0, 60.0 * coreSize));
+    float clouds = fbm3(d * 6.0);
+    float lanes = fbm3(d * 16.0 + vec3(5.0));
+    float structure = smoothstep(0.30, 0.72, clouds) * mix(1.0 - dust, 1.0, lanes);
+    float lum = band * structure + core * 0.8;
+    vec3 col = mix(gx_arm_color, gx_core_color, clamp(core * 1.5 + band * 0.3, 0.0, 1.0));
+    return col * lum;
+}
+// NEBULAE (Celestial C1) — up to 4 procedural colored gas clouds; mirror of night_sky_bake.glsl.
+vec3 nebula_color(vec3 d){
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < neb_count; i++){
+        vec3 nd = normalize(neb_dir_scale[i].xyz); float sc = neb_dir_scale[i].w;
+        float prox = max(dot(d, nd), 0.0);
+        float falloff = pow(prox, mix(40.0, 6.0, sc));
+        float nz = fbm3(d * mix(8.0, 3.0, sc) + vec3(float(i) * 13.7));
+        float a = falloff * smoothstep(0.35, 0.8, nz) * neb_color_dens[i].w;
+        acc += neb_color_dens[i].rgb * a;
+    }
+    return acc;
+}
+
+// STARS + NIGHT SKY (Stage 3d / Celestial C1): procedural points on a slowly-rotating celestial sphere +
+// a baked procedural galaxy/nebula color, faded in by night_factor and above the horizon. Direction-only
+// (EYEDIR), so they stay locked to the sky as the camera moves (no crawl); twinkle is a smooth TIME phase.
 vec3 stars_layer(vec3 rd){
     if (night_factor <= 0.001) { return vec3(0.0); }
     vec3 sr = normalize(rd);
@@ -317,24 +367,19 @@ vec3 stars_layer(vec3 rd){
     float mag = mix(0.35, 1.0, hash13(cell + 12.0));      // per-star brightness variety
     vec3 star = vec3(pt * tw * mag) * star_brightness;
 
-    // MILKY WAY: a tilted great-circle band broken up by 3D fbm into wispy clumps + dust lanes. PERF: when
-    // mw_baked, band*structure is read from the prebaked lat-long texture (1 tap) instead of 3 per-pixel
-    // 5-octave fbm3 — sampled at the SAME rotated direction sr so it matches the procedural exactly.
-    float mwStruct;
-    if (mw_baked) {
-        // inverse of milkyway_bake.glsl's texel→dir: u = az/2π, v = (asin(dir.y)/(π/2)+1)/2.
+    // GALAXY + NEBULAE: when night_sky_baked, the full galaxy+nebula COLOR is read from the prebaked
+    // lat-long texture (1 tap) — sampled at the SAME rotated direction sr so it matches the procedural
+    // reference exactly. Otherwise compute it inline (the reference; the bake mirrors this math).
+    vec3 ns;
+    if (night_sky_baked) {
+        // inverse of night_sky_bake.glsl's texel→dir: u = az/2π, v = (asin(dir.y)/(π/2)+1)/2.
         float maz = atan(sr.z, sr.x); if (maz < 0.0) maz += 2.0 * PI;
         float mel = asin(clamp(sr.y, -1.0, 1.0));
-        mwStruct = texture(mw_baked_tex, vec2(maz / (2.0 * PI), (mel / (0.5 * PI) + 1.0) * 0.5)).r;
+        ns = texture(night_sky_tex, vec2(maz / (2.0 * PI), (mel / (0.5 * PI) + 1.0) * 0.5)).rgb;
     } else {
-        vec3 planeN = normalize(vec3(sin(mw_tilt), 0.35, cos(mw_tilt)));
-        float wob = mw_width * (0.6 + 0.8 * fbm3(sr * 2.0 + vec3(11.0)));   // varying band thickness
-        float band = smoothstep(wob, 0.0, abs(dot(sr, planeN)));
-        float clouds = fbm3(sr * 6.0);                                     // big clumps
-        float lanes = fbm3(sr * 16.0 + vec3(5.0));                         // finer dust detail
-        mwStruct = band * smoothstep(0.32, 0.72, clouds) * mix(0.5, 1.0, lanes);
+        ns = galaxy_color(sr) + nebula_color(sr);
     }
-    vec3 mw = vec3(0.62, 0.70, 0.92) * mwStruct * mw_brightness;
+    vec3 mw = ns * night_sky_brightness;
 
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
     return (star + mw) * fade;
