@@ -97,7 +97,7 @@ public sealed class StarsState
     public Color ArmColor = new(0.45f, 0.55f, 0.85f);
     // Nebulae (baked). Count + a global density + the two lead colors are tunable; directions/scales are
     // fixed demo positions (preset territory) so the Night tab stays manageable.
-    public int NebCount = 2;
+    public int NebCount = 0;   // nebulae killed (user 2026-06-21) — galaxy + starfield only; tunable back up if wanted
     public float NebDensity = 0.55f;
     public Color Neb1Color = new(0.18f, 0.55f, 0.65f);     // teal
     public Color Neb2Color = new(0.65f, 0.22f, 0.6f);      // magenta
