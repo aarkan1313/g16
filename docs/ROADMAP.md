@@ -233,7 +233,8 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      apparent scale (not in the player's face). Tunable/modular + **presets**. Replaces the fog band as the default
      night look (re-gate). Lightest piece — first in this sub-lane.
    - **C2 — Celestial bodies.** Planets (bright moving discs/points) · meteors / shooting stars · brighter named-star
-     realism · optional distant nebulae/galaxies. Scope settled at its spec.
+     realism · optional distant nebulae/galaxies · **animated/parallax nebulae** (deferred from C1's static bake —
+     the C1 night sky is baked structure; drifting/parallaxing nebulae would layer on here). Scope settled at its spec.
    - **C3 — N suns + N moons.** Generalize the single-sun + single-moon architecture to **arbitrary counts** — each
      with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
      and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky
