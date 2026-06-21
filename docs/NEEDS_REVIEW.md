@@ -22,7 +22,7 @@ manual tuning). Press a key, fly, judge, move on:
 | **4** | GM2 real height + POM | 1c |
 | **5** | GM3-A within-area variation | 1c |
 | **6** | Clouds types — press 6 to cycle cumulus(profile off→on)→stratus→cirrus | 9 · 9b |
-| **7** | God rays | 3 |
+| **7** | Fantasy / exotic sky (press 7 to cycle presets) — ST4-2 | — |
 | **8** | GI / SDFGI ✅ RESOLVED → off+proxy off (toggle `GI (SDFGI)` on the **Light** tab to A/B) | 0b · 2 |
 | **9** | BRDF / approved baseline (clouds off) | 6 |
 

@@ -19,6 +19,7 @@ public partial class TerrainLabUI : Control
     private int _lastPreset = -1;
     private bool _co1ProfileOn;   // CO-1 vertical-profile A/B state (review key 6 toggles it)
     private int _co2Type;         // CO-2 type on review key 6: 0 cumulus · 1 stratus · 2 cirrus
+    private int _fantasyIdx;      // ST4-2 fantasy preset on review key 7 (cycles)
     private List<string> _palNames;
     private Dictionary<string, string[]> _palRoles;
     private int _palIdx;
@@ -112,12 +113,18 @@ public partial class TerrainLabUI : Control
                     _ => "Cumulus vertical profile (CO-1): ON reads as a 3D volume, OFF = approved slab. Press 6 to cycle on → stratus → cirrus. NOTE: profile ON thins clouds — raise 'density'."
                 };
                 break;
-            case 7: // God rays — final pass (3)
-                ApplyMood(0);                                   // low sun
-                Set("cloud_enabled", true); Set("cloud_coverage", 0.72f);
-                Set("cloud_godrays", true);
-                title = "7 · God rays";
-                judge = "Believable sun-through-cloud shafts (crisp, not uniform fog, not washing the scene)? Needs a cloud actually crossing the sun (coverage is high). Tune in Clouds tab.";
+            case 7: // Stage-4 FANTASY / exotic sky — press 7 to cycle the fantasy presets (god rays passed; still on Clouds tab)
+                LoadFantasyPresets();
+                if (_lastPreset != 7)
+                {
+                    ApplyMood(5); Set("cloud_enabled", true); Set("cloud_coverage", 0.4f); Set("time_of_day", 20f);
+                    _fantasyIdx = 0;
+                }
+                else if (_fantasyPresets.Count > 0) { _fantasyIdx = (_fantasyIdx + 1) % _fantasyPresets.Count; }
+                if (_fantasyPresets.Count > 0) { ApplyFantasyPreset(_fantasyIdx); }
+                string fname = _fantasyPresets.Count > 0 ? _fantasyPresets[_fantasyIdx].name : "?";
+                title = $"7 · Fantasy / exotic sky  [{fname}]  (press 7 to cycle)";
+                judge = "Cohesive believable exotic sky? Scrub 'time of day' or press 'play day/night' (Light tab) — the look should HOLD as the cycle runs. blood_moon/violet_night read at NIGHT (moon up), alien_green/ember_dusk by day/dusk. Tune 'sky tint' (Light) + moon colors (Night).";
                 break;
             case 8: // GI / SDFGI default — DECISION LANDED 2026-06-20 (0b / 2)
                 ApplyMood(5);
