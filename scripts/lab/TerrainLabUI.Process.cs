@@ -28,6 +28,8 @@ public partial class TerrainLabUI : Control
     private DirectionalLight3D? _inspectLight;
     private bool _inspectOn;
     private bool _lastLDown;
+    private bool _lastKey1Down;             // debounce for the analytic/baked toggle (key 1)
+    private bool _analyticOn = true;        // ground source: live field (default) vs baked; toggled by key 1
     private float _inspectEnergy = 1.0f;   // L-light brightness (Night tab 'inspect light')
 
     /// Toggle the inspection light (press L). Lazily creates a fixed-angle shadow-casting directional
@@ -140,6 +142,19 @@ public partial class TerrainLabUI : Control
             bool lDown = Input.IsKeyPressed(Key.L);
             if (lDown && !_lastLDown) { ToggleInspectLight(); }
             _lastLDown = lDown;
+
+            // Key 1: live-flip ground source between the analytic field and the baked texture
+            // (A/B the S1.5 normal in motion). Skipped when ReviewMode owns the number keys.
+            if (!ReviewMode)
+            {
+                bool k1 = Input.IsKeyPressed(Key.Key1);
+                if (k1 && !_lastKey1Down)
+                {
+                    _analyticOn = !_analyticOn;
+                    _terrain.SetAnalytic(_analyticOn);
+                }
+                _lastKey1Down = k1;
+            }
         }
         // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)

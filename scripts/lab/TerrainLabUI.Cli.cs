@@ -185,7 +185,7 @@ public partial class TerrainLabUI : Control
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
         if (_proxyResCli >= 0) { _terrain.SetProxyRes(_proxyResCli); }
         if (_giProxyCli >= 0) { _terrain.SetGiProxy(_giProxyCli == 1); }
-        if (_analyticCli >= 0) { _terrain.SetAnalytic(_analyticCli == 1); }
+        if (_analyticCli >= 0) { _analyticOn = _analyticCli == 1; _terrain.SetAnalytic(_analyticOn); }   // keep key-1 toggle in sync with the CLI default
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
     }
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)

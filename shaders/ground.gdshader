@@ -87,11 +87,12 @@ float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 void vertex() {
     if (use_analytic) {
         vec2 wxz = VERTEX.xz;                              // object==world at identity (matches field)
-        VERTEX.y = analytic_h(wxz);
         float e = analytic_spacing;
-        float hl = analytic_h(wxz - vec2(e, 0.0)), hr = analytic_h(wxz + vec2(e, 0.0));
-        float hd = analytic_h(wxz - vec2(0.0, e)), hu = analytic_h(wxz + vec2(0.0, e));
-        v_normal = normalize(vec3(hl - hr, 2.0 * e, hd - hu));
+        float h0 = analytic_h(wxz);                        // center: reused for height AND the normal
+        VERTEX.y = h0;
+        float hx = analytic_h(wxz + vec2(e, 0.0));         // forward diff (2 taps, not 4): 5 evals -> 3
+        float hz = analytic_h(wxz + vec2(0.0, e));
+        v_normal = normalize(vec3(h0 - hx, e, h0 - hz));   // normalize() makes the gradient magnitude immaterial
         NORMAL = v_normal;
         v_h = VERTEX.y;
     } else {
