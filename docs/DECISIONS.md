@@ -6,6 +6,24 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — Sky perf pass (no-visuals window): profiled + shipped the verifiable on-par wins; 2-3× needs a motion gate.**
+Goal was 2-3× sky perf without quality loss. **Profiled** (`--profmove --profile=3`, subsystem toggles): the sky =
+**clouds ~1.8 ms** (day) + **night stars/galaxy/moon ~1.3 ms**; **the whole atmosphere stack (AT-1/2/3) is ~free**
+(LUTs recompute on sun-change only; aerial/cloud-light negligible — the earlier "+0.7 ms" was measurement noise).
+**Shipped (each mechanically verified look-neutral — pixel-diff vs the original, since the user can't eye-gate now):**
+(1) **Milky Way bake** — 3 per-pixel 5-octave fbm3 → one prebaked texture tap (`milkyway_bake.glsl` on AtmosphereCompute's
+seam, exact-copied noise); pixel-diff bake==procedural (the diff WAS the animated stars); **default-on**; ~0.3 ms +
+worst-case 14.8→8.5 ms. (2) **Cloud temporal stride 1→2** — converged image pixel-identical (static diff 0.030);
+**default-on**; ~0.5 ms + stabler frames; the residual is a 2-frame dome staleness in fast motion (imperceptible on
+slow far clouds). (3) earlier: AT-3 readback throttle + static-camera aerial skip. **Honest outcome:** the
+on-par-*verifiable* wins total ~0.5-0.8 ms (~10-12 %) + much steadier frame times — NOT 2-3×. **A true 2-3× needs the
+clouds**, and the bulk lever is aggressive temporal amortization (stride 4-8 → another ~0.8 ms) which trades *motion*
+smear a static pixel-diff can't certify → **staged for the user's motion gate** (Clouds-tab `temporal frames` /
+`--temporal=N`, already wired). Commits 82d5900/6019c9f/918e8ab/193a4eb (+ the earlier efficiency commit). Banked for
+the formal end-of-arc perf pass (ROADMAP #7): the deeper texel-only LUT readback + a cloud-amortization motion gate.
+
+---
+
 **2026-06-21 — GROUND lane: verdict flipped ITERATE → RESET after the live G-0 gate; reset spec + plan + handoff written.**
 The G-0 "wrong-defaults" probe (review key 3, stepped lever isolation) put the material defaults in front of the
 user's live eye. At the **real-height** step the blend broke into hard **4 m-grid rectangular facets** — confirming
