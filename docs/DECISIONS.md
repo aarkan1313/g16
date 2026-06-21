@@ -6,6 +6,18 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #4 ST4-2 (fantasy/exotic presets) BUILT, awaiting the picker gate → #4 ~COMPLETE.**
+Cross-system preset layer (`FantasyPresets.cs` + `data/fantasy_presets.json`, mirrors sun/celestial): each
+preset names a sun preset + celestial preset and layers a sky tint + moon/moonlight colors + cloud/exposure —
+fanning out to ApplySunPreset/ApplyCelestialPreset + scene appliers (data only). 5 presets: blood_moon,
+alien_green, violet_night, harvest, ember_dusk. Night-tab picker + `--fantasy=N`. Deliberately set NO
+time_of_day so the LOOK holds as the ST4-1 cycle runs. **New lever:** a persistent `_skyTint` (Color, default
+white) multiplied into the sky gradient in ComposeLighting (so it survives DriveTime re-running each frame) +
+a Light-tab `sky tint` scenecolor — needed because sky color is time-driven with no direct override; this is
+the fantasy looks' main sky-recolor. Verified: alien_green (green sky/cast) + blood_moon (red night) compose +
+render distinct. Commit `5ea58d4`. **#4 Stage 4 ~complete** (ST4-1 gated, ST4-2 awaiting picker gate; multiple
+suns/moons deferred). Sky lane #2 + #4 now done; **#3 GPU atmosphere (AT-1)** is the remaining big item.
+
 **2026-06-20 — Sun/Light #4 ST4-1 (auto day/night cycle) PASS (live) + moon arc decoupled from the sun.**
 ST4-1 auto cycle: a clock in `_Process` advances `_time.TimeOfDay` by `_timeSpeed` h/s and re-`DriveTime()`s
 (wrap 24→0); time-of-day slider synced so manual scrub still works. Light-tab `play day/night` + `cycle speed`,

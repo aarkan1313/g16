@@ -147,8 +147,11 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      (play toggle + `cycle speed` + `--autotime`); manual scrub preserved. Follow-ups from the gate: **moon
      arc decoupled from the sun** (own phase-lagged arc — FIXED) · **galaxy/Milky Way needs review** (banked,
      NEEDS_REVIEW 10).
-   - **ST4-2 fantasy/exotic — NEXT** (cross-system presets: blood-moon/alien-sky on the single sun+moon).
-   **Multiple suns/moons DEFERRED** (own spec).
+   - **ST4-2 fantasy/exotic — 🔨 BUILT 2026-06-20, awaiting the picker gate.** Cross-system presets
+     (`fantasy_presets.json` + `FantasyPresets.cs` + Night-tab picker + `--fantasy=N`) composing a sun preset
+     + celestial preset + a new persistent `sky_tint` + moon/moonlight colors: blood_moon, alien_green,
+     violet_night, harvest, ember_dusk. No time set → the look holds as the cycle runs. Verified distinct.
+   **Multiple suns/moons DEFERRED** (own spec). **#4 Stage 4 ~COMPLETE pending this gate.**
 5. **Shadow & Lighting pass** — CSM/cascade tuning, contact + soft (PCSS) shadows, the proxy-on cheap-
    shadow perf lever (~2.8 vs ~4.7 ms), SSIL re-check. Pairs with Stage-3 moonlight shadows.
 
