@@ -49,7 +49,7 @@ public partial class TerrainLabUI : Control
         // so toggling back on re-arms the readiness gate.
         if (knob == "aerial_on") { _aerialOn = on; _aerial?.SetEnabled(on && (_atmosphere?.AerialReady ?? false)); if (!on) { _aerialActivated = false; } ComposeLighting(); return; }
         // AT-3 physical cloud lighting: off → push strength 0 (mood path); on → re-arm the readiness gate (_Process pushes RIDs+strength when both nodes ready).
-        if (knob == "cloud_light") { _cloudLightOn = on; if (!on) { _cloud?.SetCloudAtmoLight(0f); } _cloudLightActivated = false; return; }
+        if (knob == "cloud_light") { _cloudLightOn = on; _atmosphere?.SetCloudLightWanted(on); if (!on) { _cloud?.SetCloudAtmoLight(0f); } _cloudLightActivated = false; return; }
         if (knob == "godrays") { _godraysScreen?.SetEnabled(on); return; }   // screen-space radial beams
         if (knob == "godray_backlit") { _godraysScreen?.SetCloudInvert(on); return; }   // occluder polarity (sun behind cloud)
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)

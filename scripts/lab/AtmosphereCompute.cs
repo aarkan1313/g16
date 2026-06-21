@@ -53,12 +53,24 @@ public partial class AtmosphereCompute : Node
     public Vector3 CloudHorizonSun { get; private set; } = Vector3.One;
     public Vector3 CloudSunTrans { get; private set; } = Vector3.One;
     public bool CloudLightReady { get; private set; }
+    // Readback cost control: only read the 3 colors back from the GPU when (a) the clouds want them (AT-3 on)
+    // and (b) the sun moved enough to matter. The colors change smoothly, so a coarse sun-delta gives
+    // imperceptible steps while avoiding a per-frame ~296 KB GPU→CPU sync stall during a running day/night
+    // cycle (RecomputeAll fires every frame then). Look-neutral; the deeper fix (read only 3 texels via a
+    // tiny GPU output) is banked for the end-of-arc perf pass (ROADMAP #7).
+    private const float CloudColorSunDelta = 0.011f;   // ~0.6° of arc between cloud-color readbacks
+    private bool _cloudLightWanted = true;             // AT-3 default-on; TerrainLabUI clears it when toggled off
+    private Vector3 _lastCloudColorSun = new Vector3(2f, 2f, 2f);   // != any unit sun → forces the first readback
+    public void SetCloudLightWanted(bool on) { _cloudLightWanted = on; if (on) { _lastCloudColorSun = new Vector3(2f, 2f, 2f); } }
 
     public Texture3Drd? AerialTexture => _aerialRd;
     public bool AerialReady => _ready && _aerialRd != null;
     /// Push the camera each frame (cheap aerial-only recompute path). farDist = max aerial range (m).
+    /// Skips the per-frame aerial froxel recompute when nothing actually moved (static camera = no wasted
+    /// dispatch). Exact equality is correct here: identical camera → identical froxel.
     public void SetCamera(Vector3 camPos, float farDist, Godot.Projection invViewProj)
     {
+        if (camPos == _camPos && farDist == _aerialFar && invViewProj == _invViewProj) { return; }
         _camPos = camPos; _aerialFar = farDist; _invViewProj = invViewProj; _camDirty = true;
     }
     /// One-shot aerial readback on the next recompute. Forces enable + a recompute.
@@ -213,7 +225,13 @@ public partial class AtmosphereCompute : Node
         if (_msShader.IsValid)  { Dispatch(_msPipe, _msSet, MsW, MsH); }  // 2. multiscatter (reads transmittance)
         if (_skyShader.IsValid) { Dispatch(_skyPipe, _skySet, SkyW, SkyH); } // 3. skyview (reads both)
         DispatchAerial();                                                 // 4. aerial froxel (reads trans + ms)
-        ComputeCloudLightColors();                                        // AT-3: read back the 3 cloud-light colors
+        // AT-3: read the cloud-light colors back only when wanted + the sun moved enough (skips the per-frame
+        // GPU→CPU sync stall during a running cycle, and all readback when AT-3 is off).
+        if (_cloudLightWanted && _sunDir.DistanceTo(_lastCloudColorSun) > CloudColorSunDelta)
+        {
+            ComputeCloudLightColors();
+            _lastCloudColorSun = _sunDir;
+        }
         if (_checkRequested) { _checkRequested = false; DumpCheck(); }
         if (_aerialCheckRequested) { _aerialCheckRequested = false; DumpAerialCheck(); }
     }

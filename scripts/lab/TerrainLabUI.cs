@@ -137,9 +137,10 @@ public partial class TerrainLabUI : Control
         // AT-2 aerial perspective CLI: =0 turns it off (restores built-in fog via ComposeLighting); strength A/B.
         if (_aerialCli == 0) { _aerialOn = false; _aerial?.SetEnabled(false); ComposeLighting(); }
         if (_aerialStrCli >= 0f) { _aerial?.SetStrength(_aerialStrCli); }
-        // AT-3 physical cloud lighting CLI (default off): =1 enables; _Process pushes RIDs+strength once ready.
+        // AT-3 physical cloud lighting CLI (default ON): =0 turns it off; =1 on. _Process pushes once ready.
         if (_cloudLightStrCli >= 0f) { _cloudLightStr = _cloudLightStrCli; }
-        if (_cloudLightCli == 1) { _cloudLightOn = true; _cloudLightActivated = false; }
+        if (_cloudLightCli == 1) { _cloudLightOn = true; _atmosphere?.SetCloudLightWanted(true); _cloudLightActivated = false; }
+        else if (_cloudLightCli == 0) { _cloudLightOn = false; _atmosphere?.SetCloudLightWanted(false); _cloud.SetCloudAtmoLight(0f); _cloudLightActivated = false; }
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
