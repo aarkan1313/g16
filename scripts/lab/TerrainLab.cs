@@ -330,6 +330,8 @@ public partial class TerrainLab : MeshInstance3D
         mat.SetShaderParameter("p_patch_m", p.PatchM);
         mat.SetShaderParameter("p_noise_gain", p.NoiseGain);
         mat.SetShaderParameter("p_height_bias", p.HeightBias);
+        mat.SetShaderParameter("p_rough_floor", p.RoughFloor);
+        mat.SetShaderParameter("p_nrm_strength", p.NrmStrength);
         GD.Print($"TerrainLab: ground v2 arrays bound ({g.Count} materials, {g.TexRes}px, scale {g.TexScaleM:F1} m)");
     }
 

@@ -11,7 +11,9 @@
     "warp_amp_m": 80.0,
     "patch_m": 40.0,
     "noise_gain": 0.8,
-    "height_bias": 1.0
+    "height_bias": 1.0,
+    "rough_floor": 0.15,
+    "nrm_strength": 0.7
   },
 
   "_height_range_note": "Bands fit the lab field's actual elevation (~ -180..639 m). Retune per biome/terrain; the field range is printed at startup as 'TerrainLab: built ... (h MIN..MAX m)'.",

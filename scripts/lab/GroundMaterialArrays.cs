@@ -17,10 +17,12 @@ public struct RuleData
 public struct PlacementParams
 {
     public float BandSoftM, SlopeSoft, WarpM, WarpAmpM, PatchM, NoiseGain, HeightBias;
+    public float RoughFloor, NrmStrength;   // surface knobs (Unit 3): min roughness, normal-map tilt strength
     public static PlacementParams Default => new PlacementParams
     {
         BandSoftM = 60f, SlopeSoft = 0.08f, WarpM = 120f, WarpAmpM = 80f,
         PatchM = 40f, NoiseGain = 0.8f, HeightBias = 1f,
+        RoughFloor = 0.15f, NrmStrength = 0.7f,
     };
 }
 
@@ -116,6 +118,8 @@ public static class GroundMaterialArrays
         p.PatchM = F(pl, "patch_m", p.PatchM);
         p.NoiseGain = F(pl, "noise_gain", p.NoiseGain);
         p.HeightBias = F(pl, "height_bias", p.HeightBias);
+        p.RoughFloor = F(pl, "rough_floor", p.RoughFloor);
+        p.NrmStrength = F(pl, "nrm_strength", p.NrmStrength);
         return p;
     }
 
