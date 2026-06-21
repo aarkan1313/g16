@@ -328,15 +328,20 @@ is default-off so the approved look is untouched.
 - Mechanically: cumulus no-op (terrain pixel-identical); `--shadowcheck` PASS r=0.811 (stratus); cirrus appears
   (sky diff 2.0) + night-fades. Plan `plans/2026-06-20-clouds-co2-types.md`. **On PASS → CO-3 anti-repetition/horizon.**
 
-### 10. Stars + Milky Way (galaxy) — ✅ REVIEWED 2026-06-20 (live) → ❌ NEEDS WORK → folded into Celestial #6 C1
-- **Verdict (user, live, `--time=23 --celestial=1` = moonless dark, MW boosted):** needs work — "not terrible but
-  just a fog band, and a band that goes all the way across in a half-circle." Reviewed → **no longer "owed."** Now
-  **C1 of the Celestial expansion** (ROADMAP #6), **sequenced AFTER #3 GPU atmosphere (AT-1)** per the user.
-- **Root cause (code):** `stars_layer()` in `cloud_sky.gdshader` — a **uniform great-circle band** (no along-band
-  core → the uniform arc) + **smooth low-freq fbm + flat blue-white color + no embedded stars** (→ fog). C1 fix:
-  galactic **core/bulge** + Great-Rift **dust lanes** + **resolved star clouds** + subtle **color** + **pulled-back**
-  apparent scale; tunable + presets. (DECISIONS 2026-06-20.)
-- **See it (for C1 when it's built):** `--time=23 --celestial=1` → Night tab `mw *` / `star *` knobs.
+### 10. Stars + Milky Way → Celestial C1 procedural fantasy night-sky — ⚑ BUILT 2026-06-21, **LOOK-GATE OWED**
+- **Original verdict (user, live, 2026-06-20):** the old `stars_layer()` MW was "not terrible but just a fog band, a
+  band that goes all the way across in a half-circle." → folded into **Celestial C1** (ROADMAP #6), sequenced after #3.
+- **C1 BUILT 2026-06-21 (T1-T5, commits a43515a..a09672a):** replaced the uniform band with a procedural fantasy
+  **galaxy** (core bulge kills the arc + dust lanes + star-cloud knots + 2-color gradient) + up to **4 nebulae** +
+  reworked **magnitude/size/color-temp starfield**, all **baked** to one runtime texture tap (cheaper than the old 3
+  fbm3). Tunable (11 new Night knobs) + **4 presets** (Subtle / Crimson Rift / Aurora Veil / Deep Field). Mechanically
+  verified: baked==procedural pixel-diff ≤0.0005, presets bake distinct skies, perf 5.9 ms (≤ pre-C1).
+- **See it / gate it:** `--time=0 --celestial=1` (night). **Night tab → "NIGHT SKY PRESET (galaxy + nebulae)"** picker
+  (or `--nspreset=1..4`); fine-tune with the `galaxy *` / `nebula *` / `star *` knobs; `night sky baked (perf)` on/off
+  must look identical. **Judge:** no longer a uniform fog band (core reads as a focal point); nebulae "cool"; stars
+  varied; presets distinct + tie with the night mood. Tune to taste, pick a default preset. **PASS → default-on + record.**
+- **Mechanical screenshots (not a substitute for the live gate):** `/c/tmp/preset{1..4}.png` — Aurora reads as a
+  structured teal galaxy with dust lanes. The default look is dim (galaxy brightness 0.25) — likely a T6 tune-up.
 
 ---
 

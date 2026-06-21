@@ -6,6 +6,21 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — Celestial C1 (procedural fantasy night-sky) BUILT T1-T5, look-gate owed.** Replaced the uniform Milky
+Way fog band (NEEDS_REVIEW 10, user: "just a fog band, a half-circle all the way across") with a procedural fantasy
+**galaxy** (core bulge that kills the uniform arc + dust lanes + star-cloud knots + 2-color gradient) + up to **4
+nebulae** + a reworked **magnitude/size/color-temp starfield**. Spec/plan `2026-06-21-celestial-c1-*`. **Key decisions:**
+(1) **Baked, evolving the MW-bake seam** — `milkyway_bake.glsl`→`night_sky_bake.glsl` bakes galaxy+nebula COLOR to an
+rgba16f lat-long texture (1 runtime tap, cheaper than the old 3 fbm3); the procedural path stays as the `night_sky_baked`
+toggle-off reference, pixel-diff-verified == baked (≤0.0005, the star-twinkle floor). (2) **Why baked, not cross-node
+sampling:** the AT-3 lesson — cross-node GPU texture sampling HARD-CRASHES the render device — so C1 reuses the
+render-thread-RD bake + `Texture2Drd`/param seam, copying the noise block verbatim so baked==proc. (3) **Brightness stays
+a LIVE shader multiplier** (not baked) so dragging it never re-bakes; structure/color re-bake on change (coalesced via
+`_mwDirty` → one bake/frame). (4) **Tunable + 4 presets** (Subtle / Crimson Rift / Aurora Veil / Deep Field), `--nspreset=N`;
+presets bake distinct skies (bright-region max ~1.0 → proves the knob→re-bake path). Commits a43515a..a09672a. **Owed:**
+the user's live look-gate (T6) — perf/correctness are mechanically verified; the fantasy "is it cool" + the dim default
+brightness are the user's call. On PASS: default-on (already wired) + record.
+
 **2026-06-21 — Sky perf pass (no-visuals window): profiled + shipped the verifiable on-par wins; 2-3× needs a motion gate.**
 Goal was 2-3× sky perf without quality loss. **Profiled** (`--profmove --profile=3`, subsystem toggles): the sky =
 **clouds ~1.8 ms** (day) + **night stars/galaxy/moon ~1.3 ms**; **the whole atmosphere stack (AT-1/2/3) is ~free**

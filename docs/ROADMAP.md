@@ -77,7 +77,7 @@ the gates upstream → downstream so judgments aren't contaminated:**
    run the **Step-0 "wrong-defaults" ground gate (1e)** first (shows how much "drab" is just suppressed
    defaults), then iterate per the rewritten **Ground / Texture** lane below. *(Part of the "drab" is the
    default-on atmosphere warm-washing the surface — judge ground only after the sky lane settles.)*
-4. **Sky:** Clouds feature review (5 ✅) → god rays (3 ✅) → **galaxy/Milky Way C1** (10, needs work).
+4. **Sky:** Clouds feature review (5 ✅) → god rays (3 ✅) → **Celestial C1 night-sky** (10, ⚑ built 2026-06-21, look-gate owed).
 5. **Whole-scene last:** AA in motion (7) + GI-proxy fidelity (2).
 
 ## ⏸ Phase A — the two lanes (FULL scope; finish before Phase B)
@@ -156,8 +156,9 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
 > **SKY LANE 2026-06-20: Stage 3 (Night & Celestial) ✅ · #2 Clouds overhaul (CO-1..CO-4) ✅ · #4 Stage 4
 > (auto cycle + fantasy) ✅ — all eye-gated/soft-gated live.** Moon now on its OWN arc (decoupled). **Galaxy/Milky
 > Way reviewed live 2026-06-20 → NEEDS WORK** (fog band + uniform half-circle arc) → folded into the new
-> **Celestial expansion (#6)** below. **REMAINING, IN ORDER (user's call): #3 GPU atmosphere (AT-1) NEXT → then
-> #6 Celestial expansion (C1 galaxy → C2 bodies → C3 N suns/moons).** Review keys: 6 = cloud types · 7 = fantasy skies.
+> **Celestial expansion (#6)** below. **STATUS 2026-06-21: #3 GPU atmosphere (AT-1/2/3) ✅ arc complete · #6 C1
+> (procedural fantasy night-sky) ⚑ BUILT, look-gate owed. REMAINING: C1 look-gate → C2 bodies → C3 N suns/moons.**
+> Review keys: 6 = cloud types · 7 = fantasy skies.
 
 Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
 Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
@@ -227,11 +228,13 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
 6. **Celestial / Night-Sky expansion — 🆕 ROADMAPPED 2026-06-20** (user scope-up during the galaxy review).
    Built **AFTER #3 atmosphere** (the physical sky is the backdrop the celestial work sits on; and C3 feeds it).
    Each piece its own spec → plan → eye-gate, built one phase past the last pass (discipline rule).
-   - **C1 — Galaxy / Milky Way redesign.** Today's `stars_layer()` reads as a uniform fog half-circle (DECISIONS
-     2026-06-20). Redesign: bright galactic **core/bulge** (kills the uniform arc) · sharp dark **dust lanes** (Great
-     Rift) · **resolved star clouds** in the band · subtle warm-core/cool-arm **color** · **pulled back** to a smaller
-     apparent scale (not in the player's face). Tunable/modular + **presets**. Replaces the fog band as the default
-     night look (re-gate). Lightest piece — first in this sub-lane.
+   - **C1 — Procedural fantasy night-sky. ⚑ BUILT 2026-06-21 (T1-T5), LOOK-GATE OWED.** Replaced the uniform fog
+     half-circle with a procedural fantasy **galaxy** (core bulge kills the arc + dust lanes + star-cloud knots +
+     2-color gradient) + up to **4 nebulae** + reworked **magnitude/size/color-temp starfield**, all **baked** to one
+     runtime texture tap (evolves the MW-bake seam; cheaper than the old 3 fbm3). 11 Night-tab knobs + **4 presets**
+     (Subtle / Crimson Rift / Aurora Veil / Deep Field, `--nspreset=N`). Mechanically verified (baked==proc ≤0.0005,
+     distinct presets, 5.9 ms). Commits a43515a..a09672a; spec/plan `2026-06-21-celestial-c1-*`. **Gate:** NEEDS_REVIEW
+     10 — `--time=0 --celestial=1`, Night-tab "NIGHT SKY PRESET" picker. On PASS → default-on (wired) + record.
    - **C2 — Celestial bodies.** Planets (bright moving discs/points) · meteors / shooting stars · brighter named-star
      realism · optional distant nebulae/galaxies · **animated/parallax nebulae** (deferred from C1's static bake —
      the C1 night sky is baked structure; drifting/parallaxing nebulae would layer on here). Scope settled at its spec.
