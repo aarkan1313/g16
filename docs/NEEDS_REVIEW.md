@@ -151,14 +151,16 @@ the **default** path (no toggle; placement byte-stable). Spec/plan `2026-06-20-g
   vs damper-darker-smoother patches, organic, no squares, no shimmer)? Tune `var roughness` first. **Verdict gates
   GM3 Approach B/C** (true different-material patches via texture arrays). Plan `plans/2026-06-20-ground-gm3a-within-area-variation.md` T3.
 
-### ⚑ 1e. GROUND G-0 — the "wrong-defaults" eye-gate (NEXT for ground; from the 2026-06-21 review) — needs wiring
+### ⚑ 1e. GROUND G-0 — the "wrong-defaults" eye-gate (NEXT for ground; from the 2026-06-21 review) — ✅ WIRED 2026-06-21
 The 2026-06-21 ground review found the "drab/flat" look is largely a cluster of **suppressed-good-tech defaults**,
-not a rotten foundation (verdict: **ITERATE, don't rebuild** — ROADMAP "Ground / Texture"). Before any building,
-flip the cluster behind toggles defaulting to current and **A/B it live** — it shows how much "drab" is recoverable today.
-- **The flips:** `rough_floor` → ~0.15 (needs a NEW slider — it currently has no UI control and is pinned 0.5,
-  forcing the whole ground matte: `terrain_lab.gdshader:103,987`); `height_from_maps=true` (bind GM2's real Poisson
-  relief — Detail tab); palette `active` → `alpine_stone` (one-line `ground_palette.json`); `within-area variation`
-  ON (Color tab); reconcile `tex_scale_m` (28 → ~9-12).
+not a rotten foundation (verdict: **ITERATE, don't rebuild** — ROADMAP "Ground / Texture"). The cluster is now flippable
+as ONE before/after, defaulting to the current look — A/B it live to see how much "drab" is recoverable today.
+- **See it:** `review.tscn` → **press ⇧1 (Shift+1)** to toggle the whole cluster CURRENT↔FIXED (banner shows which);
+  fly **close/mid in motion**, toggle ⇧1 to A/B. (`--greview=1` drives the FIXED state at startup for an auto-shot.)
+  Mechanical check 2026-06-21: FIXED renders distinctly (warmer alpine_stone palette + finer texture + variation), no no-op.
+- **The flips (all default-current):** `rough_floor` 0.5→0.15 (**new Surface-tab slider** — was pinned 0.5 with no UI
+  control, forcing the ground dead-matte: `terrain_lab.gdshader:103,987`); `tex_scale_m` 28→11 (un-stretch ~3×);
+  `height_from_maps` on (GM2 real Poisson relief); `within-area variation` on (GM3-A); palette → `alpine_stone`.
 - **Judge (close/mid, in motion, under SETTLED light — gate the atmosphere first):** does the ground gain specular/
   sheen + relief + color variety + crisper texture? Or does unclamping roughness reintroduce specular shimmer/fuzz
   (the floor was hiding it)? If shimmer appears, that's the bisect target (`dbg_fullrough`/`dbg_use_normalmap`), not a

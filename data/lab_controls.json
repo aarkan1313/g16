@@ -29,6 +29,8 @@
     { "id": "blend_mode", "label": "blend mode", "tab": "Surface", "type": "enum", "setter": "blend",
       "options": ["flat albedo", "full PBR", "PBR+anti-tile", "+macro tint", "full stack"],
       "default": 3, "rand": false },
+    { "id": "rough_floor", "label": "rough floor", "tab": "Surface", "type": "slider",
+      "param": "rough_floor", "min": 0.04, "max": 1, "default": 0.5, "rand": false },
 
     { "id": "macro_on", "label": "macro color", "tab": "Color", "type": "toggle",
       "param": "macro_on", "default": false, "rand": true },
