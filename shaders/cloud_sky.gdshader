@@ -67,10 +67,12 @@ uniform float star_rotation = 0.003;     // celestial rotation speed (rad/s)
 // METEORS (Celestial C2): occasional shooting stars. Defaults subtle; gate-tunable. meteor_debug forces a
 // streak (headless capture). meteor_rate = how often a channel fires; speed = sweep speed (shorter window).
 uniform bool meteors_on = true;
-uniform float meteor_rate : hint_range(0.0, 1.0) = 0.15;
-uniform float meteor_brightness : hint_range(0.0, 3.0) = 0.8;
+uniform float meteor_rate : hint_range(0.0, 1.0) = 0.2;
+uniform float meteor_brightness : hint_range(0.0, 3.0) = 1.1;
 uniform float meteor_length : hint_range(0.0, 1.0) = 0.5;
 uniform float meteor_speed : hint_range(0.0, 1.0) = 0.5;
+uniform vec3 meteor_color = vec3(0.85, 0.92, 1.0);          // base streak color (cool white); per-meteor hue varies by meteor_color_var
+uniform float meteor_color_var : hint_range(0.0, 1.0) = 0.25;  // 0 = all base color · 1 = vivid fantasy hues per meteor
 uniform bool meteor_debug = false;
 // NIGHT SKY (Celestial C1): a procedural fantasy galaxy (core bulge + dust + star-clouds + 2-color
 // gradient) + up to 4 nebulae. PERF: the galaxy+nebula COLOR is baked to a lat-long texture
@@ -429,9 +431,17 @@ vec3 meteor_channel(vec3 rd, float seed){
     float crossT = smoothstep(thick, 0.0, abs(ya));              // thin
     float tail = smoothstep(-trail, 0.0, xa);                    // tail-end (0) → head (1): extent + gradient
     float headCut = smoothstep(0.012, 0.0, xa);                 // keep only BEHIND the head
+    float streak = crossT * tail * headCut;
+    // bright HEAD flare — a glowing tip so it reads as more than a thin line
+    float hd = acos(clamp(dot(rd, H), -1.0, 1.0));
+    float head = smoothstep(radians(0.55), 0.0, hd);
     float life = sin(p * 3.14159265);                          // fade in/out over the window
-    float bri = mix(0.4, 1.2, hash13(vec3(cyc, seed, 7.0))) * meteor_brightness;
-    return vec3(0.85, 0.92, 1.0) * (crossT * tail * headCut * life * bri);   // faint cool white
+    float bri = mix(0.45, 1.3, hash13(vec3(cyc, seed, 7.0))) * meteor_brightness;
+    // per-meteor COLOR: base meteor_color → a vivid hashed hue, blended by meteor_color_var (the fantasy knob)
+    float hue = hash13(vec3(cyc, seed, 9.0));
+    vec3 fancy = 0.55 + 0.45 * cos(6.2831853 * (hue + vec3(0.0, 0.33, 0.67)));
+    vec3 mcol = mix(meteor_color, fancy, meteor_color_var);
+    return mcol * ((streak + head * 0.8) * life * bri);
 }
 vec3 meteors(vec3 rd){
     if (!meteors_on || rd.y < -0.02) { return vec3(0.0); }       // off / below horizon → free

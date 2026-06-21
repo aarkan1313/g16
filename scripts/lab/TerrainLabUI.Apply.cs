@@ -63,6 +63,7 @@ public partial class TerrainLabUI : Control
     {
         switch (target)
         {
+            case "meteor_color":    _stars.MeteorColor = col; ComposeLighting(); break;
             case "moon_color":      _moon.Color = col; ComposeLighting(); break;
             case "moonlight_color": _moon.LightColor = col; ComposeLighting(); break;
             case "sky_tint":        _skyTint = col; ComposeLighting(); break;   // ST4-2 fantasy sky tint
@@ -132,6 +133,7 @@ public partial class TerrainLabUI : Control
             case "meteor_brightness":   _stars.MeteorBrightness = v; ComposeLighting(); break;
             case "meteor_length":       _stars.MeteorLength = v; ComposeLighting(); break;
             case "meteor_speed":        _stars.MeteorSpeed = v; ComposeLighting(); break;
+            case "meteor_color_var":    _stars.MeteorColorVar = v; ComposeLighting(); break;
             case "mw_brightness":       _stars.MwBrightness = v; ComposeLighting(); break;   // galaxy brightness (live)
             case "mw_width":            _stars.MwWidth = v; ComposeLighting(); break;        // galaxy band width
             case "mw_tilt":             _stars.MwTilt = v; ComposeLighting(); break;         // galaxy band tilt

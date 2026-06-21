@@ -538,12 +538,14 @@ public partial class CloudVolume : Node
 
     // --- METEORS (Celestial C2): occasional shooting stars (in cloud_sky.gdshader). CloudVolume stays the SOLE _skyMat writer. ---
     public void SetMeteorsOn(bool on) { _skyMat?.SetShaderParameter("meteors_on", on); }
-    public void SetMeteors(float rate, float brightness, float length, float speed)
+    public void SetMeteors(float rate, float brightness, float length, float speed, Color color, float colorVar)
     {
         _skyMat?.SetShaderParameter("meteor_rate", Mathf.Clamp(rate, 0f, 1f));
         _skyMat?.SetShaderParameter("meteor_brightness", Mathf.Max(brightness, 0f));
         _skyMat?.SetShaderParameter("meteor_length", Mathf.Clamp(length, 0f, 1f));
         _skyMat?.SetShaderParameter("meteor_speed", Mathf.Clamp(speed, 0f, 1f));
+        _skyMat?.SetShaderParameter("meteor_color", new Vector3(color.R, color.G, color.B));
+        _skyMat?.SetShaderParameter("meteor_color_var", Mathf.Clamp(colorVar, 0f, 1f));
     }
     public void SetMeteorDebug(bool on) { _skyMat?.SetShaderParameter("meteor_debug", on); }
     // Night-sky (Celestial C1): live brightness multiplier + the procedural-reference galaxy/nebula

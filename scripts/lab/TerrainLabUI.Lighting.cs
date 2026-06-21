@@ -166,7 +166,7 @@ public partial class TerrainLabUI : Control
             // ── STARS + NIGHT SKY (Stage 3d / Celestial C1): procedural, faded in at night by the sky shader. ──
             _cloud.SetStars(_stars.Brightness, _stars.Density, _stars.Twinkle, _stars.Rotation);
             _cloud.SetMeteorsOn(_stars.MeteorsOn);
-            _cloud.SetMeteors(_stars.MeteorRate, _stars.MeteorBrightness, _stars.MeteorLength, _stars.MeteorSpeed);
+            _cloud.SetMeteors(_stars.MeteorRate, _stars.MeteorBrightness, _stars.MeteorLength, _stars.MeteorSpeed, _stars.MeteorColor, _stars.MeteorColorVar);
             var gx = BuildGalaxyParams();
             var nebs = BuildNebulae();
             _cloud.SetNightSky(gx);             // live brightness + procedural-reference galaxy uniforms
