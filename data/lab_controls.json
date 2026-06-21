@@ -33,7 +33,7 @@
     { "id": "star_density", "label": "star density", "tab": "Night", "type": "scenef", "scene": "star_density", "min": 0.0, "max": 1.0, "default": 0.5, "rand": false },
     { "id": "star_twinkle", "label": "star twinkle", "tab": "Night", "type": "scenef", "scene": "star_twinkle", "min": 0.0, "max": 1.0, "default": 0.5, "rand": false },
     { "id": "star_rotation", "label": "sky rotation speed", "tab": "Night", "type": "scenef", "scene": "star_rotation", "min": 0.0, "max": 0.05, "default": 0.003, "rand": false },
-    { "id": "mw_brightness", "label": "galaxy bright", "tab": "Night", "type": "scenef", "scene": "mw_brightness", "min": 0.0, "max": 2.0, "default": 0.8, "rand": false },
+    { "id": "mw_brightness", "label": "galaxy bright", "tab": "Night", "type": "scenef", "scene": "mw_brightness", "min": 0.0, "max": 2.0, "default": 0.0, "rand": false },
     { "id": "mw_width", "label": "galaxy width", "tab": "Night", "type": "scenef", "scene": "mw_width", "min": 0.02, "max": 0.4, "default": 0.11, "rand": false },
     { "id": "mw_tilt", "label": "galaxy tilt", "tab": "Night", "type": "scenef", "scene": "mw_tilt", "min": 0.0, "max": 3.14, "default": 0.6, "rand": false },
     { "id": "gx_core_size", "label": "galaxy core size", "tab": "Night", "type": "scenef", "scene": "gx_core_size", "min": 0.05, "max": 1.0, "default": 0.5, "rand": false },

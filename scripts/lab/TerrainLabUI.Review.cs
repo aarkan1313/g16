@@ -58,25 +58,24 @@ public partial class TerrainLabUI : Control
                 title = $"1 · Sun disc + surface  [{sunName}]  (press 1 to cycle)";
                 judge = "Fly CLOSE to the sun. Surface believable (granulation, churn, spots), not a flat circle? No swimming or pole-spin (raise sun high). No clip-to-white. Press 1 to cycle presets; tune 'sun surface *' on the Light tab.";
                 break;
-            case 2: // Celestial C1 — procedural fantasy night sky (galaxy + nebulae + stars). Press 2 to cycle presets.
-                LoadNightSkyPresets();
-                if (_lastPreset != 2)
+            case 2: // Night sky — stars + MOON (galaxy + nebulae killed per user 2026-06-21)
+                // Drive night DIRECTLY (robust to the ground strip's Apply.cs scenef-path breakage) + lock the
+                // clock so it can't tick back to day. NOT calling ApplyMood (it throws post-strip).
+                DriveTime(0f); _timeRunning = false;
+                if (_byId.TryGetValue("time_of_day", out var tod)) { SetWidgetValueSilent(tod, 0f); }
+                Set("cloud_enabled", false);                    // clear sky so the stars + moon read
                 {
-                    // Drive night DIRECTLY (robust to the ground strip's Apply.cs scenef-path breakage) + lock
-                    // the clock so it can't tick back to day. NOT calling ApplyMood (it throws post-strip).
-                    DriveTime(0f); _timeRunning = false;
-                    if (_byId.TryGetValue("time_of_day", out var tod)) { SetWidgetValueSilent(tod, 0f); }
-                    Set("cloud_enabled", false);                // clear sky so the galaxy/stars read
-                    Set("moon_energy", 0.0f);                   // moon disc off — don't wash the galaxy
-                    Set("moonlight_energy", 0.0f);              // moonlight off (clean dark sky)
-                    LookUpAtNightSky();                         // aim the camera straight at the galaxy core
-                    _nsReviewIdx = _nsPresets.Count > 2 ? 2 : 0; // first press leads with the hero preset (Aurora Veil)
+                    // moon is the night feature now — aim the camera at it (falls back to a sky-up view)
+                    var camN = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+                    if (camN != null)
+                    {
+                        camN.Position = new Vector3(0, 280, 200);
+                        if (_lastMoonDir != Vector3.Zero) { camN.LookAt(camN.GlobalPosition + _lastMoonDir, Vector3.Up); }
+                        else { camN.RotationDegrees = new Vector3(28, 180, 0); }
+                    }
                 }
-                else if (_nsPresets.Count > 0) { _nsReviewIdx = (_nsReviewIdx + 1) % _nsPresets.Count; }
-                if (_nsPresets.Count > 0) { ApplyNightSkyPreset(_nsReviewIdx); }
-                string nsName = (_nsReviewIdx >= 0 && _nsReviewIdx < _nsPresets.Count) ? _nsPresets[_nsReviewIdx].name : "default";
-                title = $"2 · Night sky (Celestial C1)  [{nsName}]  (press 2 to cycle presets)";
-                judge = "Fantasy night sky: a galaxy with a bright CORE (not a uniform fog band), dust lanes, colored nebulae, varied stars. Press 2 to cycle default→Subtle→Crimson Rift→Aurora Veil→Deep Field. Tune 'galaxy *' / 'nebula *' / 'star *' on the Night tab; 'night sky baked (perf)' on/off must look identical. Fly to look around the sky.";
+                title = "2 · Night sky — stars + moon";
+                judge = "Clear night: the moon + stars (galaxy/nebulae removed). Tune 'star *' (brightness/density/twinkle) and the 'moon *' knobs on the Night tab; moon phase/size/halo + moonlight on the ground.";
                 break;
             // cases 3-5 (ground G-0 / v2 parity / variation) removed in the 2026-06-21 ground strip.
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle: cumulus(profile off→on) → stratus → cirrus
