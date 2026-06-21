@@ -20,6 +20,7 @@ public partial class TerrainLabUI : Control
     private bool _co1ProfileOn;   // CO-1 vertical-profile A/B state (review key 6 toggles it)
     private int _co2Type;         // CO-2 type on review key 6: 0 cumulus · 1 stratus · 2 cirrus
     private int _fantasyIdx;      // ST4-2 fantasy preset on review key 7 (cycles)
+    private int _atmoStep;        // AT-1 atmosphere time-of-day preset on review key 8 (cycles dawn→noon→golden→dusk→night)
     private List<string> _palNames;
     private Dictionary<string, string[]> _palRoles;
     private int _palIdx;
@@ -126,17 +127,20 @@ public partial class TerrainLabUI : Control
                 title = $"7 · Fantasy / exotic sky  [{fname}]  (press 7 to cycle)";
                 judge = "Cohesive believable exotic sky? Scrub 'time of day' or press 'play day/night' (Light tab) — the look should HOLD as the cycle runs. blood_moon/violet_night read at NIGHT (moon up), alien_green/ember_dusk by day/dusk. Tune 'sky tint' (Light) + moon colors (Night).";
                 break;
-            case 8: // AT-1 GPU ATMOSPHERE A/B (repurposed from the GI gate — that decision LANDED; the SDFGI
-                    // toggle stays on the Light tab for manual A/B, so the key is free to reuse)
-                ApplyMood(5);
-                Set("cloud_enabled", false);                 // clear sky → judge pure atmosphere color + isolate any horizon seam from the cloud dome
-                Set("atmosphere_on", true);
+            case 8: // AT-1 GPU ATMOSPHERE — press 8 to CYCLE the times of day (dawn→noon→golden→dusk→night).
+                    // Repurposed from the GI gate (decision LANDED; SDFGI A/B still on the Light tab).
+                if (_lastPreset != 8) { _atmoStep = 0; ApplyMood(5); }   // first press: dawn + neutral grade
+                else { _atmoStep = (_atmoStep + 1) % 5; }                  // re-press: advance the time of day
+                float[] atmoTimes = { 6.5f, 12f, 17.5f, 19.5f, 23f };
+                string[] atmoNames = { "DAWN", "NOON", "GOLDEN HOUR", "DUSK", "NIGHT" };
+                Set("cloud_enabled", false);                              // clear sky → pure atmosphere color
+                Set("atmosphere_on", true);                               // physical sky ON (toggle OFF on the Light tab to A/B vs keyframed)
                 Set("atmo_exposure", 12f);
-                Set("time_of_day", 17f);                     // low sun → prominent dawn/dusk gradient (where the horizon line shows)
-                var acam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
-                if (acam != null) { acam.Position = new Vector3(0f, 220f, 420f); acam.RotationDegrees = new Vector3(-3f, 0f, 0f); }   // look ~level at the horizon
-                title = "8 · GPU ATMOSPHERE (AT-1) A/B — physical sky vs keyframed";
-                judge = "Light tab: 'GPU atmosphere (AT-1)' on/off to A/B; scrub 'time of day' dawn→noon→dusk→night; tune 'atmosphere exposure'. Judge: physical sky good-or-better? believable dawn/dusk gradient? no pops? clean dusk→night? WATCH the horizon line — toggle atmosphere on/off: if the line moves with it, it's the sky seam (fixable); if not, it's the cloud dome. Toggle clouds (Clouds tab) to see them lit by the sky.";
+                Set("time_of_day", atmoTimes[_atmoStep]);                 // drives the sun (so LookAtSun frames the right spot)
+                if (_atmoStep < 4) { LookAtSun(); }                       // day steps: frame the sun + its horizon gradient
+                else { var nc = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera"); if (nc != null) { nc.Position = new Vector3(0f, 240f, 440f); nc.RotationDegrees = new Vector3(18f, 0f, 0f); } }   // night: look UP at the sky
+                title = $"8 · GPU ATMOSPHERE (AT-1) — {atmoNames[_atmoStep]} ({atmoTimes[_atmoStep]:0.0}h)  (press 8 to cycle)";
+                judge = "A/B: Light tab 'GPU atmosphere (AT-1)' on/off (physical vs keyframed). Press 8 to cycle dawn→noon→golden→dusk→night. Tune 'atmosphere exposure'. NIGHT should match today's look (atmosphere hands off). Watch the horizon for any flashing line.";
                 break;
             case 9: // H1 BRDF clouds-off baseline (6)
                 BaselineGround();

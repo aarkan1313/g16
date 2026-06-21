@@ -48,6 +48,7 @@ public partial class TerrainLabUI : Control
     private int _atmosphereCli = -1;     // --atmosphere[=1] → enable the AT-1 GPU physical sky at startup
     private bool _atmoCheckCli;          // --atmoscheck → one-shot LUT numeric self-check (readback)
     private float _atmoExpCli = -1f;     // --atmoexp=N → AT-1 atmosphere exposure override
+    private int _reviewCli = -1;         // --review=N → run ApplyReview(N) at startup (drive/verify a review preset headlessly)
     private int _terrainArCli = -1;
     private int _terrainDetailCli = -1;
     private int _groundRulesCli = -1;
@@ -121,6 +122,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
             else if (a == "--atmoscheck") { _atmoCheckCli = true; }
             else if (a.StartsWith("--atmoexp=")) { float.TryParse(a.Substring("--atmoexp=".Length), out _atmoExpCli); }
+            else if (a.StartsWith("--review=")) { int.TryParse(a.Substring("--review=".Length), out _reviewCli); }
             else if (a == "--profmove") { _profMove = true; }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }

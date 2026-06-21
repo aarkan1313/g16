@@ -199,6 +199,8 @@ public partial class TerrainLabUI : Control
             var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
             camN.LookAt(camN.GlobalPosition + _lastMoonDir, Vector3.Up);
         }
+        // --review=N: drive a review preset at startup (verify/screenshot the keypress path headlessly). LAST so it wins.
+        if (_reviewCli > 0) { ApplyReview(_reviewCli); }
     }
 
     public override void _ExitTree() => _fc?.Dispose();
