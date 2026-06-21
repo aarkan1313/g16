@@ -6,6 +6,23 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — AT-2 aerial perspective BUILT + live eye-gated → soft-PASS, default-ON at subtle strength 0.4.**
+Built the full AT-2 stack from the approved plan (`plans/2026-06-20-gpu-atmosphere-at2-aerial-perspective.md`): a 4th
+Hillaire LUT in `AtmosphereCompute` — a 32³ camera-frustum aerial froxel (rgb in-scatter, a transmittance, `Texture3Drd`
+seam, cheap camera-only recompute path) + a screen-space composite (`AerialPerspective` + `aerial_screen.gdshader`,
+mirrors GodRaysScreen, RenderPriority 120 < godray 127) that reads depth, reconstructs distance, samples the froxel, and
+composites `color·T + inscatter` on geometry only (sky depth-gated out — proven no double-count). Built-in `FogAerial`
+handed to 0 when on (no double-fog; off restores it exactly). Commits af07b5d (T1), 505ba07 (T2), d7474e6 (recal).
+**Two plan-snippet fixes forced by the live engine:** spatial shader writes `ALBEDO/ALPHA` not `COLOR`; froxel altitude
+clamped to ≥ sea level (terrain rays dive below the ground radius at large t → `exp()` density explodes → whole-frame
+wash; sky LUTs never hit this). **The gate (user, review key 8 A/B):** the audit's predicted gain mismatch was real —
+in-scatter is additive and at the planned strength (~2, let alone the sky-matched 10) it WASHED the frame. Swept it:
+**~0.4** reads as gentle physical distance haze (warm sunset / blue noon), near terrain stays crisp; >1 washes. User
+verdict at 0.4: "a little better than off" → **soft-pass, keep default-ON subtle.** Cost (`--profmove`): **+0.7 ms**
+(114 vs 124 fps), within budget. Self-checks PASS (`--aerialcheck` inscatter[0..0.13] T[0.466..0.999], `--atmoscheck`,
+`--shadowcheck`). **Still owed:** the AT-1 horizon-flash in-motion re-confirm (folded into key 8's new horizon framing;
+user watching). AT-3 (cloud-lighting) NOT started (disciplined — one sub-phase). Lane stays paused for the re-roadmap.
+
 **2026-06-21 — Full project audit + ground/texture iterate-vs-rebuild review; docs reconciled; sky lane pushed to origin.**
 Ran a 7-subsystem project audit (`AUDIT-2026-06-21.md`, committed) + a focused ground review (both multi-agent,
 adversarially verified). **(1)** Pushed `experiment/presentation` (was 179 commits ahead) + 6 backup tags to origin —

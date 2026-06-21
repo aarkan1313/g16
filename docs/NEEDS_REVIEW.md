@@ -340,18 +340,19 @@ is default-off so the approved look is untouched.
 
 ---
 
-### 11. GPU atmosphere AT-1 + AT-2 aerial — DEFAULT-ON but NEVER LIVE-EYE-GATED (2026-06-21 audit)
-Both shipped default-on, replacing the approved look, with no recorded live-eye PASS — against the discipline rule
-(features built ahead stay default-off). Gate them or flip default-off. (Audit BAD #1, `docs/AUDIT-2026-06-21.md`.)
-- **AT-1 (physical Hillaire sky):** review **key 8** A/B (physical vs keyframed; Light-tab toggle + exposure).
-  **Judge IN MOTION** — the horizon flash/seam fix was only confirmed on stills (DECISIONS: "user hasn't re-checked");
-  confirm the day sky reads better than the keyframed look it replaced. AT-1 was only soft-passed off cycling presets.
-- **AT-2 (screen-space aerial perspective):** Light-tab `aerial` toggle / `--aerial=0`. **Judge:** does distant haze
-  read as physical aerial perspective and **fade into the sky color at the horizon**? (Audit found the in-scatter gain
-  ~2 vs the sky-view exposure ~10-12, so haze may NOT resolve into the sky — a known tuning gap to fix at the source.)
-  **Measure its in-motion cost** (`--profmove`) — never profiled; the 9.6 ms budget predates it.
-- **Unblocks:** an honest perf budget + Celestial C1 (the roadmap's next sky item, currently queued ON this un-gated
-  stack). On PASS: record + update performance.md. On fail/uncertain: flip both default-off.
+### 11. GPU atmosphere AT-1 + AT-2 aerial — eye-gated 2026-06-21 (one owed sub-item remains)
+- **AT-2 (screen-space aerial perspective):** ✅ **soft-PASS 2026-06-21** (review **key 8** A/B, live). The audit's
+  predicted gain mismatch was real — in-scatter is additive, so the planned strength (~2) WASHED the frame; recalibrated
+  to **0.4** (gentle distance haze, warm sunset / blue noon, near stays crisp). User: "a little better than off" →
+  default-ON subtle. Cost **+0.7 ms** (`--profmove`, 114 vs 124 fps). Self-checks PASS. (DECISIONS 2026-06-21; commits
+  af07b5d/505ba07/d7474e6.) *Note: it's a marginal gain over the built-in fog — revisit if you later want it punchier
+  (soften extinction so distant contrast survives) or default-off.*
+- **AT-1 horizon flash — ⏳ STILL OWED (in-motion re-confirm):** the flash/seam fix was only confirmed on stills. Review
+  **key 8**'s new framing centers the horizon for exactly this — watch the `dir.y≈0` line in motion while cycling times.
+  If it flashes, suspect the `sqrt` elevation-warp near `dir.y=0` in the sky-view UV mapping. (AT-1 sky itself soft-passed
+  off cycling presets 2026-06-20.)
+- **Unblocks:** an honest perf budget + Celestial C1 (the roadmap's next sky item). On the horizon-flash confirm:
+  record + update performance.md with the +0.7 ms.
 
 ---
 

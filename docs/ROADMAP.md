@@ -191,12 +191,12 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
    fallback). Night hands off to the keyframed night cleanly (atmosphere bows out). Review **key 8** cycles the day
    presets. **Follow-ups:** confirm the horizon flash gone in motion · mood/fantasy sky-tint bypassed by day (the
    physical sky owns daytime color) — handle if the colored fantasy skies must persist · exposure default.
-   **AT-2 aerial perspective — 🟡 SPEC'd + PLANNED + handoff-ready (build in a NEW session, user's call):** froxel
-   aerial LUT + a screen-space composite (no terrain-shader edit), default-on, A/B vs the built-in fog. Spec
-   `specs/2026-06-20-gpu-atmosphere-at2-aerial-perspective-design.md` · plan
-   `plans/2026-06-20-gpu-atmosphere-at2-aerial-perspective.md` · **START HERE:**
-   `handoffs/2026-06-20-at2-aerial-build-start-here.md`. **Then AT-3 cloud-lighting** (each its own gate).
-   Supersedes the keyframed `day_script` for sky color.
+   **AT-2 aerial perspective — 🟢 BUILT + eye-gated → soft-PASS 2026-06-21 (default-on, subtle 0.4).** Froxel aerial
+   LUT (32³, `Texture3Drd`) + screen-space composite (`AerialPerspective`, no terrain-shader edit), A/B vs the built-in
+   fog via review key 8. In-scatter is additive → recalibrated strength to 0.4 (the planned ~2/10 washed); user "a
+   little better than off"; cost +0.7 ms. Spec `…at2-aerial-perspective-design.md` · plan `…at2-aerial-perspective.md`
+   (DECISIONS/NEEDS_REVIEW 11 2026-06-21). **Then AT-3 cloud-lighting** (NOT started — its own gate). Supersedes the
+   keyframed `day_script` for sky color.
 4. **Stage 4 — IN PROGRESS** (`specs/2026-06-20-stage4-cycle-and-fantasy-design.md`).
    - **ST4-1 auto day/night cycle — ✅ GATED 2026-06-20 (live, "looks pretty good").** Clock in `_Process`
      (play toggle + `cycle speed` + `--autotime`); manual scrub preserved. Follow-ups from the gate: **moon
