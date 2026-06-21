@@ -6,6 +6,26 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #3 GPU atmosphere AT-1 (core sky color) BUILT + day look soft-PASSED (live); fog-wash + horizon-seam fixed.**
+AT-1 Hillaire LUTs (transmittance→multi-scatter→sky-view) on the CloudVolume `Texture2Drd`/`CallOnRenderThread`
+seam (new `AtmosphereCompute` node, mirrors CloudVolume; RIDs assigned once; LUTs recompute on sun-change, not
+per-frame). `cloud_sky.gdshader` `background()` samples the sky-view LUT when `atmosphere_on`, **default OFF** =
+the approved keyframed look (A/B). **User verdict (live, review key 8 cycling dawn→noon→golden→dusk): "just the
+sky? yeah i see it, looks good"** — physical DAYTIME sky soft-PASSED. Two gate fixes found live: **(1)** daytime
+depth fog (`FogSkyAffect=1.0`) washed the whole sky dome → masked the atmosphere ("not much going on"); fixed by
+dropping `FogSkyAffect` when `atmosphere_on` (atmosphere owns the sky haze, per the existing design note; terrain
+aerial fog unchanged). **(2)** a hard horizon line the finite world revealed = a shading seam at `dir.y=0`
+(physical above, keyframed below); fixed by making `background()` continuous across the horizon (sample the horizon
+row below, fade to ground) — **world-size-independent** (it was never a finite-sky edge, so it needn't "adapt to
+world size"). **NIGHT:** atmosphere correctly bows out to the keyframed night (night A/B identical, clean handoff)
+— accepted (user: "fine if night just doesnt use it"). Review **key 8** (repurposed from the resolved GI gate; SDFGI
+A/B still on the Light tab) cycles the 4 daytime presets; **camera reframes only on the first press** (no teleport
+while cycling, per user); `--review=N` drives a preset headlessly; `--atmosphere/--atmoscheck/--atmoexp` CLIs.
+Mechanically: `--atmoscheck` PASS (transmittance∈[0,1], skyview horizon>zenith, finite), `--shadowcheck` PASS
+(no cloud regression), perf negligible (tiny LUTs). **Default stays OFF** (no flip called yet). Open: confirm the
+horizon flash is gone in motion; exposure default. Commits 0fdcfc5/367388d/5bb24ab + this. NEXT (user's call):
+flip-to-default · AT-2 aerial · or the Celestial expansion (galaxy→bodies→N suns/moons).
+
 **2026-06-20 — Galaxy/Milky Way review: NEEDS WORK → scope expanded into a Celestial sub-lane; atmosphere (AT-1) sequenced FIRST.**
 Drove the live galaxy gate (`review.tscn`, `--time=23 --celestial=1` new_moon_dark, MW boosted). **User verdict (live):
 needs work** — "not terrible but just a fog band, and a band that goes all the way across in a half-circle." Root cause

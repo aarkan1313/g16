@@ -127,20 +127,21 @@ public partial class TerrainLabUI : Control
                 title = $"7 · Fantasy / exotic sky  [{fname}]  (press 7 to cycle)";
                 judge = "Cohesive believable exotic sky? Scrub 'time of day' or press 'play day/night' (Light tab) — the look should HOLD as the cycle runs. blood_moon/violet_night read at NIGHT (moon up), alien_green/ember_dusk by day/dusk. Tune 'sky tint' (Light) + moon colors (Night).";
                 break;
-            case 8: // AT-1 GPU ATMOSPHERE — press 8 to CYCLE the times of day (dawn→noon→golden→dusk→night).
+            case 8: // AT-1 GPU ATMOSPHERE — press 8 to CYCLE the daytime sky (dawn→noon→golden→dusk). Night is
+                    // left out (it hands off to the keyframed night — atmosphere does nothing there, user's call).
                     // Repurposed from the GI gate (decision LANDED; SDFGI A/B still on the Light tab).
-                if (_lastPreset != 8) { _atmoStep = 0; ApplyMood(5); }   // first press: dawn + neutral grade
-                else { _atmoStep = (_atmoStep + 1) % 5; }                  // re-press: advance the time of day
-                float[] atmoTimes = { 6.5f, 12f, 17.5f, 19.5f, 23f };
-                string[] atmoNames = { "DAWN", "NOON", "GOLDEN HOUR", "DUSK", "NIGHT" };
+                bool atmoFirst = _lastPreset != 8;                        // only the FIRST press reframes the camera (no teleport while cycling)
+                if (atmoFirst) { _atmoStep = 0; ApplyMood(5); }           // first press: dawn + neutral grade
+                else { _atmoStep = (_atmoStep + 1) % 4; }                  // re-press: advance the time of day
+                float[] atmoTimes = { 6.5f, 12f, 17.5f, 19.5f };
+                string[] atmoNames = { "DAWN", "NOON", "GOLDEN HOUR", "DUSK" };
                 Set("cloud_enabled", false);                              // clear sky → pure atmosphere color
                 Set("atmosphere_on", true);                               // physical sky ON (toggle OFF on the Light tab to A/B vs keyframed)
                 Set("atmo_exposure", 12f);
                 Set("time_of_day", atmoTimes[_atmoStep]);                 // drives the sun (so LookAtSun frames the right spot)
-                if (_atmoStep < 4) { LookAtSun(); }                       // day steps: frame the sun + its horizon gradient
-                else { var nc = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera"); if (nc != null) { nc.Position = new Vector3(0f, 240f, 440f); nc.RotationDegrees = new Vector3(18f, 0f, 0f); } }   // night: look UP at the sky
+                if (atmoFirst) { LookAtSun(); }                           // frame the sky ONCE; re-presses keep the user's view — fly freely while cycling
                 title = $"8 · GPU ATMOSPHERE (AT-1) — {atmoNames[_atmoStep]} ({atmoTimes[_atmoStep]:0.0}h)  (press 8 to cycle)";
-                judge = "A/B: Light tab 'GPU atmosphere (AT-1)' on/off (physical vs keyframed). Press 8 to cycle dawn→noon→golden→dusk→night. Tune 'atmosphere exposure'. NIGHT should match today's look (atmosphere hands off). Watch the horizon for any flashing line.";
+                judge = "A/B: Light tab 'GPU atmosphere (AT-1)' on/off (physical vs keyframed). Press 8 to cycle dawn→noon→golden→dusk. Tune 'atmosphere exposure'. Camera reframes ONLY on the first press — fly freely while cycling. Watch the horizon for any flashing line.";
                 break;
             case 9: // H1 BRDF clouds-off baseline (6)
                 BaselineGround();
