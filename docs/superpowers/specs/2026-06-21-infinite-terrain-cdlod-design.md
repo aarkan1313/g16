@@ -309,3 +309,40 @@ their own arcs, each plugging into the §2 chunk contract.
 - Biome-into-`field_height` signature extension (deferred to the biome arc, per the user's "what, not
   how" steer).
 - No clipmap, ever, without a fresh post-mortem-first roadmap.
+
+---
+
+## 10. S1 result (measured 2026-06-21)
+
+S1 built (commits 121b583 / a871c6b / 7e8e8e1): `field_height` extracted to one shared
+`field_math.gdshaderinc` (params as a `FieldP` struct); the compute bake splices it (C# marker
+replace), the spatial `ground.gdshader` `#include`s it. Two cross-language fixes were needed for the
+shared file to compile in BOTH Godot's shading language and RD-GLSL: unsigned shift amounts
+(`>> 16u`, Godot rejects `uint >> int`) and one-uniform-per-line (Godot rejects comma-separated
+uniforms). Both are valid/portable GLSL, so the single-source goal holds.
+
+**Parity (mechanical + eye):** `--fieldcheck` = `PASS maxAbsDiff=0m` (bit-exact; the refactor did not
+change a single height). Gross-shape analytic-vs-baked confirmed equal by eye at altitude.
+
+**Perf go/no-go (`--profile=5 --profmove`, full 2048² no-LOD mesh, RTX 5090 Laptop):**
+| Path | Avg in motion | Worst | 8 ms budget |
+|---|---|---|---|
+| Baked texture (baseline) | **5.9 ms** | 7.2 ms | under |
+| Analytic live field | **34.0 ms** | 39.3 ms | **~4.3× over** |
+
+**Verdict — CONDITIONAL GO (decision deferred to the user).** This is the worst case by construction:
+`field_height` (domain warps + 3 fBM variants + ridges) evaluated per-vertex ×5 taps over the ENTIRE
+4.19M-vertex mesh, every frame, with NO LOD. S2's quadtree exists precisely to cut that vertex count
+by 1–2 orders of magnitude (constant screen-space density → most far vertices vanish), so the relevant
+question is not "is 34 ms acceptable" (it isn't) but "will the quadtree's vertex reduction bring the
+live field under budget." Three honable paths, weighed against the pillars:
+1. **Proceed to S2 as designed** — bet the quadtree's vertex cut closes the 4.3× gap. Pure-analytic
+   render (no per-chunk height data needed for *rendering*), keeps Approach C's data slot for erosion.
+2. **Hybrid height-source** — analytic for the morph MATH (pop-free) but sample a per-chunk baked
+   height TEXTURE for the value (cheap), accepting more data management. Lower per-vertex cost, but
+   reintroduces some of the texture-cache the design avoided.
+3. **Reduce field cost** — cache expensive low-frequency terms (continent/uplift are low-freq; could be
+   sampled coarsely) so the per-vertex field is cheaper without changing the look.
+
+S1 did its job: it surfaced the cost cheaply, on one mesh, BEFORE any quadtree was built — the
+anti-WG1-15 discipline working as intended.
