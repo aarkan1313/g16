@@ -64,6 +64,14 @@ uniform float star_brightness = 1.0;
 uniform float star_density : hint_range(0.0, 1.0) = 0.5;
 uniform float star_twinkle : hint_range(0.0, 1.0) = 0.5;
 uniform float star_rotation = 0.003;     // celestial rotation speed (rad/s)
+// METEORS (Celestial C2): occasional shooting stars. Defaults subtle; gate-tunable. meteor_debug forces a
+// streak (headless capture). meteor_rate = how often a channel fires; speed = sweep speed (shorter window).
+uniform bool meteors_on = true;
+uniform float meteor_rate : hint_range(0.0, 1.0) = 0.15;
+uniform float meteor_brightness : hint_range(0.0, 3.0) = 0.8;
+uniform float meteor_length : hint_range(0.0, 1.0) = 0.5;
+uniform float meteor_speed : hint_range(0.0, 1.0) = 0.5;
+uniform bool meteor_debug = false;
 // NIGHT SKY (Celestial C1): a procedural fantasy galaxy (core bulge + dust + star-clouds + 2-color
 // gradient) + up to 4 nebulae. PERF: the galaxy+nebula COLOR is baked to a lat-long texture
 // (AtmosphereCompute) — one sample vs 3 per-pixel 5-octave fbm3. night_sky_baked default off in the
@@ -386,6 +394,52 @@ vec3 star_field(vec3 sr){
     return acc * star_brightness;
 }
 
+// One meteor channel. Cycles on `period` seconds; only OCCASIONALLY fires (hash vs a rate-derived gate).
+// When it fires, a head sweeps an arc over a ~window-second window, drawing a thin head-bright/tail-fading
+// streak. Pure TIME (stateless); two early-outs make it ~free when idle. meteor_debug pins it visible.
+const int METEOR_CHANNELS = 2;
+vec3 meteor_channel(vec3 rd, float seed){
+    float window = mix(1.6, 0.7, clamp(meteor_speed, 0.0, 1.0));   // active seconds (faster → shorter)
+    float period = mix(42.0, 8.0, clamp(meteor_rate, 0.0, 1.0));   // seconds between potential fires
+    float t = TIME + seed * 53.0;
+    float cyc = floor(t / period);
+    float local = fract(t / period) * period;                     // seconds into this cycle
+    if (!meteor_debug && local > window) { return vec3(0.0); }     // idle most of the cycle (early-out 1)
+    float fireGate = mix(0.05, 0.9, clamp(meteor_rate, 0.0, 1.0)); // fraction of cycles that actually fire
+    if (!meteor_debug && hash13(vec3(cyc, seed, 1.0)) > fireGate) { return vec3(0.0); }   // (early-out 2)
+    float p = meteor_debug ? 0.45 : clamp(local / window, 0.0, 1.0);   // 0..1 sweep progress
+    // hashed per-cycle params
+    vec3 A = normalize(vec3(hash13(vec3(cyc, seed, 2.0)) * 2.0 - 1.0,
+                            0.35 + 0.6 * hash13(vec3(cyc, seed, 3.0)),
+                            hash13(vec3(cyc, seed, 4.0)) * 2.0 - 1.0));   // start dir, upper sky
+    vec3 up = abs(A.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    vec3 tang = normalize(cross(A, up));
+    vec3 bnor = cross(A, tang);
+    float ad = hash13(vec3(cyc, seed, 5.0)) * 6.2831853;
+    vec3 v = normalize(cos(ad) * tang + sin(ad) * bnor);          // random travel tangent at A
+    float arc = radians(mix(18.0, 42.0, hash13(vec3(cyc, seed, 6.0))));
+    vec3 H = normalize(A + v * tan(arc * p));                     // head at progress p
+    vec3 hv = normalize(v - H * dot(v, H));                       // travel tangent at the head
+    vec3 hw = cross(H, hv);
+    vec3 rel = rd - H;
+    float xa = dot(rel, hv);                                      // along-track (ahead of head = +)
+    float ya = dot(rel, hw);                                      // cross-track
+    float trail = radians(mix(2.0, 7.0, clamp(meteor_length, 0.0, 1.0)));
+    float thick = radians(0.10);
+    float crossT = smoothstep(thick, 0.0, abs(ya));              // thin
+    float tail = smoothstep(-trail, 0.0, xa);                    // tail-end (0) → head (1): extent + gradient
+    float headCut = smoothstep(0.012, 0.0, xa);                 // keep only BEHIND the head
+    float life = sin(p * 3.14159265);                          // fade in/out over the window
+    float bri = mix(0.4, 1.2, hash13(vec3(cyc, seed, 7.0))) * meteor_brightness;
+    return vec3(0.85, 0.92, 1.0) * (crossT * tail * headCut * life * bri);   // faint cool white
+}
+vec3 meteors(vec3 rd){
+    if (!meteors_on || rd.y < -0.02) { return vec3(0.0); }       // off / below horizon → free
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < METEOR_CHANNELS; i++) { acc += meteor_channel(rd, float(i) + 1.0); }
+    return acc;
+}
+
 // STARS + NIGHT SKY (Stage 3d / Celestial C1): a reworked magnitude-stratified starfield + a baked
 // procedural galaxy/nebula color, on a slowly-rotating celestial sphere, faded in by night_factor and
 // above the horizon. Direction-only (EYEDIR), so they stay locked to the sky as the camera moves.
@@ -418,7 +472,7 @@ vec3 stars_layer(vec3 rd){
     }
 
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
-    return (star + mw) * fade;
+    return (star + meteors(rd) + mw) * fade;
 }
 
 // CIRRUS (CO-2): anisotropic wind-stretched fbm3 → high thin filaments. Streaks run ALONG the wind
