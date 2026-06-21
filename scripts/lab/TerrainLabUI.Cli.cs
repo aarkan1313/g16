@@ -60,6 +60,7 @@ public partial class TerrainLabUI : Control
     private int _groundRulesCli = -1;
     private int _giProxyCli = -1;
     private int _proxyResCli = -1;
+    private int _groundV2Cli = -1;   // --groundv2[=1] → swap to the new per-pixel ground skin at startup (A/B / auto-shots)
 
     private void ParseCli()
     {
@@ -80,6 +81,7 @@ public partial class TerrainLabUI : Control
                 GetTree().Quit();
                 return;
             }
+            else if (a.StartsWith("--groundv2")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _groundV2Cli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--auto-shot=")) { _autoShotPath = a.Substring("--auto-shot=".Length); _autoShotT = 0.0; }
             else if (a.StartsWith("--blend=")) { int.TryParse(a.Substring("--blend=".Length), out _overrideBlend); }
             else if (a.StartsWith("--mask=")) { int.TryParse(a.Substring("--mask=".Length), out _overrideMask); }

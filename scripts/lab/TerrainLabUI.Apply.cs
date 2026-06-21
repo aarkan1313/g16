@@ -87,6 +87,7 @@ public partial class TerrainLabUI : Control
     {
         if (field == "RuleBased") { _terrain.RuleBased = v; }
         else if (field == "UseGiProxy") { _terrain.SetGiProxy(v); }
+        else if (field == "GroundV2") { _terrain.SetGroundV2(v); }
     }
 
     private void ApplySceneColor(string? target, Color col)

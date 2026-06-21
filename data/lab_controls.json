@@ -278,6 +278,8 @@
     { "id": "dbg_fog", "label": "fog", "tab": "Debug", "type": "scene", "scene": "fog", "default": true, "rand": false },
     { "id": "dbg_sun", "label": "sun (vs flat ambient)", "tab": "Debug", "type": "scene", "scene": "sun", "default": true, "rand": false },
     { "id": "gi_proxy", "label": "GI/shadow proxy (perf)", "tab": "Debug", "type": "toggle",
-      "field": "UseGiProxy", "default": false, "rand": false }
+      "field": "UseGiProxy", "default": false, "rand": false },
+    { "id": "ground_v2", "label": "ground v2 (new core)", "tab": "Debug", "type": "toggle",
+      "field": "GroundV2", "default": false, "rand": false }
   ]
 }

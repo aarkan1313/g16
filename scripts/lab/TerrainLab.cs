@@ -9,6 +9,11 @@ namespace WG16.Lab;
 public partial class TerrainLab : MeshInstance3D
 {
     private ShaderMaterial _mat = null!;
+    // GROUND v2 (2026-06-21 reset): the new per-pixel-procedural skin, built ALONGSIDE _mat.
+    // Default stays the old look; SetGroundV2 swaps the mesh material for the parity A/B.
+    private ShaderMaterial? _groundV2Mat;
+    private bool _groundV2On;
+    private ImageTexture? _heightTex;   // the base heightfield tex, shared old<->new for displacement
     private float[]? _heights;
     private int _res;
     private float _regionSize;
@@ -58,6 +63,7 @@ public partial class TerrainLab : MeshInstance3D
         System.Buffer.BlockCopy(heights, 0, bytes, 0, bytes.Length);
         Image img = Image.CreateFromData(p.HeightmapRes, p.HeightmapRes, false, Image.Format.Rf, bytes);
         ImageTexture tex = ImageTexture.CreateFromImage(img);
+        _heightTex = tex;   // keep for the v2 skin (same displacement source as the old _mat)
 
         if (Mesh == null)
         {
@@ -246,6 +252,34 @@ public partial class TerrainLab : MeshInstance3D
             };
             GD.Print($"TerrainLab: proxy res → {ProxyRes}² (~{((ProxyRes + 1) * (ProxyRes + 1)) / 1000}k verts)");
         }
+    }
+
+    /// The ground v2 material (lazy). Shape uniforms (heightmap/region/texel) are pushed in SetGroundV2;
+    /// the texture arrays + rule table are bound by AttachGroundArrays (Task 1).
+    public ShaderMaterial GroundV2Material => _groundV2Mat ??= new ShaderMaterial {
+        Shader = GD.Load<Shader>("res://shaders/ground.gdshader")
+    };
+    public bool GroundV2On => _groundV2On;
+
+    /// Swap the terrain mesh material between the old (terrain_lab) and new (ground v2) skin for A/B.
+    /// Default is OFF (old look). The new shader displaces from the SAME heightmap, so only the
+    /// material skin changes — a fair parity comparison.
+    public void SetGroundV2(bool on)
+    {
+        _groundV2On = on;
+        if (on)
+        {
+            var mat = GroundV2Material;
+            if (_heightTex != null) { mat.SetShaderParameter("heightmap", _heightTex); }
+            mat.SetShaderParameter("region_size", _regionSize);
+            mat.SetShaderParameter("texel_world", _spacing);
+            MaterialOverride = mat;
+        }
+        else
+        {
+            MaterialOverride = _mat;
+        }
+        GD.Print($"TerrainLab: ground v2 {(on ? "ON (new per-pixel skin)" : "off (old terrain_lab)")}");
     }
 
     public void SetMaskMode(int mode) => _mat.SetShaderParameter("mask_mode", mode);
