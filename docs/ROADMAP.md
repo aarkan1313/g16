@@ -101,8 +101,10 @@ Lane roadmap: `specs/2026-06-20-sun-light-system-architecture.md`.
   `2026-06-20-sun-surface-shader-and-presets-design.md`.
 
 #### ☀️🌙 FINISH THE FULL SKY SYSTEM (user's call 2026-06-20: "plan it all, make a roadmap, lets do it")
-> **SKY LANE: Stage 3 (Night & Celestial) ✅ COMPLETE 2026-06-20** (all 4 sub-phases eye-gated live).
-> Next item below is #2 (Clouds overhaul). Resume: pick #2/#3/#4 → brainstorm→spec→plan→gate.
+> **SKY LANE 2026-06-20: Stage 3 (Night & Celestial) ✅ · #2 Clouds overhaul (CO-1..CO-4) ✅ · #4 Stage 4
+> (auto cycle + fantasy) ✅ — all eye-gated/soft-gated live.** Moon now on its OWN arc (decoupled). **REMAINING:
+> #3 GPU atmosphere (AT-1, the last big item, now unblocked) + the galaxy/Milky Way review (NEEDS_REVIEW 10).**
+> Review keys: 6 = cloud types · 7 = fantasy skies.
 
 Ordered, each its own spec → plan → eye-gate, built ONE phase past the last pass (discipline rule).
 Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
@@ -147,11 +149,11 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      (play toggle + `cycle speed` + `--autotime`); manual scrub preserved. Follow-ups from the gate: **moon
      arc decoupled from the sun** (own phase-lagged arc — FIXED) · **galaxy/Milky Way needs review** (banked,
      NEEDS_REVIEW 10).
-   - **ST4-2 fantasy/exotic — 🔨 BUILT 2026-06-20, awaiting the picker gate.** Cross-system presets
-     (`fantasy_presets.json` + `FantasyPresets.cs` + Night-tab picker + `--fantasy=N`) composing a sun preset
-     + celestial preset + a new persistent `sky_tint` + moon/moonlight colors: blood_moon, alien_green,
-     violet_night, harvest, ember_dusk. No time set → the look holds as the cycle runs. Verified distinct.
-   **Multiple suns/moons DEFERRED** (own spec). **#4 Stage 4 ~COMPLETE pending this gate.**
+   - **ST4-2 fantasy/exotic — ✅ GATED 2026-06-20 (soft-pass, "pretty good, good enough for now").**
+     Cross-system presets (`fantasy_presets.json` + `FantasyPresets.cs` + Night-tab picker + `--fantasy=N`,
+     **review key 7 cycles them**) composing a sun preset + celestial preset + persistent `sky_tint` +
+     moon/moonlight colors: blood_moon, alien_green, violet_night, harvest, ember_dusk.
+   **Multiple suns/moons DEFERRED** (own spec). **#4 Stage 4 COMPLETE.**
 5. **Shadow & Lighting pass** — CSM/cascade tuning, contact + soft (PCSS) shadows, the proxy-on cheap-
    shadow perf lever (~2.8 vs ~4.7 ms), SSIL re-check. Pairs with Stage-3 moonlight shadows.
 

@@ -6,6 +6,15 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-20 — Sun/Light #4 ST4-2 (fantasy presets) GATED (soft) + review key 7; #4 Stage 4 COMPLETE.**
+ST4-2 soft-passed live (user: "pretty good, good enough for now") + wired to review key 7 (cycles the 5 fantasy
+presets). **Stage 4 done; the core sky system is now built end-to-end: Stage 3 Night/Celestial ✅ · #2 Clouds
+overhaul CO-1..CO-4 ✅ · #4 auto cycle + fantasy ✅ · moon decoupled to its own arc.** REMAINING sky work:
+**#3 GPU atmosphere (AT-1)** (the last big item — physical Hillaire sky color on the Texture2Drd seam,
+default-off A/B; now unblocked since #2 landed) and the **galaxy/Milky Way review** (NEEDS_REVIEW 10). Several
+soft-accepts owe fuller judgment once weather + surrounding systems exist (CO-3 macro variety default-off,
+CO-4 cloud presets, ST4-2). Detail-erosion raymarch↔shadow divergence still deferred (own gate).
+
 **2026-06-20 — Sun/Light #4 ST4-2 (fantasy/exotic presets) BUILT, awaiting the picker gate → #4 ~COMPLETE.**
 Cross-system preset layer (`FantasyPresets.cs` + `data/fantasy_presets.json`, mirrors sun/celestial): each
 preset names a sun preset + celestial preset and layers a sky tint + moon/moonlight colors + cloud/exposure —
