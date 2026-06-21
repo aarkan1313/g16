@@ -74,18 +74,8 @@ uniform float meteor_speed : hint_range(0.0, 1.0) = 0.5;
 uniform vec3 meteor_color = vec3(0.85, 0.92, 1.0);          // base streak color (cool white); per-meteor hue varies by meteor_color_var
 uniform float meteor_color_var : hint_range(0.0, 1.0) = 0.25;  // 0 = all base color · 1 = vivid fantasy hues per meteor
 uniform bool meteor_debug = false;
-// NIGHT SKY (Celestial Galaxy/Nebula v2): the global brightness multiplier for the billboard layer.
-// LIVE master on/off for the whole galaxy/nebula lane (0 = truly free).
-uniform float night_sky_brightness : hint_range(0.0, 3.0) = 0.25;
-// CELESTIAL BILLBOARDS (Galaxy/Nebula v2): up to 8 discrete objects, each rendered in a local 2D
-// tangent-plane disc (structure, not 3D fbm). Pushed from C# on change only. type in color_type.w:
-// 0 = spiral galaxy, 1 = elliptical galaxy, 2 = nebula.
-const int MAX_BILLBOARDS = 8;
-uniform int  bb_count = 0;
-uniform vec4 bb_dir_size[MAX_BILLBOARDS];    // xyz = sky dir (unit), w = angular radius (radians)
-uniform vec4 bb_color_type[MAX_BILLBOARDS];  // rgb = primary/core color, w = type
-uniform vec4 bb_color2[MAX_BILLBOARDS];      // rgb = secondary/arm color, w = brightness
-uniform vec4 bb_params[MAX_BILLBOARDS];      // x = rotation(rad), y = tilt(0..1 squash), z = arms, w = seed
+// Night sky = moon + stars + meteors. Galaxy/nebula was attempted (procedural + volumetric) and removed
+// 2026-06-21 — could not hit the quality bar within budget (see DECISIONS).
 
 uniform vec3 sky_top : source_color = vec3(0.30, 0.48, 0.74);
 uniform vec3 sky_horizon : source_color = vec3(0.68, 0.74, 0.80);
@@ -381,148 +371,8 @@ vec3 meteors(vec3 rd){
     return acc;
 }
 
-// CELESTIAL BILLBOARDS (Galaxy/Nebula v2) — each object is a direction-anchored 2D disc. Structure,
-// not 3D fbm: spiral arms / elliptical cores / (Phase 3) nebula lobes + dust lanes. Cheap: a pixel only
-// pays for objects whose disc it's inside (per-object dot-product early-out).
-
-// Project a sky dir `d` into a billboard's local disc centered on `dir`. Returns uv where |uv|~0 at
-// center and ~1 at the rim (reach). `rot` spins the disc; `tilt` squashes one axis (disc inclination).
-vec2 bb_disc_uv(vec3 d, vec3 dir, float reach, float rot, float tilt){
-    vec3 up = abs(dir.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
-    vec3 ax = normalize(cross(up, dir));
-    vec3 ay = cross(dir, ax);
-    vec3 rel = d - dir * dot(d, dir);            // tangent-plane component
-    vec2 uv = vec2(dot(rel, ax), dot(rel, ay)) / max(sin(reach), 1e-4);
-    float cs = cos(rot), sn = sin(rot);
-    uv = vec2(cs * uv.x - sn * uv.y, sn * uv.x + cs * uv.y);
-    uv.y /= max(1.0 - 0.85 * tilt, 0.15);        // squash → inclined disc
-    return uv;
-}
-
-// Realistic spiral/elliptical galaxy in disc-uv space (Hubble-reference look). Organic FLOCCULENT arms via
-// domain-warped log-spiral (not clean cosine arms), golden HDR bulge + blinding nucleus, reddish-brown dust
-// lanes threading the arms, faint inter-arm disk glow, pink/blue star-cluster knots, fine field stars, halo.
-// coreCol = warm bulge, armCol = blue arms. Calibrated so arms keep color at brightness ~0.8 (nucleus clips).
-vec3 galaxy_billboard(vec2 uv, vec3 coreCol, vec3 armCol, float arms, float isSpiral, float seed){
-    float r = length(uv);
-    if (r > 1.0) return vec3(0.0);
-    float rim = smoothstep(1.0, 0.80, r);
-    float theta = atan(uv.y, uv.x);
-
-    // DOMAIN WARP — perturb angle + radius with noise so the structure is organic, not mathematical.
-    float nA = vnoise3(vec3(uv * 2.0, seed));
-    float nB = vnoise3(vec3(uv * 2.1 + 5.0, seed * 1.3));
-    float wTheta = theta + (nA - 0.5) * 0.9;
-    float wR     = r * (1.0 + (nB - 0.5) * 0.28);
-
-    // radial light profiles: blinding nucleus, golden bulge, warped exponential disk, faint halo
-    float nucleus = exp(-r * r * 90.0);
-    float bulge   = exp(-r * r * 7.0);
-    float disc    = exp(-wR * 3.0);
-    float halo    = exp(-r * 1.2) * 0.12;
-
-    // spiral arms (warped coords) — broad arms broken into flocculent patches along their length
-    float wind = 4.5;
-    float phase = arms * wTheta - wind * log(r + 0.06) + seed * 6.2831;
-    float arm = pow(0.5 + 0.5 * cos(phase), 3.0);
-    float flock = 0.35 + 0.95 * vnoise3(vec3(cos(phase), sin(phase), r * 9.0 + seed * 4.0) * 3.0);
-    float armEnv = smoothstep(0.03, 0.18, r) * smoothstep(1.0, 0.50, r);
-    float armLight = disc * arm * flock * armEnv;
-
-    // multi-octave filigree modulating the faint inter-arm disk
-    float fil = 0.6 + 0.4 * (vnoise3(vec3(uv * 8.0, seed)) * 0.6 + vnoise3(vec3(uv * 18.0, seed * 2.0)) * 0.4);
-    float diskGlow = disc * 0.16 * fil;
-
-    // dust lanes — dark reddish-brown, follow the arms (offset phase) + fine dust grain, inner-to-mid disk
-    float dphase = arms * wTheta - wind * log(r + 0.06) + seed * 6.2831 + 0.5;
-    float dustArm = pow(max(cos(dphase), 0.0), 3.0);
-    float dustGrain = vnoise3(vec3(uv * 14.0 + 9.0, seed));
-    float dust = clamp(dustArm * 0.8 + (dustGrain - 0.45) * 0.7, 0.0, 1.0) * smoothstep(0.85, 0.07, r) * armEnv;
-
-    // assemble luminance: spiral (arms dominate) vs elliptical (smooth)
-    float spiralLum = bulge * 0.5 + armLight * 1.35 + diskGlow;
-    spiralLum *= 1.0 - 0.85 * dust;
-    float ellipLum = bulge * 0.7 + disc * 0.3;
-    float lum = (nucleus * 2.5 + mix(ellipLum, spiralLum, isSpiral)) * rim;
-
-    // color: golden bulge → blue arms; white-hot nucleus; dust reddens/darkens
-    vec3 col = mix(armCol, coreCol, clamp(bulge * 1.3, 0.0, 1.0));
-    col = mix(col, armCol * vec3(0.9, 0.95, 1.1), clamp(armLight * 1.5, 0.0, 0.55) * isSpiral);
-    col = mix(col, vec3(1.0, 0.97, 0.9), nucleus * 0.8);
-    col = mix(col, col * vec3(0.72, 0.52, 0.40), dust * 0.6 * isSpiral);
-
-    // star clusters along arms (pink HII + blue OB associations)
-    vec2 cell = floor(uv * 26.0); vec2 f = fract(uv * 26.0) - 0.5;
-    float h = hash13(vec3(cell + seed * 9.0, seed));
-    float knot = step(0.82, h) * smoothstep(0.22, 0.0, length(f)) * arm * armEnv;
-    vec3 knotCol = mix(vec3(1.0, 0.5, 0.6), vec3(0.6, 0.8, 1.0), hash13(vec3(cell, seed)));
-
-    // fine field stars across the disk
-    vec2 c2 = floor(uv * 12.0); vec2 f2 = fract(uv * 12.0) - 0.5;
-    float h2 = hash13(vec3(c2 + seed * 3.0, seed * 1.7));
-    float spark = step(0.92, h2) * smoothstep(0.12, 0.0, length(f2)) * (disc * 0.6 + 0.15) * armEnv;
-
-    return (col * lum + knotCol * knot * 1.3 + vec3(0.9, 0.95, 1.0) * spark) * rim;
-}
-
-// Emission nebula in disc-uv space (Hubble-reference look: Omega/Horsehead/NGC604). Domain-warped turbulent
-// gas, dark dust PILLARS/voids carving it, saturated two-color emission with hot bright cores, embedded
-// star cluster. The black-space context + stars + dust + saturated color make turbulence read as a NEBULA,
-// not a terrestrial cloud (the C1 failure was using cloud-style fbm with weak color/structure on a galaxy).
-vec3 nebula_billboard(vec2 uv, vec3 col1, vec3 col2, float seed){
-    float r = length(uv);
-    if (r > 1.0) return vec3(0.0);
-    float rim = smoothstep(1.0, 0.62, r);
-
-    // domain-warped billowing gas
-    vec2 p = uv * 2.2;
-    float w1 = vnoise3(vec3(p, seed));
-    float w2 = vnoise3(vec3(p.yx * 1.4 + 7.0, seed * 1.7));
-    p += (vec2(w1, w2) - 0.5) * 1.2;
-    float f = 0.0, a = 0.55; vec2 q = p;
-    for (int i = 0; i < 5; i++) { f += a * vnoise3(vec3(q, seed + float(i) * 1.3)); q *= 2.07; a *= 0.5; }
-    float fall = exp(-r * r * 1.8);                              // localize to a patch
-    float density = clamp(f * 1.55 * fall - 0.12, 0.0, 1.0);
-    float glow = pow(density, 1.6);                              // hot bright cores
-
-    // dark dust pillars/voids carve the gas (low-freq mask) — the Horsehead silhouette element
-    float dustMask = smoothstep(0.55, 0.28, vnoise3(vec3(uv * 3.0 + 21.0, seed * 0.7)));
-    density *= mix(1.0, 0.20, dustMask);
-
-    // saturated two-color emission; hot cores brighten + warm-shift
-    float cmap = clamp(vnoise3(vec3(uv * 1.6 + 3.0, seed)) * 1.3, 0.0, 1.0);
-    vec3 gas = mix(col1, col2, cmap);
-    gas = mix(gas, gas + vec3(0.28, 0.13, -0.04), glow * 0.6);
-
-    float lum = density * 1.5 * rim;
-
-    // embedded star cluster — brighter/denser where the gas glows (OB associations light the nebula)
-    vec2 cell = floor(uv * 20.0); vec2 cf = fract(uv * 20.0) - 0.5;
-    float h = hash13(vec3(cell + seed * 4.0, seed));
-    float star = step(0.86, h) * smoothstep(0.16, 0.0, length(cf)) * (0.35 + density);
-
-    return gas * lum + vec3(0.9, 0.95, 1.0) * star * rim;
-}
-
-vec3 billboards(vec3 sr){
-    vec3 acc = vec3(0.0);
-    for (int i = 0; i < bb_count; i++){
-        vec3 dir = bb_dir_size[i].xyz; float reach = bb_dir_size[i].w;
-        if (dot(sr, dir) < cos(reach)) continue;               // EARLY-OUT: one dot product
-        float type = bb_color_type[i].w;
-        float rot = bb_params[i].x, tilt = bb_params[i].y, arms = bb_params[i].z, seed = bb_params[i].w;
-        vec2 uv = bb_disc_uv(sr, dir, reach, rot, tilt);
-        vec3 c;
-        if (type < 1.5) c = galaxy_billboard(uv, bb_color_type[i].rgb, bb_color2[i].rgb, arms, type < 0.5 ? 1.0 : 0.0, seed);
-        else            c = nebula_billboard(uv, bb_color_type[i].rgb, bb_color2[i].rgb, seed);
-        acc += c * bb_color2[i].w;                              // per-slot brightness
-    }
-    return acc;
-}
-
-// STARS + NIGHT SKY (Stage 3d / Celestial C1): a reworked magnitude-stratified starfield + a baked
-// procedural galaxy/nebula color, on a slowly-rotating celestial sphere, faded in by night_factor and
-// above the horizon. Direction-only (EYEDIR), so they stay locked to the sky as the camera moves.
+// STARS (Stage 3d / Celestial): magnitude-stratified starfield + meteors, on a slowly-rotating celestial
+// sphere, faded in by night_factor and above the horizon. Direction-only (EYEDIR), locked to the sky.
 vec3 stars_layer(vec3 rd){
     if (night_factor <= 0.001) { return vec3(0.0); }
     vec3 sr = normalize(rd);
@@ -533,13 +383,8 @@ vec3 stars_layer(vec3 rd){
     // STARS: magnitude-stratified live point-stars (few-bright/many-faint, size + color-temp variety).
     vec3 star = star_field(sr);
 
-    // BILLBOARDS: galaxy/nebula objects (early-out at brightness 0 → lane is free). Global multiplier
-    // + fade applied once here (per-slot brightness is inside billboards()).
-    vec3 bb = vec3(0.0);
-    if (night_sky_brightness > 0.0001) { bb = billboards(sr) * night_sky_brightness; }
-
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
-    return (star + meteors(rd) + bb) * fade;
+    return (star + meteors(rd)) * fade;
 }
 
 // CIRRUS (CO-2): anisotropic wind-stretched fbm3 → high thin filaments. Streaks run ALONG the wind

@@ -23,31 +23,6 @@ public partial class TerrainLabUI : Control
     private GradeState _grade = new();
     private MoonState _moon = new();
     private StarsState _stars = new();
-    // Build the celestial billboard slots (galaxy/nebula v2). Phase 1: one hero spiral, driven LIVE by the
-    // existing Night-tab galaxy sliders (size/az/elev/tilt/curve/colors) so the eye-gate is tunable. Hybrid
-    // seeded-scatter + dedicated controls arrive in Phase 2/4. Runs on ComposeLighting (change), not per frame.
-    private System.Collections.Generic.List<Billboard> BuildBillboards()
-    {
-        var list = new System.Collections.Generic.List<Billboard>();
-        float ce = Mathf.Cos(_stars.CoreElev);
-        var dir = new Vector3(ce * Mathf.Cos(_stars.CoreAz), Mathf.Sin(_stars.CoreElev), ce * Mathf.Sin(_stars.CoreAz)).Normalized();
-        list.Add(new Billboard {
-            Dir = dir,
-            Size = Mathf.DegToRad(Mathf.Lerp(2f, 22f, Mathf.Clamp(_stars.CoreSize, 0f, 1f))),   // 'galaxy core size'
-            Type = 0,
-            Color = new Vector3(_stars.CoreColor.R, _stars.CoreColor.G, _stars.CoreColor.B),
-            Color2 = new Vector3(_stars.ArmColor.R, _stars.ArmColor.G, _stars.ArmColor.B),
-            Brightness = 1f,                                            // global level is _stars.MwBrightness ('galaxy bright')
-            Rotation = _stars.Curve * Mathf.Pi,                        // 'galaxy curve' → disc spin
-            Tilt = Mathf.Clamp(_stars.MwTilt, 0f, 1f),                 // 'galaxy tilt' → inclination
-            Arms = 2f, Seed = 0.21f });
-        // Phase 3: one nebula to gate (flanks the galaxy in the review-2 view). Teal→warm-gold emission.
-        list.Add(new Billboard {
-            Dir = new Vector3(-0.31f, 0.30f, 0.90f).Normalized(), Size = Mathf.DegToRad(15f), Type = 2,
-            Color = new Vector3(0.20f, 0.60f, 0.62f), Color2 = new Vector3(0.92f, 0.52f, 0.30f),
-            Brightness = 1f, Rotation = 0f, Tilt = 0f, Arms = 0f, Seed = 0.63f });
-        return list;
-    }
     private Vector3 _lastMoonDir = Vector3.Zero;   // last composed moon direction (for --lookatmoon)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
@@ -160,7 +135,6 @@ public partial class TerrainLabUI : Control
             _cloud.SetStars(_stars.Brightness, _stars.Density, _stars.Twinkle, _stars.Rotation);
             _cloud.SetMeteorsOn(_stars.MeteorsOn);
             _cloud.SetMeteors(_stars.MeteorRate, _stars.MeteorBrightness, _stars.MeteorLength, _stars.MeteorSpeed, _stars.MeteorColor, _stars.MeteorColorVar);
-            _cloud.SetBillboards(BuildBillboards(), _stars.MwBrightness);   // Galaxy/Nebula v2 (live; on change only)
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by

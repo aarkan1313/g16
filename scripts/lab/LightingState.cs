@@ -81,10 +81,8 @@ public sealed class MoonState
     public MoonState Clone() => (MoonState)MemberwiseClone();
 }
 
-/// CELESTIAL — STARS + NIGHT SKY (Stage 3d / Celestial C1). Pure data; procedural galaxy + nebulae baked
-/// (night_sky_bake.glsl) + live starfield, rendered in cloud_sky.gdshader, faded in at night. Fantasy,
-/// tunable — no real constellations (user's call). MwBrightness/MwWidth/MwTilt = the galaxy brightness/
-/// width/tilt (control ids kept mw_* so celestial_presets.json still routes).
+/// CELESTIAL — STARS + METEORS (Stage 3d / Celestial). Pure data; live starfield + meteors rendered in
+/// cloud_sky.gdshader, faded in at night. Galaxy/nebula was attempted and removed 2026-06-21 (see DECISIONS).
 public sealed class StarsState
 {
     // Live starfield (not baked).
@@ -94,18 +92,6 @@ public sealed class StarsState
     public float MeteorRate = 0.2f, MeteorBrightness = 1.1f, MeteorLength = 0.5f, MeteorSpeed = 0.5f;
     public Color MeteorColor = new(0.85f, 0.92f, 1.0f);   // base streak color
     public float MeteorColorVar = 0.25f;                  // 0 = uniform · 1 = vivid fantasy hues per meteor
-    // Galaxy/Nebula v2 billboards. MwBrightness is the LIVE global master multiplier for the lane.
-    public float MwBrightness = 0.8f, MwWidth = 0.11f, MwTilt = 0.6f;   // billboards visible by default (galaxy/nebula v2)
-    public float CoreAz = 1.26f, CoreElev = 0.5f;          // core direction az/elev (rad); elev ~29° = galaxy sits up in the sky
-    public float CoreSize = 0.85f, Curve = 0.0f, Dust = 0.5f;   // big, clearly-visible galaxy out of the box (≈19° radius)
-    public Color CoreColor = new(0.95f, 0.75f, 0.55f);
-    public Color ArmColor = new(0.45f, 0.55f, 0.85f);
-    // Nebulae (baked). Count + a global density + the two lead colors are tunable; directions/scales are
-    // fixed demo positions (preset territory) so the Night tab stays manageable.
-    public int NebCount = 0;   // nebulae killed (user 2026-06-21) — galaxy + starfield only; tunable back up if wanted
-    public float NebDensity = 0.55f;
-    public Color Neb1Color = new(0.18f, 0.55f, 0.65f);     // teal
-    public Color Neb2Color = new(0.65f, 0.22f, 0.6f);      // magenta
     public StarsState Clone() => (StarsState)MemberwiseClone();
 }
 

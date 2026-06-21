@@ -236,20 +236,6 @@ public partial class TerrainLabUI : Control
         if (cam != null) { cam.Position = new Vector3(0, 280, 520); cam.RotationDegrees = new Vector3(16, 0, 0); }
     }
 
-    // Vantage for judging the night sky: a mid-altitude camera tilted UP so a wide band of sky (where the
-    // galaxy + nebulae live) fills the frame, with a sliver of horizon for grounding. Fly to look around.
-    private void LookUpAtNightSky()
-    {
-        var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
-        if (cam == null) return;
-        cam.Position = new Vector3(0, 280, 200);
-        // aim straight at the galaxy core (computed from the live core az/elev) so the localized patch is
-        // centred in the frame — it no longer spans the sky, so the framing must point right at it.
-        float ce = Mathf.Cos(_stars.CoreElev);
-        var core = new Vector3(ce * Mathf.Cos(_stars.CoreAz), Mathf.Sin(_stars.CoreElev), ce * Mathf.Sin(_stars.CoreAz));
-        cam.LookAt(cam.GlobalPosition + core, Vector3.Up);
-    }
-
     private void LookAtSun()
     {
         var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");

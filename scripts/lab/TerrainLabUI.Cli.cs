@@ -33,7 +33,6 @@ public partial class TerrainLabUI : Control
     private int _presetCli = -1;           // --preset=N: apply cloud preset N at startup (test layer stacks)
     private int _sunPresetCli = -1;        // --sunpreset=N: apply sun-disc preset N at startup
     private int _celestialCli = -1;        // --celestial=N: apply celestial (moon/stars/night) preset N at startup
-    private int _nsPresetCli = -1;         // --nspreset=N (1-based): apply night-sky (galaxy/nebula) preset N at startup
     private int _fantasyCli = -1;          // --fantasy=N: apply fantasy/exotic cross-system preset N at startup (ST4-2)
     private int _temporalCli = 0;          // --temporal=N: temporal amortization stride (roadmap #4)
     private int _godraysOnCli = -1;
@@ -142,7 +141,6 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--preset=")) { int.TryParse(a.Substring("--preset=".Length), out _presetCli); }
             else if (a.StartsWith("--sunpreset=")) { int.TryParse(a.Substring("--sunpreset=".Length), out _sunPresetCli); }
             else if (a.StartsWith("--celestial=")) { int.TryParse(a.Substring("--celestial=".Length), out _celestialCli); }
-            else if (a.StartsWith("--nspreset=")) { int.TryParse(a.Substring("--nspreset=".Length), out _nsPresetCli); }
             else if (a.StartsWith("--fantasy=")) { int.TryParse(a.Substring("--fantasy=".Length), out _fantasyCli); }
             else if (a.StartsWith("--cloudtex=")) { if (int.TryParse(a.Substring("--cloudtex=".Length), out int th) && th >= 64) { CloudVolume.TexH = th; CloudVolume.TexW = th * 4; } }
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
