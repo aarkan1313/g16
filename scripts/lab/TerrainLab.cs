@@ -45,6 +45,37 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter("region_size", p.RegionSizeM);
         _mat.SetShaderParameter("texel_world", p.Spacing);
 
+        // S1: feed the live-field (analytic) path in ground.gdshader the SAME params the bake used.
+        _mat.SetShaderParameter("analytic_seed", (int)p.Seed);
+        _mat.SetShaderParameter("analytic_spacing", p.Spacing);
+        _mat.SetShaderParameter("fp_base_freq", p.BaseFreq);
+        _mat.SetShaderParameter("fp_amplitude", p.AmplitudeM);
+        _mat.SetShaderParameter("fp_lacunarity", p.Lacunarity);
+        _mat.SetShaderParameter("fp_gain", p.Gain);
+        _mat.SetShaderParameter("fp_octaves", (int)p.Octaves);
+        _mat.SetShaderParameter("fp_field_mode", 0);
+        _mat.SetShaderParameter("fp_cont_octaves", (int)p.ContOctaves);
+        _mat.SetShaderParameter("fp_cont_freq", p.ContFreq);
+        _mat.SetShaderParameter("fp_cont_weight", p.ContWeight);
+        _mat.SetShaderParameter("fp_uplift_freq", p.UpliftFreq);
+        _mat.SetShaderParameter("fp_uplift_weight", p.UpliftWeight);
+        _mat.SetShaderParameter("fp_uplift_lo", p.UpliftLo);
+        _mat.SetShaderParameter("fp_uplift_hi", p.UpliftHi);
+        _mat.SetShaderParameter("fp_macro_pivot", p.MacroPivot);
+        _mat.SetShaderParameter("fp_macro_amp", p.MacroAmp);
+        _mat.SetShaderParameter("fp_hill_damp", p.HillDamp);
+        _mat.SetShaderParameter("fp_ridge_freq", p.RidgeFreq);
+        _mat.SetShaderParameter("fp_ridge_amp", p.RidgeAmp);
+        _mat.SetShaderParameter("fp_mtn_lo", p.MtnLo);
+        _mat.SetShaderParameter("fp_mtn_hi", p.MtnHi);
+        _mat.SetShaderParameter("fp_grain_stretch", p.GrainStretch);
+        _mat.SetShaderParameter("fp_cont_warp", p.ContWarp);
+        _mat.SetShaderParameter("fp_uplift_warp", p.UpliftWarp);
+        _mat.SetShaderParameter("fp_massif_freq", p.MassifFreq);
+        _mat.SetShaderParameter("fp_massif_floor", p.MassifFloor);
+        _mat.SetShaderParameter("fp_foothill_w", p.FoothillW);
+        _mat.SetShaderParameter("fp_foothill_h", p.FoothillH);
+
         // --- GI/shadow PROXY (perf): a coarse copy of the SAME heightfield. The render mesh has
         // ~4M verts for displacement detail, but SDFGI + shadow casting are low-frequency — a coarse
         // proxy can feed them ~60× cheaper. Created inert; SetGiProxy(true) flips the roles. Reuses
@@ -74,6 +105,13 @@ public partial class TerrainLab : MeshInstance3D
         if (_giProxy != null) { _giProxy.CustomAabb = CustomAabb; }
         SetGiProxy(UseGiProxy);
         GD.Print($"TerrainLab: built {p.HeightmapRes}x{p.HeightmapRes} (h {_minBase:F0}..{_maxBase:F0} m)");
+    }
+
+    /// S1: flip the ground material between the live analytic field and the baked heightmap (A/B).
+    public void SetAnalytic(bool on)
+    {
+        _mat?.SetShaderParameter("use_analytic", on);
+        GD.Print($"TerrainLab: ground source = {(on ? "ANALYTIC (live field)" : "baked texture")}");
     }
 
     /// Toggle the GI/shadow proxy. ON: the coarse proxy feeds SDFGI + casts shadows; the detail mesh
