@@ -21,6 +21,7 @@ public partial class TerrainLabUI : Control
     private int _co2Type;         // CO-2 type on review key 6: 0 cumulus · 1 stratus · 2 cirrus
     private int _fantasyIdx;      // ST4-2 fantasy preset on review key 7 (cycles)
     private int _atmoStep;        // AT-1 atmosphere time-of-day preset on review key 8 (cycles dawn→noon→golden→dusk→night)
+    private bool _gv2On;          // ground-v2 parity A/B state (review key 4 toggles old↔new)
     private List<string> _palNames;
     private Dictionary<string, string[]> _palRoles;
     private int _palIdx;
@@ -97,12 +98,23 @@ public partial class TerrainLabUI : Control
                 judge = g0Judge[_g0Step];
                 break;
             }
-            case 4: // Ground GM2 — real height + POM (1c)
-                BaselineGround();
-                Set("height_from_maps", true); Set("pom_on", true);
-                title = "4 · GM2 real height + POM";
-                judge = "Real crevice/relief depth under motion+light (not just 'raised a little')? No swimming/artifacts. Toggle 'real height (GM2)' / 'surface depth (POM)' (Detail tab) to A/B.";
+            case 4: // Ground v2 (new core) PARITY A/B — press 4 to toggle old↔new. Reset spec 2026-06-21.
+            {
+                if (_lastPreset != 4)
+                {
+                    BaselineGround();                 // clouds off + neutral grade + old GM features off
+                    _timeRunning = false;             // LOCK the sun so the A/B isn't confounded by drifting light
+                    Set("time_of_day", 16.0f);        // fixed mid-afternoon sun (grazing → reveals relief + transitions)
+                    CloseGround();                     // frame the ground (fly the last bit to a slope/transition)
+                    _terrain.PrewarmGroundV2();        // build the v2 arrays NOW so the A/B toggle is instant (no bake hitch)
+                    _gv2On = false;                    // start on the OLD path (the parity baseline)
+                }
+                else { _gv2On = !_gv2On; }
+                _terrain.SetGroundV2(_gv2On);
+                title = $"4 · Ground v2 (new core) — {(_gv2On ? "NEW (per-pixel procedural)" : "OLD (terrain_lab)")}  (press 4 to A/B)";
+                judge = "Fly close/mid. NEW must beat OLD: NO blocky facets at material transitions, materials placed sensibly (clay low / scree & talus slopes / basalt cliffs / lichen & snow high), within-area variation native, anti-tiling intact, no fuzz in motion. Sun is LOCKED. This is the parity gate — tune via data/ground_materials.json (bands/placement) or the Debug 'gv2 debug' viz.";
                 break;
+            }
             case 5: // Ground GM3-A — within-area variation (1c)
                 BaselineGround();
                 Set("variation_on", true);

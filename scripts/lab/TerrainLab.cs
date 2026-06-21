@@ -295,6 +295,10 @@ public partial class TerrainLab : MeshInstance3D
         GD.Print($"TerrainLab: ground v2 {(on ? "ON (new per-pixel skin)" : "off (old terrain_lab)")}");
     }
 
+    /// Build + bind the v2 arrays ahead of time (e.g. when entering the parity gate) so the
+    /// subsequent old↔new toggle is instant instead of hitching on the first Poisson bake.
+    public void PrewarmGroundV2() => EnsureGroundArrays();
+
     /// Lazily build the ground v2 texture arrays from the manifest and bind them, once.
     /// Build cost (incl. the windowed Poisson height bake) is paid on first v2 use, not at startup.
     private void EnsureGroundArrays()
