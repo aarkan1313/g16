@@ -15,9 +15,13 @@ public sealed class FieldCompute : IDisposable
     {
         _rd = RenderingServer.CreateLocalRenderingDevice();
         string shaderPath = ProjectSettings.GlobalizePath("res://shaders/field_height.glsl");
+        string mathPath = ProjectSettings.GlobalizePath("res://shaders/field_math.gdshaderinc");
+        string mathSrc = System.IO.File.ReadAllText(mathPath);
         string computeSource = System.IO.File.ReadAllText(shaderPath)
             .Replace("#[compute]\r\n", string.Empty)
-            .Replace("#[compute]\n", string.Empty);
+            .Replace("#[compute]\n", string.Empty)
+            // RD-GLSL has no #include (Godot proposal #9592): splice the shared field math here.
+            .Replace("// @@INCLUDE field_math", mathSrc);
         var source = new RDShaderSource
         {
             Language = RenderingDevice.ShaderLanguage.Glsl,
