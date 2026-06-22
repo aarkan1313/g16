@@ -86,7 +86,7 @@ public partial class CloudVolume : Node
     // sample (cloud_sky.gdshader) reads clean in motion. Ship can dial down (--cloudtex=128) +
     // lean on temporal amortization for the mid-range budget. MUST be set before InitCompute.
     public static int TexW = 1024, TexH = 256;
-    public const int ShadowRes = 512;
+    public const int ShadowRes = 512;   // cloud-shadow map (feeds god rays; terrain-receive deferred to the new terrain shader)
     // L1 fix: set from FieldParams.RegionSizeM at Attach so the shadow map + god-ray
     // UV stay locked to the actual terrain footprint (was hardcoded 8192, desynced
     // silently if field_params.json changed).

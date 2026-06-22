@@ -24,6 +24,7 @@ public partial class TerrainLabUI : Control
     private MoonState _moon = new();
     private StarsState _stars = new();
     private Vector3 _lastMoonDir = Vector3.Zero;   // last composed moon direction (for --lookatmoon)
+    private bool _shadowTuned = false;             // #5: directional shadow atlas size set once (RenderingServer global)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
 
@@ -85,6 +86,25 @@ public partial class TerrainLabUI : Control
         // ── SUN DISC (Stage-1 appearance) + shadow softness ──
         sun.ShadowBlur = _sunDisc.ShadowSoft;
         sun.LightAngularDistance = _sunDisc.DiscAngular;
+        // #5 SHADOW PASS (code-side, no scene/project edits → no conflict with the terrain chat). The blocky
+        // far-cascade self-shadow + closer/farther quality jump were the directional shadow under-resolved at
+        // distance: default 4096 atlas (~0.6 m/texel near → ~7.8 m far). Double the atlas + flatten the splits
+        // + cross-fade cascades so far texel density isn't starved.
+        if (!_shadowTuned)
+        {
+            RenderingServer.DirectionalShadowAtlasSetSize(8192, true);   // 4096→8192 = halve m/texel everywhere (perf lever — dial down once edges hold)
+            RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftHigh);   // PCF blur → dissolves texel "squares" cheaply
+            // SSAO was the harsh "second shadow system": intensity 2.0 raked across the faceted 4 m mesh and read
+            // as jagged shadows. Dial to subtle valley AO (the look fix); revisit when the higher-res CDLOD mesh lands.
+            var envNode = GetNodeOrNull<WorldEnvironment>("/root/TerrainLabRoot/Env");
+            if (envNode?.Environment != null) { envNode.Environment.SsaoIntensity = 0.6f; }
+            _shadowTuned = true;
+        }
+        sun.DirectionalShadowBlendSplits = true;                        // cross-fade cascade seams
+        sun.DirectionalShadowMaxDistance = 6000f;                       // was 8000; don't waste cascades on far haze
+        sun.DirectionalShadowSplit1 = 0.10f;                            // flatter split distribution (was 0.08/0.2/0.5)
+        sun.DirectionalShadowSplit2 = 0.28f;
+        sun.DirectionalShadowSplit3 = 0.60f;
         if (_cloud != null)
         {
             _cloud.SetSkyColors(tTop, tHor, tGnd);   // tinted keyframed gradient (ST4-2)

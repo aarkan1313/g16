@@ -225,8 +225,14 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      **review key 7 cycles them**) composing a sun preset + celestial preset + persistent `sky_tint` +
      moon/moonlight colors: blood_moon, alien_green, violet_night, harvest, ember_dusk.
    **Multiple suns/moons → UN-DEFERRED as #6 C3** (user's call 2026-06-20; see below). **#4 Stage 4 COMPLETE.**
-5. **Shadow & Lighting pass** — CSM/cascade tuning, contact + soft (PCSS) shadows, the proxy-on cheap-
-   shadow perf lever (~2.8 vs ~4.7 ms), SSIL re-check. Pairs with Stage-3 moonlight shadows.
+5. **Shadow & Lighting pass — 🟡 PARTIAL 2026-06-21 (code-side done; terrain-mesh part deferred to CDLOD).**
+   ✅ Directional CSM under-resolution fixed: 8192 atlas + SoftHigh PCF + blend_splits + flatter splits (0.1/0.28/
+   0.6) + max 6000 (all via `RenderingServer`/Sun props in `TerrainLabUI.Lighting.cs`, no scene/project edits).
+   ✅ The "blocky shadow blob" was **SSAO @2.0** on the faceted 4 m mesh, not a shadow → dialed to 0.6. See
+   DECISIONS 2026-06-21. **Deferred (terrain-coupled, ride CDLOD):** diffuse-terminator faceting (mesh res),
+   per-chunk caster AABBs (CDLOD already does), cloud→terrain shadow receive (re-add in the new terrain shader),
+   proxy-on cheap-shadow lever, and cascade split-*distance* retuning once terrain scale settles. Godot 4 has no
+   native contact shadows. Night moonlight→clouds shipped (#5 Layer 1). 8192 atlas = perf lever to dial down later.
 6. **Celestial / Night-Sky expansion — 🆕 ROADMAPPED 2026-06-20** (user scope-up during the galaxy review).
    Built **AFTER #3 atmosphere** (the physical sky is the backdrop the celestial work sits on; and C3 feeds it).
    Each piece its own spec → plan → eye-gate, built one phase past the last pass (discipline rule).

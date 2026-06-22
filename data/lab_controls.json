@@ -70,7 +70,7 @@
     { "id": "sun_surface_warm", "label": "sun surface warm", "tab": "Light", "type": "scenef", "scene": "sun_surface_warm", "min": 0.0, "max": 1.0, "default": 0.3, "rand": false },
     { "id": "sun_cloud_redden", "label": "sun cloud redden", "tab": "Light", "type": "scenef", "scene": "sun_cloud_redden", "min": 0.0, "max": 2.0, "default": 0.8, "rand": false },
     { "id": "ambient_e", "label": "sky ambient", "tab": "Light", "type": "scenef", "scene": "ambient", "min": 0.0, "max": 1.5, "default": 0.4, "rand": false },
-    { "id": "ssao_i", "label": "AO strength", "tab": "Light", "type": "scenef", "scene": "ssao_intensity", "min": 0.0, "max": 4.0, "default": 2.0, "rand": false },
+    { "id": "ssao_i", "label": "AO strength", "tab": "Light", "type": "scenef", "scene": "ssao_intensity", "min": 0.0, "max": 4.0, "default": 0.6, "rand": false },
     { "id": "ssao_r", "label": "AO radius m", "tab": "Light", "type": "scenef", "scene": "ssao_radius", "min": 0.5, "max": 30.0, "default": 8.0, "rand": false },
     { "id": "fog_d", "label": "fog density", "tab": "Light", "type": "scenef", "scene": "fog_density", "min": 0.0, "max": 0.003, "default": 0.0006, "rand": false },
     { "id": "fog_aerial", "label": "aerial persp", "tab": "Light", "type": "scenef", "scene": "fog_aerial", "min": 0.0, "max": 1.0, "default": 0.85, "rand": false },

@@ -6,6 +6,27 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — #5 Shadow pass: findings + fixes (code-side; terrain-mesh part deferred to CDLOD).** Reviewed the
+shadow system in motion. Two defects + a process bug:
+- **Defect A — shadow quality jumps as the camera moves (CSM cascades).** Cause: default 4096 directional atlas
+  + a split distribution that starved the far cascades (~0.6 m/texel near → ~7.8 m far over an 8 km range).
+  **Fixed (code-side, no scene/project edits → no conflict with the terrain chat):** in `TerrainLabUI.Lighting.cs`
+  `RenderingServer.DirectionalShadowAtlasSetSize(8192,true)` + `DirectionalSoftShadowFilterSetQuality(SoftHigh)`,
+  and on the Sun `DirectionalShadowBlendSplits=true`, `MaxDistance=6000`, splits 0.10/0.28/0.60.
+- **Defect B — the "blocky shadow blob with a jagged edge" was NOT a shadow at all — it was SSAO.** The active
+  `ground.gdshader` (placeholder) doesn't even sample `cloud_shadow_tex` (only the god-ray pass does), and turning
+  the directional shadow off didn't remove the blob. It was **SSAO at intensity 2.0** raking the faceted **4 m**
+  mesh → jagged dark patches reading as shadows. **Fixed:** SSAO 2.0 → **0.6** (subtle valley AO) — default set in
+  `data/lab_controls.json` `ssao_i` + a code guarantee in the shadow block. Revisit/raise once the higher-res CDLOD
+  mesh lands (it'll be smooth then).
+- **Process bug (cost us several blind iterations):** CLI flags need a **`--` separator** (`OS.GetCmdlineUserArgs()`
+  is empty without it) — `--shadow=0/--ssao=0/--time` were silently dropping, so the isolation tests were no-ops
+  until corrected. (Already in memory `wg16-launch-absolute-path` — follow it.)
+- **Deferred (terrain-coupled):** the residual hard *diffuse terminator* is the 4 m mesh faceting itself → CDLOD's
+  domain; the full-height single-mesh caster-AABB depth-precision amplifier (CDLOD already does per-chunk tight
+  AABBs); re-adding cloud→terrain shadow receive (belongs in the new terrain/CDLOD shader, sampled `filter_linear`).
+  Cloud shadow map kept at 512 (only feeds god rays today). 8192 atlas is a perf lever to dial down later.
+
 **2026-06-21 — Night variation direction (planned) + night-cloud lighting (build now).** User: every night/weather
 shouldn't look the same. Two layers. **(1) Enabling lighting — BUILD NOW as the lead of #5:** clouds currently
 take only sun + sky-ambient (`cloud_raymarch.glsl` ~L384), so at dusk/night they get no fill and read as "big black
