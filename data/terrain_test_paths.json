@@ -1,0 +1,26 @@
+{
+  "schema": "terrain_test_paths.v1",
+  "paths": [
+    {
+      "name": "low_fast_flythrough",
+      "duration": 8.0,
+      "from": [-3500, 80, 0], "to": [3500, 80, 0],
+      "look_offset": [0, -8, 200],
+      "comment": "low + fast horizontal across many LOD rings — worst-case pop stress"
+    },
+    {
+      "name": "vertical_descend_ascend",
+      "duration": 10.0,
+      "from": [0, 1800, 1200], "to": [0, 120, 1200],
+      "look_offset": [0, -40, -400],
+      "comment": "drop through LOD bands over a fixed point — altitude-driven LOD"
+    },
+    {
+      "name": "slow_boundary_hover",
+      "duration": 12.0,
+      "from": [300, 120, 900], "to": [700, 120, 900],
+      "look_offset": [0, -10, -300],
+      "comment": "creep slowly across a single LOD boundary — isolate one transition"
+    }
+  ]
+}

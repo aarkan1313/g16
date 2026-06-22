@@ -17,6 +17,7 @@ public sealed partial class CdlodTerrain : Node3D
     private float[] _heights = System.Array.Empty<float>();   // baked heightmap (row-major, res²), for per-chunk AABB
     private int _hRes;
     private readonly List<MeshInstance3D> _pool = new();
+    private List<CdlodChunk> _lastLeaves = new();   // S2b: last Tick's selected leaves (for the test-path along-path invariant/count report)
     private bool _enabled;
     private bool _lodViz;
 
@@ -27,6 +28,10 @@ public sealed partial class CdlodTerrain : Node3D
     // S2b: exposed to TerrainLab so it can push the matching geomorph uniforms to the shader.
     public float GridResolution => GridN;
     public float SplitFactorValue => SplitFactor;
+
+    // S2b: along-path report accessors for TerrainTestPaths (sampled every frame during a flight).
+    public int LeafCountLastTick => _lastLeaves.Count;
+    public bool InvariantHoldsNow(out string msg) => _qt.NeighborInvariantHolds(_lastLeaves, out msg);
 
     public void Setup(ShaderMaterial mat, FieldParams p, float minH, float maxH, float[] heights)
     {
@@ -80,6 +85,7 @@ public sealed partial class CdlodTerrain : Node3D
         if (!_enabled) { return; }
         if (!IsInsideTree()) { return; }   // the AddChild is deferred (see TerrainLab.Build); skip until in-tree
         List<CdlodChunk> leaves = _qt.Select(camPos);
+        _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
         EnsurePool(leaves.Count);
         for (int i = 0; i < leaves.Count; i++)
         {

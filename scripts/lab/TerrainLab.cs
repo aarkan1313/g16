@@ -119,6 +119,15 @@ public partial class TerrainLab : MeshInstance3D
             (GetParent() ?? (Node)this).CallDeferred(Node.MethodName.AddChild, _cdlod);
             _cdlod.Setup(_mat, p, _minBase, _maxBase, heights);
         }
+
+        // S2b: the LOD-crossing test-path player (sibling, deferred — same reason as _cdlod). Setup needs
+        // the camera + cdlod (both siblings under our parent), so defer it one frame too.
+        _testPaths ??= new TerrainTestPaths { Name = "TerrainTestPaths" };
+        if (_testPaths.GetParent() == null)
+        {
+            (GetParent() ?? (Node)this).CallDeferred(Node.MethodName.AddChild, _testPaths);
+            CallDeferred(nameof(SetupTestPaths));
+        }
     }
 
     /// S1: flip the ground material between the live analytic field and the baked heightmap (A/B).
@@ -168,6 +177,18 @@ public partial class TerrainLab : MeshInstance3D
     }
     public void SetCdlodViz(bool on) { _cdlod?.SetLodViz(on); }
     public void CdlodTick(Vector3 camPos) { _cdlod?.Tick(camPos); }
+
+    // S2b: LOD-crossing test-path player (TerrainTestPaths sibling). RunTestPath starts a flight;
+    // TickTestPath advances it each frame (called from TerrainLabUI.Process); the report prints on finish.
+    private TerrainTestPaths? _testPaths;
+    private void SetupTestPaths()
+    {
+        var cam = GetParent()?.GetNodeOrNull<Camera3D>("Camera");
+        if (cam != null && _cdlod != null) { _testPaths?.Setup(cam, _cdlod); }
+    }
+    public void RunTestPath(int i, bool cliQuit = false) => _testPaths?.Start(i, cliQuit);
+    public void TickTestPath(double delta) => _testPaths?.Tick(delta);
+    public bool TestPathRunning => _testPaths?.Running ?? false;
 
     /// Toggle the GI/shadow proxy. ON: the coarse proxy feeds SDFGI + casts shadows; the detail mesh
     /// renders the view only. OFF: detail mesh feeds both; proxy inert.

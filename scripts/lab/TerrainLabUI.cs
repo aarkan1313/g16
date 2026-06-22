@@ -79,6 +79,11 @@ public partial class TerrainLabUI : Control
         _ready = true;
     }
 
+    /// S2b: deferred --testpath=N start. Runs after the _testPaths sibling-add + SetupTestPaths (both
+    /// deferred from TerrainLab.Build) so the path player is set up. Enables CDLOD (the harness needs the
+    /// quadtree ticking), then starts the flight with cliQuit so the run prints its report and exits.
+    private void StartTestPathDeferred() { _terrain.SetCdlod(true); _terrain.RunTestPath(_testPathCli, cliQuit: true); }
+
     /// Deferred cloud wiring (see _Ready). Adds the CloudVolume node to the scene
     /// root and attaches it to the Environment, now that tree setup has finished.
     private void AttachClouds()

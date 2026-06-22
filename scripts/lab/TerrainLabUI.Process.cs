@@ -29,6 +29,7 @@ public partial class TerrainLabUI : Control
     private bool _inspectOn;
     private bool _lastLDown;
     private bool _lastKey1Down;             // debounce for the analytic/baked toggle (key 1)
+    private bool _lastKey5Down, _lastKey6Down, _lastKey7Down;   // S2b: debounce for the test-path keys (5/6/7)
     private bool _analyticOn = true;        // ground source: live field (default) vs baked; toggled by key 1
     private float _inspectEnergy = 1.0f;   // L-light brightness (Night tab 'inspect light')
 
@@ -155,6 +156,19 @@ public partial class TerrainLabUI : Control
                     _terrain.SetAnalytic(_analyticOn);
                 }
                 _lastKey1Down = k1;
+            }
+
+            // S2b: advance an active LOD-crossing test-path flight; keys 5/6/7 start the 3 paths
+            // (live eye-gate). Guarded by !ReviewMode like key 1 (ReviewMode owns the number keys).
+            _terrain.TickTestPath(delta);
+            if (!ReviewMode)
+            {
+                if (Input.IsKeyPressed(Key.Key5) && !_lastKey5Down) { _terrain.RunTestPath(0); }
+                if (Input.IsKeyPressed(Key.Key6) && !_lastKey6Down) { _terrain.RunTestPath(1); }
+                if (Input.IsKeyPressed(Key.Key7) && !_lastKey7Down) { _terrain.RunTestPath(2); }
+                _lastKey5Down = Input.IsKeyPressed(Key.Key5);
+                _lastKey6Down = Input.IsKeyPressed(Key.Key6);
+                _lastKey7Down = Input.IsKeyPressed(Key.Key7);
             }
         }
         // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
