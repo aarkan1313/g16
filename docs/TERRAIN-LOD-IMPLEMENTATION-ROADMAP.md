@@ -157,39 +157,56 @@ Splat/breakup/scatter load with their tiles. No pops, no visible seams at tile b
 
 ---
 
-## Current Status (2026-06-21)
+## Current Status (updated 2026-06-22)
+
+> **⚠ STAGE NAMING SUPERSEDED.** The newer, user-approved spec `2026-06-21-infinite-terrain-cdlod-design.md`
+> renames the stages **S1 (perf go/no-go) → S2 (quadtree+geomorph+stitch on a finite region) → S3 (streaming
+> infinite) → S4 (floating-origin)** and corrects the old "T1 = standalone fixed-region gate" premise (a baked
+> region has no LOD, so it can't pop → that gate was payoff-free; folded into S2). **The old T1/T2/T3 framing
+> below is retained for history but is NOT the live map.** Live map = S1✅ S2✅ S3🔨(spec+plan, not built) S4(folded into S3).
 
 ### ✅ Complete
-- **S1 (quadtree skeleton):** commits e3595e7…fb981e6.
-  - Quadtree hierarchy, ≤1-level neighbor constraint, mechanical per-frame select.
-  - `--cdlodcheck` PASS every frame.
-  - Build clean, no regressions.
+- **S1 — analytic-field perf go/no-go.** Measured: live `field_height` per-vertex = 34 ms full-mesh (4.3× over),
+  but S2's LOD vertex-cut brings it to **~6.4 ms static** → the go/no-go is effectively PASSED (the quadtree
+  closed the gap). Render is live-analytic. (Details: infinite-terrain spec §10.)
+- **S1 quadtree skeleton + S2a chunks render.** Quadtree hierarchy, ≤1-level invariant (`--cdlodcheck`), pooled
+  mesh chunks, per-chunk tight AABB, baseline crack prevention. Commits e3595e7…fb981e6.
+- **S2b — per-vertex geomorph (POP-FREE).** Commits 25098d8…dd07e45. Each vertex morphs its grid XZ toward the
+  coarse grid sampling the SAME `field_height` → elevation pop structurally impossible. **The pop bug was a
+  morphK sign-inversion** (cc9638a fixed it). Proven by `--morphcheck` (far-edge verts coincide with coarse
+  grid to 0.0 m). Test harness `TerrainTestPaths` (keys 5/6/7, `--testpath=N`). User eye-gate: PASS.
+- **S2d — edge-stitched mesh variants (CRACK-FREE), skirt eliminated.** Commits 575939e…4804d98. 16 welded
+  INDEXED variants (odd boundary verts collapse onto even → coarse spacing → no T-junction); skirt deleted.
+  Proven by `--stitchcheck` (welded verts on the coarse neighbor's lattice to 0.0 m). Two bugs found+fixed in
+  verification: vertex-soup→indexed (perf), inverted winding (the "see-through"). User eye-gate: soft-pass.
+- **Shadow integration (cross-lane).** The sky lane's CSM shadow pass (d116612) is now in-build. Terrain-side:
+  the per-chunk AABB margin was scaled to the geomorph displacement (96b88a9) to kill grid-aligned shadow
+  ACNE. Shadow params (bias/penumbra/soft/dist) made lab-tunable + survive recompose (7fa6aab); review key 4
+  cycles shadow presets (ad4a0f3); penumbra reverted to the physically-correct ~0.53° default (2990249). The
+  residual penumbra/PCF stipple on coarse geometry is logged + deferred (fixed by surfacing, not shadow tuning;
+  memory `cdlod-shadow-acne-vs-penumbra-stipple`).
 
-- **S2a (chunks render):** commits e3595e7…fb981e6.
-  - Quadtree leaves → pooled mesh chunks (position + scale per chunk).
-  - Per-chunk custom AABB (tight vertical for shadow).
-  - Skirt crack prevention.
-  - **Perf: 5.6 ms avg, 4.4× under budget** (was 3.8 ms floor for the no-LOD 4.19M vert mesh; S2a is 5.6 ms
-    with shadow redraw also dropping → net is a speedup once S2c proxy lands).
-  - Mechanics gate: PASS.
+**T1 GEOMETRY (pop-free + crack-free continuous LOD) is COMPLETE.**
 
-### 🔨 In Progress
-- **S2b.1 — Per-vertex geomorph:** spec written (2026-06-21, commit 548e206); implementation plan drafted.
-  - Ready to execute (geomorph math, wiring, shader + C# changes scoped).
-  - Next: write the plan, execute tasks (geomorph → test harness → reserved curve), eye-gate.
+### 🔨 In progress — S3 (streaming infinite): SPEC + PLAN written, NOT yet built
+- **Spec:** `docs/superpowers/specs/2026-06-22-s3-streaming-infinite-design.md` (committed 194c1a8).
+- **Plan:** `docs/superpowers/plans/2026-06-22-s3-streaming-infinite.md` (committed cb6a0b5) — 5 tasks + eye-gate.
+- **Shape:** unpin the quadtree root → roams with the camera (3×3 root-cell window) → infinite. Floating-origin
+  FOLDED in (snapped camera-relative render space; no drift phase — subsumes the old "S4"). Per-chunk AABB:
+  born generous, tightened by an ASYNC GPU height-range (render-thread RD) — Task 5, the big/high-risk piece.
+- **Status:** ready to execute (direct, send-it per task). Tasks 1–4 deliver a working infinite world; Task 5
+  is the AAA shadow-quality layer with the generous AABB as the safe fallback.
 
-- **S2b.2 — Test harness:** spec written; plan drafted.
-  - Next: implement `TerrainTestPaths` + JSON + keys + CLI.
-
-- **S2b.3 — Reserved detail-fade curve:** spec written; trivial, tagged as tail.
-
-- **S2b eye-gate:** After Tasks 1-2 complete, user flies the 3 paths in motion, confirms ZERO pops.
-
-### ⏸ Blocked (on T1 eye-gate)
-- **S2c — Proxy shadows:** fenced to terrain geom only, deferred until S2b passes.
-- **S2d — Skirt/stitch finalization + atlas lock:** tail of T1.
-- **T2 (tiles):** cannot start until T1 eye-gate passes.
-- **T3 (streaming):** cannot start until T2 eye-gate passes.
+### ⏸ Deferred / later
+- **The async per-chunk DATA grid** (carvable height for erosion/water) — reserved-dormant; S3 builds only the
+  AABB slice of the async path.
+- **Surfacing (Skyrim-look ground)** — the LAST arc per the infinite-terrain build order; plugs into the chunk
+  contract. The "smooth mess" placeholder look + the residual shadow stipple both resolve here. NOT before S3.
+- **Erosion, water, biomes, collision, flora, world-editing** — each its own later arc on the chunk contract.
+- **Old "S2c proxy shadows"** — largely subsumed (shadows are the sky lane's CSM now; terrain casts the LOD'd
+  mesh). Not a separate live stage.
+- **Chunk-rebuild frame spike** (54–71 ms transients in motion) — bounded by S3's churn budget, fully fixed in
+  a later perf pass. Logged, not blocking.
 
 ---
 

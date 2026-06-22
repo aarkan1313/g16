@@ -1,5 +1,13 @@
 # WG16 Terrain LOD — Roadmap & Design (CDLOD)
 
+> **⚠ SUPERSEDED (framing) by `2026-06-21-infinite-terrain-cdlod-design.md`.** That spec keeps this doc's
+> CDLOD *mechanism* (quadtree + per-vertex geomorph + edge-stitch + ≤1-level neighbor, clipmap rejected) but
+> corrects the staging: the "T1 = standalone pop-free LOD on the fixed region" gate here is folded into its
+> **S2** (a baked region has no LOD, so it can't pop → a standalone fixed-region gate was payoff-free). LIVE
+> STAGES: S1 (perf go/no-go) → S2 (quadtree+geomorph+stitch, DONE) → S3 (streaming infinite, spec+plan written
+> 2026-06-22) → S4 (floating-origin, folded into S3). Read this doc for the mechanism/post-mortem rationale;
+> read the 2026-06-21 spec + `docs/TERRAIN-LOD-IMPLEMENTATION-ROADMAP.md` for the live status/plan.
+
 Date: 2026-06-18. Status: SPEC (planned arc — not yet scheduled for build). Brainstormed with the user.
 Companion: `docs/performance.md` (the floor measurement), `docs/ROADMAP.md` (where this arc slots in),
 memory `terrain-clipmap-killed-wg1-15` (the post-mortem this spec is built around).
