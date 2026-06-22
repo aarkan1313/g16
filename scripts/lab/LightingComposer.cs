@@ -112,6 +112,19 @@ public sealed class LightingComposer
         {
             if (b.Kind == LuminaryKind.Sun) { suns.Add(b); } else { moons.Add(b); }
         }
+        // PRIMARY (entry 0 of each kind): drive the existing single-sun/single-moon render path from the list,
+        // but ONLY the fields that kind actually OWNS — so editing a primary body in the list renders, while
+        // the default list stays byte-identical (luminaries.json's primary values == today's live defaults).
+        //  • Sun: only the DISC SIZE. The primary sun's COLOR + ENERGY are owned by the time-of-day day-script
+        //    (DriveTime→SampleDayScript rewrites them every frame); the list must not fight that decoupling.
+        //  • Moon: color/size/phase/arc — all owned by MoonState (NOT the day-script), so fully list-driven.
+        if (suns.Count > 0) { SunDisc.Size = suns[0].Size; }
+        if (moons.Count > 0)
+        {
+            var m = moons[0];
+            Moon.Color = m.Color; Moon.Size = m.Size; Moon.Phase = m.Phase;
+            Moon.AzOffset = m.AzOffset; Moon.DeclScale = m.DeclScale;
+        }
         // Extra suns/moons = list beyond the primary (entry 0 of each kind keeps the existing render path).
         ExtraSunCount = Mathf.Clamp(suns.Count - 1, 0, MaxExtraSuns);
         ExtraMoonCount = Mathf.Clamp(moons.Count - 1, 0, MaxExtraMoons);

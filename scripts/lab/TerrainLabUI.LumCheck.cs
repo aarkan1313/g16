@@ -56,29 +56,43 @@ public partial class TerrainLabUI : Control
         {
             if (++_lumFramesB < 2) { return; }               // let the recompose land
             _lumDiffB = MaxDiff(_lumA!, GetViewport().GetTexture().GetImage().GetData());
-            // C: append an extra Sun (a real edit) via the data path, then recompose.
+            // C: edit the PRIMARY sun's disc SIZE via the data path (a primary-from-list edit, visible at noon),
+            // then recompose. Proves the list now drives the PRIMARY body's render, not just added ones.
             var edited = DefaultLuminaryDicts();
-            edited.Add(new Godot.Collections.Dictionary { { "kind", 0 }, { "color", new Color(0.62f, 0.78f, 1.0f) }, { "size", 0.9f }, { "phase", 1f }, { "az_offset", 60f }, { "decl_scale", 0.88f }, { "energy", 1.3f }, { "casts_shadow", false }, { "atmosphere", true }, { "priority", 80f } });
+            edited[0]["size"] = 4.0f;   // primary sun disc 0.6 -> 4.0 deg (big, unmistakable at noon)
             ApplyLuminaryDicts(edited);
             _lumStage = 3; _lumFramesC = 0;
             return;
         }
         if (_lumStage == 3)
         {
-            if (++_lumFramesC < 2) { return; }               // let the recompose/disc array land
+            if (++_lumFramesC < 2) { return; }               // let the recompose land
             int maxC = MaxDiff(_lumA!, GetViewport().GetTexture().GetImage().GetData());
-            // "identical" = the data path adds no MORE diff than the no-change frame jitter floor.
+            // D: append an extra Sun (the added-body path) via the data path, then recompose.
+            var edited2 = DefaultLuminaryDicts();
+            edited2.Add(new Godot.Collections.Dictionary { { "kind", 0 }, { "color", new Color(0.62f, 0.78f, 1.0f) }, { "size", 0.9f }, { "phase", 1f }, { "az_offset", 60f }, { "decl_scale", 0.88f }, { "energy", 1.3f }, { "casts_shadow", false }, { "atmosphere", true }, { "priority", 80f } });
+            ApplyLuminaryDicts(edited2);
+            _lumDiffC = maxC;
+            _lumStage = 4; _lumFramesD = 0;
+            return;
+        }
+        if (_lumStage == 4)
+        {
+            if (++_lumFramesD < 2) { return; }
+            int maxD = MaxDiff(_lumA!, GetViewport().GetTexture().GetImage().GetData());
+            // "identical" = the data path adds no MORE diff than the no-change recompose floor.
             bool identical = _lumDiffB <= _lumJitter;
-            bool edited = maxC > _lumJitter + 8;             // an added sun must change pixels well beyond jitter
-            bool ok = identical && edited;
-            GD.Print($"LUMINARYCHECK: {(ok ? "PASS" : "FAIL")}  jitter-floor={_lumJitter}, default-vs-datapath={_lumDiffB} (want <= floor), default-vs-added-sun={maxC} (want > floor+8)");
+            bool primaryEdit = _lumDiffC > _lumJitter + 8;   // primary-sun-size edit must change pixels beyond jitter
+            bool addedBody = maxD > _lumJitter + 8;          // an added sun must change pixels beyond jitter
+            bool ok = identical && primaryEdit && addedBody;
+            GD.Print($"LUMINARYCHECK: {(ok ? "PASS" : "FAIL")}  floor={_lumJitter}, default-vs-datapath={_lumDiffB} (want <= floor), primary-size-edit={_lumDiffC} (want > floor+8), added-sun={maxD} (want > floor+8)");
             _lumCheckT = -1.0;
             Engine.TimeScale = 1.0;
             GetTree().Quit();
         }
     }
 
-    private int _lumDiffB, _lumFramesB, _lumFramesC, _lumFramesFloor, _lumJitter;
+    private int _lumDiffB, _lumDiffC, _lumFramesB, _lumFramesC, _lumFramesD, _lumFramesFloor, _lumJitter;
 
     /// The default body list (sun + moon), as objectlist dicts — matches data/luminaries.json.
     private static List<Godot.Collections.Dictionary> DefaultLuminaryDicts() => new()
