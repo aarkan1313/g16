@@ -4,8 +4,10 @@
 > items: **(1) GI/shadow proxy + SDFGI are DEFAULT-OFF now** (the 0b eye-gate, 2026-06-20). Every "proxy ON / SDFGI ON"
 > figure below (incl. the 9.9/9.6 ms clouds-on decomposition) describes a config the shipped default no longer uses;
 > the shipped default is SDFGI-off + proxy-off sharp detail-mesh shadows (~4.7 ms clouds-off). **(2) The 9.6 ms budget
-> predates AT-1 + AT-2** (both now default-on); **AT-2 aerial was never profiled.** TODO: re-decompose the in-motion
-> frame for the actual shipped default and measure AT-2 (`--profmove`). The relative costs + the "8 ms is unreachable
+> predates AT-1 + AT-2** (both now default-on); **AT-2 aerial measured +0.7 ms** (`--profmove`, 114 vs 124 fps;
+> NEEDS_REVIEW 11). **Night moonlight on clouds (2026-06-21)** adds one extra cloud light-march per in-cloud step,
+> **gated night-only** (`P.moon_dir.w==0` in day/new-moon → skipped, zero daytime cost); same order as a 2nd sun
+> light-march on the night cloud cost. TODO: re-decompose the in-motion frame for the actual shipped default. The relative costs + the "8 ms is unreachable
 > on the single 4.19M-vert mesh" conclusion still hold; the absolute default-config attribution does not.
 
 The reference for "where the frame goes" and what's been optimized. Numbers are RTX 5090
