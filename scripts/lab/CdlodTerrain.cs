@@ -53,33 +53,16 @@ public sealed partial class CdlodTerrain : Node3D
         GD.Print($"CdlodTerrain: setup gridN={GridN} maxDepth={MaxDepth} split={SplitFactor} region={_regionSize:F0}");
     }
 
-    /// Min/max terrain height over a chunk's world-XZ footprint, sampled from the baked heightmap.
-    /// A TIGHT per-chunk vertical AABB is essential: Godot fits the directional shadow cascade's
-    /// depth range to caster AABBs, so a full-region-tall AABB on every small chunk inflates the
-    /// shadow-map depth range and destroys precision → large soft self-shadow blobs (worst at low
-    /// sun). Sampling a coarse stride keeps this cheap; margins cover sub-sample peaks.
+    /// Generous vertical bound from the field's global height envelope. S3: works for a streamed chunk
+    /// ANYWHERE (no baked region needed) — born with this loose-but-safe AABB so it renders + shadows with no
+    /// pop-in; the async ChunkAabbProvider (Task 5) tightens it a few frames later for cascade precision.
+    /// A TIGHT per-chunk vertical AABB matters: Godot fits the directional shadow cascade's depth range to
+    /// caster AABBs, so a full-region-tall AABB on every small chunk inflates the shadow-map depth range and
+    /// destroys precision → soft self-shadow blobs. Until Task 5 tightens, this generous-but-safe outer bound
+    /// keeps chunks rendering+shadowing everywhere with no pop-in (slightly loose far-out).
     private (float lo, float hi) ChunkHeightRange(Vector2 originXZ, float size)
     {
-        if (_heights.Length == 0 || _hRes <= 0) { return (_minH, _maxH); }   // fallback: global range
-        float texel = _regionSize / _hRes;
-        float h = _regionSize * 0.5f;
-        int c0 = Mathf.Clamp((int)Mathf.Floor((originXZ.X + h) / texel), 0, _hRes - 1);
-        int c1 = Mathf.Clamp((int)Mathf.Ceil((originXZ.X + size + h) / texel), 0, _hRes - 1);
-        int r0 = Mathf.Clamp((int)Mathf.Floor((originXZ.Y + h) / texel), 0, _hRes - 1);
-        int r1 = Mathf.Clamp((int)Mathf.Ceil((originXZ.Y + size + h) / texel), 0, _hRes - 1);
-        // cap the sample count per chunk so coarse (huge) chunks stay cheap (~<=32² taps)
-        int stepC = Mathf.Max(1, (c1 - c0) / 32);
-        int stepR = Mathf.Max(1, (r1 - r0) / 32);
-        float lo = float.MaxValue, hi = float.MinValue;
-        for (int r = r0; r <= r1; r += stepR)
-        for (int c = c0; c <= c1; c += stepC)
-        {
-            float v = _heights[r * _hRes + c];
-            if (v < lo) { lo = v; }
-            if (v > hi) { hi = v; }
-        }
-        if (lo > hi) { return (_minH, _maxH); }
-        return (lo, hi);
+        return (_minH - 200f, _maxH + 200f);   // + safety margin for far-out amplitude beyond the sampled region
     }
 
     public void SetEnabled(bool on)
@@ -100,7 +83,7 @@ public sealed partial class CdlodTerrain : Node3D
             Mathf.Floor(camPos.X / _coarseSnap) * _coarseSnap, 0f,
             Mathf.Floor(camPos.Z / _coarseSnap) * _coarseSnap);
         _mat?.SetShaderParameter("render_origin", _renderOrigin);
-        List<CdlodChunk> leaves = _qt.Select(camPos);   // still TRUE-world select (root fixed until Task 2)
+        List<CdlodChunk> leaves = _qt.SelectRoaming(camPos);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
         EnsurePool(leaves.Count);
         for (int i = 0; i < leaves.Count; i++)

@@ -30,22 +30,42 @@ public sealed class CdlodQuadtree
     {
         var leaves = new List<CdlodChunk>();
         Recurse(_rootX, _rootZ, _rootSize, 0, camPos, leaves);
-        // S2d: resolve each leaf's edge-stitch mask — a bit is set iff the neighbor across that edge is
-        // COARSER (a bigger leaf), the only case that can crack. Point-sample the SAME tree (same camPos so
-        // the neighbor matches what's rendered this frame). Bit convention: bit0=-X bit1=+X bit2=-Z bit3=+Z.
+        FillStitchMasks(leaves, camPos);
+        return leaves;
+    }
+
+    /// Fill each leaf's 4-bit edge-stitch mask (bit0=-X bit1=+X bit2=-Z bit3=+Z): a bit is set iff the
+    /// neighbor across that edge midpoint is COARSER. Shared by Select + SelectRoaming.
+    private void FillStitchMasks(List<CdlodChunk> leaves, Vector3 camPos)
+    {
         const float eps = 0.25f;   // probe inset (m): < smallest chunk (128 m), safely inside the neighbor
         for (int i = 0; i < leaves.Count; i++)
         {
             CdlodChunk c = leaves[i];
             float ox = c.OriginXZ.X, oz = c.OriginXZ.Y, s = c.Size, hs = s * 0.5f;
             int mask = 0;
-            if (LeafSizeAt(ox - eps,     oz + hs,     camPos) > s) { mask |= 1; }   // bit0 -X
-            if (LeafSizeAt(ox + s + eps, oz + hs,     camPos) > s) { mask |= 2; }   // bit1 +X
-            if (LeafSizeAt(ox + hs,      oz - eps,    camPos) > s) { mask |= 4; }   // bit2 -Z
-            if (LeafSizeAt(ox + hs,      oz + s + eps, camPos) > s) { mask |= 8; }  // bit3 +Z
+            if (LeafSizeAt(ox - eps,     oz + hs,      camPos) > s) { mask |= 1; }   // bit0 -X
+            if (LeafSizeAt(ox + s + eps, oz + hs,      camPos) > s) { mask |= 2; }   // bit1 +X
+            if (LeafSizeAt(ox + hs,      oz - eps,     camPos) > s) { mask |= 4; }   // bit2 -Z
+            if (LeafSizeAt(ox + hs,      oz + s + eps, camPos) > s) { mask |= 8; }   // bit3 +Z
             c.StitchMask = mask;
             leaves[i] = c;   // struct — write back
         }
+    }
+
+    /// S3: select leaves over a 3x3 block of root-size cells centered on the camera's root cell (cell-aligned
+    /// so a world point always falls in the same chunk → no shimmer). Root roams with the camera → infinite.
+    public List<CdlodChunk> SelectRoaming(Vector3 camPos)
+    {
+        float cx = Mathf.Floor(camPos.X / _rootSize) * _rootSize;   // camera's root-cell origin
+        float cz = Mathf.Floor(camPos.Z / _rootSize) * _rootSize;
+        var leaves = new List<CdlodChunk>();
+        for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++)   // 3x3 cells → camera never near a window edge
+        {
+            Recurse(cx + dx * _rootSize, cz + dz * _rootSize, _rootSize, 0, camPos, leaves);
+        }
+        FillStitchMasks(leaves, camPos);
         return leaves;
     }
 
@@ -54,8 +74,12 @@ public sealed class CdlodQuadtree
     /// contains the point — O(depth). Used by S2d stitch-mask resolution (a coarser neighbor = bigger size).
     public float LeafSizeAt(float px, float pz, Vector3 camForSplit)
     {
-        if (px < _rootX || px > _rootX + _rootSize || pz < _rootZ || pz > _rootZ + _rootSize) { return 0f; }
-        float x = _rootX, z = _rootZ, size = _rootSize; int depth = 0;
+        // S3: root the walk at the root-cell containing (px,pz) (the world is infinite now — any probe has a
+        // containing cell). MUST use the SAME cell grid as SelectRoaming (floor to _rootSize) so neighbor
+        // lookups across a cell seam are correct.
+        float x = Mathf.Floor(px / _rootSize) * _rootSize;
+        float z = Mathf.Floor(pz / _rootSize) * _rootSize;
+        float size = _rootSize; int depth = 0;
         while (depth < _maxDepth)
         {
             float d = DistanceToCellXZ(x, z, size, camForSplit);
