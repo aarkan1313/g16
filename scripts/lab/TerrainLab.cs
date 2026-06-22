@@ -153,6 +153,14 @@ public partial class TerrainLab : MeshInstance3D
     {
         if (_cdlod == null) { return; }
         _mat?.SetShaderParameter("use_chunk", on ? 1.0f : 0.0f);   // chunk-mode on the shared material
+        if (on && _cdlod != null)
+        {
+            // S2b: push the geomorph params so the shader's per-vertex morph window matches the
+            // quadtree's actual split rule (camDist < size*SplitFactor). cam_world is pushed every
+            // frame separately (SetCameraWorld from TerrainLabUI.Process).
+            _mat?.SetShaderParameter("grid_n", _cdlod.GridResolution);
+            _mat?.SetShaderParameter("split_factor", _cdlod.SplitFactorValue);
+        }
         _cdlod.SetEnabled(on);
         Visible = !on;                          // hide the single full mesh (CdlodTerrain is a sibling, unaffected)
         if (_giProxy != null) { _giProxy.Visible = !on; }

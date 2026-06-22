@@ -24,6 +24,10 @@ public sealed partial class CdlodTerrain : Node3D
     public int MaxDepth = 6;          // finest LOD depth; tunable
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
 
+    // S2b: exposed to TerrainLab so it can push the matching geomorph uniforms to the shader.
+    public float GridResolution => GridN;
+    public float SplitFactorValue => SplitFactor;
+
     public void Setup(ShaderMaterial mat, FieldParams p, float minH, float maxH, float[] heights)
     {
         _mat = mat; _minH = minH; _maxH = maxH; _regionSize = p.RegionSizeM;

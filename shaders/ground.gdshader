@@ -19,6 +19,11 @@ uniform int   analytic_seed = 0;
 uniform float analytic_spacing = 4.0;
 uniform float use_chunk = 0.0;             // S2a: 1.0 = CDLOD chunk-mode (set once on the shared material)
 instance uniform float lod_viz = -1.0;     // S2a debug: >=0 tints this chunk by LOD level; <0 = normal
+// S2b geomorph inputs (chunk branch only). cam_world is re-declared post-strip (TerrainLab.SetCameraWorld
+// already pushes it every frame; the stripped shader had dropped the uniform so the push was a no-op).
+uniform vec3  cam_world = vec3(0.0);    // camera world pos (chunk geomorph per-vertex distance)
+uniform float grid_n = 65.0;            // chunk grid resolution (verts/side) — for odd->even snap
+uniform float split_factor = 2.5;       // quadtree split rule: subdivide when camDist < size*split_factor
 // Godot's shading language requires ONE variable per uniform statement (no comma lists).
 uniform float fp_base_freq;
 uniform float fp_amplitude;
@@ -88,21 +93,49 @@ float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 
 void vertex() {
     if (use_chunk > 0.5) {
-        // S2a CDLOD chunk: world-XZ from the instance transform (unit grid * MODEL_MATRIX).
-        vec2 wxz = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
-        float chunk_size = length(MODEL_MATRIX[0].xyz);    // X-basis length = chunk world size
-        float e = analytic_spacing;
+        // --- S2b GEOMORPH: morph each vertex toward the COARSE grid by a per-vertex factor, so a
+        // chunk's odd verts slide onto the coarse grid before it coarsens -> no elevation pop, and
+        // per-vertex distance makes the morph continuous across chunk seams. ---
+        float chunk_size = length(MODEL_MATRIX[0].xyz);    // chunk world size (X-basis length)
+
+        // fine vertex grid coord (integer) from unit pos; coarse target = snap odd index down to even.
+        vec2 u_fine = VERTEX.xz + vec2(0.5);               // unit [0,1]
+        vec2 g_fine = u_fine * (grid_n - 1.0);             // [0, grid_n-1]
+        vec2 g_coarse = floor(g_fine * 0.5 + 0.5) * 2.0;   // nearest even grid index
+        vec2 u_coarse = g_coarse / (grid_n - 1.0);
+
+        // per-vertex morphK: distance from camera to THIS vertex's world pos, mapped across the chunk's
+        // LOD band. The chunk coarsens at camDist == chunk_size*split_factor; it was created (subdivided
+        // from its parent) at camDist == 2*chunk_size*split_factor. Morph 0->1 over the FAR HALF of that
+        // band (start morphing at the midpoint, fully morphed by the coarsen distance) — the standard
+        // CDLOD morph window.
+        vec3 vworld_fine = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;   // pre-displacement world pos (y≈0)
+        float d = distance(cam_world.xz, vworld_fine.xz);
+        float far_d  = 2.0 * chunk_size * split_factor;    // band outer (this LOD just appeared)
+        float near_d = 1.0 * chunk_size * split_factor;    // band inner (about to coarsen)
+        float mid_d  = mix(near_d, far_d, 0.5);
+        float morphK = clamp((d - mid_d) / max(far_d - mid_d, 1e-3), 0.0, 1.0);  // 0 near .. 1 far edge
+        // NOTE: morph toward coarse as the chunk APPROACHES coarsening, i.e. as d -> near_d. So invert:
+        morphK = 1.0 - morphK;                              // 1 at near edge (coarsen imminent), 0 at far
+
+        vec2 u_morph = mix(u_fine, u_coarse, morphK);
+        vec2 wxz = (MODEL_MATRIX * vec4(u_morph.x - 0.5, 0.0, u_morph.y - 0.5, 1.0)).xz;  // morphed world XZ
+
         float h0 = analytic_h(wxz);
-        // Skirt: drop the chunk's BORDER ring so it tucks under any (coarser) neighbor, plugging
-        // LOD-seam cracks. Depth scales with the chunk's vertex spacing so big coarse chunks (whose
-        // edges can disagree more with a finer neighbor) skirt deeper. Border = unit pos at +/-0.5.
-        vec2 u01 = VERTEX.xz + vec2(0.5);
-        float edge = min(min(u01.x, 1.0 - u01.x), min(u01.y, 1.0 - u01.y));
-        float skirt = (edge < 0.001) ? (chunk_size / 32.0 + 4.0) : 0.0;   // ~one vertex-span + margin
-        VERTEX.y = h0 - skirt;                             // world-unit height (instance Y scale = 1)
-        float hx = analytic_h(wxz + vec2(e, 0.0));
-        float hz = analytic_h(wxz + vec2(0.0, e));
-        v_normal = normalize(vec3(h0 - hx, e, h0 - hz));
+
+        // Skirt (S2a): drop the border ring so it tucks under coarser neighbors (crack backstop). Use
+        // the FINE unit pos for the border test (a vertex is "border" by its mesh position, not morph).
+        float edge = min(min(u_fine.x, 1.0 - u_fine.x), min(u_fine.y, 1.0 - u_fine.y));
+        float skirt = (edge < 0.001) ? (chunk_size / 32.0 + 4.0) : 0.0;
+
+        VERTEX.y = h0 - skirt;
+
+        // Normal from forward differences scaled to the chunk's ACTUAL vertex spacing (S2a review fix:
+        // was analytic_spacing=4 m but coarse-chunk verts are 16 m+ apart). Sample at the morphed XZ.
+        float vs = chunk_size / max(grid_n - 1.0, 1.0);    // chunk vertex spacing (m)
+        float hx = analytic_h(wxz + vec2(vs, 0.0));
+        float hz = analytic_h(wxz + vec2(0.0, vs));
+        v_normal = normalize(vec3(h0 - hx, vs, h0 - hz));
         NORMAL = v_normal;
         v_h = h0;
     } else if (use_analytic) {
