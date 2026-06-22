@@ -53,6 +53,7 @@ public sealed class LightingComposer
     // integrate with ZERO look change, and is the source of truth the N-sun rendering will read.
     public LuminaryCaps Caps { get; } = new();
     private readonly List<Luminary> _luminaries = new();
+    private readonly List<float> _budgetWeights = new();   // #7 perf: reused per-frame in RebuildAndBudget
     public IReadOnlyList<Luminary> Luminaries => _luminaries;
     public LuminaryAllocation? Allocation { get; private set; }
     private int _lastLumCount = -1;
@@ -437,7 +438,8 @@ public sealed class LightingComposer
         float moonVis = moonUp * moonIllum;
 
         _luminaries.Clear();
-        var weights = new List<float>();
+        _budgetWeights.Clear();   // #7 perf: reuse the weights list (was new List<float>() every frame in a cycle)
+        var weights = _budgetWeights;
         _luminaries.Add(new Luminary
         {
             Id = "sun_primary", Kind = LuminaryKind.Sun,

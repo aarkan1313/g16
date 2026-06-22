@@ -9,6 +9,14 @@ namespace WG16.Lab;
 
 public partial class TerrainLabUI : Control
 {
+    // #7 perf: cache the Env + Sun nodes (they never move) instead of re-walking the tree on every slider
+    // edit / per-frame SyncLightControlsToScene during a day/night cycle. Lazy so first access matches the
+    // old timing. Mirrors LightingComposer's EnvNode/SunNode caching.
+    private WorldEnvironment? _uiEnvNode;
+    private DirectionalLight3D? _uiSunNode;
+    private WorldEnvironment UiEnv => _uiEnvNode ??= GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
+    private DirectionalLight3D UiSun => _uiSunNode ??= GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+
     // ---- apply ----------------------------------------------------------------
 
     private void ApplyAll()
@@ -74,15 +82,15 @@ public partial class TerrainLabUI : Control
     {
         switch (target)
         {
-            case "ssao":   GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SsaoEnabled = on; break;
-            case "fog":    GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.FogEnabled = on; break;
+            case "ssao":   UiEnv.Environment.SsaoEnabled = on; break;   // #7 perf: cached nodes
+            case "fog":    UiEnv.Environment.FogEnabled = on; break;
             case "meteors_on": _stars.MeteorsOn = on; ComposeLighting(); break;
             case "planets_on":      _stars.PlanetsOn = on; ComposeLighting(); break;        // C2 planets
             case "bright_stars_on": _stars.BrightStarsOn = on; ComposeLighting(); break;    // C2 landmark stars
-            case "shadow": GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").ShadowEnabled = on; break;
-            case "sun":    GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").Visible = on; break;
-            case "sdfgi":  GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SdfgiEnabled = on; break;
-            case "volfog": GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.VolumetricFogEnabled = on; break;
+            case "shadow": UiSun.ShadowEnabled = on; break;
+            case "sun":    UiSun.Visible = on; break;
+            case "sdfgi":  UiEnv.Environment.SdfgiEnabled = on; break;
+            case "volfog": UiEnv.Environment.VolumetricFogEnabled = on; break;
             case "sun_surface_on": _cloud?.SetSunSurfaceOn(on); break;   // sun-disc surface (cloud_sky material)
             case "time_running":   _timeRunning = on; break;             // ST4-1 auto day/night cycle play/pause
         }
@@ -92,8 +100,8 @@ public partial class TerrainLabUI : Control
     // properties in TerrainLabUI.Lighting.cs (same names), so the slider/OrientSun code below is unchanged.
     private void ApplySceneFloat(string? target, float v)
     {
-        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
-        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        var env = UiEnv.Environment;   // #7 perf: cached node (was a per-edit tree walk)
+        var sun = UiSun;
         switch (target)
         {
             // sun energy + ambient go through ApplyOvercastScaling (the one writer of the overcast-scaled
@@ -193,8 +201,8 @@ public partial class TerrainLabUI : Control
     /// the mood's values (sliders are live overrides on top of the chosen mood).
     public void SyncLightControlsToScene()   // public: satisfies ILightingHost (composer calls back)
     {
-        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
-        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        var env = UiEnv.Environment;   // #7 perf: cached nodes (this runs every frame during a day/night cycle)
+        var sun = UiSun;
         void Set(string id, float v) { if (_byId.TryGetValue(id, out var c)) { SetWidgetValueSilent(c, v); } }
         Set("sun_energy", sun.LightEnergy); Set("sun_angle", _sunAngle); Set("sun_azimuth", _sunAzimuth);
         Set("sun_soft", sun.ShadowBlur); Set("sun_disc", sun.LightAngularDistance); Set("ambient_e", env.AmbientLightEnergy);
