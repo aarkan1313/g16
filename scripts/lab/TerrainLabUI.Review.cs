@@ -22,6 +22,7 @@ public partial class TerrainLabUI : Control
     private int _fantasyIdx;      // ST4-2 fantasy preset on review key 7 (cycles)
     private int _atmoStep;        // AT-1 atmosphere time-of-day preset on review key 8 (cycles dawn→noon→golden→dusk→night)
     private int _nsReviewIdx = -1; // Celestial C1 night-sky preset on review key 2 (-1 = tuned default, then cycles the 4)
+    private int _shadowPresetIdx;  // shadow tuning preset on review key 4 (cycles default→crisp→acne-killer→soft)
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -86,7 +87,32 @@ public partial class TerrainLabUI : Control
                 title = "3 · Night clouds — moonlit";
                 judge = "Night, moon up, clouds on: do the clouds get silver-lit edges/undersides (not flat black)? Tune Night tab 'moonlight on clouds' (+ 'moon brightness' / 'moon phase'). Drop it / new moon → clouds go dark (intended — no-moon night).";
                 break;
-            // cases 4-5 (ground G-0 / v2 parity / variation) removed in the 2026-06-21 ground strip.
+            // case 5 (ground) removed in the 2026-06-21 ground strip.
+            case 4: // SHADOW tuning — press 4 to cycle: default → crisp → acne-killer → soft/cinematic.
+                    // Drives the lab-tunable shadow knobs (shadow_bias / penumbra / soft / distance) so the
+                    // CDLOD-terrain shadow stipple can be dialed live in motion. Midday clear sun = harshest
+                    // shadows (worst-case for acne); fly low across LOD bands + steep slopes to judge.
+                if (_lastPreset != 4) { ApplyMood(5); Set("cloud_enabled", false); _shadowPresetIdx = 0; }
+                else { _shadowPresetIdx = (_shadowPresetIdx + 1) % 4; }
+                switch (_shadowPresetIdx)
+                {
+                    case 1: // CRISP — sharp shadows; exposes any acne (use when geometry is clean)
+                        Set("shadow_bias", 0.6f); Set("sun_disc", 0.25f); Set("sun_soft", 0.5f); Set("shadow_dist", 6000f);
+                        break;
+                    case 2: // ACNE-KILLER — high normal-bias pushes self-shadow acne off the surface (the stipple fix)
+                        Set("shadow_bias", 3.5f); Set("sun_disc", 0.6f); Set("sun_soft", 1.0f); Set("shadow_dist", 6000f);
+                        break;
+                    case 3: // SOFT / cinematic — wide penumbra + blur hides stipple by softening (costlier filter)
+                        Set("shadow_bias", 1.5f); Set("sun_disc", 1.2f); Set("sun_soft", 2.0f); Set("shadow_dist", 6000f);
+                        break;
+                    default: // 0 — DEFAULT baseline (the shipped values)
+                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.6f); Set("sun_soft", 1.0f); Set("shadow_dist", 6000f);
+                        break;
+                }
+                string shName = _shadowPresetIdx switch { 1 => "CRISP", 2 => "ACNE-KILLER", 3 => "SOFT/cinematic", _ => "DEFAULT" };
+                title = $"4 · Shadow tuning  [{shName}]  (press 4 to cycle)";
+                judge = "Fly LOW across LOD bands + steep sunlit slopes (midday = harshest). Watch for dotted self-shadow ACNE/stipple. CRISP exposes it, ACNE-KILLER pushes it off (raise 'shadow bias' more if needed), SOFT blurs it away. Fine-tune live on the Light tab: 'shadow bias (acne)' / 'shadow penumbra' / 'shadow soft' / 'shadow distance'. The winning values can be baked as the default.";
+                break;
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle: cumulus(profile off→on) → stratus → cirrus
                 if (_lastPreset != 6)
                 {
