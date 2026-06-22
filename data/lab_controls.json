@@ -52,7 +52,7 @@
     { "id": "day_sunset", "label": "sunset (h)", "tab": "Light", "type": "scenef", "scene": "day_sunset", "min": 15.0, "max": 21.0, "default": 18.0, "rand": false },
     { "id": "day_peak_elev", "label": "sun noon height", "tab": "Light", "type": "scenef", "scene": "day_peak_elev", "min": 20.0, "max": 85.0, "default": 60.0, "rand": false },
     { "id": "sun_soft", "label": "shadow soft", "tab": "Light", "type": "scenef", "scene": "sun_soft", "min": 0.0, "max": 5.0, "default": 1.0, "rand": false },
-    { "id": "sun_disc", "label": "shadow penumbra", "tab": "Light", "type": "scenef", "scene": "sun_disc", "min": 0.1, "max": 5.0, "default": 0.6, "rand": false },
+    { "id": "sun_disc", "label": "shadow penumbra", "tab": "Light", "type": "scenef", "scene": "sun_disc", "min": 0.1, "max": 5.0, "default": 0.55, "rand": false },
     { "id": "shadow_bias", "label": "shadow bias (acne)", "tab": "Light", "type": "scenef", "scene": "shadow_bias", "min": 0.0, "max": 8.0, "default": 1.0, "rand": false },
     { "id": "shadow_dist", "label": "shadow distance (m)", "tab": "Light", "type": "scenef", "scene": "shadow_dist", "min": 1000.0, "max": 12000.0, "default": 6000.0, "rand": false },
     { "id": "sun_size", "label": "sun disc size (deg)", "tab": "Light", "type": "scenef", "scene": "sun_size", "min": 0.1, "max": 8.0, "default": 0.6, "rand": false },

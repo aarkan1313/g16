@@ -94,24 +94,31 @@ public partial class TerrainLabUI : Control
                     // shadows (worst-case for acne); fly low across LOD bands + steep slopes to judge.
                 if (_lastPreset != 4) { ApplyMood(5); Set("cloud_enabled", false); _shadowPresetIdx = 0; }
                 else { _shadowPresetIdx = (_shadowPresetIdx + 1) % 4; }
+                // PHYSICAL is the pillar-correct baseline: penumbra ~0.53 deg = the real sun's angular size
+                // (Godot LightAngularDistance is that angle in deg). The math showed the atlas already has
+                // ~76 texels across a physical penumbra (ample) — so the residual dotted stipple is the PCF
+                // sample PATTERN on the coarse LOD geometry, NOT a shadow-resolution/penumbra problem. Masking
+                // it with unphysical wide-soft (we tried 2.5 deg = 4.7x the real sun) reads mushy + costs ~7ms
+                // and is the cheap fix the pillars say to avoid — the real fix is better geometry (surfacing /
+                // denser mesh), which removes the flat triangles the dither rides on. So PHYSICAL is the
+                // default; SOFTER/SOFTEST stay as a deliberately-unphysical A/B (to SEE the masking tradeoff),
+                // not a recommendation.
                 switch (_shadowPresetIdx)
                 {
-                    case 1: // CRISP — sharp shadows; exposes any acne (use when geometry is clean)
-                        Set("shadow_bias", 0.6f); Set("sun_disc", 0.25f); Set("sun_soft", 0.5f); Set("shadow_dist", 6000f);
+                    case 1: // SOFTER — mild over-soften (~0.9 deg), still believable; takes the edge off the grain
+                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.9f); Set("sun_soft", 1.4f); Set("shadow_dist", 6000f);
                         break;
-                    case 2: // ACNE-KILLER — high normal-bias pushes self-shadow acne off the surface (the stipple fix)
-                        Set("shadow_bias", 3.5f); Set("sun_disc", 0.6f); Set("sun_soft", 1.0f); Set("shadow_dist", 6000f);
+                    case 2: // SOFTEST (unphysical, A/B only) — wide-soft masks the stipple but reads mushy + costs perf
+                        Set("shadow_bias", 1.5f); Set("sun_disc", 2.5f); Set("sun_soft", 3.5f); Set("shadow_dist", 6000f);
                         break;
-                    case 3: // SOFT / cinematic — wide penumbra + blur hides stipple by softening (costlier filter)
-                        Set("shadow_bias", 1.5f); Set("sun_disc", 1.2f); Set("sun_soft", 2.0f); Set("shadow_dist", 6000f);
-                        break;
-                    default: // 0 — DEFAULT baseline (the shipped values)
-                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.6f); Set("sun_soft", 1.0f); Set("shadow_dist", 6000f);
+                    default: // 0 — PHYSICAL: penumbra ~0.53 deg = real sun. The pillar-correct default.
+                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.55f); Set("sun_soft", 1.0f); Set("shadow_dist", 6000f);
                         break;
                 }
-                string shName = _shadowPresetIdx switch { 1 => "CRISP", 2 => "ACNE-KILLER", 3 => "SOFT/cinematic", _ => "DEFAULT" };
+                _shadowPresetIdx %= 3;   // 3 presets now (physical / softer / softest)
+                string shName = _shadowPresetIdx switch { 1 => "SOFTER (~0.9deg)", 2 => "SOFTEST (unphysical A/B)", _ => "PHYSICAL (~0.53deg = real sun)" };
                 title = $"4 · Shadow tuning  [{shName}]  (press 4 to cycle)";
-                judge = "Fly LOW across LOD bands + steep sunlit slopes (midday = harshest). Watch for dotted self-shadow ACNE/stipple. CRISP exposes it, ACNE-KILLER pushes it off (raise 'shadow bias' more if needed), SOFT blurs it away. Fine-tune live on the Light tab: 'shadow bias (acne)' / 'shadow penumbra' / 'shadow soft' / 'shadow distance'. The winning values can be baked as the default.";
+                judge = "PHYSICAL = the real sun's penumbra (correct, cheap). The residual dotted stipple is PCF grain on COARSE geometry — the math says shadows are fine; the real fix is surfacing/denser mesh, NOT softer shadows. SOFTER/SOFTEST just show the masking tradeoff (mushier + costlier, physically wrong). Pillars: ship PHYSICAL, let surfacing kill the grain. Fly low across LOD bands + sunlit slopes.";
                 break;
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle: cumulus(profile off→on) → stratus → cirrus
                 if (_lastPreset != 6)

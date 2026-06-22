@@ -49,7 +49,7 @@ public sealed class TimeKey
 public sealed class SunDiscState
 {
     public string Name = "";
-    public float ShadowSoft = 1.0f, DiscAngular = 0.6f;   // sun.ShadowBlur, sun.LightAngularDistance (PCSS penumbra)
+    public float ShadowSoft = 1.0f, DiscAngular = 0.55f;   // sun.ShadowBlur, sun.LightAngularDistance — ~0.53deg = the real sun's angular size (physically-correct penumbra; pillars)
     // SHADOW casting params — routed through ComposeLighting (the one writer) so lab sliders survive the
     // per-frame re-assert. Defaults == the previously hard-coded values, so behaviour is unchanged at first.
     // Bias is the acne<->peter-panning lever (was never set = Godot default 1.0/2.0); MaxDist/splits were
