@@ -20,6 +20,38 @@ Profiling probes: `--clouds=0/1`, `--godrays=0/1`, `--temporal=N`, `--cloudtex=H
 Caveat: the laptop GPU thermally throttles after many back-to-back runs — space runs out / trust
 reproduced numbers, and treat single wild outliers as hitches.
 
+## 2026-06-22 — SKY/LIGHT lane subsystem perf state-of-record (consolidated, not a fresh run)
+
+> Consolidates the **sky/atmosphere/cloud/light** subsystem costs that ARE measured + scattered across
+> `ROADMAP.md`/`DECISIONS.md`/`NEEDS_REVIEW.md`, because the older decompositions below price a config the
+> shipped default no longer uses (SDFGI/proxy ON; pre-atmosphere). **Scoped to the sky lane on purpose:** the
+> terrain mesh/CDLOD cost is in flux in the parallel chat, so a fresh *whole-frame* number would be contaminated
+> and isn't taken here. A coordinated `--profmove` whole-frame re-decomposition is **owed** (run it when the
+> terrain chat is idle — see "Owed" below). All ms are RTX 5090 laptop, uncapped, **in motion** unless noted.
+
+**Sky-lane subsystem costs (all default-ON unless noted):**
+
+| Subsystem | Cost | Source / confidence | Lever |
+|---|---|---|---|
+| Atmosphere **AT-1** sky-view LUTs | **+0.2 ms** | measured (DECISIONS 2026-06-20) | recompute-on-change; LUT res |
+| Atmosphere **AT-2** aerial froxel (32³) | **+0.7 ms** | measured `--profmove` 114↔124 fps (NEEDS_REVIEW 11) | froxel res; recompute cadence |
+| Atmosphere **AT-3** cloud-lighting | **CPU readback / change** (not ms-profiled) | structural (DECISIONS 2026-06-21) | **readback throttle owed (#7)** |
+| **Clouds** raymarch (512 + temporal default) | **~1.0 ms** (1024 = +3.2; in-motion floor ~2.0) | measured | temporal stride; dome res; coverage |
+| **God rays** (screen-space radial, shipped w/ tangential high-pass) | **~+1.1 ms** | memory `godray-emission-vs-albedo-rootcause` ⚠ **supersedes the "+0.2 ms" old-path figure below** | sample count; downsample |
+| Moonlight-on-clouds (2nd night light-march) | **~0 day / small night** | structural; `P.moon_dir.w==0` skips in day/new-moon | night-gated already |
+| Directional shadow map (8192 atlas, SoftHigh PCF) | **not re-measured since the 4096→8192 bump** | — | **8192 = the dial-down perf lever** (4096/6144) once edges hold |
+
+**Reading it:** the whole default-on GPU-atmosphere arc (AT-1+AT-2+AT-3) is **~0.9 ms + a CPU readback** — cheap,
+and the C3 N-sun design keeps it cheap (suns summed inside the one skyview raymarch, transmittance/multiscatter LUTs
+sun-independent). The sky lane's real cost is **clouds + god rays + the shadow map**, not the atmosphere. SDFGI
+(~2.9 ms intrinsic / ~12 ms in-motion on the full mesh) and the GI/shadow proxy are **OFF** since decision 0b — ignore
+every "proxy/SDFGI ON" figure below for the shipped default.
+
+**Owed (needs a coordinated launch — don't unilaterally kill the terrain chat's Godot):**
+1. Fresh whole-frame `--profmove` decomposition for the *current* shipped default (after terrain/CDLOD settles).
+2. Re-measure the directional shadow map at 8192 vs 4096/6144 (the audit's "dial it down for non-5090 HW" lever).
+3. AT-3 readback throttle (folds into the #7 end-of-arc efficiency pass).
+
 ## 2026-06-19 — IN-MOTION profiling (major correction) + GI/shadow proxy
 
 **The static `--profile` was measuring the wrong thing.** A still camera lets SDFGI converge,
@@ -142,8 +174,10 @@ From the code audit (4 read-only subagents, 2026-06-18) — ranked, quality-pres
   the 96³ SHAPE volume (not cache-resident) — but that changes the density math (coupling).
 - **Shadow-map amortization** — re-marched every frame; could stride like the dome, but risks the ground
   shadow lagging the cloud overhead during motion (coupling) → needs care + eye-check.
-- **Cache per-frame `GetNode("/root/...")`** in `TerrainLabUI._Process`/`UpdateOvercast` (string-path
-  tree walks every frame; resolve to fields once in `AttachClouds`).
+- **✅ Cache per-frame `GetNode("/root/...")` — PARTIALLY DONE 2026-06-22.** `ComposeLighting` +
+  `ApplyOvercastScaling` (the per-frame lighting hot path while the day/night cycle runs) now use cached
+  `EnvNode`/`SunNode` lazy props instead of re-walking `/root/TerrainLabRoot/Env|Sun` each call (~4 walks/frame
+  removed). Remaining one-shot/`_Process` walks elsewhere are not per-frame-hot; fold into the #7 pass if wanted.
 - **macro `rgb2hsv→hsv2rgb` roundtrip** per pixel — value/saturation drift can be done in RGB.
 - **⚠ MSAA — REVIEW NEEDED (user eye, in motion).** Was 4× (`msaa_3d=2`), set to **2× (`msaa_3d=1`)** as
   the safe no-regret call (still real edge AA, banks ~0.7 ms, no new artifact class). Fully OFF saved
