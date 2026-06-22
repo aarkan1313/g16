@@ -266,15 +266,18 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      **Do not re-attempt procedurally** — the only paths research suggests would clear the bar are authored/offline
      **textures** or expensive (>1 ms) lit volumetrics, neither in scope for a night-sky accent. See DECISIONS +
      `docs/superpowers/specs|plans/2026-06-21-celestial-galaxy-nebula-billboards*`. Night sky = moon + stars + meteors.
-   - **C3 — N suns + N moons. 📐 DESIGN-AHEAD spec written 2026-06-21 (build nothing yet):**
-     `specs/2026-06-21-celestial-c3-n-luminaries-design.md`. Generalizes single-sun+single-moon to a `List<Luminary>`
-     + a **priority-budgeting layer** that allocates the scarce hardware (≤4 `LIGHTn`, ≤2 shadow atlases, ≤3
-     atmosphere suns summed in ONE raymarch) so e.g. a **3-sun sky costs ≈ today** (1 shadow pass + cheap discs +
-     a slightly heavier rarely-recomputed skyview LUT — NOT 3× anything). **Folds the god-class de-coupling in:** Unit
-     1 extracts `LightingComposer` out of `TerrainLabUI` (+ `SkyMaterial` facade out of `CloudVolume`) at the moment
-     the feature forces the refactor, so we don't cut the same code twice. 6 Units, each its own eye-gate; Unit 1
-     (zero visual drift) + Unit 4 (3-sun sky looks good AND profiles in budget) are the load-bearing gates.
-     Heaviest/architectural — still LAST among features; design banked, build deferred.
+   - **C3 — N suns + N moons. 🟡 BUILT 2026-06-22 (Units 1-6), EYE-GATE OWED (NEEDS_REVIEW 12).**
+     Spec `specs/2026-06-21-celestial-c3-n-luminaries-design.md`. Generalized single-sun+single-moon to a
+     `List<Luminary>` + a **priority-budgeting layer** (≤4 `LIGHTn`, ≤2 shadow atlases, ≤3 atmosphere suns summed in
+     ONE raymarch) so e.g. a **3-sun sky costs ≈ today** (verified: 4 suns @ ~36 fps, 3 moons @ ~57 fps; shadows stay
+     capped on the primary). **Built:** U1 `LightingComposer` extracted from `TerrainLabUI` (zero-drift verified) · U2
+     composer luminary-aware · U4 visible extra suns (disc array + shadowless light pool + `--suns=N`, tuned) · U5
+     atmosphere N-sun scatter (sky color responds; shared skyview/aerial raymarch) · U6 N moons (`--moons=N`) +
+     Night-tab `extra suns`/`extra moons` controls + fantasy presets (binary_suns/trinary_worlds/twin_moons/triple_moons).
+     **Default unchanged** (1 sun + 1 moon = byte-identical; extra loops no-op at count 0). Commits 79497f3·41e2fe9·
+     61686f0·aa62b38·2ad2b23·d995c88·bf9bfb6. **Owed:** the multi-luminary look eye-gate + tuning (colors/sizes/spread
+     are placeholder) + (future polish) a full per-luminary list editor UI; atmosphere extra-sun color management. **C3
+     — and the whole Celestial arc — is now feature-complete pending the gate.**
 7. **⚙️ END-OF-ARC CODE-EFFICIENCY PASS — 🟣 LAST, after all sky/light/cloud/atmosphere work above is gated (user request 2026-06-21).**
    A dedicated pass over the *whole* lighting + cloud + sun + atmosphere lane for **code/compute efficiency — NOT visual
    tuning** (the user's words: "i dont want to tune, i want to look at code efficiency"). Scope: profile the real GPU/CPU

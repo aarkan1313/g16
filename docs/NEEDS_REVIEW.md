@@ -365,6 +365,28 @@ is default-off so the approved look is untouched.
 
 ---
 
+### 12. Celestial C3 — N suns + N moons (multi-luminary) — 🟡 BUILT 2026-06-22, EYE-GATE OWED
+Generalized the single-sun + single-moon sky to arbitrary luminaries (spec `2026-06-21-celestial-c3-n-luminaries-design.md`).
+**Default is unchanged** (1 sun + 1 moon → byte-identical; the extra-luminary shader loops are no-ops at count 0),
+so this is opt-in and regression-safe. Built in 6 units; **Unit 1 (LightingComposer extraction) zero-drift was
+verified** (noon/dusk/night auto-shots clean, no errors). What's owed your live eye:
+- **The multi-luminary LOOK.** Fly it and judge: `--suns=2/3/4`, `--moons=2/3`, or the Night-tab **`extra suns`/`extra
+  moons`** sliders, or the **fantasy presets** (`--fantasy=` **binary_suns · trinary_worlds · twin_moons · triple_moons**;
+  Night-tab fantasy picker). Auto-shots looked good: a gold companion sun (noon), a warm twin-sun horizon (dusk), and 3
+  distinct moons with their own sizes/colors/PHASES on a clear night.
+- **Tuning is placeholder (my taste, not gated).** Companion colors/sizes/arc-spread are constants in
+  `LightingComposer` (`ExtraSunColors`/`ExtraSunSizeFac`/`ExtraMoonColors`/`ExtraMoonPhases`, az offsets 45°/40°·i).
+  Tell me the look you want (tight binary? wide-spread? specific hues?) and I re-dial.
+- **Perf is in budget:** 4 suns @ ~36 fps, 3 moons @ ~57 fps — shadows stay capped (only the primary casts; extras are
+  shadowless), and the atmosphere sums all suns inside the ONE shared skyview/aerial raymarch (Unit 5; ~+per-step, not
+  N marches). The budgeter logs every demotion (e.g. 4 suns → moon demoted to disc-only) — no silent caps.
+- **Known-lighter scope (not blocking):** extra suns light terrain (shadowless), extra moons are visual discs only (the
+  primary moon owns terrain moonlight); a full per-luminary list *editor* UI is future (count sliders + presets cover
+  runtime control for now). Atmosphere extra-sun colors are approximate (intensity 0.7, not full color management).
+Commits: 79497f3 (model) · 41e2fe9 (Unit 1) · 61686f0 (Unit 2) · aa62b38 + 2ad2b23 (Unit 4 + tune) · d995c88 (Unit 5) · bf9bfb6 (Unit 6).
+
+---
+
 ## ⏸ Not "review" — build-when-you-can-see (eye-gated, parked)
 These need your eye to *build*, not just approve — listed so they're not forgotten:
 - **CDLOD terrain LOD (T1)** — the dominant remaining perf lever toward the **8 ms** target (mesh floor ~4 ms; also cuts SDFGI+shadow). Gate is pop-free-in-motion. Spec `specs/2026-06-18-terrain-lod-roadmap-design.md`.
