@@ -135,6 +135,7 @@ public sealed partial class CdlodTerrain : Node3D
 
     public bool TightenEnabled => TightenAabb;
     public bool LodVizEnabled => _lodViz;
+    public bool Enabled => _enabled;   // S3 floating-origin: Process only co-locates the camera when CDLOD is live
 
     public void Tick(Vector3 camPos)
     {

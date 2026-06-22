@@ -180,6 +180,9 @@ public partial class TerrainLab : MeshInstance3D
     public void ConfigureCdlodAabb(bool tighten, int probeRes, int maxReq) { _cdlod?.ConfigureAabb(tighten, probeRes, maxReq); }
     public CdlodTerrain? Cdlod => _cdlod;   // S3 --popmeter: live meter reads RenderOrigin
     public void SetPinOrigin(bool on) { if (_cdlod != null) { _cdlod.PinOrigin = on; } }   // DEBUG --pinorigin
+    // S3 floating-origin: the active render-frame offset, and whether CDLOD owns the camera frame this run.
+    public Vector3 CdlodRenderOrigin => _cdlod?.RenderOrigin ?? Vector3.Zero;
+    public bool CdlodActive => _cdlod != null && _cdlod.Enabled;
 
     // S2b: LOD-crossing test-path player (TerrainTestPaths sibling). RunTestPath starts a flight;
     // TickTestPath advances it each frame (called from TerrainLabUI.Process); the report prints on finish.

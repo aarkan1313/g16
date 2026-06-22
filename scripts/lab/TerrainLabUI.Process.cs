@@ -145,15 +145,35 @@ public partial class TerrainLabUI : Control
         if (_ready)
         {
             var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
-            Vector3 camPos = camN.GlobalPosition;
+            // S3 FLOATING-ORIGIN (snap-pop fix). The CDLOD chunks render at worldXZ − renderOrigin (bounded
+            // coords for far-distance precision). For the rendered image to be correct, the CAMERA must live in
+            // that SAME render frame — otherwise it draws terrain offset by renderOrigin, and that offset jumps
+            // 8192 m at every snap → the whole terrain "changes shape" in one frame (the pop the user saw).
+            //   • TRUE world pos = camera node render pos + renderOrigin (renderOrigin is last tick's; 0 on f0).
+            //   • CdlodTick(trueCam) snaps the NEW renderOrigin and places chunks render-relative to it.
+            //   • Then co-locate the camera node into the render frame (trueCam − newOrigin). On a snap, node and
+            //     geometry shift by the SAME −Δorigin in lockstep → no relative jump → no pop. FlyCamera's
+            //     Position += delta integrator is frame-agnostic, so navigation is unaffected.
+            //   • EVERY world-space consumer (sky/clouds/atmosphere/quadtree/popmeter) gets the TRUE pos so the
+            //     sky-lane's world-anchored cloud/shadow/aerial math is unchanged.
+            // When CDLOD is off (single full mesh at true origin), renderOrigin stays 0 → this is a no-op.
+            Vector3 renderOrigin = _terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero;
+            Vector3 camPos = camN.Position + renderOrigin;   // TRUE world camera position
             _terrain.SetCameraWorld(camPos);
-            _terrain.CdlodTick(camPos);   // S2a: rebuild the visible chunk set from the quadtree
+            _terrain.CdlodTick(camPos);   // S2a: rebuild the visible chunk set; S3: snaps the new renderOrigin
+            if (_terrain.CdlodActive)
+            {
+                Vector3 newOrigin = _terrain.CdlodRenderOrigin;   // may have snapped inside CdlodTick
+                camN.Position = camPos - newOrigin;               // co-locate the camera with the render frame
+            }
             _cloud?.SetCameraWorld(camPos);
             TickPopMeter(camPos);   // S3 --popmeter: live per-frame pop/snap measurement (no-op unless armed)
 
             // AT-2: push the camera to the atmosphere so the aerial froxel LUT (camera-frustum aligned)
             // re-marches from the current view each frame. invViewProj reconstructs world from NDC in the
-            // aerial compute (same convention as godray_screen). Cheap aerial-only recompute (sun unchanged).
+            // aerial compute (same convention as godray_screen). The view matrix is render-relative now, but the
+            // aerial reconstructs positions in the SAME render frame as the depth buffer, so passing the TRUE
+            // camPos keeps the in-scatter distance/world math consistent with the (true-world) sun + sky.
             if (_atmosphere != null && _atmosphereOn)
             {
                 var proj = camN.GetCameraProjection();
