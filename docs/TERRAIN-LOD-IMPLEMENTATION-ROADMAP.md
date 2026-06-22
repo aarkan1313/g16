@@ -188,14 +188,31 @@ Splat/breakup/scatter load with their tiles. No pops, no visible seams at tile b
 
 **T1 GEOMETRY (pop-free + crack-free continuous LOD) is COMPLETE.**
 
-### 🔨 In progress — S3 (streaming infinite): SPEC + PLAN written, NOT yet built
-- **Spec:** `docs/superpowers/specs/2026-06-22-s3-streaming-infinite-design.md` (committed 194c1a8).
-- **Plan:** `docs/superpowers/plans/2026-06-22-s3-streaming-infinite.md` (committed cb6a0b5) — 5 tasks + eye-gate.
-- **Shape:** unpin the quadtree root → roams with the camera (3×3 root-cell window) → infinite. Floating-origin
-  FOLDED in (snapped camera-relative render space; no drift phase — subsumes the old "S4"). Per-chunk AABB:
-  born generous, tightened by an ASYNC GPU height-range (render-thread RD) — Task 5, the big/high-risk piece.
-- **Status:** ready to execute (direct, send-it per task). Tasks 1–4 deliver a working infinite world; Task 5
-  is the AAA shadow-quality layer with the generous AABB as the safe fallback.
+### ✅ DONE — S3 (streaming infinite, folded floating-origin) — built + eye-gated 2026-06-22
+- **Spec:** `docs/superpowers/specs/2026-06-22-s3-streaming-infinite-design.md` (194c1a8).
+- **Plan:** `docs/superpowers/plans/2026-06-22-s3-streaming-infinite.md` (cb6a0b5) — 5 tasks + eye-gate.
+- **Shape (built):** quadtree root roams with the camera (3×3 root-cell window) → infinite. Floating-origin
+  FOLDED in (snapped camera-relative render space; subsumes the old "S4"). Per-chunk AABB born generous,
+  tightened by an ASYNC GPU height-range on the render-thread RD (Task 5). Identity-keyed pool + churn budget.
+- **Snap-pop ROOT-CAUSED + FIXED (commit 22408ed).** The in-flight "whole terrain reshapes every ~8 km" pop was
+  the renderOrigin snap — but NOT via the field-XZ reconstruction the first root-cause claimed (that round-trips
+  exactly; rebuilding wxz from a per-chunk true-origin uniform was byte-identical, a no-op). REAL cause:
+  floating-origin was half-wired — chunks rendered at worldXZ−renderOrigin but the CAMERA stayed at true world,
+  so it drew terrain offset by renderOrigin and that offset jumped 8192 m at each snap. Fix: co-locate the
+  camera in the chunks' render frame (Process derives trueCam, ticks CDLOD, sets camN.Position = trueCam −
+  newOrigin); every world-space consumer still gets the TRUE pos (sky lane unchanged). Shader + field untouched.
+  Memory `cdlod-renderorigin-snap-pop`.
+- **Two residual streaming flashes FIXED (19666ad + 5fbdd50):** (1) retire-hole — fast flight could hide a parent
+  the frame its budget-deferred children were due → 1-2 frame hole; now a BOUNDED retire-grace (RetireGrace=2
+  unseen frames) bridges it without leaking. (2) coarse-probe AABB undershoot — the 7×7 shadow-AABB probe could
+  miss a peak on big far chunks → too-short AABB → cull; margin now padded by half the probe spacing.
+- **Perf (5fbdd50):** the old "rebuild spike" + an interim retire-skip LEAK are gone. --profmove (terrain-only,
+  sky/GI off): avg 21.2→14.6 ms, worst 149.5→22.2 ms, max active 3954→498 (≈ leaf count). No spike even on a
+  12 km orbit crossing snaps; CDLOD worst-frame (22 ms) is now below the no-LOD full-mesh worst (38.9 ms).
+- **Gates:** all 7 guards PASS (`--fieldcheck` 0 m / `--cdlodcheck` / `--morphcheck` / `--stitchcheck` /
+  `--streamcheck` / `--popcheck` 0 m,0° / `--snapdiff`). Origin=0 pre/post byte-identical (no sky regression).
+  USER eye-gate: flew to ~49 km out across ~17 snaps, popmeter worst Δh=0.00 m; no pop; no flash at normal speed.
+- **The chunk is now the streamed, infinite, pop-free, crack-free unit the next arcs plug into.**
 
 ### ⏸ Deferred / later
 - **The async per-chunk DATA grid** (carvable height for erosion/water) — reserved-dormant; S3 builds only the
@@ -203,10 +220,11 @@ Splat/breakup/scatter load with their tiles. No pops, no visible seams at tile b
 - **Surfacing (Skyrim-look ground)** — the LAST arc per the infinite-terrain build order; plugs into the chunk
   contract. The "smooth mess" placeholder look + the residual shadow stipple both resolve here. NOT before S3.
 - **Erosion, water, biomes, collision, flora, world-editing** — each its own later arc on the chunk contract.
+  Per the infinite-terrain build order, the NEXT arc after S3 is **E1 (coupled erosion sim core + live lab)** —
+  spec at `docs/superpowers/specs/2026-06-17-erosion-arc-design.md` (not yet planned). (Surfacing is LAST.)
 - **Old "S2c proxy shadows"** — largely subsumed (shadows are the sky lane's CSM now; terrain casts the LOD'd
   mesh). Not a separate live stage.
-- **Chunk-rebuild frame spike** (54–71 ms transients in motion) — bounded by S3's churn budget, fully fixed in
-  a later perf pass. Logged, not blocking.
+- **Chunk-rebuild frame spike** — FIXED in the S3 perf pass (5fbdd50); see the S3 entry above. No longer open.
 
 ---
 
