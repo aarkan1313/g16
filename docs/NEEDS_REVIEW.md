@@ -413,10 +413,11 @@ math/test to prove good", not eyeballed A/B):
   save/load path incl. the storable conversion) **LUMPRESETCHECK PASS** — 4 bodies round-trip with all fields incl.
   Color. Commit `d36f6e7`.
 **What's owed your live eye:** open Night → **Sky bodies**, add/edit/remove bodies, change colors/sizes/phases live, and
-save/load a named set — confirm the editor feels good and the sky tracks edits. (NOTE: editing the PRIMARY sun/moon's
-appearance via the list is not yet wired — only ADDED bodies render; the primary keeps its existing slider/day-script
-path so the default stays byte-identical. Wire primary-from-list as a follow-up if you want it.) The objectlist is also
-the **first module** of the eventual one-big-world-config JSON (direction B, out of scope here).
+save/load a named set — confirm the editor feels good and the sky tracks edits. **PRIMARY-from-list is now wired**
+(commit 88ad06f): editing the first sun/moon renders too — sun = disc SIZE (its color/energy stay owned by the
+time-of-day day-script by design); moon = color/size/phase/az/decl (all MoonState-owned). Default stays byte-identical
+(gate: `--luminarycheck --lookatsun` PASS — default-vs-datapath=2 ≤ floor=2, primary-size-edit=46, added-sun=142).
+The objectlist is also the **first module** of the eventual one-big-world-config JSON (direction B, out of scope here).
 
 ---
 
