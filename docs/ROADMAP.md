@@ -346,16 +346,24 @@ payoff-free; folded into S2). Full status: `docs/TERRAIN-LOD-IMPLEMENTATION-ROAD
   inversion, fixed) + crack-free (`--stitchcheck`; 16 welded mesh variants, skirt eliminated). Shadows (sky
   lane CSM) integrated; per-chunk AABB scaled for geomorph displacement (acne fix); shadow knobs lab-tunable.
   User eye-gated. **The graveyard gate (WG1–15's killer) is passed: pop-free + crack-free continuous LOD.**
-- **S3 streaming infinite 🔨 SPEC + PLAN WRITTEN, NOT BUILT.** Spec `specs/2026-06-22-s3-streaming-infinite-design.md`,
-  plan `plans/2026-06-22-s3-streaming-infinite.md`. Unpin the root → roams with the camera → infinite;
-  floating-origin FOLDED in (snapped camera-relative coords, no drift = subsumes "S4"); per-chunk AABB
-  tightened by an async GPU height-range. Next action = execute the S3 plan (handoff:
-  `docs/handoffs/2026-06-22-s3-streaming-start-here.md`).
-- **S4 floating-origin** → folded into S3.
+- **S3 streaming infinite ✅ BUILT + EYE-GATED 2026-06-22.** Spec `specs/2026-06-22-s3-streaming-infinite-design.md`,
+  plan `plans/2026-06-22-s3-streaming-infinite.md` (executed). Root roams with the camera (3×3 cell window) →
+  infinite; floating-origin FOLDED in (snapped camera-relative coords, no drift = subsumes "S4"); per-chunk AABB
+  tightened by an async render-thread GPU height-range; identity-keyed pool + churn budget. The in-flight
+  snap-pop was root-caused (the renderOrigin snap — but via the CAMERA not being co-located in the chunks'
+  render frame, NOT the field reconstruction; that diagnosis's fix was a no-op) and FIXED (22408ed); two residual
+  flashes fixed (retire-grace + probe-margin, 19666ad/5fbdd50); perf pass killed the rebuild-spike + a leak
+  (--profmove terrain-only avg 21.2→14.6 ms, worst 149.5→22.2 ms). All 7 guards PASS; user flew ~49 km/~17 snaps,
+  no pop/flash. Memory `cdlod-renderorigin-snap-pop`.
+- **S4 floating-origin** → folded into S3 (delivered).
 
-**After S3:** the async per-chunk DATA grid (carvable height), then **surfacing** (the LAST arc — Skyrim-look
-ground; fixes the placeholder "smooth mess" + the residual shadow stipple), then erosion/water/biomes/
-collision/flora/world-editing — each its own arc plugging into the chunk contract (`infinite-terrain` spec §2).
+**After S3 (canonical build order — infinite world → erosion+water → biomes → ground textures):** the NEXT arc
+is **E1 erosion** (coupled sim core + live lab; spec `specs/2026-06-17-erosion-arc-design.md`, not yet planned),
+then water (consumes the erosion drainage skeleton), then biomes, then **surfacing LAST** (Skyrim-look ground;
+fixes the placeholder "smooth mess" + the residual shadow stipple — it must consume the eroded+biomed terrain,
+hence last). The async per-chunk DATA grid (carvable height) stays reserved-dormant until erosion/collision
+wakes it. Each arc plugs into the chunk contract (`infinite-terrain` spec §2). NOTE: surfacing-vs-erosion FIRST
+is an open user call (surfacing = bigger visible win now but risks rework when erosion reshapes the bones).
 
 **Other Phase-B systems (dependent on T1–T3 spine):**
 - **Biomes** — climate field (moisture/temperature) selects per-region material palettes + rules +

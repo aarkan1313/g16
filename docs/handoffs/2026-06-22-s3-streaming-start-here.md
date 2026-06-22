@@ -1,4 +1,12 @@
-# HANDOFF — S3 Streaming Infinite Terrain · START HERE
+# HANDOFF — S3 Streaming Infinite Terrain · ✅ DONE (superseded)
+
+> **✅ S3 IS BUILT, EYE-GATED, AND COMMITTED (2026-06-22).** This "start here" is kept for history.
+> For current terrain status go to **`docs/TERRAIN-LOD-IMPLEMENTATION-ROADMAP.md`** (S3 entry) and
+> **`docs/ROADMAP.md`**. The in-flight snap-pop + two residual flashes are fixed; perf pass done; all 7
+> guards PASS; user flew ~49 km / ~17 snaps with no pop/flash (memory `cdlod-renderorigin-snap-pop`).
+> **NEXT ARC after S3 = E1 erosion** (spec `docs/superpowers/specs/2026-06-17-erosion-arc-design.md`, not
+> yet planned) — though surfacing-vs-erosion-first is an open user call. The rest of this doc is the
+> pre-build plan, retained as a record.
 
 **Date:** 2026-06-22  
 **Branch:** `experiment/presentation`  
@@ -8,6 +16,7 @@
 
 ## TL;DR — what to do next
 
+**[SUPERSEDED — S3 is now DONE; see the banner above. Original text follows.]**
 **S2 is DONE (pop-free + crack-free continuous LOD). The S3 spec + plan are written and committed but NOT
 built. The next action is to EXECUTE the S3 plan.**
 

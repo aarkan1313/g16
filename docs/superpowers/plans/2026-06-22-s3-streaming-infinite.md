@@ -1,5 +1,10 @@
 # S3 — Streaming infinite terrain (folded floating-origin) — Implementation Plan
 
+> **✅ EXECUTED 2026-06-22.** All tasks built + eye-gated. Note: the snap-pop root cause turned out to be the
+> CAMERA not being co-located in the chunks' render frame (Task 1's render-origin reconstruction round-trips
+> fine — that was a red herring); fixed by co-locating the camera (commit 22408ed). Two residual flashes +
+> perf pass followed (19666ad / 5fbdd50). Current status lives in `docs/TERRAIN-LOD-IMPLEMENTATION-ROADMAP.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Unpin the S2 quadtree root so it roams with the camera → infinite streamed world, with floating-origin folded in (snapped camera-relative render space, no float drift), the field still sampling true world XZ (bit-identical across snaps → no shimmer), all S2 geometry guarantees preserved, and tight per-chunk shadow AABBs everywhere via an async GPU height-range (no stall).

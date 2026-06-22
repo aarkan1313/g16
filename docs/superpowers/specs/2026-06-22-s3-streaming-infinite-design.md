@@ -158,11 +158,17 @@ consumer needs.)
   `--streamcheck` in `TerrainLabUI.Cli.cs`/`.cs`). The sky/light lane edits its own files in parallel — stage
   ONLY S3 files by explicit path; NEVER `git add -A`.
 
-## Definition of done
+## Definition of done — ✅ MET 2026-06-22
 S3.1–S3.4 committed; the user flies a one-minute traverse + a far-out teleport and confirms **infinite world,
 no edge, no hitch, no shimmer, no jitter**; `--fieldcheck` + `--cdlodcheck` + `--morphcheck` + `--stitchcheck`
 + `--streamcheck` all PASS; `--profmove` under budget. The chunk is now the streamed, infinite, pop-free,
 crack-free unit of work the next arcs plug into.
+
+> **✅ DONE (2026-06-22).** Built + eye-gated: user flew ~49 km / ~17 snaps, popmeter Δh=0.00 m, no pop/flash.
+> All 7 guards PASS. The snap-pop root cause was NOT this spec's render_origin reconstruction (that round-trips;
+> §S3.1's wxz rebuild was a byte-identical no-op) — it was the CAMERA not being co-located in the chunks'
+> render frame; fixed in commit 22408ed. Two residual flashes + perf pass: 19666ad / 5fbdd50. The async data
+> GRID (§6) remains correctly NOT built (no consumer yet). Memory `cdlod-renderorigin-snap-pop`.
 
 ## Relationship to the parent spec (2026-06-21-infinite-terrain-cdlod)
 - **Kept:** the chunk contract (§2), the CDLOD mechanism, the pop-free/crack-free guarantees from S2, the
