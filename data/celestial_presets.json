@@ -32,6 +32,35 @@
       "moon_color": [1.0, 0.6, 0.5], "moonlight_color": [0.9, 0.5, 0.42],
       "night_darkness": 1.2, "night_ambient_floor": 0.05,
       "star_brightness": 1.2, "star_density": 0.7
+    },
+    "calm_night": {
+      "moon_phase": 0.85, "moon_size": 1.2, "moon_energy": 0.7, "moonlight_energy": 0.6,
+      "night_darkness": 1.0, "night_ambient_floor": 0.04,
+      "star_brightness": 0.9, "star_density": 0.45, "star_twinkle": 0.35,
+      "meteors_on": true, "meteor_rate": 0.08, "meteor_brightness": 0.8, "meteor_length": 0.4, "meteor_speed": 0.5, "meteor_color_var": 0.1,
+      "planets_on": true, "planet_brightness": 0.8, "bright_stars_on": true, "bright_star_brightness": 0.9
+    },
+    "meteor_shower": {
+      "moon_phase": 0.15, "moon_energy": 0.4, "moonlight_energy": 0.05,
+      "night_darkness": 0.7, "night_ambient_floor": 0.0,
+      "star_brightness": 1.2, "star_density": 0.65, "star_twinkle": 0.5,
+      "meteors_on": true, "meteor_rate": 0.85, "meteor_brightness": 1.2, "meteor_length": 0.6, "meteor_speed": 0.6, "meteor_color_var": 0.3,
+      "planets_on": true, "planet_brightness": 1.0, "bright_stars_on": true, "bright_star_brightness": 1.0
+    },
+    "cosmic_fantasy": {
+      "moon_phase": 0.6, "moon_size": 1.8, "moon_energy": 1.0, "moonlight_energy": 0.5,
+      "moon_color": [0.82, 0.84, 1.0], "moonlight_color": [0.70, 0.72, 1.0],
+      "night_darkness": 1.2, "night_ambient_floor": 0.05,
+      "star_brightness": 1.5, "star_density": 0.7, "star_twinkle": 0.6,
+      "meteors_on": true, "meteor_rate": 0.5, "meteor_brightness": 1.4, "meteor_length": 0.6, "meteor_speed": 0.5, "meteor_color_var": 1.0,
+      "planets_on": true, "planet_brightness": 1.8, "bright_stars_on": true, "bright_star_brightness": 1.6
+    },
+    "fireballs": {
+      "moon_phase": 0.1, "moon_energy": 0.35, "moonlight_energy": 0.03,
+      "night_darkness": 0.65, "night_ambient_floor": 0.0,
+      "star_brightness": 1.0, "star_density": 0.5, "star_twinkle": 0.45,
+      "meteors_on": true, "meteor_rate": 0.18, "meteor_brightness": 2.4, "meteor_length": 0.95, "meteor_speed": 0.28, "meteor_color_var": 0.6,
+      "planets_on": true, "planet_brightness": 1.0, "bright_stars_on": true, "bright_star_brightness": 1.0
     }
   }
 }
