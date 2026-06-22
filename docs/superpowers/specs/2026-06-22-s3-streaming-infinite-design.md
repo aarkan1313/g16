@@ -61,13 +61,41 @@ already operate in world XZ and are distance-based; they just run over a moving 
 window roams; per-frame the tree is bounded (finest LOD near camera, coarsest at the window edge) — you only
 build what's near. Matches parent §5 ("the root recenters on the camera").
 
-### 3. Per-chunk AABB from a CPU analytic eval (retire the baked dependency)
-A streamed chunk's tight vertical shadow AABB (load-bearing — the 96b88a9 acne fix) is computed by evaluating
-`field_height` at a **coarse CPU grid** (~5×5) over the chunk footprint on chunk birth → min/max height. Works
-anywhere (infinite-safe), keeps the tight AABB that fixed shadow acne (pillar: don't regress quality), and
-**retires the `_heights` baked-heightmap dependency entirely** (cleaner for infinite). Cost is bounded: only
-on births, capped by the churn budget (§4). (The CPU `field_height` must match the shader's — reuse the same
-field math the bake already mirrors; this is a read-only eval, NOT a change to the field — skin not bones.)
+### 3. Per-chunk AABB via ASYNC GPU eval — tight everywhere, no hitch (modular)
+A streamed chunk's tight vertical shadow AABB (load-bearing — the 96b88a9 acne fix) cannot come from a CPU
+`field_height` eval: **there is no CPU field evaluator** (the field is GPU-compute `field_height.glsl` +
+the GLSL include only), and hand-porting it to C# is forbidden (skin not bones — parity is fragile). A
+synchronous GPU readback per chunk is the very stall the spec forbids. So the AABB uses the **AAA path: an
+async GPU height-range request, modular + tunable** (the user's call: "all-in-one, if it's tunable and
+modular it'll work"):
+- **Chunk lifecycle:** a chunk is **born immediately with a GENEROUS vertical AABB** (from the field's known
+  global amplitude envelope — `_minH/_maxH` or `FieldParams` amplitude bounds) so it renders + casts shadows
+  with zero pop-in. In the same breath an **async GPU height-range request** is queued for its footprint.
+- **Async GPU path (render-thread RD — the verified-feasible route):** `FieldCompute` uses a LOCAL
+  `RenderingDevice` whose `Submit()/Sync()` is blocking — Godot's local RD has no easy cross-frame fence, so
+  "submit now, collect later" is NOT available on it (verified 2026-06-22). The async height-range therefore
+  runs on the **main render-thread RD via `RenderingServer.CallOnRenderThread`** (the pattern memory
+  `compute-to-material-callonrenderthread` established for per-frame compute), where work overlaps the frame
+  and the result is collected on a later frame without stalling the main thread. It computes min/max over a
+  **coarse grid** (tunable `AabbProbeRes`, e.g. 5–9) over the footprint — far cheaper than a full `ProducePage`
+  res² page. When the result lands, the chunk's AABB is **tightened in place** (shadows sharpen a few frames
+  after the chunk appears — imperceptible: far chunks, brief, no geometry change).
+- **Honest scope:** this async-on-the-render-thread height-range is the LARGEST, highest-risk piece of S3 —
+  effectively the first real build of the async-data-path infra. It is sequenced LAST in the arc (after
+  streaming is proven with the generous AABB) and built as an isolated module, so a GPU-threading problem
+  can't break the working infinite world — the generous AABB is the always-safe fallback if the async layer
+  is deferred.
+- **Modularity:** this is a self-contained unit (`ChunkAabbProvider` or equivalent) — queue, async-collect,
+  tighten. The streaming core does not depend on its result (chunks work with the generous AABB); the provider
+  only *improves* the AABB. If it misbehaves it is isolated + dial-able, not tangled into streaming.
+- **Tunable:** `AabbProbeRes` (grid res), `MaxAabbRequestsPerFrame` (request budget — async requests are
+  themselves throttled so a fast camera doesn't flood the GPU queue). Uniforms/fields, no rebuild — codebase
+  convention.
+- **Retires the `_heights` baked-heightmap dependency** for the AABB (the generous bound + async tighten work
+  anywhere; no baked region needed).
+This is a deliberate, bounded **first slice of the async data path** the chunk contract reserves (§6) — scoped
+to the AABB only, NOT the full lazy data grid (still dormant). Quality-correct (tight AABB everywhere, no
+regression) + performance-correct (no stall) — both pillars, which is why the async path is worth it here.
 
 ### 4. Churn budget (bound the cost streaming introduces)
 Cap chunk births/deaths per frame (`MaxChunkOps`, tunable). A fast camera amortizes pool growth + AABB evals
@@ -80,11 +108,15 @@ it is a uniform/field, no rebuild — codebase convention.)
 Drop chunks outside the camera frustum. Godot culls via the per-chunk AABB + visibility; S3 ensures off-window
 chunks hide. Lands here per parent §5 (trivial once chunks exist).
 
-### 6. Async data path — RESERVED, dormant (YAGNI)
-The lazy per-chunk data grid + async `FieldCompute` (parent §2.3 / §5) is NOT built this arc — no consumer
-needs it. The chunk contract reserves the slot; the async path is built when erosion/collision wake it. (Per
-the contract's own scope discipline: "the async data path is a property of S3 *when streaming needs it*, not a
-day-one clause" — and rendering streams fine without it, so nothing needs it now.)
+### 6. Async data path — a FIRST SLICE built (the AABB), the rest dormant
+The async `FieldCompute` mode (parent §2.3 / §5) IS partially built this arc — but ONLY the thin slice §3
+needs: an async height-range (min/max) request feeding the per-chunk AABB. This slice is justified now
+because §3 *needs* it (tight AABB without a stall — both pillars). The **full lazy per-chunk data grid**
+(the carvable height grid erosion/water write deltas into) is still **NOT built** — no consumer needs it, and
+the chunk contract reserves that slot for when erosion/collision wake it. So: the async *plumbing* exists
+(reusable when the data grid arrives), but only the AABB consumes it now. (Scope discipline preserved: build
+the async path because *something* — the AABB — needs it, not speculatively; do not build the data grid no
+consumer needs.)
 
 ## What stays UNCHANGED (S3 changes WHERE chunks are + WHAT XZ the field samples, not HOW they morph)
 - The geomorph (`--morphcheck`), edge-stitch variants (`--stitchcheck`), and field math (`--fieldcheck`) are
