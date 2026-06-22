@@ -138,7 +138,11 @@ void vertex() {
         // Skirt (S2a): drop the border ring so it tucks under coarser neighbors (crack backstop). Use
         // the FINE unit pos for the border test (a vertex is "border" by its mesh position, not morph).
         float edge = min(min(u_fine.x, 1.0 - u_fine.x), min(u_fine.y, 1.0 - u_fine.y));
-        float skirt = (edge < 0.001) ? (chunk_size / 32.0 + 4.0) : 0.0;
+        // Skirt depth: was chunk_size/32 + 4 (≈8 m at 128 m chunks, ≈132 m at 4 km chunks) — so deep it
+        // fenced every chunk with a visible outline, fighting the pop eye-gate. The A/B (skirt=0) showed
+        // the geomorph + ≤1-level invariant leave NO cracks on their own, so the skirt is a thin backstop,
+        // not load-bearing: drop to ~half a vertex-span (chunk_size/128). S2d will tune the crack-safe min.
+        float skirt = (edge < 0.001) ? (chunk_size / 128.0) : 0.0;
 
         VERTEX.y = h0 - skirt;
 
