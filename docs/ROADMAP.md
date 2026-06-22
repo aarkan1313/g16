@@ -266,10 +266,15 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      **Do not re-attempt procedurally** — the only paths research suggests would clear the bar are authored/offline
      **textures** or expensive (>1 ms) lit volumetrics, neither in scope for a night-sky accent. See DECISIONS +
      `docs/superpowers/specs|plans/2026-06-21-celestial-galaxy-nebula-billboards*`. Night sky = moon + stars + meteors.
-   - **C3 — N suns + N moons.** Generalize the single-sun + single-moon architecture to **arbitrary counts** — each
-     with its own arc / color / size (phase for moons) + lighting contribution (extends `ComposeLighting`'s one-writer
-     and the per-luminary disc render in `cloud_sky.gdshader`). **Dependency:** feeds the atmosphere scattering (sky
-     color is computed from the sun direction[s]) → **extends AT-1's LUTs.** Heaviest/architectural — last.
+   - **C3 — N suns + N moons. 📐 DESIGN-AHEAD spec written 2026-06-21 (build nothing yet):**
+     `specs/2026-06-21-celestial-c3-n-luminaries-design.md`. Generalizes single-sun+single-moon to a `List<Luminary>`
+     + a **priority-budgeting layer** that allocates the scarce hardware (≤4 `LIGHTn`, ≤2 shadow atlases, ≤3
+     atmosphere suns summed in ONE raymarch) so e.g. a **3-sun sky costs ≈ today** (1 shadow pass + cheap discs +
+     a slightly heavier rarely-recomputed skyview LUT — NOT 3× anything). **Folds the god-class de-coupling in:** Unit
+     1 extracts `LightingComposer` out of `TerrainLabUI` (+ `SkyMaterial` facade out of `CloudVolume`) at the moment
+     the feature forces the refactor, so we don't cut the same code twice. 6 Units, each its own eye-gate; Unit 1
+     (zero visual drift) + Unit 4 (3-sun sky looks good AND profiles in budget) are the load-bearing gates.
+     Heaviest/architectural — still LAST among features; design banked, build deferred.
 7. **⚙️ END-OF-ARC CODE-EFFICIENCY PASS — 🟣 LAST, after all sky/light/cloud/atmosphere work above is gated (user request 2026-06-21).**
    A dedicated pass over the *whole* lighting + cloud + sun + atmosphere lane for **code/compute efficiency — NOT visual
    tuning** (the user's words: "i dont want to tune, i want to look at code efficiency"). Scope: profile the real GPU/CPU
