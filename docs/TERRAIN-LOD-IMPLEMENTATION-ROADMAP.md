@@ -214,11 +214,24 @@ Splat/breakup/scatter load with their tiles. No pops, no visible seams at tile b
   USER eye-gate: flew to ~49 km out across ~17 snaps, popmeter worst Δh=0.00 m; no pop; no flash at normal speed.
 - **The chunk is now the streamed, infinite, pop-free, crack-free unit the next arcs plug into.**
 
+### ✅ Minimal surfacing slice — DONE 2026-06-22 (readable landforms, to judge erosion)
+- Spec `specs/2026-06-22-surfacing-minimal-slice-design.md`, plan `plans/2026-06-22-surfacing-minimal-slice.md`.
+- A deliberately small, mostly-shader pass (NOT the full surfacing arc): 5 real materials from
+  `assets/materials/` (sand/grass/earth/rock/snow) placed PER-PIXEL by height+slope with `fwidth`-soft
+  boundaries (no 4 m grid), triplanar on cliffs, real normal maps for the 3D read, blended into the existing
+  lighting. Default-on (`use_textures`); `--textures=0` A/Bs back to the legacy colour ramp; thresholds +
+  tiling + material roles are live tunables. Built in `ground.gdshader` + `TerrainLab.LoadGroundMaterials()`.
+- **Gates:** all 7 guards PASS, `--fieldcheck` 0 m (bones untouched); `--profmove` textured == legacy ramp
+  (4.6 ms avg — the blend is effectively free); user eye-gate: landforms read (light audit, OK to judge erosion).
+- **Purpose:** make landforms legible so the NEXT arc (erosion) can be eye-judged. This slice is a stop-gap;
+  the full texture-array surfacing arc (below) supersedes it later (build-alongside-then-flip).
+
 ### ⏸ Deferred / later
 - **The async per-chunk DATA grid** (carvable height for erosion/water) — reserved-dormant; S3 builds only the
   AABB slice of the async path.
-- **Surfacing (Skyrim-look ground)** — the LAST arc per the infinite-terrain build order; plugs into the chunk
-  contract. The "smooth mess" placeholder look + the residual shadow stipple both resolve here. NOT before S3.
+- **Surfacing (Skyrim-look ground) — the FULL arc** — the LAST arc per the infinite-terrain build order
+  (`specs/2026-06-21-ground-material-system-reset-design.md`: texture arrays, per-pixel placement engine,
+  POM/relief, biomes). Supersedes the minimal slice above. The residual shadow stipple resolves here. NOT next.
 - **Erosion, water, biomes, collision, flora, world-editing** — each its own later arc on the chunk contract.
   Per the infinite-terrain build order, the NEXT arc after S3 is **E1 (coupled erosion sim core + live lab)** —
   spec at `docs/superpowers/specs/2026-06-17-erosion-arc-design.md` (not yet planned). (Surfacing is LAST.)
