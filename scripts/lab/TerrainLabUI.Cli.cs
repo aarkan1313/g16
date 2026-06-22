@@ -126,6 +126,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--morphcheck") { _morphCheckCli = true; }   // S2b: geomorph C0-continuity / pop-free numeric backstop
             else if (a == "--stitchcheck") { _stitchCheckCli = true; }   // S2d: edge-stitch crack-free numeric guard
             else if (a == "--streamcheck") { _streamCheckCli = true; }   // S3: streaming invariant + snap-continuity guard
+            else if (a == "--popcheck") { _popCheckCli = true; }   // S3: pop detector — fixed-point sample-XZ continuity across a moving cam
             else if (a == "--aabbspike") { _aabbSpikeCli = true; }   // S3.5: one async GPU height-range vs sync, prints AABBSPIKE
             else if (a == "--notighten") { _noTightenCli = true; }   // S3.5: disable async AABB tighten → generous AABB fallback
             else if (a.StartsWith("--aabbres=")) { int.TryParse(a.Substring("--aabbres=".Length), out _aabbResCli); }   // S3.5: ProbeRes
@@ -224,6 +225,7 @@ public partial class TerrainLabUI : Control
     private bool _morphCheckCli;      // --morphcheck → S2b geomorph pop-free numeric backstop (PASS/FAIL)
     private bool _stitchCheckCli;     // --stitchcheck → S2d edge-stitch seam-coincidence guard (PASS/FAIL)
     private bool _streamCheckCli;     // --streamcheck → S3 streaming invariant-along-traverse + snap field-continuity
+    private bool _popCheckCli;        // --popcheck → S3 fixed-point morphed-sample-XZ continuity (pop detector)
     private bool _aabbSpikeCli;       // --aabbspike → S3.5 async GPU height-range feasibility spike (vs sync ref)
     private bool _noTightenCli;       // --notighten → S3.5 disable the async AABB tighten (generous-AABB fallback)
     private int _aabbResCli;          // --aabbres=N → S3.5 ChunkAabbProvider.ProbeRes (0 = leave default)

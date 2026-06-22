@@ -223,11 +223,10 @@ public partial class TerrainLabUI : Control
             bool ok = StreamCheck.Run(_params.RegionSizeM, 6, 2.5f, out string m);
             GD.Print($"STREAMCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
         }
-        if (_popCheckCli || _popCheckCellCli)   // S3: GPU ground-truth pop detector — rendered height at a fixed point across LOD swaps
+        if (_popCheckCli)   // S3: GPU ground-truth pop detector — rendered height + normal at a fixed point across LOD swaps
         {
-            PopCheck.UseCellDistance = _popCheckCellCli;   // A/B: cell-nearest distance (candidate fix) vs per-vertex (current)
             bool ok = PopCheck.Run(_fc, _params, 6, 2.5f, 65, out string m);
-            GD.Print($"POPCHECK{(_popCheckCellCli ? "-CELL" : "")}: {(ok ? "PASS" : "FAIL")}  {m}");
+            GD.Print($"POPCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
         }
         if (_aabbSpikeCli)   // S3.5 SPIKE: kick off one async height-range; _Process collects + compares to sync
         {
