@@ -215,6 +215,22 @@ void vertex() {
     }
 }
 
+// Triplanar albedo/scalar sample by world position (no UV needed) — kills cliff stretching on steep faces.
+vec3 tri_sample(sampler2D t, vec3 wpos, vec3 wn, float scale) {
+    vec3 bw = pow(abs(wn), vec3(4.0));
+    bw /= max(bw.x + bw.y + bw.z, 1e-4);
+    vec3 cx = texture(t, wpos.zy / scale).rgb;
+    vec3 cy = texture(t, wpos.xz / scale).rgb;
+    vec3 cz = texture(t, wpos.xy / scale).rgb;
+    return cx * bw.x + cy * bw.y + cz * bw.z;
+}
+// Perturb a world normal by a tangent-space normal map sampled on the dominant (XZ) plane. Cheap, tangent-free
+// (good enough for the legibility bar): rotate the map's xy into world XZ, keep the geometric normal as the base.
+vec3 apply_nrm(vec3 geo_n, sampler2D nmap, vec2 uv, float strength) {
+    vec3 n = texture(nmap, uv).xyz * 2.0 - 1.0;
+    return normalize(geo_n + vec3(n.x, 0.0, n.y) * strength);
+}
+
 void fragment() {
     if (use_textures) {
         // Minimal surfacing slice. (Godot forbids `return` in fragment(), so the legacy ramp is the else.)
@@ -236,15 +252,20 @@ void fragment() {
         float w3 = rock;
         float sum = max(w0 + w1 + w2 + w3 + w4, 1e-4);
 
-        vec3 alb = (w0 * texture(mat0_alb, uv).rgb + w1 * texture(mat1_alb, uv).rgb
-                  + w2 * texture(mat2_alb, uv).rgb + w3 * texture(mat3_alb, uv).rgb
-                  + w4 * texture(mat4_alb, uv).rgb) / sum;
-        float rgh = (w0 * texture(mat0_rgh, uv).r + w1 * texture(mat1_rgh, uv).r
-                  + w2 * texture(mat2_rgh, uv).r + w3 * texture(mat3_rgh, uv).r
-                  + w4 * texture(mat4_rgh, uv).r) / sum;
+        vec3 wpos = vec3(v_surf_xz.x, v_h, v_surf_xz.y);
+        // rock (mat3) uses triplanar (steep faces); others use planar world-XZ uv (cheaper, they're flat-ish).
+        vec3 a0 = texture(mat0_alb, uv).rgb, a1 = texture(mat1_alb, uv).rgb, a2 = texture(mat2_alb, uv).rgb;
+        vec3 a3 = tri_sample(mat3_alb, wpos, v_normal, mat_tiling), a4 = texture(mat4_alb, uv).rgb;
+        vec3 alb = (w0 * a0 + w1 * a1 + w2 * a2 + w3 * a3 + w4 * a4) / sum;
+        float rgh = (w0 * texture(mat0_rgh, uv).r + w1 * texture(mat1_rgh, uv).r + w2 * texture(mat2_rgh, uv).r
+                   + w3 * texture(mat3_rgh, uv).r + w4 * texture(mat4_rgh, uv).r) / sum;
+        // dominant material's normal map perturbs the geometric normal (cheap; legibility, not exactness).
+        vec3 nrm = v_normal;
+        nrm = apply_nrm(nrm, mat1_nrm, uv, (w1 + w2) / sum);   // grass/earth meso relief
+        nrm = apply_nrm(nrm, mat0_nrm, uv, w0 / sum);          // sand ripples
         ALBEDO = alb;
         ROUGHNESS = clamp(rgh, 0.04, 1.0);
-        NORMAL = v_normal;   // real normal-map combine in Task 3
+        NORMAL = normalize(nrm);
     } else {
         vec3 c = mix(col_low, col_mid, smoothstep(h_low, h_mid, v_h));
         c = mix(c, col_high, smoothstep(h_mid, h_high, v_h));
