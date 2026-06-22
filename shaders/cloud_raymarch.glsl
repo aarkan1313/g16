@@ -50,6 +50,10 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     vec4 atmo_zenith;     // sky-view radiance at the zenith (cloud-top ambient)
     vec4 atmo_horizon;    // sky-view radiance at the horizon toward the sun (cloud-underside ambient)
     vec4 atmo_suntrans;   // sun transmittance toward the sun (reddened direct-light color)
+    // NIGHT MOONLIGHT (appended at the very end → std430-safe, no offset shift; raymarch-only). A weak 2nd
+    // directional light so night/dusk clouds aren't black. w = phase·presence·user strength (0 = skip → free).
+    vec4 moon_dir;        // xyz = unit dir TO the moon, w = cloud-light strength
+    vec4 moon_color;      // rgb = moon tint (cool white), a unused
 } P;
 #define WIND vec2(P.tail.x, P.tail.y)
 #define CELL_SCALE P.tail.z
@@ -381,7 +385,18 @@ void main(){
                 // cloud bodies reach high opacity within a deck while wisps stay translucent.
                 float sigma = dens * 0.05 * opac;
                 float beer = exp(-sigma * dt);
-                vec3 lum = (sunCol * sun * powder * albedo * tint + amb) * P.brightness;
+                // NIGHT MOONLIGHT: a weak 2nd directional light (same scatter model as the sun) so night/dusk
+                // clouds get silver-lit edges/undersides instead of going black. Gated: w==0 (day/no moon) skips
+                // the extra light-march entirely. Phase-aware strength + cool moon tint pushed from the composer.
+                vec3 moonLit = vec3(0.0);
+                if (P.moon_dir.w > 0.001){
+                    vec3 mL = normalize(P.moon_dir.xyz);
+                    float odM = light_optical_depth(p, mL, windOff) * absorb;
+                    float mPhase = mix(globalPhase, hg(dot(rd, mL), LF(act, 12)), pdeck);
+                    float moonScatter = exp(-odM) * mPhase + 0.45 * exp(-odM * 0.25);
+                    moonLit = P.moon_color.rgb * P.moon_dir.w * moonScatter;
+                }
+                vec3 lum = ((sunCol * sun + moonLit) * powder * albedo * tint + amb) * P.brightness;
                 if (P.dbgdeck > 0.5) lum = deck_dbg_color(act) * 1.5;   // deck-ID overlay: flat per-deck color
                 scattered += T * lum * (1.0 - beer);
                 T *= beer;

@@ -123,6 +123,7 @@ public partial class TerrainLabUI : Control
             case "moon_az_off":         _moon.AzOffset = v; ComposeLighting(); break;
             case "moon_decl":           _moon.DeclScale = v; ComposeLighting(); break;   // moon arc peak height (own declination)
             case "moonlight_energy":    _moon.LightEnergy = v; ComposeLighting(); break;
+            case "moon_cloud_light":    _moon.MoonCloudLight = v; ComposeLighting(); break;   // moonlight scattered through clouds
             case "star_brightness":     _stars.Brightness = v; ComposeLighting(); break;
             case "star_density":        _stars.Density = v; ComposeLighting(); break;
             case "star_twinkle":        _stars.Twinkle = v; ComposeLighting(); break;

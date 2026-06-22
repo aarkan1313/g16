@@ -70,8 +70,8 @@ number keys 1-9 jump to each gate item** (guide + per-item judge criteria in `NE
 the gates upstream → downstream so judgments aren't contaminated:**
 
 1. **Light first** (it washes everything): GI/SDFGI default (0b ✅) → Sun disc Stage 1 (3b ✅) →
-   time-of-day Stage 2 (3c ✅) → **AT-1 atmosphere in motion + AT-2 aerial (11) — both default-on,
-   never gated; confirm or flip to default-off** + measure AT-2 (`--profmove`).
+   time-of-day Stage 2 (3c ✅) → **AT-1 atmosphere + AT-2 aerial + AT-3 cloud-light (11) ✅ eye-gated
+   2026-06-21 (default-on confirmed; AT-2 +0.7 ms measured) — re-confirmed good 2026-06-21.**
 2. **Base shading:** H1 BRDF clouds-off regression (6 ✅).
 3. **Ground under SETTLED light:** the GM1/GM2/GM3-A batch is **superseded by the ground redesign** —
    run the **Step-0 "wrong-defaults" ground gate (1e)** first (shows how much "drab" is just suppressed

@@ -77,6 +77,7 @@ public sealed class MoonState
     // MOONLIGHT (Stage 3c): a 2nd cool directional cast on the terrain, gated to night × moon-up × phase.
     public float LightEnergy = 0.5f;
     public Color LightColor = new(0.60f, 0.70f, 1.0f);  // cool blue moonlight
+    public float MoonCloudLight = 0.6f;                 // strength of moonlight scattered through clouds (night)
 
     public MoonState Clone() => (MoonState)MemberwiseClone();
 }

@@ -77,7 +77,16 @@ public partial class TerrainLabUI : Control
                 title = "2 · Night sky — stars + moon";
                 judge = "Clear night: moon + stars + meteors. Tune 'star *' (brightness/density/twinkle), 'meteor *', and the 'moon *' knobs on the Night tab; moon phase/size/halo + moonlight on the ground.";
                 break;
-            // cases 3-5 (ground G-0 / v2 parity / variation) removed in the 2026-06-21 ground strip.
+            case 3: // Night clouds — moonlit (judge the #5 moonlight-on-clouds work)
+                DriveTime(0f); _timeRunning = false;
+                if (_byId.TryGetValue("time_of_day", out var tod3)) { SetWidgetValueSilent(tod3, 0f); }
+                Set("cloud_enabled", true); Set("cloud_coverage", 0.6f);   // real cloud masses to light
+                Set("moon_phase", 1.0f);                                    // full moon = strongest moonlight
+                LookUpAtClouds();
+                title = "3 · Night clouds — moonlit";
+                judge = "Night, moon up, clouds on: do the clouds get silver-lit edges/undersides (not flat black)? Tune Night tab 'moonlight on clouds' (+ 'moon brightness' / 'moon phase'). Drop it / new moon → clouds go dark (intended — no-moon night).";
+                break;
+            // cases 4-5 (ground G-0 / v2 parity / variation) removed in the 2026-06-21 ground strip.
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle: cumulus(profile off→on) → stratus → cirrus
                 if (_lastPreset != 6)
                 {

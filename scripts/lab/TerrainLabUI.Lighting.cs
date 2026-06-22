@@ -130,6 +130,9 @@ public partial class TerrainLabUI : Control
             _moonLight.LightColor = _moon.LightColor;
             _moonLight.LightEnergy = mEnergy;
             _moonLight.Visible = mEnergy > 0.001f;                              // invisible = no shadow/cost in day
+            // Night moonlight on CLOUDS (raymarch 2nd light): same phase·presence·night gating as the
+            // directional, scaled by the user knob. 0 in day / new-moon → the raymarch skips the moon march.
+            _cloud.SetCloudMoon(moonDir, _moon.LightColor, mIllum * moonUp * _nightFactor * _moon.MoonCloudLight);
 
             // ── STARS + METEORS (Stage 3d / Celestial): procedural, faded in at night by the sky shader. ──
             _cloud.SetStars(_stars.Brightness, _stars.Density, _stars.Twinkle, _stars.Rotation);

@@ -63,6 +63,15 @@ public partial class CloudVolume : Node
     // sampling (that hazards the render device; the seam-law memory). 0 strength = off (mood path).
     private float _atmoCloudStrength;
     private Vector3 _atmoZenith = Vector3.One, _atmoHorizon = Vector3.One, _atmoSunTrans = Vector3.One;
+    // Night moonlight on clouds (raymarch 2nd directional light). strength = phase·presence·user knob (0 = off).
+    private Vector3 _moonCloudDir = new Vector3(0f, 1f, 0f), _moonCloudColor = new Vector3(0.6f, 0.7f, 1.0f);
+    private float _moonCloudStrength = 0f;
+    public void SetCloudMoon(Vector3 dir, Color col, float strength)
+    {
+        _moonCloudDir = dir.Normalized();
+        _moonCloudColor = new Vector3(col.R, col.G, col.B);
+        _moonCloudStrength = Mathf.Max(strength, 0f);
+    }
     public void SetCloudAtmoLight(float strength) { _atmoCloudStrength = Mathf.Max(0f, strength); }
     public void SetCloudAtmoColors(Vector3 zenith, Vector3 horizon, Vector3 sunTrans) { _atmoZenith = zenith; _atmoHorizon = horizon; _atmoSunTrans = sunTrans; }
     private Texture2Drd? _shadowRd;
@@ -465,6 +474,8 @@ public partial class CloudVolume : Node
             .Vec4(_atmoZenith, 0f)                      // AT-3 atmo_zenith (cloud-top ambient)
             .Vec4(_atmoHorizon, 0f)                     // AT-3 atmo_horizon (cloud-underside ambient)
             .Vec4(_atmoSunTrans, 0f)                    // AT-3 atmo_suntrans (reddened direct light)
+            .Vec4(_moonCloudDir.X, _moonCloudDir.Y, _moonCloudDir.Z, _moonCloudStrength)   // night moonlight: dir + strength
+            .Vec4(_moonCloudColor.X, _moonCloudColor.Y, _moonCloudColor.Z, 0f)             // night moonlight: tint
             .ToArray();
     }
     private float _perDeck = 1f;   // per-deck phase/albedo/tint ON by default; --perdeck toggles
