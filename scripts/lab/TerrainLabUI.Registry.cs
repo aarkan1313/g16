@@ -217,6 +217,28 @@ public partial class TerrainLabUI : Control
                 BuildFantasyPresetPicker(col);
                 col.AddChild(new HSeparator());
                 col.AddChild(new Label { Text = "fine-tune:" });
+
+                // U1 PROOF (throwaway): a test object-list wired to a GD.Print adapter.
+                // Replaced by the real luminary list in U2.
+                var schemas = ItemSchemas.Load();
+                if (schemas.TryGetValue("test3", out var testSchema))
+                {
+                    var olc = new ObjectListControl();
+                    col.AddChild(olc);
+                    var seed = new List<Godot.Collections.Dictionary>
+                    {
+                        new() { { "label", 0 }, { "amount", 5.0f }, { "on", true } },
+                    };
+                    olc.Init("TEST list (U1 proof)", testSchema, seed, 1, 7,
+                        (f, initial, onChanged) => BuildFieldWidget(
+                            f.Type, f.Label, f.Min, f.Max, f.Default, f.DefBool, f.DefColor, f.Options,
+                            initial, onChanged, out _),
+                        items =>
+                        {
+                            GD.Print($"[objectlist:test3] {items.Count} items:");
+                            foreach (var it in items) { GD.Print($"  {Json.Stringify(it)}"); }
+                        });
+                }
             }
             foreach (LabControl c in _controls.Where(c => c.Tab == tabName)) { BuildRow(col, c); }
         }
@@ -317,6 +339,63 @@ public partial class TerrainLabUI : Control
             }
         }
         col.AddChild(row);
+    }
+
+    /// Shared per-type widget builder. Both BuildRow (flat registry) and ObjectListControl
+    /// (object-list item fields) call this so there's ONE widget implementation per type.
+    /// Returns the editing Control; fires onChanged(Variant) on edit. valLabel is the value
+    /// readout for slider types (null otherwise). Does NOT register into _byId.
+    private Control BuildFieldWidget(string type, string label, float min, float max,
+        float defF, bool defBool, Color defColor, string[] options,
+        Variant initial, Action<Variant> onChanged, out Label? valLabel)
+    {
+        valLabel = null;
+        switch (type)
+        {
+            case "slider":
+            case "scenef":
+            case "float":
+            {
+                string fmt = (max - min) < 0.05f ? "0.0000" : "0.00";
+                float start = initial.VariantType == Variant.Type.Nil ? defF : initial.AsSingle();
+                var sl = new HSlider { MinValue = min, MaxValue = max, Value = start,
+                    Step = (max - min) / 400.0, CustomMinimumSize = new Vector2(160, 0) };
+                sl.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                var vlbl = new Label { Text = start.ToString(fmt), CustomMinimumSize = new Vector2(52, 0) };
+                sl.ValueChanged += v => { vlbl.Text = ((float)v).ToString(fmt); onChanged((float)v); };
+                valLabel = vlbl;
+                return sl;
+            }
+            case "toggle":
+            case "scene":
+            case "bool":
+            {
+                bool start = initial.VariantType == Variant.Type.Nil ? defBool : initial.AsBool();
+                var cb = new CheckBox { ButtonPressed = start };
+                cb.Toggled += on => onChanged(on);
+                return cb;
+            }
+            case "scenecolor":
+            case "color":
+            {
+                Color start = initial.VariantType == Variant.Type.Nil ? defColor : initial.AsColor();
+                var cp = new ColorPickerButton { Color = start, CustomMinimumSize = new Vector2(160, 0), EditAlpha = false };
+                cp.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                cp.ColorChanged += col => onChanged(col);
+                return cp;
+            }
+            case "enum":
+            {
+                int start = initial.VariantType == Variant.Type.Nil ? (int)defF : initial.AsInt32();
+                var ob = new OptionButton { CustomMinimumSize = new Vector2(200, 0) };
+                ob.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                for (int i = 0; i < options.Length; i++) { ob.AddItem(options[i], i); }
+                ob.Select(start);
+                ob.ItemSelected += idx => onChanged((int)idx);
+                return ob;
+            }
+        }
+        return new Label { Text = $"?{type}" };
     }
 
     private void BuildPresetsTab(TabContainer tabs)

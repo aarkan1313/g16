@@ -1,0 +1,7 @@
+{
+  "test3": [
+    { "id": "label",  "type": "enum",  "label": "label", "options": ["Alpha", "Beta", "Gamma"], "default": 0 },
+    { "id": "amount", "type": "float", "label": "amount", "min": 0.0, "max": 10.0, "default": 5.0 },
+    { "id": "on",     "type": "bool",  "label": "enabled", "default": true }
+  ]
+}

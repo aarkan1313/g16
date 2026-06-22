@@ -53,6 +53,16 @@ public partial class TerrainLabUI : Control
 
     public override void _Ready()
     {
+        // U1 self-check (--objectlistcheck): pure-logic ObjectListControl model/callback test. Runs FIRST,
+        // before FieldCompute (which NullRefs under --headless: no local RenderingDevice), then quits.
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--objectlistcheck") >= 0)
+        {
+            bool olOk = ObjectListCheck.Run(this, out string olMsg);
+            GD.Print($"OBJECTLISTCHECK: {(olOk ? "PASS" : "FAIL")}  {olMsg}");
+            GetTree().Quit();
+            return;
+        }
+
         _fc = new FieldCompute();
         _params = FieldParams.Load();
         _terrain = GetNode<TerrainLab>("/root/TerrainLabRoot/TerrainLab");
@@ -212,6 +222,12 @@ public partial class TerrainLabUI : Control
         {
             bool ok = StreamCheck.Run(_params.RegionSizeM, 6, 2.5f, out string m);
             GD.Print($"STREAMCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
+        }
+        if (_popCheckCli || _popCheckCellCli)   // S3: GPU ground-truth pop detector — rendered height at a fixed point across LOD swaps
+        {
+            PopCheck.UseCellDistance = _popCheckCellCli;   // A/B: cell-nearest distance (candidate fix) vs per-vertex (current)
+            bool ok = PopCheck.Run(_fc, _params, 6, 2.5f, 65, out string m);
+            GD.Print($"POPCHECK{(_popCheckCellCli ? "-CELL" : "")}: {(ok ? "PASS" : "FAIL")}  {m}");
         }
         if (_aabbSpikeCli)   // S3.5 SPIKE: kick off one async height-range; _Process collects + compares to sync
         {
