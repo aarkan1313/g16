@@ -6,6 +6,17 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-21 — Night variation direction (planned) + night-cloud lighting (build now).** User: every night/weather
+shouldn't look the same. Two layers. **(1) Enabling lighting — BUILD NOW as the lead of #5:** clouds currently
+take only sun + sky-ambient (`cloud_raymarch.glsl` ~L384), so at dusk/night they get no fill and read as "big black
+blobs"; add **moonlight into the cloud raymarch** (weak directional → silver edges/undersides) + a clean night
+ambient/darkness floor. Without this, varying the moon does nothing visible. **(2) Night variation system — PLANNED
+(not a new future lane):** a seeded "night composer" that draws each axis from ranges/pools so nights differ —
+moon phase/brightness/**presence** (some nights no moon → very dark, stars dominate), star density/twinkle +
+**different star/planet setups** (the curated planet + named-star tables become sampled/rotated pools, or a seeded
+scatter), and mood. Builds on the decoupled `ComposeLighting` axes. **WEATHER-side night variation (overcast hides
+stars / fog / clear) folds into the WEATHER roadmap lane — NOT a separate item.** Order: Layer 1 now → variation later.
+
 **2026-06-21 — Galaxy / Nebula v2: KILLED (feature dropped; night sky = moon + stars + meteors).** After the
 C1 procedural-noise rejection we rebuilt from scratch as **billboards**: a structured non-noise generator
 (log-spiral arms + bulge + dust + HII knots), then a richer flocculent/domain-warped version, then — after
