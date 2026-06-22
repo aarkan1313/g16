@@ -98,8 +98,13 @@ public partial class TerrainLabUI : Control
             // sun energy + ambient go through ApplyOvercastScaling (the one writer of the overcast-scaled
             // fields) so they stay overcast-correct and never fight UpdateOvercast.
             case "sun_energy":      _baseSunEnergy = v; ApplyOvercastScaling(); PushSunToCloud(sun); break;
-            case "sun_soft":        sun.ShadowBlur = v; break;   // shadow softness (separate from disc)
-            case "sun_disc":        sun.LightAngularDistance = v; break;   // visible sun size (PCSS penumbra too)
+            // Shadow knobs: write the _sunDisc STATE (not just the Sun) so the value survives the next
+            // ComposeLighting recompose (which re-asserts from _sunDisc) instead of snapping back. The
+            // immediate Sun write makes the slider feel live; ComposeLighting keeps it.
+            case "sun_soft":        _sunDisc.ShadowSoft = v; sun.ShadowBlur = v; break;   // shadow softness
+            case "sun_disc":        _sunDisc.DiscAngular = v; sun.LightAngularDistance = v; break;   // PCSS penumbra width (+ disc size)
+            case "shadow_bias":     _sunDisc.ShadowNormalBias = v; sun.ShadowNormalBias = v; break;   // acne<->peter-panning
+            case "shadow_dist":     _sunDisc.ShadowMaxDist = v; sun.DirectionalShadowMaxDistance = v; break;   // shadow draw distance
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
             case "sun_azimuth":     _sunAzimuth = v; OrientSun(sun); break;
             case "time_of_day":     DriveTime(v); break;   // decoupled Time axis: sun arc + day color script

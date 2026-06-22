@@ -50,6 +50,13 @@ public sealed class SunDiscState
 {
     public string Name = "";
     public float ShadowSoft = 1.0f, DiscAngular = 0.6f;   // sun.ShadowBlur, sun.LightAngularDistance (PCSS penumbra)
+    // SHADOW casting params — routed through ComposeLighting (the one writer) so lab sliders survive the
+    // per-frame re-assert. Defaults == the previously hard-coded values, so behaviour is unchanged at first.
+    // Bias is the acne<->peter-panning lever (was never set = Godot default 1.0/2.0); MaxDist/splits were
+    // literals in ComposeLighting. Tunable so the terrain lane can re-dial shadows as the geometry evolves.
+    public float ShadowNormalBias = 1.0f;   // sun.ShadowNormalBias — raise to kill acne, lower if shadows detach
+    public float ShadowMaxDist = 6000f;      // sun.DirectionalShadowMaxDistance (m) — shadow draw distance
+    public float ShadowSplit1 = 0.10f, ShadowSplit2 = 0.28f, ShadowSplit3 = 0.60f;   // cascade split fractions
     public float Size = 0.6f, Limb = 0.55f;
     public float CoronaSize = 1200f, CoronaEnergy = 2.0f, HaloSize = 90f, HaloEnergy = 0.4f;
     public float Redden = 1.0f, ReddenOnset = 0.25f, HorizonGrow = 0.6f, CloudRedden = 0.8f;

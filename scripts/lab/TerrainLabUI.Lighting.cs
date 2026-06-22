@@ -41,6 +41,7 @@ public partial class TerrainLabUI : Control
         _time.SkyGround = m.ContainsKey("sky_ground") ? Col(m["sky_ground"]) : new Color(0.22f, 0.26f, 0.22f);
 
         _sunDisc.ShadowSoft = F(m, "shadow_soft", 1.0f); _sunDisc.DiscAngular = F(m, "sun_disc", 0.6f);
+        _sunDisc.ShadowNormalBias = F(m, "shadow_bias", 1.0f); _sunDisc.ShadowMaxDist = F(m, "shadow_dist", 6000f);
         _sunDisc.Size = F(m, "sun_size", 0.6f); _sunDisc.Limb = F(m, "sun_limb", 0.70f);   // polish: more spherical default
         _sunDisc.CoronaSize = F(m, "sun_corona_size", 1200f); _sunDisc.CoronaEnergy = F(m, "sun_corona_energy", 2.0f);
         _sunDisc.HaloSize = F(m, "sun_halo_size", 90f); _sunDisc.HaloEnergy = F(m, "sun_halo_energy", 0.4f);
@@ -101,10 +102,13 @@ public partial class TerrainLabUI : Control
             _shadowTuned = true;
         }
         sun.DirectionalShadowBlendSplits = true;                        // cross-fade cascade seams
-        sun.DirectionalShadowMaxDistance = 6000f;                       // was 8000; don't waste cascades on far haze
-        sun.DirectionalShadowSplit1 = 0.10f;                            // flatter split distribution (was 0.08/0.2/0.5)
-        sun.DirectionalShadowSplit2 = 0.28f;
-        sun.DirectionalShadowSplit3 = 0.60f;
+        // Shadow caster params from _sunDisc (lab-tunable; defaults == the former literals). Routed through
+        // this one-writer so a slider edit survives the next recompose instead of being overwritten.
+        sun.ShadowNormalBias = _sunDisc.ShadowNormalBias;               // acne<->peter-panning lever (was unset)
+        sun.DirectionalShadowMaxDistance = _sunDisc.ShadowMaxDist;      // shadow draw distance (was 6000 literal)
+        sun.DirectionalShadowSplit1 = _sunDisc.ShadowSplit1;            // flatter split distribution
+        sun.DirectionalShadowSplit2 = _sunDisc.ShadowSplit2;
+        sun.DirectionalShadowSplit3 = _sunDisc.ShadowSplit3;
         if (_cloud != null)
         {
             _cloud.SetSkyColors(tTop, tHor, tGnd);   // tinted keyframed gradient (ST4-2)
