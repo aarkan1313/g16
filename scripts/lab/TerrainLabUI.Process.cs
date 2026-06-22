@@ -86,6 +86,24 @@ public partial class TerrainLabUI : Control
             pcam.LookAt(center, Vector3.Up);
         }
 
+        // S3.5 SPIKE driver (--aabbspike): pump the async provider; once the result lands, compare to a sync
+        // FieldCompute.ProducePage min/max of the SAME footprint and print AABBSPIKE match=YES/NO, then quit.
+        if (_spikeFrame >= 0 && !_spikeDone)
+        {
+            _spikeProvider.Pump();
+            if (_spikeProvider.TryTake(out long _, out float alo, out float ahi))
+            {
+                float[] page = _fc.ProducePage(_params, 0f, 0f, 2048f / (7 - 1), 7, 0);   // sync reference, same grid
+                float slo = float.MaxValue, shi = float.MinValue;
+                foreach (float v in page) { if (v < slo) { slo = v; } if (v > shi) { shi = v; } }
+                bool match = Mathf.Abs(alo - slo) < 0.01f && Mathf.Abs(ahi - shi) < 0.01f;
+                GD.Print($"AABBSPIKE: async=({alo:F3},{ahi:F3}) sync=({slo:F3},{shi:F3}) match={(match ? "YES" : "NO")} (landed frame {_spikeFrame})");
+                _spikeDone = true;
+                GetTree().Quit();
+            }
+            else if (++_spikeFrame > 120) { GD.Print("AABBSPIKE: NO RESULT in 120 frames — async collect FAILED"); _spikeDone = true; GetTree().Quit(); }
+        }
+
         if (_ready) { UpdateOvercast(); }
         // AT-1 default-on: flip the sky material to the physical LUT only once it's computed (RID bound).
         // Until then the approved keyframed sky shows — no sampling of an unbound Texture2Drd on frame 1.

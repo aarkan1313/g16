@@ -177,6 +177,7 @@ public partial class TerrainLab : MeshInstance3D
     }
     public void SetCdlodViz(bool on) { _cdlod?.SetLodViz(on); }
     public void CdlodTick(Vector3 camPos) { _cdlod?.Tick(camPos); }
+    public void ConfigureCdlodAabb(bool tighten, int probeRes, int maxReq) { _cdlod?.ConfigureAabb(tighten, probeRes, maxReq); }
 
     // S2b: LOD-crossing test-path player (TerrainTestPaths sibling). RunTestPath starts a flight;
     // TickTestPath advances it each frame (called from TerrainLabUI.Process); the report prints on finish.

@@ -86,6 +86,13 @@ public sealed class FieldCompute : IDisposable
         _rd.Sync();
     }
 
+    /// Public access to the EXACT 128-byte std430 param block (single source of truth for the field param
+    /// layout). S3: ChunkAabbProvider dispatches field_height on the render-thread RD and must pack params
+    /// byte-identically — reusing this avoids the std430-drift gotcha (memory std430-packing-helper).
+    public static byte[] PackParamsBytes(FieldParams p, float originX, float originZ,
+                                         float spacing, uint res, uint fieldMode)
+        => BuildParamsBytes(p, originX, originZ, spacing, res, fieldMode);
+
     // 128-byte std430 block, field-for-field with ParamsBuf in field_height.glsl.
     private static byte[] BuildParamsBytes(FieldParams p, float originX, float originZ,
                                            float spacing, uint res, uint fieldMode)

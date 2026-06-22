@@ -19,9 +19,19 @@ public sealed partial class CdlodTerrain : Node3D
     private int _hRes;
     private readonly List<MeshInstance3D> _pool = new();
     private readonly List<int> _poolMask = new();   // S2d: per-pool-slot last-assigned stitch mask (-1 = unset); avoids per-frame mesh re-upload
+    private readonly List<long> _poolKey = new();   // S3.5: per-slot chunk WORLD address (level,x,z) — re-request a tighten only when a slot's address changes
     private List<CdlodChunk> _lastLeaves = new();   // S2b: last Tick's selected leaves (for the test-path along-path invariant/count report)
     private bool _enabled;
     private bool _lodViz;
+
+    // S3.5: async GPU AABB tightening. Chunks are born with the generous AABB (no pop-in); the provider
+    // tightens each in place a few frames later via an async render-thread height-range. Self-contained +
+    // tunable; TightenAabb=false falls back to the always-safe generous AABB.
+    private FieldParams _fieldParams = null!;
+    private ChunkAabbProvider _aabbProvider;
+    public bool TightenAabb = true;                 // S3.5: disable → keep the generous AABB (fallback)
+    private readonly Dictionary<long, (float lo, float hi)> _tightened = new();   // key → landed tight range
+    private float _margin;   // current chunk's AABB Y margin (set per-leaf; reused when a tighten lands)
 
     public int GridN = 65;            // verts/side per chunk (64 quads)
     public int MaxDepth = 6;          // finest LOD depth; tunable
@@ -47,6 +57,8 @@ public sealed partial class CdlodTerrain : Node3D
     {
         _mat = mat; _minH = minH; _maxH = maxH; _regionSize = p.RegionSizeM;
         _heights = heights; _hRes = p.HeightmapRes;
+        _fieldParams = p;
+        _aabbProvider = new ChunkAabbProvider(p);   // S3.5: async height-range provider (render-thread RD lazily inited)
         _grid = CdlodMesh.BuildGrid(GridN);
         _variants = CdlodMesh.BuildStitchedVariants(GridN);   // S2d: 16 welded edge-stitch variants (by mask)
         _qt = new CdlodQuadtree(-_regionSize * 0.5f, -_regionSize * 0.5f, _regionSize, MaxDepth, SplitFactor);
@@ -75,6 +87,18 @@ public sealed partial class CdlodTerrain : Node3D
 
     public void SetLodViz(bool on) { _lodViz = on; }
 
+    /// S3.5: configure the async AABB tightener (CLI/lab tunables). probeRes/maxReq <= 0 leave the default.
+    public void ConfigureAabb(bool tighten, int probeRes = 0, int maxReq = 0)
+    {
+        TightenAabb = tighten;
+        if (_aabbProvider != null)
+        {
+            if (probeRes > 0) { _aabbProvider.ProbeRes = probeRes; }
+            if (maxReq > 0) { _aabbProvider.MaxRequestsPerFrame = maxReq; }
+        }
+        GD.Print($"CdlodTerrain: AABB tighten={(tighten ? "on" : "OFF")} probeRes={_aabbProvider?.ProbeRes} maxReq={_aabbProvider?.MaxRequestsPerFrame}");
+    }
+
     public void Tick(Vector3 camPos)
     {
         if (!_enabled) { return; }
@@ -87,6 +111,7 @@ public sealed partial class CdlodTerrain : Node3D
         List<CdlodChunk> leaves = _qt.SelectRoaming(camPos);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
         EnsurePool(leaves.Count);
+        DrainTightened();   // S3.5: collect any async height-ranges that landed since last frame
         int n = Mathf.Min(leaves.Count, _pool.Count);   // S3: budget may cap the pool below leaf count this frame
         for (int i = 0; i < n; i++)
         {
@@ -96,17 +121,27 @@ public sealed partial class CdlodTerrain : Node3D
             // S3: RENDER-RELATIVE position (true center − renderOrigin); shader adds render_origin back.
             mi.Position = new Vector3(c.OriginXZ.X + half - _renderOrigin.X, 0f, c.OriginXZ.Y + half - _renderOrigin.Z);
             mi.Scale = new Vector3(c.Size, 1f, c.Size);    // X/Z = chunk size; Y = 1 (world-unit height)
+            // S3.5: this slot's chunk WORLD ADDRESS (level,x,z). When it CHANGES the slot now shows a
+            // different chunk → queue an async tighten for the new address (deduped in the provider).
+            long key = ChunkKey(c);
+            if (_poolKey[i] != key && TightenAabb)
+            {
+                _aabbProvider.Request(key, c.OriginXZ, c.Size);
+                _poolKey[i] = key;
+            }
             // CustomAabb is LOCAL (pre-node-scale): X/Z = the unit grid (the node Scale stretches it to
-            // the chunk footprint); Y = this chunk's TIGHT world height range (Y scale is 1). Tight Y is
-            // required for shadow-cascade depth precision — see ChunkHeightRange.
-            var (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size);
-            // Vertical AABB margin. ChunkHeightRange samples the baked map at a COARSE stride, and S2b's
-            // geomorph displaces each vertex's sample by up to ~one chunk vertex-span (chunk_size/(GridN-1))
-            // toward the coarse grid — so on steep ground the actual displaced verts can sit well outside a
-            // flat 8 m margin. Too tight -> the CSM cascade depth range misses those verts -> grid-aligned
-            // shadow ACNE (dotted stipple, worst on slopes). Too loose -> inflated cascade depth -> soft
-            // blobs (memory cdlod-chunk-shadow-aabb). Scale the margin to the chunk's vertex spacing (the
-            // morph-displacement bound) with an 8 m floor: tight for fine chunks, enough for coarse ones.
+            // the chunk footprint); Y = this chunk's world height range (Y scale is 1). Tight Y is required
+            // for shadow-cascade depth precision. Born GENEROUS (ChunkHeightRange) so it renders+shadows with
+            // no pop-in; once the async tighten for this key has landed, use the tight range instead.
+            float lo, hi;
+            if (TightenAabb && _tightened.TryGetValue(key, out var tr)) { lo = tr.lo; hi = tr.hi; }
+            else { (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size); }
+            // Vertical AABB margin. S2b's geomorph displaces each vertex's sample by up to ~one chunk
+            // vertex-span (chunk_size/(GridN-1)) toward the coarse grid — so on steep ground the actual
+            // displaced verts can sit well outside a flat 8 m margin. Too tight -> the CSM cascade depth range
+            // misses those verts -> grid-aligned shadow ACNE (dotted stipple, worst on slopes). Too loose ->
+            // inflated cascade depth -> soft blobs (memory cdlod-chunk-shadow-aabb). Scale the margin to the
+            // chunk's vertex spacing (the morph-displacement bound) with an 8 m floor.
             float m = Mathf.Max(8f, c.Size / (GridN - 1) * 1.5f);
             mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f),
                                      new Vector3(1f, (hi - lo) + 2f * m, 1f));
@@ -122,6 +157,44 @@ public sealed partial class CdlodTerrain : Node3D
             mi.Visible = true;
         }
         for (int i = n; i < _pool.Count; i++) { _pool[i].Visible = false; }
+        if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
+    }
+
+    /// S3.5: drain async height-ranges that have landed and cache them by key so the per-leaf loop applies the
+    /// tight AABB. Bounded keep: only addresses currently of interest stay (a slot re-requests if it recurs).
+    private void DrainTightened()
+    {
+        while (_aabbProvider.TryTake(out long key, out float lo, out float hi))
+        {
+            _tightened[key] = (lo, hi);
+        }
+        // Bound the cache as the camera streams an infinite world: when it outgrows a generous multiple of the
+        // live leaf set, drop everything not currently visible (those re-request cheaply if revisited). Cheap
+        // amortized — runs only when the cap is exceeded.
+        if (_tightened.Count > 8192)
+        {
+            var live = new HashSet<long>(_poolKey);
+            var stale = new List<long>();
+            foreach (var k in _tightened.Keys) { if (!live.Contains(k)) { stale.Add(k); } }
+            foreach (var k in stale) { _tightened.Remove(k); }
+        }
+    }
+
+    /// Stable per-chunk key from its WORLD address (level + integer XZ origin). Quantize the origin to whole
+    /// metres (chunk origins are exact powers-of-two grid points, so this is lossless) and pack into 64 bits.
+    private static long ChunkKey(CdlodChunk c)
+    {
+        long xi = (long)Mathf.Round(c.OriginXZ.X);
+        long zi = (long)Mathf.Round(c.OriginXZ.Y);
+        // pack: level (8 bits) | x (28 bits) | z (28 bits), biased to keep negatives positive.
+        long x = (xi + (1L << 27)) & 0xFFFFFFF;
+        long z = (zi + (1L << 27)) & 0xFFFFFFF;
+        return ((long)(c.Level & 0xFF) << 56) | (x << 28) | z;
+    }
+
+    public override void _ExitTree()
+    {
+        _aabbProvider?.Dispose();   // S3.5: free the render-thread field shader/pipeline
     }
 
     private void EnsurePool(int n)
@@ -133,6 +206,7 @@ public sealed partial class CdlodTerrain : Node3D
             AddChild(mi);
             _pool.Add(mi);
             _poolMask.Add(-1);   // S2d: -1 = no variant assigned yet (forces first Tick to set the mesh)
+            _poolKey.Add(-1L);   // S3.5: -1 = no chunk address assigned yet (forces first Tick to request a tighten)
             births++;
         }
     }

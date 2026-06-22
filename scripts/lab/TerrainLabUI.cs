@@ -28,6 +28,11 @@ public partial class TerrainLabUI : Control
     private System.Random _rng = new();
     private bool _ready;   // suppress callbacks while building/applying
 
+    // S3.5 spike state (--aabbspike): drive one async height-range request over a few frames, compare to sync.
+    private ChunkAabbProvider _spikeProvider;
+    private int _spikeFrame = -1;          // -1 = not started; >=0 = frames since the request
+    private bool _spikeDone;
+
     /// One control: parsed registry fields + runtime state.
     private sealed class LabControl
     {
@@ -207,6 +212,12 @@ public partial class TerrainLabUI : Control
         {
             bool ok = StreamCheck.Run(_params.RegionSizeM, 6, 2.5f, out string m);
             GD.Print($"STREAMCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
+        }
+        if (_aabbSpikeCli)   // S3.5 SPIKE: kick off one async height-range; _Process collects + compares to sync
+        {
+            _spikeProvider = new ChunkAabbProvider(_params) { ProbeRes = 7 };
+            _spikeProvider.Request(1L, new Vector2(0f, 0f), 2048f);   // one known chunk footprint at the origin
+            _spikeFrame = 0;
         }
         if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
         {

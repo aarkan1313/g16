@@ -124,6 +124,10 @@ public partial class TerrainLabUI : Control
             else if (a == "--morphcheck") { _morphCheckCli = true; }   // S2b: geomorph C0-continuity / pop-free numeric backstop
             else if (a == "--stitchcheck") { _stitchCheckCli = true; }   // S2d: edge-stitch crack-free numeric guard
             else if (a == "--streamcheck") { _streamCheckCli = true; }   // S3: streaming invariant + snap-continuity guard
+            else if (a == "--aabbspike") { _aabbSpikeCli = true; }   // S3.5: one async GPU height-range vs sync, prints AABBSPIKE
+            else if (a == "--notighten") { _noTightenCli = true; }   // S3.5: disable async AABB tighten → generous AABB fallback
+            else if (a.StartsWith("--aabbres=")) { int.TryParse(a.Substring("--aabbres=".Length), out _aabbResCli); }   // S3.5: ProbeRes
+            else if (a.StartsWith("--aabbreq=")) { int.TryParse(a.Substring("--aabbreq=".Length), out _aabbReqCli); }   // S3.5: MaxRequestsPerFrame
             else if (a.StartsWith("--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--lodviz")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _lodVizCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--testpath=")) { int.TryParse(a.Substring("--testpath=".Length), out _testPathCli); }   // S2b: run LOD-crossing test path N, print report, quit
@@ -201,6 +205,11 @@ public partial class TerrainLabUI : Control
         if (_cdlodTestCli) { _terrain.SetAnalytic(true); _terrain.CdlodTestOneChunk(_params); }   // S2a Task-1 sanity
         if (_cdlodCli >= 0) { _terrain.SetAnalytic(true); _terrain.SetCdlod(_cdlodCli == 1); }   // S2a quadtree terrain
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
+        // S3.5: async AABB tighten tunables (--notighten / --aabbres= / --aabbreq=). Only meaningful with CDLOD on.
+        if (_cdlodCli == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
+        {
+            _terrain.ConfigureCdlodAabb(!_noTightenCli, _aabbResCli, _aabbReqCli);
+        }
         // S2b: --testpath=N. Deferred so the _testPaths sibling-add + SetupTestPaths (both deferred from
         // TerrainLab.Build) have completed before we Start the flight.
         if (_testPathCli >= 0) { CallDeferred(nameof(StartTestPathDeferred)); }
@@ -213,6 +222,10 @@ public partial class TerrainLabUI : Control
     private bool _morphCheckCli;      // --morphcheck → S2b geomorph pop-free numeric backstop (PASS/FAIL)
     private bool _stitchCheckCli;     // --stitchcheck → S2d edge-stitch seam-coincidence guard (PASS/FAIL)
     private bool _streamCheckCli;     // --streamcheck → S3 streaming invariant-along-traverse + snap field-continuity
+    private bool _aabbSpikeCli;       // --aabbspike → S3.5 async GPU height-range feasibility spike (vs sync ref)
+    private bool _noTightenCli;       // --notighten → S3.5 disable the async AABB tighten (generous-AABB fallback)
+    private int _aabbResCli;          // --aabbres=N → S3.5 ChunkAabbProvider.ProbeRes (0 = leave default)
+    private int _aabbReqCli;          // --aabbreq=N → S3.5 ChunkAabbProvider.MaxRequestsPerFrame (0 = leave default)
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;
