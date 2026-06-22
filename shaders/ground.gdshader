@@ -144,12 +144,20 @@ void vertex() {
         // its grazing-angle squares are gone). Proven by --stitchcheck (boundary verts coincident to ~0 m).
         VERTEX.y = h0;
 
-        // Normal from forward differences scaled to the chunk's ACTUAL vertex spacing (S2a review fix:
-        // was analytic_spacing=4 m but coarse-chunk verts are 16 m+ apart). Sample at the morphed XZ.
-        float vs = chunk_size / max(grid_n - 1.0, 1.0);    // chunk vertex spacing (m)
-        float hx = analytic_h(wxz + vec2(vs, 0.0));
-        float hz = analytic_h(wxz + vec2(0.0, vs));
-        v_normal = normalize(vec3(h0 - hx, vs, h0 - hz));
+        // Normal = the field's TRUE surface gradient, via a CENTRAL difference at a fixed, LOD-INDEPENDENT
+        // step. The prior code stepped by the chunk vertex spacing (chunk_size/(grid_n-1)), which HALVES at
+        // every LOD swap → the shaded normal jumped ~11° per swap (the "lighting flicker"/LOD-band terracing
+        // the user saw; geometry was already pop-free per --morphcheck, proven by --popcheck height=0 m).
+        // A fixed step makes the normal a function of position only → continuous across every swap (--popcheck
+        // normal≈0°). Central diff (4 taps) is 2nd-order accurate ≈ the analytic gradient; the step is the
+        // field's own analytic_spacing so shading detail tracks the field, not the triangulation (correct:
+        // shading detail is decoupled from geometry LOD, the AAA approach). h0 stays the morphed height.
+        float ns = max(analytic_spacing, 1.0);             // fixed FD step (m), LOD-independent
+        float hxp = analytic_h(wxz + vec2(ns, 0.0));
+        float hxm = analytic_h(wxz - vec2(ns, 0.0));
+        float hzp = analytic_h(wxz + vec2(0.0, ns));
+        float hzm = analytic_h(wxz - vec2(0.0, ns));
+        v_normal = normalize(vec3(hxm - hxp, 2.0 * ns, hzm - hzp));
         NORMAL = v_normal;
         v_h = h0;
     } else if (use_analytic) {

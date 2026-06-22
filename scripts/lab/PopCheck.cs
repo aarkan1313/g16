@@ -57,12 +57,13 @@ public static class PopCheck
     // GPU ground-truth shaded NORMAL at XZ, computed the EXACT way ground.gdshader's chunk branch does:
     // forward differences with the step = the chunk's vertex spacing vs (= leafSize/(gridN-1)). vs changes
     // with LOD, so the normal changes at a swap EVEN when the height is identical — the shading/terracing pop.
-    private static Vector3 FieldN(FieldCompute fc, FieldParams p, Vector2 xz, float vs)
+    // Mirror of ground.gdshader's FIXED-step CENTRAL-difference normal (the analytic-quality fix): step is
+    // LOD-independent (the field's own analytic_spacing), so the normal is a function of position only.
+    private static Vector3 FieldN(FieldCompute fc, FieldParams p, Vector2 xz, float ns)
     {
-        float h0 = FieldH(fc, p, xz);
-        float hx = FieldH(fc, p, xz + new Vector2(vs, 0f));
-        float hz = FieldH(fc, p, xz + new Vector2(0f, vs));
-        return new Vector3(h0 - hx, vs, h0 - hz).Normalized();
+        float hxp = FieldH(fc, p, xz + new Vector2(ns, 0f)), hxm = FieldH(fc, p, xz - new Vector2(ns, 0f));
+        float hzp = FieldH(fc, p, xz + new Vector2(0f, ns)), hzm = FieldH(fc, p, xz - new Vector2(0f, ns));
+        return new Vector3(hxm - hxp, 2f * ns, hzm - hzp).Normalized();
     }
 
     public static bool Run(FieldCompute fc, FieldParams p, int maxDepth, float split, int gridN, out string msg)
@@ -99,12 +100,12 @@ public static class PopCheck
                 // height at the morphed sample XZ, normal from FD taps stepped by the chunk's vertex spacing.
                 Vector2 sxz = SampleXZ(tgt, leaf, gridN, split, camXZ);
                 float h = FieldH(fc, p, sxz);
-                // Normal exactly as ground.gdshader's chunk branch computes it: FD step = the chunk vertex
-                // spacing (leaf/(gridN-1)). This is LOD-DEPENDENT — the source of the shading pop. Once the
-                // shader switches to the LOD-independent analytic gradient, this guard's normal must mirror
-                // THAT (the gradient is camera/LOD-independent), so the swap Δnormal collapses to ~0°.
-                float vs = leaf / (gridN - 1f);
-                Vector3 n = FieldN(fc, p, sxz, vs);
+                // Normal exactly as ground.gdshader's chunk branch now computes it: CENTRAL difference at a
+                // FIXED, LOD-INDEPENDENT step (the field's analytic_spacing = p.Spacing). Because the step no
+                // longer depends on leaf size, the normal at a point is identical regardless of which LOD
+                // chunk renders it → the swap Δnormal collapses to ~0° (this is the fix being verified).
+                float ns = Mathf.Max(p.Spacing, 1f);
+                Vector3 n = FieldN(fc, p, sxz, ns);
                 if (!float.IsNaN(prevH))
                 {
                     float dh = Mathf.Abs(h - prevH);
