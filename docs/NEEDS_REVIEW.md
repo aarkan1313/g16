@@ -365,7 +365,14 @@ is default-off so the approved look is untouched.
 
 ---
 
-### 12. Celestial C3 — N suns + N moons (multi-luminary) — 🟡 BUILT 2026-06-22, EYE-GATE OWED
+### 12. Celestial C3 — N suns + N moons (multi-luminary) — ✅ PASS 2026-06-22 (eye-gate, review key 5: "it looks good")
+**Gated:** user flew the multi-luminary flip-through (review key 5: 2→3 suns daytime) → "it looks good." The look passes.
+**Next (user's call 2026-06-22):** make luminaries **fully data-driven** — select the body count + every per-body
+setting easily (a luminaries JSON + an editor UI), replacing the hardcoded `LightingComposer` constants. Part of a
+broader "everything data-driven → author settings → export one big config JSON" direction (own brainstorm/spec).
+Original build record below.
+
+#### (build record) — BUILT 2026-06-22
 Generalized the single-sun + single-moon sky to arbitrary luminaries (spec `2026-06-21-celestial-c3-n-luminaries-design.md`).
 **Default is unchanged** (1 sun + 1 moon → byte-identical; the extra-luminary shader loops are no-ops at count 0),
 so this is opt-in and regression-safe. Built in 6 units; **Unit 1 (LightingComposer extraction) zero-drift was
