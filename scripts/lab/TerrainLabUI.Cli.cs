@@ -130,6 +130,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--snapdiff") { _snapDiffCli = true; }   // S3: renderOrigin-snap seamlessness check
             else if (a == "--pinorigin") { _pinOriginCli = true; }   // DEBUG: pin renderOrigin=0 (isolate snap-pop)
             else if (a == "--debugwxz") { _debugWxzCli = true; }   // DEBUG: shader outputs sampled world-XZ as color
+            else if (a == "--nofog") { _noFogCli = true; }   // REVIEW: kill all atmospheric haze (env fog + aerial + atmosphere + volfog)
             else if (a == "--popmeter") { _popMeterCli = true; }   // S3: LIVE pop meter — measure height/normal/origin-snap each frame as you fly
             else if (a == "--aabbspike") { _aabbSpikeCli = true; }   // S3.5: one async GPU height-range vs sync, prints AABBSPIKE
             else if (a == "--notighten") { _noTightenCli = true; }   // S3.5: disable async AABB tighten → generous AABB fallback
@@ -224,6 +225,23 @@ public partial class TerrainLabUI : Control
         // TerrainLab.Build) have completed before we Start the flight.
         if (_testPathCli >= 0) { CallDeferred(nameof(StartTestPathDeferred)); }
         if (_probeMood >= 0) { ApplyMood(_probeMood); }
+        if (_noFogCli) { KillAllFog(); }   // REVIEW: last, so the mood/composer can't re-enable fog
+    }
+
+    /// REVIEW (--nofog): kill EVERY atmospheric haze layer so the raw terrain is visible — env distance fog,
+    /// volumetric fog, aerial perspective (AT-2), and the GPU atmosphere (AT-1). Applied after mood/compose so
+    /// nothing re-enables it for a static review. Toggle the systems back via the Light/Debug tabs.
+    private void KillAllFog()
+    {
+        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
+        env.FogEnabled = false;
+        env.VolumetricFogEnabled = false;
+        env.FogDensity = 0f;
+        env.FogAerialPerspective = 0f;
+        env.FogHeightDensity = 0f;
+        _aerial?.SetEnabled(false);          // AT-2 screen-space aerial perspective
+        _cloud?.SetAtmosphereOn(false);      // AT-1 physical sky tint on the terrain
+        GD.Print("[nofog] all haze OFF (env fog / volfog / aerial / atmosphere) — raw terrain review");
     }
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)
     private bool _shadowCheckCli;     // --shadowcheck → numeric correlation test, PASS/FAIL to console
@@ -236,6 +254,7 @@ public partial class TerrainLabUI : Control
     private bool _snapDiffCli;        // --snapdiff → S3 renderOrigin-snap seamless check (PASS/FAIL)
     private bool _pinOriginCli;       // --pinorigin → DEBUG pin renderOrigin=0
     private bool _debugWxzCli;        // --debugwxz → DEBUG shader world-XZ color
+    private bool _noFogCli;           // --nofog → REVIEW kill all haze (fog+aerial+atmosphere)
     private bool _popMeterCli;        // --popmeter → S3 live per-frame pop meter (HUD + log) while you fly
     private bool _aabbSpikeCli;       // --aabbspike → S3.5 async GPU height-range feasibility spike (vs sync ref)
     private bool _noTightenCli;       // --notighten → S3.5 disable the async AABB tighten (generous-AABB fallback)
