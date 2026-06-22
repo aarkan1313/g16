@@ -197,6 +197,12 @@ public partial class TerrainLabUI : Control
             }
             GD.Print($"MORPHCHECK: {(allOk ? "PASS" : "FAIL")}  {worstMsg}");
         }
+        if (_stitchCheckCli)   // S2d: edge-stitch seam-coincidence (welded fine edge on the coarse neighbor's lattice)
+        {
+            var camStitch = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
+            bool ok = StitchCheck.Run(_params.RegionSizeM, 6, 2.5f, 65, camStitch.GlobalPosition, out string m);
+            GD.Print($"STITCHCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
+        }
         if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");

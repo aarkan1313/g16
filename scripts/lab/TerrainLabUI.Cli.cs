@@ -120,6 +120,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--cdlodtest") { _cdlodTestCli = true; }
             else if (a == "--cdlodcheck") { _cdlodCheckCli = true; }   // exact-match BEFORE StartsWith("--cdlod") or it gets shadowed
             else if (a == "--morphcheck") { _morphCheckCli = true; }   // S2b: geomorph C0-continuity / pop-free numeric backstop
+            else if (a == "--stitchcheck") { _stitchCheckCli = true; }   // S2d: edge-stitch crack-free numeric guard
             else if (a.StartsWith("--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--lodviz")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _lodVizCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--testpath=")) { int.TryParse(a.Substring("--testpath=".Length), out _testPathCli); }   // S2b: run LOD-crossing test path N, print report, quit
@@ -207,6 +208,7 @@ public partial class TerrainLabUI : Control
     private bool _fieldCheckCli;      // --fieldcheck → one-shot field determinism/parity self-check (S1)
     private bool _cdlodCheckCli;      // --cdlodcheck → quadtree neighbor-invariant + stats self-check (S2a)
     private bool _morphCheckCli;      // --morphcheck → S2b geomorph pop-free numeric backstop (PASS/FAIL)
+    private bool _stitchCheckCli;     // --stitchcheck → S2d edge-stitch seam-coincidence guard (PASS/FAIL)
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;
