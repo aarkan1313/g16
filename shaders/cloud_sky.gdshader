@@ -56,6 +56,16 @@ uniform vec3  extra_sun_color[MAX_EXTRA_SUNS];                      // plain vec
 uniform float extra_sun_size[MAX_EXTRA_SUNS];                       // angular radius (deg)
 uniform float extra_sun_energy[MAX_EXTRA_SUNS];                     // per-sun disc energy
 
+// --- EXTRA MOONS (Celestial C3 Unit 6): additional moon discs beyond the primary. Like extra suns:
+// custom-uniform arrays, extra_moon_count=0 (default) → no-op. Each shares the global moon limb/halo/
+// disc-energy appearance but has its own dir/color/size/phase. MAX 2 extra (3 moons total). ---
+const int MAX_EXTRA_MOONS = 2;
+uniform int   extra_moon_count = 0;
+uniform vec3  extra_moon_dir[MAX_EXTRA_MOONS];                      // direction TO each extra moon (normalized)
+uniform vec3  extra_moon_color[MAX_EXTRA_MOONS];                    // plain vec3 (binds as Vector3[])
+uniform float extra_moon_size[MAX_EXTRA_MOONS];                     // angular radius (deg)
+uniform float extra_moon_phase[MAX_EXTRA_MOONS];                    // 0 new .. 1 full
+
 // --- MOON (Stage 3b): custom-uniform disc, gated to night. Reuses sun_fbm for maria/craters. ---
 uniform vec3  moon_dir = vec3(0.0, 0.7, 0.7);                      // direction TO the moon (pushed from C#, normalized)
 uniform vec3  moon_color : source_color = vec3(0.85, 0.88, 1.0);  // cool moonlight white
@@ -342,6 +352,45 @@ vec3 moon_layers(vec3 rd) {
     return moon_disc_energy * vis * (core + glow);
 }
 
+// EXTRA MOONS (C3 Unit 6): compact moon_layers per extra moon (disc + limb + phase terminator + cool
+// halo + per-pixel cloud occlusion), reading its own dir/color/size/phase, sharing the global moon
+// limb/halo/disc-energy. Gated night × above-horizon. extra_moon_count=0 → returns 0 (no-op).
+vec3 extra_moons(vec3 rd){
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < extra_moon_count && i < MAX_EXTRA_MOONS; i++){
+        vec3 md = extra_moon_dir[i];
+        float vis = night_factor * smoothstep(-0.04, 0.02, md.y);
+        if (vis <= 0.0) { continue; }
+        float cosM = dot(rd, md);
+        float discEdge = cos(radians(extra_moon_size[i]));
+        float mu = clamp((cosM - discEdge) / max(1.0 - discEdge, 1e-6), 0.0, 1.0);
+        float discMask = smoothstep(0.0, 0.04, mu);
+        float limb = mix(1.0, mix(0.45, 1.0, sqrt(mu)), moon_limb);
+        float disc = discMask * limb;
+        // disc-local frame for the phase terminator
+        vec3 S = md;
+        vec3 upv = abs(S.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+        vec3 T = normalize(cross(upv, S));
+        vec3 Bt = cross(S, T);
+        float rad = max(sin(radians(extra_moon_size[i])), 1e-4);
+        vec2 p = vec2(dot(rd, T), dot(rd, Bt)) / rad;
+        float r2 = clamp(dot(p, p), 0.0, 1.0);
+        float ball = sqrt(1.0 - r2);
+        float angle = (1.0 - extra_moon_phase[i]) * PI;
+        vec3 Ld = vec3(sin(angle), 0.0, cos(angle));
+        vec3 n = normalize(vec3(p.x, p.y, ball));
+        disc *= smoothstep(-0.08, 0.08, dot(n, Ld));
+        float illum = 0.5 + 0.5 * cos(angle);
+        float halo = pow(max(cosM, 0.0), moon_halo_size) * moon_halo_energy * illum;
+        float aPix = (cloud_enabled && rd.y > 0.0) ? clamp(texture(cloud_rd_tex, dir_to_uv(rd)).a, 0.0, 1.0) : 0.0;
+        vec3 col = extra_moon_color[i];
+        vec3 core = col * disc * 2.2 * (1.0 - aPix);
+        vec3 glow = col * halo * (1.0 - aPix * 0.5);
+        acc += moon_disc_energy * vis * (core + glow);
+    }
+    return acc;
+}
+
 // STARFIELD (Celestial C1) — magnitude-stratified live point-stars: a dense FAINT grid + a sparse BRIGHT
 // grid layered over it (few-bright/many-faint), each star with size variety + a warm/cool color-temp tint
 // + smooth twinkle. Live (not baked) so the twinkle animates. sr = the (rotated) celestial direction.
@@ -563,6 +612,7 @@ void sky(){
     bg += sun_layers(rd);
     bg += extra_suns(rd);      // C3: additional suns (no-op when extra_sun_count == 0)
     bg += moon_layers(rd);
+    bg += extra_moons(rd);     // C3: additional moons (no-op when extra_moon_count == 0)
 
     vec4 ci = cirrus_layer(rd);              // CO-2: high thin layer, OVER sun/moon, UNDER cumulus
     bg = bg * (1.0 - ci.a) + ci.rgb * ci.a;

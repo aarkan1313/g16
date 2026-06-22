@@ -45,6 +45,8 @@
     { "id": "planet_brightness", "label": "planet brightness", "tab": "Night", "type": "scenef", "scene": "planet_brightness", "min": 0.0, "max": 3.0, "default": 1.0, "rand": false },
     { "id": "bright_stars_on", "label": "bright stars", "tab": "Night", "type": "scene", "scene": "bright_stars_on", "default": true, "rand": false },
     { "id": "bright_star_brightness", "label": "bright star brightness", "tab": "Night", "type": "scenef", "scene": "bright_star_brightness", "min": 0.0, "max": 3.0, "default": 1.0, "rand": false },
+    { "id": "extra_suns", "label": "extra suns (C3)", "tab": "Night", "type": "scenef", "scene": "extra_suns", "min": 0.0, "max": 3.0, "default": 0.0, "rand": false },
+    { "id": "extra_moons", "label": "extra moons (C3)", "tab": "Night", "type": "scenef", "scene": "extra_moons", "min": 0.0, "max": 2.0, "default": 0.0, "rand": false },
     { "id": "moon_color", "label": "moon color", "tab": "Night", "type": "scenecolor", "scene": "moon_color", "default": [0.85, 0.88, 1.0], "rand": false },
     { "id": "moonlight_color", "label": "moonlight color", "tab": "Night", "type": "scenecolor", "scene": "moonlight_color", "default": [0.6, 0.7, 1.0], "rand": false },
     { "id": "inspect_light", "label": "inspect light (L) energy", "tab": "Night", "type": "scenef", "scene": "inspect_energy", "min": 0.0, "max": 4.0, "default": 1.0, "rand": false },

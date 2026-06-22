@@ -141,6 +141,8 @@ public partial class TerrainLabUI : Control
             case "meteor_color_var":    _stars.MeteorColorVar = v; ComposeLighting(); break;
             case "planet_brightness":      _stars.PlanetBrightness = v; ComposeLighting(); break;       // C2 planets
             case "bright_star_brightness": _stars.BrightStarBrightness = v; ComposeLighting(); break;   // C2 landmark stars
+            case "extra_suns":   _lighting.ExtraSunCount = Mathf.RoundToInt(v); ComposeLighting(); break;    // C3: extra suns (0-3), live + preset-settable
+            case "extra_moons":  _lighting.ExtraMoonCount = Mathf.RoundToInt(v); ComposeLighting(); break;   // C3: extra moons (0-2)
             case "inspect_energy":      _inspectEnergy = v; if (_inspectLight != null) { _inspectLight.LightEnergy = v; } break;
             case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
             case "ssao_intensity":  env.SsaoIntensity = v; break;

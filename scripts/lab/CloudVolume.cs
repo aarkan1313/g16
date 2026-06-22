@@ -582,6 +582,16 @@ public partial class CloudVolume : Node
         _skyMat?.SetShaderParameter("extra_sun_energy", energies);
     }
 
+    // --- EXTRA MOONS (C3 Unit 6): arrays length MAX_EXTRA_MOONS (2); count gates the shader loop (0=no-op). ---
+    public void SetExtraMoons(int count, Vector3[] dirs, Vector3[] colors, float[] sizes, float[] phases)
+    {
+        _skyMat?.SetShaderParameter("extra_moon_count", count);
+        _skyMat?.SetShaderParameter("extra_moon_dir", dirs);
+        _skyMat?.SetShaderParameter("extra_moon_color", colors);
+        _skyMat?.SetShaderParameter("extra_moon_size", sizes);
+        _skyMat?.SetShaderParameter("extra_moon_phase", phases);
+    }
+
     // --- CIRRUS (CO-2): 2D sky-layer uniforms (default off) ---
     public void SetCirrusOn(bool on) { _skyMat?.SetShaderParameter("cirrus_on", on); }
     public void SetCirrus(string knob, float v)

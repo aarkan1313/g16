@@ -75,6 +75,18 @@ public sealed class LightingComposer
     private readonly float[] _extraEnergies = new float[MaxExtraSuns];
     private readonly float[] _extraAtmoInten = new float[MaxExtraSuns];   // C3 Unit 5: per-sun sky-scatter strength
 
+    // ── C3 Unit 6: EXTRA MOONS (visual disc accents; night-gated; no extra terrain light — the primary
+    // moon owns moonlight). Own phase-lagged arc + az offset, like the primary moon. 0 = single moon (no-op).
+    public int ExtraMoonCount = 0;
+    private const int MaxExtraMoons = 2;   // matches MAX_EXTRA_MOONS in cloud_sky.gdshader
+    private static readonly Color[] ExtraMoonColors = { new(1.0f, 0.90f, 0.72f), new(1.0f, 0.82f, 0.86f) };   // pale gold, pale rose
+    private static readonly float[] ExtraMoonSizeFac = { 0.80f, 0.62f };
+    private static readonly float[] ExtraMoonPhases = { 0.5f, 0.85f };   // distinct (half, gibbous)
+    private readonly Vector3[] _exMoonDirs = new Vector3[MaxExtraMoons];
+    private readonly Vector3[] _exMoonCols = new Vector3[MaxExtraMoons];
+    private readonly float[] _exMoonSizes = new float[MaxExtraMoons];
+    private readonly float[] _exMoonPhases = new float[MaxExtraMoons];
+
     private bool _shadowTuned = false;             // #5: directional shadow atlas size set once (RenderingServer global)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;               // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
@@ -279,6 +291,7 @@ public sealed class LightingComposer
         _host.SyncLightControlsToScene(); // Light-tab sliders reflect the composed state
 
         ComposeExtraSuns();               // C3 Unit 4: extra sun discs + terrain lights (no-op when ExtraSunCount==0)
+        ComposeExtraMoons();              // C3 Unit 6: extra moon discs (no-op when ExtraMoonCount==0)
         RebuildAndBudget();               // C3: keep the luminary list + allocation current
     }
 
@@ -321,6 +334,39 @@ public sealed class LightingComposer
         // C3 Unit 5: feed the same extras to the atmosphere so the SKY COLOR responds (summed in the shared
         // skyview/aerial raymarch — cheap; transmittance/multiscatter LUTs are sun-independent and reused).
         _host.Atmosphere?.SetExtraSuns(n, _extraDirs, _extraCols, _extraAtmoInten);
+    }
+
+    /// C3 Unit 6: orient each extra moon on its own phase-lagged arc (+ az offset) and push the disc arrays.
+    /// Visual accents only — night-gated in the shader; no extra DirectionalLight (the primary moon owns the
+    /// terrain moonlight). Direction computed analytically (Basis.FromEuler, Godot's default YXZ = the same
+    /// convention as the primary moon's node). No-op when ExtraMoonCount==0.
+    private void ComposeExtraMoons()
+    {
+        int n = Mathf.Clamp(ExtraMoonCount, 0, MaxExtraMoons);
+        if (n == 0) { return; }
+        float moonDayLen = Mathf.Max(Time.SunsetH - Time.SunriseH, 1e-3f);
+        for (int i = 0; i < MaxExtraMoons; i++)
+        {
+            if (i < n)
+            {
+                float phase = ExtraMoonPhases[i];
+                float azOff = 40f * (i + 1) + Moon.AzOffset;     // offset from the primary moon's path
+                float declScale = 0.78f;
+                float moonHour = Time.TimeOfDay - phase * 12f;   // own phase lag
+                moonHour -= Mathf.Floor(moonHour / 24f) * 24f;
+                float mf = (moonHour - Time.SunriseH) / moonDayLen;
+                float elev = Time.PeakElev * declScale * Mathf.Sin(Mathf.Pi * mf);
+                float az = Mathf.Lerp(Time.AzStart, Time.AzEnd, mf) + azOff;
+                var b = Basis.FromEuler(new Vector3(Mathf.DegToRad(-elev), Mathf.DegToRad(az), 0f));
+                _exMoonDirs[i] = b.Z.Normalized();
+                Color c = ExtraMoonColors[i % ExtraMoonColors.Length];
+                _exMoonCols[i] = new Vector3(c.R, c.G, c.B);
+                _exMoonSizes[i] = Moon.Size * ExtraMoonSizeFac[i % ExtraMoonSizeFac.Length];
+                _exMoonPhases[i] = phase;
+            }
+            else { _exMoonDirs[i] = Vector3.Up; _exMoonCols[i] = Vector3.Zero; _exMoonSizes[i] = 1f; _exMoonPhases[i] = 1f; }
+        }
+        _host.Cloud?.SetExtraMoons(n, _exMoonDirs, _exMoonCols, _exMoonSizes, _exMoonPhases);
     }
 
     /// Lazily build + deferred-add the extra-sun DirectionalLights (shadowless; the primary owns the shadow).
