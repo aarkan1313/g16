@@ -15,6 +15,9 @@ layout(set = 0, binding = 3, std430) restrict readonly buffer Params {
     vec4 sun_turb;        // xyz = world to-sun, w = turbidity (reserved)
     vec4 cam_pos_far;     // xyz = camera world pos (m), w = max aerial distance (m, ~32000)
     mat4 inv_view_proj;   // NDC -> world (same as godray_screen)
+    vec4 sun_meta;        // C3: x = extra atmosphere-sun count
+    vec4 extra_dir[3];    // C3: xyz = to-sun, w = intensity
+    vec4 extra_col[3];    // C3: rgb = sun color tint
 } P;
 
 // ===== Hillaire shared block (KEEP IDENTICAL across atmosphere_*.glsl — edit all four together) =====
@@ -62,6 +65,16 @@ vec3 getValFromLUT(sampler2D lut, vec3 pos, vec3 sunDir){
 }
 // ===== end shared block =====
 
+// C3: per-sun in-scatter (shared march; only phase + sun-transmittance + multiscatter are per-sun).
+vec3 sunInScatter(vec3 rayDir, vec3 pos, vec3 sunDir, vec3 sunCol, vec3 rs, float ms){
+    float cosT = dot(rayDir, sunDir);
+    float miePhase = getMiePhase(cosT);
+    float rayPhase = getRayleighPhase(-cosT);
+    vec3 sunTr = getValFromLUT(transLUT, pos, sunDir);
+    vec3 psi   = getValFromLUT(msLUT, pos, sunDir);
+    return (rs * (rayPhase * sunTr + psi) + vec3(ms) * (miePhase * sunTr + psi)) * sunCol;
+}
+
 void main(){
     ivec3 sz = imageSize(aerialTex);
     ivec2 id = ivec2(gl_GlobalInvocationID.xy);
@@ -75,9 +88,7 @@ void main(){
     float maxDist = P.cam_pos_far.w;                 // metres
     float camY_Mm = camPos.y * 1e-6;
     vec3 sunDir = normalize(P.sun_turb.xyz);
-    float cosT = dot(rayDir, sunDir);
-    float miePhase = getMiePhase(cosT);
-    float rayPhase = getRayleighPhase(-cosT);
+    int nExtra = int(P.sun_meta.x + 0.5);
 
     vec3 lum = vec3(0.0), tr = vec3(1.0);
     float prevT = 0.0;
@@ -96,9 +107,10 @@ void main(){
             vec3 pos = vec3(0.0, groundRadiusMM + alt_Mm, 0.0);
             vec3 rs; float ms; vec3 ext; getScatteringValues(pos, rs, ms, ext);
             vec3 sampleTr = exp(-dt_Mm * ext);
-            vec3 sunTr = getValFromLUT(transLUT, pos, sunDir);
-            vec3 psi = getValFromLUT(msLUT, pos, sunDir);
-            vec3 inS = rs * (rayPhase * sunTr + psi) + vec3(ms) * (miePhase * sunTr + psi);
+            vec3 inS = sunInScatter(rayDir, pos, sunDir, vec3(1.0), rs, ms);   // primary
+            for (int j = 0; j < nExtra && j < 3; j++){
+                inS += sunInScatter(rayDir, pos, normalize(P.extra_dir[j].xyz), P.extra_col[j].rgb * P.extra_dir[j].w, rs, ms);
+            }
             vec3 scatterInt = (inS - inS * sampleTr) / max(ext, vec3(1e-6));
             lum += tr * scatterInt;
             tr *= sampleTr;

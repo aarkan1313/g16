@@ -19,6 +19,11 @@ public partial class AtmosphereCompute : Node
 
     private Vector3 _sunDir = new Vector3(0f, 0.6f, -0.8f).Normalized();   // world TO-sun
     private float _turbidity = 1.0f;     // reserved for presets (AT-1 core uses fixed Earth Mie)
+    // C3 Unit 5: extra suns summed into the skyview + aerial raymarch (shared march → cheap). Length 3.
+    private int _extraSunCount = 0;
+    private readonly Vector3[] _extraSunDirs = { Vector3.Up, Vector3.Up, Vector3.Up };
+    private readonly Vector3[] _extraSunCols = new Vector3[3];
+    private readonly float[] _extraSunInten = new float[3];
     private bool _enabled = false;
     private bool _dirty = true;
     private bool _checkRequested;
@@ -92,6 +97,23 @@ public partial class AtmosphereCompute : Node
     }
 
     public void SetTurbidity(float v) { v = Mathf.Max(0f, v); if (Mathf.Abs(v - _turbidity) > 1e-4f) { _turbidity = v; _dirty = true; } }
+
+    /// C3 Unit 5: the extra suns to scatter into the sky (≤3). Recomputes the skyview/aerial LUTs when they
+    /// change. dirs = world to-sun, cols = color tint, intens = per-sun strength (<1 so N suns don't blow out).
+    public void SetExtraSuns(int count, Vector3[] dirs, Vector3[] cols, float[] intens)
+    {
+        count = Mathf.Clamp(count, 0, 3);
+        bool changed = count != _extraSunCount;
+        for (int i = 0; i < 3; i++)
+        {
+            Vector3 d = (i < count) ? dirs[i].Normalized() : Vector3.Up;
+            Vector3 c = (i < count) ? cols[i] : Vector3.Zero;
+            float it = (i < count) ? intens[i] : 0f;
+            if (d.DistanceTo(_extraSunDirs[i]) > 1e-4f || c.DistanceTo(_extraSunCols[i]) > 1e-4f || Mathf.Abs(it - _extraSunInten[i]) > 1e-4f) { changed = true; }
+            _extraSunDirs[i] = d; _extraSunCols[i] = c; _extraSunInten[i] = it;
+        }
+        if (changed) { _extraSunCount = count; _dirty = true; }
+    }
 
     /// One-shot numeric self-check (readback) on the next recompute. Forces a recompute.
     public void RequestCheck() { _checkRequested = true; _enabled = true; _dirty = true; }
@@ -179,6 +201,11 @@ public partial class AtmosphereCompute : Node
         var p = _invViewProj;   // Godot.Projection columns X/Y/Z/W are Vector4 (column-major, same as GLSL mat4)
         w.Vec4(p.X.X, p.X.Y, p.X.Z, p.X.W).Vec4(p.Y.X, p.Y.Y, p.Y.Z, p.Y.W)
          .Vec4(p.Z.X, p.Z.Y, p.Z.Z, p.Z.W).Vec4(p.W.X, p.W.Y, p.W.Z, p.W.W);
+        // C3 Unit 5 tail (sky/aerial read these; trans/ms ignore them — they only read the head): extra-sun
+        // count + per-sun (dir,intensity) + (color). MUST match the Params struct order in atmosphere_skyview/aerial.glsl.
+        w.Vec4(_extraSunCount, 0f, 0f, 0f);
+        for (int i = 0; i < 3; i++) { w.Vec4(_extraSunDirs[i], _extraSunInten[i]); }
+        for (int i = 0; i < 3; i++) { w.Vec4(_extraSunCols[i], 0f); }
         return w.ToArray();
     }
 

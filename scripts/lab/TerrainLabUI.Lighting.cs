@@ -49,6 +49,7 @@ public partial class TerrainLabUI : Control, ILightingHost
     public float Overcast => _overcast;
     public bool AtmosphereOn => _atmosphereOn;
     public bool AerialOn => _aerialOn;
+    public AtmosphereCompute? Atmosphere => _atmosphere;
     // OrientSun + SyncLightControlsToScene are defined in TerrainLabUI.Apply.cs (now public to satisfy the
     // interface) — they stay there because they're shared with the sun-angle sliders + other callers.
 }

@@ -11,7 +11,16 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0, rgba16f) uniform restrict writeonly image2D outTex;
 layout(set = 0, binding = 1) uniform sampler2D transLUT;
 layout(set = 0, binding = 2) uniform sampler2D msLUT;
-layout(set = 0, binding = 3, std430) restrict readonly buffer Params { vec4 sun_turb; } P;
+// Full layout so the C3 tail (extra suns) sits at the right offset. AT-1 used only sun_turb; sky/aerial
+// now also read the tail. cam_pos_far / inv_view_proj are unused HERE but declared for offset correctness.
+layout(set = 0, binding = 3, std430) restrict readonly buffer Params {
+    vec4 sun_turb;          // primary sun: xyz to-sun, w turbidity
+    vec4 cam_pos_far;       // (unused in skyview; present for layout)
+    mat4 inv_view_proj;     // (unused in skyview; present for layout)
+    vec4 sun_meta;          // C3: x = extra atmosphere-sun count
+    vec4 extra_dir[3];      // C3: xyz = to-sun, w = intensity
+    vec4 extra_col[3];      // C3: rgb = sun color tint
+} P;
 
 // ===== Hillaire shared block (KEEP IDENTICAL across atmosphere_*.glsl — edit all four together) =====
 const float PI = 3.14159265358979;
@@ -60,15 +69,24 @@ vec3 getValFromLUT(sampler2D lut, vec3 pos, vec3 sunDir){
 
 const float SKY_STEPS = 32.0;
 
+// C3: per-sun in-scatter at a march sample. The 32-step march (getScatteringValues / extinction / tr) is
+// SHARED across suns; only this — phase + sun-transmittance + multiscatter — is per-sun, so N suns cost
+// ~+per-step ops, not N full marches. sunCol tints the contribution (primary = white; extras = their hue).
+vec3 sunInScatter(vec3 rayDir, vec3 np, vec3 sunDir, vec3 sunCol, vec3 rs, float ms){
+    float cosTheta = dot(rayDir, sunDir);
+    float miePhase = getMiePhase(cosTheta);
+    float rayPhase = getRayleighPhase(-cosTheta);
+    vec3 sunTr = getValFromLUT(transLUT, np, sunDir);
+    vec3 psi   = getValFromLUT(msLUT, np, sunDir);
+    return (rs * (rayPhase * sunTr + psi) + vec3(ms) * (miePhase * sunTr + psi)) * sunCol;
+}
+
 vec3 raymarchSky(vec3 pos, vec3 rayDir, vec3 sunDir){
     float atmoDist = rayIntersectSphere(pos, rayDir, atmosphereRadiusMM);
     float groundDist = rayIntersectSphere(pos, rayDir, groundRadiusMM);
     float tMax = (groundDist > 0.0) ? groundDist : atmoDist;
     if (tMax < 0.0) { return vec3(0.0); }
-
-    float cosTheta = dot(rayDir, sunDir);
-    float miePhase = getMiePhase(cosTheta);
-    float rayPhase = getRayleighPhase(-cosTheta);
+    int nExtra = int(P.sun_meta.x + 0.5);
 
     vec3 lum = vec3(0.0), tr = vec3(1.0);
     float t = 0.0;
@@ -79,11 +97,10 @@ vec3 raymarchSky(vec3 pos, vec3 rayDir, vec3 sunDir){
         vec3 rs; float ms; vec3 ext;
         getScatteringValues(np, rs, ms, ext);
         vec3 sampleTr = exp(-dt * ext);
-        vec3 sunTr = getValFromLUT(transLUT, np, sunDir);
-        vec3 psi = getValFromLUT(msLUT, np, sunDir);
-        vec3 rayInS = rs * (rayPhase * sunTr + psi);
-        vec3 mieInS = vec3(ms) * (miePhase * sunTr + psi);
-        vec3 inS = rayInS + mieInS;
+        vec3 inS = sunInScatter(rayDir, np, sunDir, vec3(1.0), rs, ms);   // primary sun (white)
+        for (int j = 0; j < nExtra && j < 3; j++){
+            inS += sunInScatter(rayDir, np, normalize(P.extra_dir[j].xyz), P.extra_col[j].rgb * P.extra_dir[j].w, rs, ms);
+        }
         vec3 scatterInt = (inS - inS * sampleTr) / ext;
         lum += tr * scatterInt;
         tr *= sampleTr;

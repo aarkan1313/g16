@@ -13,6 +13,7 @@ public interface ILightingHost
     float Overcast { get; }            // current overcast amount (written by the cloud-coverage proxy)
     bool AtmosphereOn { get; }         // AT-1 GPU sky on?
     bool AerialOn { get; }             // AT-2 aerial froxel on?
+    AtmosphereCompute? Atmosphere { get; }   // C3 Unit 5: push extra suns to the sky-scatter LUTs
     void OrientSun(DirectionalLight3D sun);   // orient + push sun to cloud/atmosphere (shared with the sun-angle sliders)
     void SyncLightControlsToScene();          // reflect the composed state back into the Light-tab sliders (UI)
 }
@@ -72,6 +73,7 @@ public sealed class LightingComposer
     private readonly Vector3[] _extraCols = new Vector3[MaxExtraSuns];
     private readonly float[] _extraSizes = new float[MaxExtraSuns];
     private readonly float[] _extraEnergies = new float[MaxExtraSuns];
+    private readonly float[] _extraAtmoInten = new float[MaxExtraSuns];   // C3 Unit 5: per-sun sky-scatter strength
 
     private bool _shadowTuned = false;             // #5: directional shadow atlas size set once (RenderingServer global)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
@@ -313,8 +315,12 @@ public sealed class LightingComposer
                 _extraEnergies[i] = 1.05f;                         // disc energy (< primary's 1.3); horizonGate fades it below the horizon
             }
             else { _extraDirs[i] = Vector3.Up; _extraCols[i] = Vector3.Zero; _extraSizes[i] = 0.6f; _extraEnergies[i] = 0f; }
+            _extraAtmoInten[i] = (i < n) ? 0.7f : 0f;   // sky-scatter strength (<1 so N suns don't blow out)
         }
         _host.Cloud?.SetExtraSuns(n, _extraDirs, _extraCols, _extraSizes, _extraEnergies);
+        // C3 Unit 5: feed the same extras to the atmosphere so the SKY COLOR responds (summed in the shared
+        // skyview/aerial raymarch — cheap; transmittance/multiscatter LUTs are sun-independent and reused).
+        _host.Atmosphere?.SetExtraSuns(n, _extraDirs, _extraCols, _extraAtmoInten);
     }
 
     /// Lazily build + deferred-add the extra-sun DirectionalLights (shadowless; the primary owns the shadow).
