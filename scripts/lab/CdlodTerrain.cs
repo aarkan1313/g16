@@ -17,9 +17,29 @@ public sealed partial class CdlodTerrain : Node3D
     private float _minH, _maxH, _regionSize;
     private float[] _heights = System.Array.Empty<float>();   // baked heightmap (row-major, res²), for per-chunk AABB
     private int _hRes;
-    private readonly List<MeshInstance3D> _pool = new();
-    private readonly List<int> _poolMask = new();   // S2d: per-pool-slot last-assigned stitch mask (-1 = unset); avoids per-frame mesh re-upload
-    private readonly List<long> _poolKey = new();   // S3.5: per-slot chunk WORLD address (level,x,z) — re-request a tighten only when a slot's address changes
+    // S3.6: CHUNK-IDENTITY-KEYED pool. The instance for a chunk is keyed by its world address (level,x,z),
+    // NOT by list index — so a chunk that's still visible keeps its instance and is NOT re-pushed to the
+    // rendering server every frame. Only genuine births/deaths/state-changes touch the BVH. This is what kills
+    // the S2 "rebuild spike": the old index-keyed pool re-wrote Position+Scale+AABB(+mesh) for EVERY slot
+    // every frame in motion (~474 BVH re-fits/frame) because SelectRoaming's traversal ORDER shifts as the
+    // camera moves — even for chunks that didn't change. True per-frame churn is only ~5-15 chunks (measured),
+    // so identity-keying cuts the per-frame instance touches ~30-95×.
+    private sealed class ChunkSlot
+    {
+        public MeshInstance3D Mi = null!;
+        public int Mask = -1;          // last-applied stitch-variant mask (-1 = unset)
+        public bool Tightened;         // has this slot's AABB been set from a landed async tighten?
+        public Vector2 OriginXZ;       // chunk world origin (for re-applying the render-relative position on a snap)
+        public float Size;
+        public int Level;
+        public int SeenFrame = -1;     // last Tick frame this slot was in the visible set (vs _frame → retire)
+    }
+    private int _frame;   // monotonic Tick counter for the seen-this-frame test (no per-slot Variant churn)
+    private readonly Dictionary<long, ChunkSlot> _active = new();   // live chunks by world-address key
+    private readonly Stack<MeshInstance3D> _free = new();           // retired instances, hidden, ready to reuse
+    private readonly List<long> _scratchDead = new();              // reused per-frame: keys to retire (no per-frame alloc)
+    private Vector3 _lastRenderOrigin = new(float.NaN, 0f, float.NaN);   // detect a snap → re-apply positions
+    private int _instanceCount;   // total MeshInstance3D ever created (pool high-water; for Ensure/diagnostics)
     private List<CdlodChunk> _lastLeaves = new();   // S2b: last Tick's selected leaves (for the test-path along-path invariant/count report)
     private bool _enabled;
     private bool _lodViz;
@@ -31,7 +51,6 @@ public sealed partial class CdlodTerrain : Node3D
     private ChunkAabbProvider _aabbProvider;
     public bool TightenAabb = true;                 // S3.5: disable → keep the generous AABB (fallback)
     private readonly Dictionary<long, (float lo, float hi)> _tightened = new();   // key → landed tight range
-    private float _margin;   // current chunk's AABB Y margin (set per-leaf; reused when a tighten lands)
 
     public int GridN = 65;            // verts/side per chunk (64 quads)
     public int MaxDepth = 6;          // finest LOD depth; tunable
@@ -58,7 +77,8 @@ public sealed partial class CdlodTerrain : Node3D
         _mat = mat; _minH = minH; _maxH = maxH; _regionSize = p.RegionSizeM;
         _heights = heights; _hRes = p.HeightmapRes;
         _fieldParams = p;
-        _aabbProvider = new ChunkAabbProvider(p);   // S3.5: async height-range provider (render-thread RD lazily inited)
+        _aabbProvider = new ChunkAabbProvider(p);   // S3.5: async height-range provider (render-thread RD)
+        _aabbProvider.Prewarm();   // S3.6: compile the field shader during load, not on the first birth (no cold-start stall)
         _grid = CdlodMesh.BuildGrid(GridN);
         _variants = CdlodMesh.BuildStitchedVariants(GridN);   // S2d: 16 welded edge-stitch variants (by mask)
         _qt = new CdlodQuadtree(-_regionSize * 0.5f, -_regionSize * 0.5f, _regionSize, MaxDepth, SplitFactor);
@@ -81,7 +101,11 @@ public sealed partial class CdlodTerrain : Node3D
     public void SetEnabled(bool on)
     {
         _enabled = on;
-        if (!on) { foreach (var mi in _pool) { mi.Visible = false; } }
+        if (!on)   // hide every live + free instance (S3.6 keyed pool)
+        {
+            foreach (var kv in _active) { kv.Value.Mi.Visible = false; }
+            foreach (var mi in _free) { mi.Visible = false; }
+        }
         GD.Print($"CdlodTerrain: {(on ? "ENABLED" : "disabled")}");
     }
 
@@ -108,75 +132,121 @@ public sealed partial class CdlodTerrain : Node3D
             Mathf.Floor(camPos.X / _coarseSnap) * _coarseSnap, 0f,
             Mathf.Floor(camPos.Z / _coarseSnap) * _coarseSnap);
         _mat?.SetShaderParameter("render_origin", _renderOrigin);
+        // A snap shifts every chunk's render-relative position → re-apply positions for all live slots this
+        // frame. Snaps are rare (every 8192 m of travel), so this is a once-per-snap cost, not per-frame.
+        bool snapped = _renderOrigin.X != _lastRenderOrigin.X || _renderOrigin.Z != _lastRenderOrigin.Z;
+        _lastRenderOrigin = _renderOrigin;
+
         List<CdlodChunk> leaves = _qt.SelectRoaming(camPos);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
-        EnsurePool(leaves.Count);
         DrainTightened();   // S3.5: collect any async height-ranges that landed since last frame
-        int n = Mathf.Min(leaves.Count, _pool.Count);   // S3: budget may cap the pool below leaf count this frame
-        for (int i = 0; i < n; i++)
+
+        // S3.6: identity-keyed reconcile. For each leaf still present: stamp it seen + UPDATE-ONLY-DELTAS.
+        // Birth the genuinely-new (budget-capped). Retire whatever wasn't stamped this frame. A monotonic
+        // _frame counter is the "seen" test — no per-slot Variant/Meta churn.
+        _frame++;
+        int births = 0;
+        for (int i = 0; i < leaves.Count; i++)
         {
             CdlodChunk c = leaves[i];
-            MeshInstance3D mi = _pool[i];
+            long key = ChunkKey(c);
+            if (_active.TryGetValue(key, out ChunkSlot slot))
+            {
+                slot.SeenFrame = _frame;            // still visible → keep
+                ApplyChunk(slot, c, key, snapped);  // re-pushes ONLY what changed (mask / landed tighten / snap)
+            }
+            else
+            {
+                if (births >= MaxChunkOps) { continue; }   // S3: churn budget — the rest appear next frame(s)
+                births++;
+                ChunkSlot ns = AcquireSlot();
+                ns.SeenFrame = _frame;
+                _active[key] = ns;
+                if (TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }   // queue a tighten for the new chunk
+                ApplyChunk(ns, c, key, snapped: true);   // new slot → apply everything (treat as snapped)
+            }
+        }
+
+        // Retire slots not seen this frame → hide + return to the free-list (NOT freed; reused next birth).
+        _scratchDead.Clear();
+        foreach (var kv in _active) { if (kv.Value.SeenFrame != _frame) { _scratchDead.Add(kv.Key); } }
+        for (int i = 0; i < _scratchDead.Count; i++)
+        {
+            ChunkSlot dead = _active[_scratchDead[i]];
+            dead.Mi.Visible = false;
+            _free.Push(dead.Mi);
+            _active.Remove(_scratchDead[i]);
+        }
+
+        if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
+    }
+
+    /// Push to the instance ONLY the state that actually changed for this chunk — the heart of the S3.6
+    /// spike fix. An unchanged, still-visible chunk does ZERO rendering-server work here (no Position/Scale/
+    /// AABB/mesh re-write → no BVH re-fit). Position re-applies only on a snap; mesh only on a mask change;
+    /// AABB only when a tighten lands or the slot is new.
+    private void ApplyChunk(ChunkSlot slot, CdlodChunk c, long key, bool snapped)
+    {
+        MeshInstance3D mi = slot.Mi;
+        bool isNew = slot.Level < 0;   // AcquireSlot sets Level=-1 to force a full first apply
+        if (snapped || isNew)
+        {
             float half = c.Size * 0.5f;
             // S3: RENDER-RELATIVE position (true center − renderOrigin); shader adds render_origin back.
             mi.Position = new Vector3(c.OriginXZ.X + half - _renderOrigin.X, 0f, c.OriginXZ.Y + half - _renderOrigin.Z);
             mi.Scale = new Vector3(c.Size, 1f, c.Size);    // X/Z = chunk size; Y = 1 (world-unit height)
-            // S3.5: this slot's chunk WORLD ADDRESS (level,x,z). When it CHANGES the slot now shows a
-            // different chunk → queue an async tighten for the new address (deduped in the provider).
-            long key = ChunkKey(c);
-            if (_poolKey[i] != key && TightenAabb)
-            {
-                _aabbProvider.Request(key, c.OriginXZ, c.Size);
-                _poolKey[i] = key;
-            }
-            // CustomAabb is LOCAL (pre-node-scale): X/Z = the unit grid (the node Scale stretches it to
-            // the chunk footprint); Y = this chunk's world height range (Y scale is 1). Tight Y is required
-            // for shadow-cascade depth precision. Born GENEROUS (ChunkHeightRange) so it renders+shadows with
-            // no pop-in; once the async tighten for this key has landed, use the tight range instead.
-            float lo, hi;
-            if (TightenAabb && _tightened.TryGetValue(key, out var tr)) { lo = tr.lo; hi = tr.hi; }
-            else { (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size); }
-            // Vertical AABB margin. S2b's geomorph displaces each vertex's sample by up to ~one chunk
-            // vertex-span (chunk_size/(GridN-1)) toward the coarse grid — so on steep ground the actual
-            // displaced verts can sit well outside a flat 8 m margin. Too tight -> the CSM cascade depth range
-            // misses those verts -> grid-aligned shadow ACNE (dotted stipple, worst on slopes). Too loose ->
-            // inflated cascade depth -> soft blobs (memory cdlod-chunk-shadow-aabb). Scale the margin to the
-            // chunk's vertex spacing (the morph-displacement bound) with an 8 m floor.
-            float m = Mathf.Max(8f, c.Size / (GridN - 1) * 1.5f);
-            mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f),
-                                     new Vector3(1f, (hi - lo) + 2f * m, 1f));
+            slot.OriginXZ = c.OriginXZ; slot.Size = c.Size; slot.Level = c.Level;
             mi.SetInstanceShaderParameter("lod_viz", _lodViz ? (float)c.Level : -1.0f);
-            // S2d: pick the edge-stitch variant for this chunk's neighbor configuration (mask). Welded
-            // edges coincide with the coarser neighbor -> no crack. Falls back to the flat grid if variants
-            // somehow weren't built. Only reassign when the mask CHANGED (avoid per-frame mesh re-upload churn).
-            if (_variants.Length == 16)
-            {
-                int sm = c.StitchMask & 15;
-                if (_poolMask[i] != sm) { mi.Mesh = _variants[sm]; _poolMask[i] = sm; }
-            }
             mi.Visible = true;
         }
-        for (int i = n; i < _pool.Count; i++) { _pool[i].Visible = false; }
-        if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
+        // AABB: born GENEROUS (no pop-in); tightened in place once the async height-range lands. Re-set only
+        // when new, on a snap (position changed), or when a tighten newly lands for this key.
+        bool tightAvail = TightenAabb && _tightened.TryGetValue(key, out var tr);
+        if (isNew || snapped || (tightAvail && !slot.Tightened))
+        {
+            float lo, hi;
+            if (tightAvail) { (lo, hi) = _tightened[key]; slot.Tightened = true; }
+            else { (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size); }
+            // Margin scaled to the chunk's vertex spacing (the geomorph displacement bound) with an 8 m floor:
+            // too tight → CSM cascade misses displaced verts → grid-aligned shadow acne; too loose → inflated
+            // cascade depth → soft blobs (memory cdlod-chunk-shadow-aabb).
+            float m = Mathf.Max(8f, c.Size / (GridN - 1) * 1.5f);
+            mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f), new Vector3(1f, (hi - lo) + 2f * m, 1f));
+        }
+        // S2d: edge-stitch variant — reassign the mesh ONLY when this chunk's mask changed (avoids per-frame
+        // mesh re-upload). The stitch mask CAN change frame-to-frame as neighbors split/merge, even when the
+        // chunk itself is unchanged — so this is the one per-frame check that legitimately remains.
+        if (_variants.Length == 16)
+        {
+            int sm = c.StitchMask & 15;
+            if (slot.Mask != sm) { mi.Mesh = _variants[sm]; slot.Mask = sm; }
+        }
     }
 
-    /// S3.5: drain async height-ranges that have landed and cache them by key so the per-leaf loop applies the
-    /// tight AABB. Bounded keep: only addresses currently of interest stay (a slot re-requests if it recurs).
+    /// Get an instance for a new chunk: reuse a retired one from the free-list, else create one (bounded by the
+    /// churn budget at the call site). Marked Level=-1 so ApplyChunk does a full first push.
+    private ChunkSlot AcquireSlot()
+    {
+        MeshInstance3D mi;
+        if (_free.Count > 0) { mi = _free.Pop(); }
+        else { mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat }; AddChild(mi); _instanceCount++; }
+        return new ChunkSlot { Mi = mi, Mask = -1, Tightened = false, Level = -1 };
+    }
+
+    /// S3.5: drain async height-ranges that have landed and cache them by key. The keyed pool's ApplyChunk
+    /// picks them up for the matching live slot on this/next frame. Bounded to avoid unbounded growth as the
+    /// camera streams an infinite world.
     private void DrainTightened()
     {
         while (_aabbProvider.TryTake(out long key, out float lo, out float hi))
         {
             _tightened[key] = (lo, hi);
         }
-        // Bound the cache as the camera streams an infinite world: when it outgrows a generous multiple of the
-        // live leaf set, drop everything not currently visible (those re-request cheaply if revisited). Cheap
-        // amortized — runs only when the cap is exceeded.
         if (_tightened.Count > 8192)
         {
-            var live = new HashSet<long>(_poolKey);
-            var stale = new List<long>();
-            foreach (var k in _tightened.Keys) { if (!live.Contains(k)) { stale.Add(k); } }
-            foreach (var k in stale) { _tightened.Remove(k); }
+            _scratchDead.Clear();
+            foreach (var k in _tightened.Keys) { if (!_active.ContainsKey(k)) { _scratchDead.Add(k); } }
+            for (int i = 0; i < _scratchDead.Count; i++) { _tightened.Remove(_scratchDead[i]); }
         }
     }
 
@@ -195,19 +265,5 @@ public sealed partial class CdlodTerrain : Node3D
     public override void _ExitTree()
     {
         _aabbProvider?.Dispose();   // S3.5: free the render-thread field shader/pipeline
-    }
-
-    private void EnsurePool(int n)
-    {
-        int births = 0;
-        while (_pool.Count < n && births < MaxChunkOps)   // S3: cap births/frame so a fast camera doesn't spike
-        {
-            var mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat };
-            AddChild(mi);
-            _pool.Add(mi);
-            _poolMask.Add(-1);   // S2d: -1 = no variant assigned yet (forces first Tick to set the mesh)
-            _poolKey.Add(-1L);   // S3.5: -1 = no chunk address assigned yet (forces first Tick to request a tighten)
-            births++;
-        }
     }
 }

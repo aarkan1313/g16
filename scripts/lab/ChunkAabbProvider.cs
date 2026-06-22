@@ -43,6 +43,11 @@ public sealed class ChunkAabbProvider
 
     public ChunkAabbProvider(FieldParams p) { _p = p; }
 
+    /// Pre-compile the field shader on the render thread NOW (during scene load) so the one-time SPIR-V compile
+    /// + pipeline create never lands on the first chunk-birth frame mid-session (a ~100 ms cold-start stall if
+    /// it coincides with the other render-thread inits). Idempotent.
+    public void Prewarm() { RenderingServer.CallOnRenderThread(Callable.From(EnsureRt)); }
+
     /// Queue a tighten request for a chunk footprint, keyed by its stable world address (level,x,z). Deduped:
     /// a key already queued (or in flight) is ignored until its result is taken.
     public void Request(long key, Vector2 originXZ, float size)
