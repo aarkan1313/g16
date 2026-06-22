@@ -1,5 +1,17 @@
 # S2b — Per-Vertex Geomorph + LOD-crossing Test Harness Implementation Plan
 
+> **⚠ POST-EXECUTION CORRECTION (2026-06-21).** Task 1 Step 1's shader code below contains a SIGN BUG:
+> the line `morphK = 1.0 - morphK;` (with its "morph toward coarse as the chunk APPROACHES coarsening"
+> comment) is WRONG and was removed during the eye-gate (commit cc9638a). It inverted the morph: it put
+> the full-coarse morph at the band's NEAR edge (where a chunk actually splits into FINER children) and
+> ZERO morph at the FAR edge (where the chunk is replaced by its COARSER parent), so the far-edge LOD
+> hand-off snapped raw — a simultaneous height + detail pop. The CORRECT direction is `morphK = 0` at the
+> near edge, `1` at the far edge (exactly what the clamp on the line above already produces, and what the
+> SPEC says — the plan code contradicted its own spec). Delete the inversion line. Locked by `--morphcheck`
+> (MorphCheck.cs): far-edge morphed verts coincide with the coarse grid to 0.0 m; re-adding the inversion
+> makes --morphcheck FAIL. Leaving the buggy block below as the historical record of what shipped + was fixed.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make CDLOD LOD transitions pop-free via per-vertex geomorph (each vertex morphs its grid XZ toward the coarser grid by its own camera-distance factor, sampling the same `field_height` at the morphed position), and build a reusable LOD-crossing test harness (3 scripted camera paths, keys + `--testpath=N`, per-path perf + invariant report) to make the in-motion pop eye-gate repeatable.

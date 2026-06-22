@@ -22,7 +22,12 @@ crossing LOD bands: ZERO pops.** This is the exact failure mode that killed WG1�
   actually switches, the odd vertices already sit on the coarse grid → the switch is invisible. C0-continuous.
 - **Per-VERTEX morphK (the load-bearing choice).** Each vertex computes its own `morphK ∈ [0,1]` from its
   distance to the camera within this chunk's LOD distance band (0 at the band's near edge = just subdivided;
-  1 at the far edge = about to coarsen). **Per-vertex, NOT per-chunk** — because adjacent chunks' shared
+  1 at the far edge = about to coarsen).
+  > **As-built note (2026-06-21):** this direction is correct and is what shipped after the eye-gate. The
+  > first implementation cut (plan Task-1 code) added a `morphK = 1.0 - morphK` inversion that contradicted
+  > THIS line — it caused the height+detail pop the user caught, and was removed (commit cc9638a). The
+  > `--morphcheck` backstop now asserts morphK=0 near / 1 far + far-edge vertex-coincidence (0.0 m) so the
+  > inversion can't silently return. **Per-vertex, NOT per-chunk** — because adjacent chunks' shared
   edge vertices then compute the same morphK from the same distance and agree exactly, making the morph
   continuous ACROSS chunk boundaries. Per-chunk morphK (one value per chunk) would leave a discontinuity at
   chunk seams — reintroducing the exact pop class we are killing. This is why Strugar's CDLOD is per-vertex;
