@@ -13,8 +13,8 @@ public partial class TerrainLabUI : Control
     private double _fpsAccum;
     private int _fpsFrames;
     // overcast → GI/sun dimming + aerial-perspective tint (driven by cloud coverage)
-    private float _baseAmbient = 0.4f, _baseSunEnergy = 1.3f;
-    private Color _baseFogColor = new Color(0.71f, 0.78f, 0.86f);
+    // _baseAmbient / _baseSunEnergy / _baseFogColor moved to LightingComposer (C3 Unit 1); accessed here
+    // via the forwarding properties in TerrainLabUI.Lighting.cs (same names), so this code is unchanged.
     private bool _overcastDim = true;
     private float _overcast = 0f;   // current overcast amount; the composer's ApplyOvercastScaling reads this
 

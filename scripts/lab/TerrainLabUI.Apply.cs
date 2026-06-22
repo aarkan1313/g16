@@ -88,7 +88,8 @@ public partial class TerrainLabUI : Control
         }
     }
 
-    private float _sunAngle = 35f, _sunAzimuth = 40f;
+    // _sunAngle / _sunAzimuth moved to LightingComposer (C3 Unit 1); accessed here via the forwarding
+    // properties in TerrainLabUI.Lighting.cs (same names), so the slider/OrientSun code below is unchanged.
     private void ApplySceneFloat(string? target, float v)
     {
         var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
@@ -166,7 +167,7 @@ public partial class TerrainLabUI : Control
             case "sun_surface_warm":     _cloud?.SetSunSurfaceWarm(v); break;
         }
     }
-    private void OrientSun(DirectionalLight3D sun)
+    public void OrientSun(DirectionalLight3D sun)   // public: satisfies ILightingHost (composer calls back)
     {
         // elevation from horizon + compass azimuth → a downward-pointing sun.
         sun.RotationDegrees = new Vector3(-_sunAngle, _sunAzimuth, 0f);
@@ -188,7 +189,7 @@ public partial class TerrainLabUI : Control
 
     /// After a mood sets the scene, update the Light-tab slider widgets so they show
     /// the mood's values (sliders are live overrides on top of the chosen mood).
-    private void SyncLightControlsToScene()
+    public void SyncLightControlsToScene()   // public: satisfies ILightingHost (composer calls back)
     {
         var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
         var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
