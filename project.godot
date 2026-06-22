@@ -11,9 +11,14 @@ config_version=5
 [application]
 
 config/name="WG16 base field"
-run/main_scene="res://scenes/lab.tscn"
+run/main_scene="res://scenes/terrain_lab.tscn"
 config/features=PackedStringArray("4.6", "C#", "Forward Plus")
 config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=2560
+window/size/viewport_height=1440
 
 [dotnet]
 
@@ -26,5 +31,5 @@ project/assembly_name="WG16"
 [rendering]
 
 rendering_device/driver.windows="d3d12"
-anti_aliasing/quality/msaa_3d=1
 reflections/sky_reflections/roughness_layers=7
+anti_aliasing/quality/msaa_3d=1
