@@ -303,10 +303,38 @@ default-safe and land alongside the lane work. Verdicts were adversarially verif
 
 ## 🌍 Phase B — make it a WORLD (after Phase A is done)
 Gated by the scale infra; hybrid build (spine first, content designed region-first + stream-aware).
-- **Scale spine — CDLOD → chunks → streaming → infinite.** T1 pop-free on the fixed region (the
-  gate; clipmap killed WG1–15 via pops) → T2 stable world tiles → T3 streaming. Also the dominant
-  perf lever toward 8 ms. Spec `specs/2026-06-18-terrain-lod-roadmap-design.md`.
-  - **Banked (user-flagged 2026-06-20, Sun/Light lane):** the cloud field reads as a **camera-anchored
+
+### 🏔️ TERRAIN LOD (T1–T3) — the foundational spine
+**Status 2026-06-21:** T1 = pop-free continuous LOD on the fixed 8 km region. **S1 (quadtree skeleton) ✅
+DONE; S2a (chunks render) ✅ DONE (5.6 ms, 4.4× under budget). S2b (geomorph + pop-free verification) 🔨
+IN PROGRESS.** Spec `specs/2026-06-18-terrain-lod-roadmap-design.md`; current design
+`specs/2026-06-21-s2b-geomorph-design.md`; implementation plan `plans/2026-06-21-s2b-geomorph.md`.
+
+**T1 arc (pop-free proof):** The graveyard gate — WG1–15 all died at terrain LOD pops. S2b adds per-vertex
+geomorph (each vertex morphs its grid position toward the coarser LOD via its own camera-distance factor,
+sampling the SAME field at the morphed XZ → elevation pop is structurally impossible) + a reusable
+LOD-crossing test harness (3 scripted camera paths: low-fast horizontal, vertical altitude drop, slow
+boundary isolation; keys + `--testpath=N`; per-path perf + invariant-checked-along-path). **The eye-gate:**
+the user flies the 3 paths in motion and confirms ZERO elevation pops, ZERO cracks, ZERO quality pops
+across LOD bands. **That is T1's definition of done.** Chunking, streaming, tiles are T2–T3; they cannot
+proceed until T1 proves pop-free.
+
+**T2 & T3 (after T1 eye-gate):**
+- **T2 — stable world tiles.** Chunk the 8 km fixed region into world-XZ tiles (the unit splat/breakup/
+  erosion need), per-tile LOD select, edge stitch, frustum culling. Re-point per-region bakes to per-tile.
+- **T3 — streaming.** Load/unload tiles around the camera → true-infinite. Foundation for erosion E4,
+  world-editing, flora LOD.
+
+**Other Phase-B systems (dependent on T1–T3 spine):**
+- **Biomes** — climate field (moisture/temperature) selects per-region material palettes + rules +
+  flora; the ground palette/rule system is already data-driven for this.
+- **Macro procedural variety** — regions genuinely differ (not one mountain tiled).
+- **Erosion at scale** — E2 drainage-skeleton bake → E3 per-chunk procedural detail → E4 coarse
+  global pre-solve; consumes the Phase-A hydrology model. `specs/2026-06-17-erosion-arc-design.md`.
+- **Flora integration** (parallel chat returns grass/trees/shrubs) + **world-editing integration**
+  (brush + height-delta + undo) — wire providers; edits invalidate splat/breakup/scatter → re-bake.
+
+- **Banked (user-flagged 2026-06-20, Sun/Light lane):** the cloud field reads as a **camera-anchored
     "huge dome"** at far/down extreme-distance views (clouds line up / repeat far out). Fine on-chunk;
     revisit for the infinite world (the cloud shell + cirrus altitude-plane both anchor to the camera).
 - **Biomes** — climate field (moisture/temperature) selects per-region material palettes + rules +
