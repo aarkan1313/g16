@@ -385,12 +385,12 @@ const vec4 PLANET_DIR_SIZE[5] = vec4[5](
     vec4(-0.3,  0.6, -0.6, 0.0042),   // Saturn — pale gold
     vec4( 0.7,  0.45,-0.2, 0.0038)    // blue ice giant
 );
-const vec4 PLANET_COL[5] = vec4[5](   // rgb = color, w = relative brightness
-    vec4(1.00, 0.97, 0.90, 2.2),
-    vec4(1.00, 0.50, 0.35, 1.3),
-    vec4(1.00, 0.92, 0.72, 1.8),
-    vec4(0.95, 0.85, 0.60, 1.1),
-    vec4(0.70, 0.82, 1.00, 0.9)
+const vec4 PLANET_COL[5] = vec4[5](   // FANTASY palette — rgb = color, w = relative brightness
+    vec4(0.35, 0.95, 1.00, 2.0),      // bright cyan / ice
+    vec4(1.00, 0.35, 0.80, 1.4),      // magenta / rose
+    vec4(0.45, 1.00, 0.55, 1.6),      // emerald
+    vec4(1.00, 0.68, 0.20, 1.5),      // amber / gold
+    vec4(0.70, 0.45, 1.00, 1.2)       // violet
 );
 // Curated landmark stars: xyz = dir, w = relative brightness; BSTAR_COL = color.
 const vec4 BSTAR_DIR[7] = vec4[7](
@@ -414,8 +414,8 @@ vec3 planets(vec3 sr){
         if (cd < 0.2) continue;                                  // early-out (well off the object)
         float ang = acos(clamp(cd, 0.0, 1.0));
         float core = smoothstep(PLANET_DIR_SIZE[i].w, 0.0, ang); // tiny bright disc
-        float glow = exp(-ang * 55.0);                           // faint soft halo
-        acc += PLANET_COL[i].rgb * (core * PLANET_COL[i].w + glow * 0.25);
+        float glow = exp(-ang * 90.0);                           // tight, subtle halo
+        acc += PLANET_COL[i].rgb * (core * PLANET_COL[i].w + glow * 0.072);
     }
     return acc;
 }
@@ -429,11 +429,24 @@ vec3 bright_stars(vec3 sr){
         if (cd < 0.2) continue;
         float ang = acos(clamp(cd, 0.0, 1.0));
         float point = smoothstep(0.0035, 0.0, ang);
-        float glow  = exp(-ang * 110.0) * 0.4;
+        float glow  = exp(-ang * 150.0) * 0.18;
         float tw = mix(1.0, 0.6 + 0.4 * sin(TIME * 0.6 + float(i) * 9.7), 0.5);   // slow gentle twinkle
         acc += BSTAR_COL[i] * (point * BSTAR_DIR[i].w * tw + glow);
     }
     return acc;
+}
+
+// NORTH STAR: one prominent fixed pole star near the rotation axis (barely moves). Realistic naked-eye look:
+// a bright bluish-white point + soft small halo + gentle twinkle. No lens-style spikes.
+vec3 north_star(vec3 sr){
+    vec3 nd = normalize(vec3(0.1, 0.95, 0.3));               // high, near the celestial pole
+    float cd = dot(sr, nd);
+    if (cd < 0.9) return vec3(0.0);                          // early-out
+    float ang = acos(clamp(cd, 0.0, 1.0));
+    float core = smoothstep(0.0055, 0.0, ang);             // clearly the largest/brightest point in the sky
+    float glow = exp(-ang * 105.0) * 0.22;                  // soft clean halo
+    float tw = 0.85 + 0.15 * sin(TIME * 0.8);              // gentle twinkle
+    return vec3(0.82, 0.90, 1.0) * ((core * 3.6 + glow) * tw);   // cool-white, brighter than any planet
 }
 
 // STARS (Stage 3d / Celestial): magnitude-stratified starfield + planets + landmark stars + meteors, on a
@@ -450,7 +463,7 @@ vec3 stars_layer(vec3 rd){
 
     // C2: planets (steady colored points) + landmark bright stars — ride the sky on the same rotated dir.
     vec3 pl = planets_on ? planets(sr) * planet_brightness : vec3(0.0);
-    vec3 bs = bright_stars_on ? bright_stars(sr) * bright_star_brightness : vec3(0.0);
+    vec3 bs = bright_stars_on ? (bright_stars(sr) + north_star(sr)) * bright_star_brightness : vec3(0.0);
 
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
     return (star + pl + bs + meteors(rd)) * fade;

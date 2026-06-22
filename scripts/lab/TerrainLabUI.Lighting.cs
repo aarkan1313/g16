@@ -135,6 +135,8 @@ public partial class TerrainLabUI : Control
             _cloud.SetStars(_stars.Brightness, _stars.Density, _stars.Twinkle, _stars.Rotation);
             _cloud.SetMeteorsOn(_stars.MeteorsOn);
             _cloud.SetMeteors(_stars.MeteorRate, _stars.MeteorBrightness, _stars.MeteorLength, _stars.MeteorSpeed, _stars.MeteorColor, _stars.MeteorColorVar);
+            _cloud.SetPlanets(_stars.PlanetsOn, _stars.PlanetBrightness);             // C2 planets
+            _cloud.SetBrightStars(_stars.BrightStarsOn, _stars.BrightStarBrightness); // C2 landmark stars
         }
 
         // ── WEATHER: depth fog (same down-scaling the old mood applied). FogLightColor is set by

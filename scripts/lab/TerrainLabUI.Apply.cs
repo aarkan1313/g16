@@ -77,6 +77,8 @@ public partial class TerrainLabUI : Control
             case "ssao":   GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SsaoEnabled = on; break;
             case "fog":    GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.FogEnabled = on; break;
             case "meteors_on": _stars.MeteorsOn = on; ComposeLighting(); break;
+            case "planets_on":      _stars.PlanetsOn = on; ComposeLighting(); break;        // C2 planets
+            case "bright_stars_on": _stars.BrightStarsOn = on; ComposeLighting(); break;    // C2 landmark stars
             case "shadow": GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").ShadowEnabled = on; break;
             case "sun":    GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun").Visible = on; break;
             case "sdfgi":  GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.SdfgiEnabled = on; break;
@@ -130,6 +132,8 @@ public partial class TerrainLabUI : Control
             case "meteor_length":       _stars.MeteorLength = v; ComposeLighting(); break;
             case "meteor_speed":        _stars.MeteorSpeed = v; ComposeLighting(); break;
             case "meteor_color_var":    _stars.MeteorColorVar = v; ComposeLighting(); break;
+            case "planet_brightness":      _stars.PlanetBrightness = v; ComposeLighting(); break;       // C2 planets
+            case "bright_star_brightness": _stars.BrightStarBrightness = v; ComposeLighting(); break;   // C2 landmark stars
             case "inspect_energy":      _inspectEnergy = v; if (_inspectLight != null) { _inspectLight.LightEnergy = v; } break;
             case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
             case "ssao_intensity":  env.SsaoIntensity = v; break;

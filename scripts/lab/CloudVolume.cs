@@ -548,6 +548,17 @@ public partial class CloudVolume : Node
         _skyMat?.SetShaderParameter("meteor_color_var", Mathf.Clamp(colorVar, 0f, 1f));
     }
     public void SetMeteorDebug(bool on) { _skyMat?.SetShaderParameter("meteor_debug", on); }
+    // --- CELESTIAL C2: planets + landmark bright stars (curated in cloud_sky; global on/off + brightness) ---
+    public void SetPlanets(bool on, float brightness)
+    {
+        _skyMat?.SetShaderParameter("planets_on", on);
+        _skyMat?.SetShaderParameter("planet_brightness", Mathf.Max(brightness, 0f));
+    }
+    public void SetBrightStars(bool on, float brightness)
+    {
+        _skyMat?.SetShaderParameter("bright_stars_on", on);
+        _skyMat?.SetShaderParameter("bright_star_brightness", Mathf.Max(brightness, 0f));
+    }
     // --- CIRRUS (CO-2): 2D sky-layer uniforms (default off) ---
     public void SetCirrusOn(bool on) { _skyMat?.SetShaderParameter("cirrus_on", on); }
     public void SetCirrus(string knob, float v)

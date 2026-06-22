@@ -92,6 +92,9 @@ public sealed class StarsState
     public float MeteorRate = 0.2f, MeteorBrightness = 1.1f, MeteorLength = 0.5f, MeteorSpeed = 0.5f;
     public Color MeteorColor = new(0.85f, 0.92f, 1.0f);   // base streak color
     public float MeteorColorVar = 0.25f;                  // 0 = uniform · 1 = vivid fantasy hues per meteor
+    // Celestial C2 — planets + landmark bright stars (curated in shader; global tuning only).
+    public bool PlanetsOn = true;        public float PlanetBrightness = 1.0f;
+    public bool BrightStarsOn = true;    public float BrightStarBrightness = 1.0f;
     public StarsState Clone() => (StarsState)MemberwiseClone();
 }
 
