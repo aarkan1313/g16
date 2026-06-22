@@ -284,9 +284,14 @@ default-safe and land alongside the lane work. Verdicts were adversarially verif
 - ✅ **Pushed** `experiment/presentation` + 6 backup tags to origin (2026-06-21) — the day's sky lane is now off-machine.
 - ✅ **Doc reconcile** (2026-06-21): this ROADMAP, HANDOFF §6, NEEDS_REVIEW, performance.md, the ground master
   design + DECISIONS updated to match reality (the audit found HANDOFF "PAUSED" + performance.md proxy-defaults stale).
-- **Sky-color ownership** (BAD): when `atmosphere_on` (default), the keyframed `day_script` daytime sky colors are
-  a no-op — `ComposeLighting` still pushes `SetSkyColors` every frame + writes a now-dead `ProceduralSkyMaterial`.
-  Make day_script a grade/tint OVER the LUT (the spec's stated intent) or stop pushing it; drop the dead write.
+- ✅ **Sky-color ownership** (RESOLVED 2026-06-21 — was filed "BAD", investigation downgraded it to a *documentation*
+  trap, not a bug). Tracing `background()` in `cloud_sky.gdshader`: the keyframed gradient is `mix(atmo, grad,
+  night_factor)`, so `SetSkyColors` is **load-bearing for the NIGHT sky** (atmosphere bows out as night falls) and the
+  atmosphere-off fallback — NOT redundant; "stop pushing it" would break night. The `ProceduralSkyMaterial` write is the
+  **startup / no-CloudVolume fallback** (the cloud sky only installs once `_computeReady`), not dead. So no code behavior
+  change: documented the ownership law in `ComposeLighting` (atmosphere LUT owns the DAYTIME sky/cloud-ambient; day_script
+  daytime palette is by-design superseded — grade the day sky via `sky_tint`/atmo exposure). Day_script-as-grade-over-LUT
+  is a *future look feature* (needs its own eye-gate), not a debt fix.
 - **Measure AT-2 + re-decompose the frame:** performance.md's 9.6 ms predates AT-1/AT-2 and assumed proxy/SDFGI
   ON (they're OFF since 0b). Profile AT-2 in motion (`--profmove`) and write a current "perf state of record."
 - **`copy_materials.py`** regenerates all 738 (not the 108) + hardcoded `D:\assets`, silent no-op if absent —

@@ -78,6 +78,10 @@ public partial class TerrainLabUI : Control
         // ST4-2 fantasy sky tint: multiply the sky gradient (white = no-op) → exotic presets recolor the
         // whole sky and the tint persists through the running cycle. Used by both sky paths below.
         Color tTop = _time.SkyTop * _skyTint, tHor = _time.SkyHorizon * _skyTint, tGnd = _time.SkyGround * _skyTint;
+        // SKY-COLOR OWNERSHIP (read before tuning day_script daytime colors). The active sky is the cloud_sky
+        // ShaderMaterial, installed by CloudVolume once its compute is ready. Until then (startup) — or in any
+        // scene with no CloudVolume — the scene's ProceduralSkyMaterial is live, and THIS branch drives it.
+        // It is a fallback, not the steady-state path. (Matches by type, so it's a no-op once the cloud sky is in.)
         if (env.Sky?.SkyMaterial is ProceduralSkyMaterial psky)
         {
             psky.SkyTopColor = tTop;
@@ -111,7 +115,14 @@ public partial class TerrainLabUI : Control
         sun.DirectionalShadowSplit3 = _sunDisc.ShadowSplit3;
         if (_cloud != null)
         {
-            _cloud.SetSkyColors(tTop, tHor, tGnd);   // tinted keyframed gradient (ST4-2)
+            // Keyframed gradient → cloud_sky `background()`. OWNERSHIP LAW: when the atmosphere arc is on
+            // (AT-1/2/3, the default), the physical LUT OWNS the DAYTIME sky/cloud-ambient color and these
+            // keyframed colors are mixed out by night_factor=0 — so tuning the day_script DAYTIME palette is
+            // intentionally a no-op then. These colors still drive (a) the NIGHT sky (atmosphere bows out as
+            // night_factor→1), and (b) the whole sky + cloud ambient when atmosphere is OFF. Hence: still pushed
+            // every recompose (it's the night path), NOT redundant. To grade the physical day sky use sky_tint
+            // (fantasy recolor) or the atmosphere exposure — day_script daytime colors are by-design superseded.
+            _cloud.SetSkyColors(tTop, tHor, tGnd);   // tinted keyframed gradient (ST4-2) — night sky + atmosphere-off fallback
             _cloud.SetSkyTint(_skyTint);             // ST4-2 fantasy/manual tint also modulates the physical (atmosphere) sky
             _cloud.SetSunSize(_sunDisc.Size); _cloud.SetSunLimb(_sunDisc.Limb);
             _cloud.SetSunCoronaSize(_sunDisc.CoronaSize); _cloud.SetSunCoronaEnergy(_sunDisc.CoronaEnergy);

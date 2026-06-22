@@ -20,9 +20,28 @@ The sky lane is ~90% built and mostly gated. Done + gated: **Stage 3 night** (mo
   idle. Night-tab knobs: `meteors on` / `rate` / `brightness` / `length` / `speed` / `color` / `color variety`;
   `--meteordebug` forces one. Default-on. Commits 29c52e4 · 14ec581 · 371332d.
 
-## NEXT (priority order)
+> **⚠ UPDATED 2026-06-21 (late) — this NEXT list below the line is SUPERSEDED.** After this doc was first written,
+> several of its items resolved the same day. Current truth lives in `docs/ROADMAP.md` (sky lane #1-#7). Quick delta:
+> - **Galaxy / Nebula → KILLED, not "start over."** The C1-v2 redo (billboards: structured generator → domain-warped
+>   → volumetric raymarch → lit self-shadowed volumetric) was built and ALL read fake within the ~1 ms budget →
+>   feature **removed entirely** (commit 62a3835). Do NOT re-attempt procedurally; only authored/offline textures or
+>   >1 ms lit volumetrics could clear the bar, neither in scope. Night sky = **moon + stars + meteors**, settled.
+> - **C2 planets + named stars + north star → PASS** (default-on, review key 2). C2 meteors → PASS.
+> - **Sky-color ownership debt → RESOLVED** (documentation trap, not a bug; ownership law now in `ComposeLighting`).
+> - **#5 shadows → the TERRAIN/CDLOD chat owns the remaining (mesh-coupled) work now**; sky-side config is the stable
+>   reference (`handoffs/2026-06-21-shadow-terrain-coordination.md`).
+>
+> **What actually remains in the sky/light lane (ranked):** (1) structural debt — extract `LightingComposer` /
+> `SkySubsystems` from the `TerrainLabUI` god-class + a `SkyMaterial` facade from `CloudVolume`; (2) **C3 N-suns /
+> N-moons** (the last big feature — needs the luminary-abstraction refactor of `ComposeLighting` + `cloud_sky.gdshader`,
+> so fold #1 into it rather than refactoring twice); (3) **#7 end-of-arc code-efficiency pass — LAST**, after all sky
+> work is gated. Optional small: meteor/night presets.
 
-### 1. ⭐ Galaxy / Nebula — START OVER (fresh concept). User's call: "start over on the nebulae and galaxy."
+---
+
+## NEXT (priority order) — ⚠ SUPERSEDED, see the delta box above. Kept for the failure-analysis only.
+
+### 1. ⭐ Galaxy / Nebula — START OVER (fresh concept). ❌ OBSOLETE: this was tried (C1-v2) and KILLED. See delta box.
 The C1 procedural-noise approach was REJECTED. Do NOT iterate it again — **brainstorm a genuinely different
 visual direction from scratch.** This is a fresh spec → plan → build, learning from the failure below.
 
@@ -33,40 +52,8 @@ visual direction from scratch.** This is a fresh spec → plan → build, learni
   was "all in one place."
 - A `pow(cd)` core bulge **bloomed into a soft glow** the user disliked.
 - Net: lots of knobs, but it never read as a believable/cool fantasy galaxy or nebula.
-
-**Fresh directions to explore in the brainstorm (NOT decided — options):**
-- **Painted/authored texture** — a hand-made or offline-generated galaxy/nebula image (or a few) sampled as a
-  sky layer, instead of live procedural noise. Lets it actually look like art, not noise. (Cheapest runtime; the
-  "look" is in the asset, not the math.)
-- **Structured generator, not noise** — e.g. logarithmic spiral arms for a galaxy, or domain-warped emission with
-  embedded bright stars + hard dust lanes, tuned to read as space (high dynamic range, sharp filaments, stars IN
-  the gas). The point: a different *generator*, not the cloud fbm.
-- **Distant-galaxy billboards** — a few small bright galaxy/nebula "objects" scattered across the sky as sprites
-  (like the meteors are objects), rather than one big field. Fits the moon+stars sky as accents.
-- **Drop it** — moon + stars + meteors may simply be enough; revisit only if a concept excites.
-- Decide the **reference look first** (find/agree on what "good" is — a specific image) before building, so we're
-  not iterating blind like last time.
-
-**Infra that already exists (reusable):** the render-thread bake seam (`AtmosphereCompute` `_mw*` /
-`night_sky_bake.glsl` / `Texture2Drd`) if v2 wants a baked texture; the orphaned **night-sky preset picker**
-(`TerrainLabUI.NightSkyPresets.cs` + `data/night_sky_presets.json` + `--nspreset`) — currently galaxy presets,
-repurposable. The galaxy/nebula shader code in `cloud_sky.gdshader` (`galaxy_color`/`nebula_color`, off at
-brightness 0) can be deleted or replaced when v2 lands.
-
-### 2. Meteors polish (optional, small)
-Offered, not yet built: **meteor presets** (repurpose the night-sky picker into night-look presets — Calm Night /
-Meteor Shower / Cosmic Fantasy / Fireballs — bundling meteor + star settings). Plus any head-glow/color tuning.
-Low priority; do if wanted.
-
-### 3. C2 continued — planets
-Bright slow-moving points/discs; optional brighter named-star accents. (After/alongside the galaxy redo.)
-
-### 4. #5 Shadow & Lighting pass
-Contact + soft (PCSS) shadows, CSM/cascade tuning, the proxy cheap-shadow perf lever, SSIL re-check.
-
-### 5. ⚙️ #7 End-of-arc code-efficiency pass — LAST
-Non-tuning perf sweep over the whole lighting/cloud/sun/atmosphere lane (user: "look at code efficiency, not
-tuning"). Only after the above are gated.
+- **C1-v2 addendum:** the billboard redo (structured generator, domain-warp, volumetric, lit volumetric) ALSO
+  failed within budget → feature removed. Only authored textures or >1 ms lit volumetrics could clear the bar.
 
 ## Run / coordination (unchanged)
 - One Godot at a time: kill strays `taskkill //F //IM Godot_v4.6.2-stable_mono_win64.exe`. Always
