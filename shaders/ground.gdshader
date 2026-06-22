@@ -101,7 +101,7 @@ varying vec2 v_wxz;      // DEBUG: reconstructed TRUE-world XZ the field was sam
 varying vec2 v_surf_xz;  // true-world XZ for world-space texture tiling (set in ALL vertex branches)
 
 // --- Minimal surfacing slice (readable landforms). Fixed-sampler textured path, A/B vs the colour ramp. ---
-uniform bool use_textures = false;   // false = legacy height/slope colour ramp (default); true = textured
+uniform bool use_textures = true;    // true = textured (default, minimal surfacing slice); --textures=0 = legacy colour ramp
 uniform float mat_tiling = 12.0;     // world metres per texture tile (smaller = more repeats)
 // placement bands (metres for height, normalized 0..1 slope = 1 - normal.y). Soft via fwidth.
 uniform float surf_h_sand  = 30.0;    // below → sand/low (mat0)
