@@ -293,6 +293,12 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
    maps), then attack redundant per-frame work, recompute-cadence (recompute only on real change; amortize/temporal where
    safe), dead/duplicated shader math, oversized textures/dispatches, the `Std430` buffer churn, and the CallOnRenderThread
    seams. Output: measured before/after ms per subsystem against the frame budget. No look changes — same image, fewer ms.
+   **✅ DONE 2026-06-22** (see performance.md "#7 END-OF-ARC" + "GPU-compute opportunities" sections). Measured: frame
+   is TERRAIN-MESH-bound (~27.5ms floor, other lane); sky lane is ~2-3ms GPU and already efficient. Landed: cached
+   Env/Sun nodes + reused weights list (behavior-neutral, `ee91c51`) + the **AT-3 3-texel GPU extractor** (297KB→24B
+   readback, CLOUDLIGHTCHECK PASS maxdiff=0, `14cba39`). Declined (measured marginal vs risk): starfield cubemap bake
+   (~0.3ms night-only vs a cubemap RD-seam); deferred: baked galaxy/nebula (needs a reference image). Next real perf
+   lever is terrain LOD + the shadow-atlas dial-down — both outside the sky lane.
 Tracked so nothing is lost. Each is a fix, not a feature; sequenced cheap → structural. Most are
 default-safe and land alongside the lane work. Verdicts were adversarially verified in the audit.
 

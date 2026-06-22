@@ -75,12 +75,31 @@ already dirty-guards (`>1e-4`) so it is NOT recomputing the sky LUT per-frame; `
 (`_setsBuilt`); `AtmosphereCompute` full recompute is `_dirty`-gated, aerial is `_camDirty`-gated. These are
 exemplary; left untouched.
 
-**Deliberately NOT done (cost ÷ risk too low on a shared branch):** the AT-3 "read 3 texels via a tiny GPU output"
-rewrite (saves ~0.5 ms/cycle, needs a new `.glsl` = shader risk); the `CloudVolume.PackLayers` per-frame `float[192]`
-alloc (~768 B/frame GC, but it's in the cloud chat's CloudVolume hot path + already cheap); splitting `Compose()`
-into time-vs-static (CPU-only saving on a GPU-bound frame, risks the byte-identical default). Banked if a future
-profile shows the lane is no longer terrain-bound. The real next perf lever is **terrain mesh LOD** (CDLOD, the
-other lane) + the **8192→4096/6144 shadow-atlas dial-down** — both outside the sky lane.
+**DONE later the same day — AT-3 3-texel GPU extractor** (commit `14cba39`). `atmosphere_cloudlight.glsl`
+`texelFetch`es the 3 cloud-light texels into a 3×1 image; readback is now ~24 B instead of two full-LUT
+`TextureGetData` (~297 KB). Gate `--atmoscheck`: **CLOUDLIGHTCHECK PASS, maxdiff=0.000000** (byte-for-byte
+identical to the old full-LUT read). The named ROADMAP #7 "read only 3 texels" item.
+
+**Deliberately NOT done (cost ÷ risk too low on a shared branch):** the `CloudVolume.PackLayers` per-frame
+`float[192]` alloc (~768 B/frame GC, but in the cloud chat's CloudVolume hot path + already cheap); splitting
+`Compose()` into time-vs-static (CPU-only saving on a GPU-bound frame, risks the byte-identical default). Banked
+if a future profile shows the lane is no longer terrain-bound. The real next perf lever is **terrain mesh LOD**
+(CDLOD, the other lane) + the **8192→4096/6144 shadow-atlas dial-down** — both outside the sky lane.
+
+## 2026-06-22 — GPU-compute opportunities for the sky (reviewed; one done, two declined/deferred)
+
+User asked "is there anything GPU compute we could/should be doing with sky stuff." Reviewed the sky GPU landscape:
+- **AT-3 3-texel readback → DONE** (above; commit `14cba39`).
+- **Starfield cubemap bake → DECLINED (measured marginal).** `star_field()` (cloud_sky.gdshader ~L397) is a
+  2-layer `hash13` point-star loop, night-only (early-outs when `night_factor<=0.001`), sky-facing only. Analysed
+  cost ~0.3 ms night-only. A cubemap bake would replace it with 1 tap BUT adds a `Texture*Drd` cross-node seam (the
+  class of seam that hard-crashed the RD in the AT-3 pivot — see [[compute-to-material-callonrenderthread]]), plus
+  baking the per-star twinkle hash to alpha and a density/twinkle/brightness re-bake on knob change (rotation stays
+  live). Not worth the seam risk + complexity for ~0.3 ms. Revisit only if a profile shows stars as a hotspot.
+- **Galaxy/nebula baked → DEFERRED (needs a reference look).** This is the right *home* for the killed galaxy/nebula
+  ([[galaxy-nebula-killed]]: don't re-attempt procedurally — GPU-bake a texture instead, and agree a reference FIRST).
+  Bundle the starfield bake WITH this when the user supplies a real Milky Way panorama / ESO equirect image: one
+  cubemap bake (galaxy + stars) amortises the single seam, and a real photo is guaranteed to read as space.
 
 ## 2026-06-19 — IN-MOTION profiling (major correction) + GI/shadow proxy
 
