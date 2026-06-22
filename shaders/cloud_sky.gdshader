@@ -64,6 +64,12 @@ uniform float star_brightness = 1.0;
 uniform float star_density : hint_range(0.0, 1.0) = 0.5;
 uniform float star_twinkle : hint_range(0.0, 1.0) = 0.5;
 uniform float star_rotation = 0.003;     // celestial rotation speed (rad/s)
+// CELESTIAL C2 — planets (bright steady colored points + glow) + named/landmark bright stars. Curated
+// const tables (near stars_layer); only global on/off + brightness are tunable. Rendered in stars_layer.
+uniform bool  planets_on = true;
+uniform float planet_brightness : hint_range(0.0, 3.0) = 1.0;
+uniform bool  bright_stars_on = true;
+uniform float bright_star_brightness : hint_range(0.0, 3.0) = 1.0;
 // METEORS (Celestial C2): occasional shooting stars. Defaults subtle; gate-tunable. meteor_debug forces a
 // streak (headless capture). meteor_rate = how often a channel fires; speed = sweep speed (shorter window).
 uniform bool meteors_on = true;
@@ -371,8 +377,67 @@ vec3 meteors(vec3 rd){
     return acc;
 }
 
-// STARS (Stage 3d / Celestial): magnitude-stratified starfield + meteors, on a slowly-rotating celestial
-// sphere, faded in by night_factor and above the horizon. Direction-only (EYEDIR), locked to the sky.
+// Curated planets: xyz = direction on the celestial sphere (normalized in-shader), w = core angular size (rad).
+const vec4 PLANET_DIR_SIZE[5] = vec4[5](
+    vec4( 0.5,  0.5,  0.7, 0.0060),   // Venus  — brightest, white
+    vec4(-0.6,  0.4,  0.6, 0.0045),   // Mars   — red
+    vec4( 0.2,  0.7, -0.5, 0.0052),   // Jupiter— gold, bright
+    vec4(-0.3,  0.6, -0.6, 0.0042),   // Saturn — pale gold
+    vec4( 0.7,  0.45,-0.2, 0.0038)    // blue ice giant
+);
+const vec4 PLANET_COL[5] = vec4[5](   // rgb = color, w = relative brightness
+    vec4(1.00, 0.97, 0.90, 2.2),
+    vec4(1.00, 0.50, 0.35, 1.3),
+    vec4(1.00, 0.92, 0.72, 1.8),
+    vec4(0.95, 0.85, 0.60, 1.1),
+    vec4(0.70, 0.82, 1.00, 0.9)
+);
+// Curated landmark stars: xyz = dir, w = relative brightness; BSTAR_COL = color.
+const vec4 BSTAR_DIR[7] = vec4[7](
+    vec4( 0.10, 0.80, 0.50, 1.8), vec4(-0.50, 0.60, 0.40, 1.5),
+    vec4( 0.60, 0.55, 0.30, 1.6), vec4(-0.20, 0.70,-0.60, 1.4),
+    vec4( 0.40, 0.50,-0.70, 1.7), vec4(-0.70, 0.45,-0.30, 1.3),
+    vec4( 0.00, 0.60, 0.80, 1.9)
+);
+const vec3 BSTAR_COL[7] = vec3[7](
+    vec3(0.80,0.88,1.00), vec3(1.00,1.00,0.97), vec3(1.00,0.78,0.55),
+    vec3(0.80,0.88,1.00), vec3(1.00,1.00,0.97), vec3(1.00,0.78,0.55),
+    vec3(0.80,0.88,1.00)
+);
+
+// Planets: bright steady colored points (NO twinkle) with a tiny core disc + faint soft glow.
+vec3 planets(vec3 sr){
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 5; i++){
+        vec3 dir = normalize(PLANET_DIR_SIZE[i].xyz);
+        float cd = dot(sr, dir);
+        if (cd < 0.2) continue;                                  // early-out (well off the object)
+        float ang = acos(clamp(cd, 0.0, 1.0));
+        float core = smoothstep(PLANET_DIR_SIZE[i].w, 0.0, ang); // tiny bright disc
+        float glow = exp(-ang * 55.0);                           // faint soft halo
+        acc += PLANET_COL[i].rgb * (core * PLANET_COL[i].w + glow * 0.25);
+    }
+    return acc;
+}
+
+// Landmark stars: brighter than the field, slightly colored, faint glow + a slow gentle twinkle.
+vec3 bright_stars(vec3 sr){
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 7; i++){
+        vec3 dir = normalize(BSTAR_DIR[i].xyz);
+        float cd = dot(sr, dir);
+        if (cd < 0.2) continue;
+        float ang = acos(clamp(cd, 0.0, 1.0));
+        float point = smoothstep(0.0035, 0.0, ang);
+        float glow  = exp(-ang * 110.0) * 0.4;
+        float tw = mix(1.0, 0.6 + 0.4 * sin(TIME * 0.6 + float(i) * 9.7), 0.5);   // slow gentle twinkle
+        acc += BSTAR_COL[i] * (point * BSTAR_DIR[i].w * tw + glow);
+    }
+    return acc;
+}
+
+// STARS (Stage 3d / Celestial): magnitude-stratified starfield + planets + landmark stars + meteors, on a
+// slowly-rotating celestial sphere, faded in by night_factor and above the horizon. Locked to the sky.
 vec3 stars_layer(vec3 rd){
     if (night_factor <= 0.001) { return vec3(0.0); }
     vec3 sr = normalize(rd);
@@ -383,8 +448,12 @@ vec3 stars_layer(vec3 rd){
     // STARS: magnitude-stratified live point-stars (few-bright/many-faint, size + color-temp variety).
     vec3 star = star_field(sr);
 
+    // C2: planets (steady colored points) + landmark bright stars — ride the sky on the same rotated dir.
+    vec3 pl = planets_on ? planets(sr) * planet_brightness : vec3(0.0);
+    vec3 bs = bright_stars_on ? bright_stars(sr) * bright_star_brightness : vec3(0.0);
+
     float fade = night_factor * smoothstep(-0.02, 0.12, rd.y);   // night + above horizon
-    return (star + meteors(rd)) * fade;
+    return (star + pl + bs + meteors(rd)) * fade;
 }
 
 // CIRRUS (CO-2): anisotropic wind-stretched fbm3 → high thin filaments. Streaks run ALONG the wind
