@@ -42,6 +42,7 @@ public partial class TerrainLabUI : Control
     private bool _lookAtSunCli = false;   // --lookatsun → aim camera at the sun on startup (god-ray verify)
     private bool _lookAtMoonCli = false;  // --lookatmoon → aim camera at the moon on startup (3b moon gate)
     private float _timeCli = -1f;   // --time=H → drive the decoupled Time axis (sun arc + day color script)
+    private int _sunsCli = -1;      // --suns=N → total suns (1=default; N-1 become C3 extra suns)
     private bool _nightGate;        // --nightgate=1 → review keys 1-9 jump to data/review_night.json states (Stage 3a)
     private float _nightDarkCli = -1f;   // --nightdark=N → set night_darkness (night brightness lever) at startup for A/B
     private float _moonPhaseCli = -1f;   // --moonphase=N → set moon_phase (0 new .. 1 full) at startup for A/B
@@ -109,6 +110,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a == "--lookatmoon") { _lookAtMoonCli = true; }
             else if (a.StartsWith("--time=")) { float.TryParse(a.Substring("--time=".Length), out _timeCli); }
+            else if (a.StartsWith("--suns=")) { int.TryParse(a.Substring("--suns=".Length), out _sunsCli); }
             else if (a.StartsWith("--nightgate=")) { _nightGate = a.Substring("--nightgate=".Length) == "1"; }
             else if (a.StartsWith("--nightdark=")) { float.TryParse(a.Substring("--nightdark=".Length), out _nightDarkCli); }
             else if (a.StartsWith("--moonphase=")) { float.TryParse(a.Substring("--moonphase=".Length), out _moonPhaseCli); }

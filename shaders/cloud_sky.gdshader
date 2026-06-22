@@ -45,6 +45,17 @@ uniform float sun_surface_churn : hint_range(0.0, 1.0) = 0.15;     // animation 
 uniform float sun_surface_warm  : hint_range(0.0, 1.0) = 0.3;      // cell-vs-spot warm shift
 uniform vec3  sun_surface_color : source_color = vec3(0.0);        // fantasy base override (black = off)
 
+// --- EXTRA SUNS (Celestial C3 Unit 4): additional sun discs beyond the primary LIGHT0 sun. Custom-
+// uniform arrays (like the moon), so they don't depend on LIGHTn ordering. extra_sun_count=0 (default)
+// → the loop never runs → byte-identical to a single-sun sky. Each shares the global corona/halo/limb/
+// redden appearance but has its own direction/color/size/energy. MAX 3 extra (4 suns total). ---
+const int MAX_EXTRA_SUNS = 3;
+uniform int   extra_sun_count = 0;                                  // 0 = single-sun (no-op)
+uniform vec3  extra_sun_dir[MAX_EXTRA_SUNS];                        // direction TO each extra sun (normalized)
+uniform vec3  extra_sun_color[MAX_EXTRA_SUNS];                      // plain vec3 (not source_color) → binds reliably as Vector3[]
+uniform float extra_sun_size[MAX_EXTRA_SUNS];                       // angular radius (deg)
+uniform float extra_sun_energy[MAX_EXTRA_SUNS];                     // per-sun disc energy
+
 // --- MOON (Stage 3b): custom-uniform disc, gated to night. Reuses sun_fbm for maria/craters. ---
 uniform vec3  moon_dir = vec3(0.0, 0.7, 0.7);                      // direction TO the moon (pushed from C#, normalized)
 uniform vec3  moon_color : source_color = vec3(0.85, 0.88, 1.0);  // cool moonlight white
@@ -236,6 +247,37 @@ vec3 sun_layers(vec3 rd) {
     vec3 glow = sunCol * halo * haloT;
     float horizonGate = smoothstep(-0.04, 0.0, LIGHT0_DIRECTION.y);   // 1 above horizon, 0 once below
     return sun_disc_energy * (core + glow) * horizonGate;
+}
+
+// EXTRA SUNS (C3 Unit 4): sum the extra sun discs. Mirrors sun_layers' non-surface path (disc + corona
+// + halo + horizon reddening + per-pixel cloud occlusion) per extra sun, reading its own dir/color/size/
+// energy from the arrays. extra_sun_count=0 → returns 0 (no-op). Shares the global corona/halo/limb/redden.
+vec3 extra_suns(vec3 rd){
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < extra_sun_count && i < MAX_EXTRA_SUNS; i++){
+        vec3 sdir = extra_sun_dir[i];
+        float cosS = dot(rd, sdir);
+        float sElev = clamp(sdir.y, 0.0, 1.0);
+        float sunset = smoothstep(sun_redden_onset, 0.0, sElev) * sun_redden;   // 0 high → 1 at horizon
+        float grow = 1.0 + sunset * sun_horizon_grow;
+        float discEdge = cos(radians(extra_sun_size[i] * grow));
+        float mu = clamp((cosS - discEdge) / max(1.0 - discEdge, 1e-6), 0.0, 1.0);
+        float discMask = smoothstep(0.0, 0.04, mu);
+        float limb = mix(1.0, mix(0.45, 1.0, sqrt(mu)), sun_limb);
+        float disc = discMask * limb;
+        float corona = pow(max(cosS, 0.0), sun_corona_size) * sun_corona_energy;
+        float halo   = pow(max(cosS, 0.0), sun_halo_size / grow) * sun_halo_energy;
+        vec3 col = mix(extra_sun_color[i], sun_redden_color, sunset);
+        float aPix = (cloud_enabled && rd.y > 0.0) ? clamp(texture(cloud_rd_tex, dir_to_uv(rd)).a, 0.0, 1.0) : 0.0;
+        vec3 ext = mix(vec3(1.0), sun_redden_color, clamp(aPix * sun_cloud_redden, 0.0, 1.0));
+        float discT = (1.0 - aPix);
+        float haloT = (1.0 - aPix * 0.5);
+        vec3 core = col * ext * (disc * 12.0 + corona) * discT;
+        vec3 glow = col * halo * haloT;
+        float horizonGate = smoothstep(-0.04, 0.0, sdir.y);
+        acc += extra_sun_energy[i] * (core + glow) * horizonGate;
+    }
+    return acc;
 }
 
 // MOON (Stage 3b): mirrors sun_layers — a disc at moon_dir with limb darkening, a reused-sun_fbm
@@ -519,6 +561,7 @@ void sky(){
 
     bg += stars_layer(rd);     // behind the sun/moon/clouds (they composite over)
     bg += sun_layers(rd);
+    bg += extra_suns(rd);      // C3: additional suns (no-op when extra_sun_count == 0)
     bg += moon_layers(rd);
 
     vec4 ci = cirrus_layer(rd);              // CO-2: high thin layer, OVER sun/moon, UNDER cumulus

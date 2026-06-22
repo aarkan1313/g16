@@ -570,6 +570,18 @@ public partial class CloudVolume : Node
         _skyMat?.SetShaderParameter("bright_stars_on", on);
         _skyMat?.SetShaderParameter("bright_star_brightness", Mathf.Max(brightness, 0f));
     }
+    // --- EXTRA SUNS (Celestial C3 Unit 4): additional sun discs beyond the primary. Arrays are length
+    // MAX_EXTRA_SUNS (3); count gates the shader loop (0 = no-op). Vector3[]/float[] bind reliably (a
+    // Godot.Collections.Array does NOT — see the std430/array gotcha). CloudVolume stays the sole _skyMat writer. ---
+    public void SetExtraSuns(int count, Vector3[] dirs, Vector3[] colors, float[] sizes, float[] energies)
+    {
+        _skyMat?.SetShaderParameter("extra_sun_count", count);
+        _skyMat?.SetShaderParameter("extra_sun_dir", dirs);
+        _skyMat?.SetShaderParameter("extra_sun_color", colors);
+        _skyMat?.SetShaderParameter("extra_sun_size", sizes);
+        _skyMat?.SetShaderParameter("extra_sun_energy", energies);
+    }
+
     // --- CIRRUS (CO-2): 2D sky-layer uniforms (default off) ---
     public void SetCirrusOn(bool on) { _skyMat?.SetShaderParameter("cirrus_on", on); }
     public void SetCirrus(string knob, float v)

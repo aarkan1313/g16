@@ -56,6 +56,20 @@ public sealed class LightingComposer
     public LuminaryAllocation? Allocation { get; private set; }
     private int _lastLumCount = -1;
 
+    // ── C3 Unit 4: EXTRA SUNS (visible). ExtraSunCount (set by --suns=N → N-1 extras) drives a shadowless
+    // DirectionalLight pool (terrain light) + the disc arrays pushed to cloud_sky. 0 = single-sun (no-op,
+    // shader never touched). Each extra rides its own offset arc; shadow stays on the primary only (the
+    // budgeter caps shadow casters), so N suns don't multiply the costliest pass — the "3 suns ≈ today" rule.
+    public int ExtraSunCount = 0;
+    private const int MaxExtraSuns = 3;   // matches MAX_EXTRA_SUNS in cloud_sky.gdshader
+    private readonly List<DirectionalLight3D> _extraSunLights = new();
+    private readonly HashSet<DirectionalLight3D> _extraQueued = new();
+    private static readonly Color[] ExtraSunColors = { new(1.0f, 0.65f, 0.35f), new(0.5f, 0.8f, 1.0f), new(0.85f, 0.6f, 1.0f) };
+    private readonly Vector3[] _extraDirs = new Vector3[MaxExtraSuns];
+    private readonly Vector3[] _extraCols = new Vector3[MaxExtraSuns];
+    private readonly float[] _extraSizes = new float[MaxExtraSuns];
+    private readonly float[] _extraEnergies = new float[MaxExtraSuns];
+
     private bool _shadowTuned = false;             // #5: directional shadow atlas size set once (RenderingServer global)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;               // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
@@ -259,7 +273,62 @@ public sealed class LightingComposer
         ApplyOvercastScaling();           // sun energy + ambient + fog color (overcast-scaled) — the one writer of these
         _host.SyncLightControlsToScene(); // Light-tab sliders reflect the composed state
 
-        RebuildAndBudget();               // C3: keep the luminary list + allocation current (no rendering effect yet)
+        ComposeExtraSuns();               // C3 Unit 4: extra sun discs + terrain lights (no-op when ExtraSunCount==0)
+        RebuildAndBudget();               // C3: keep the luminary list + allocation current
+    }
+
+    /// C3 Unit 4: orient each extra sun on its own offset arc, drive its (shadowless) terrain light, and
+    /// push the disc arrays to cloud_sky. No-op when ExtraSunCount==0 (the shader's extra_sun_count stays 0,
+    /// never written → byte-identical single-sun sky). Each extra shares the primary's time but offsets its
+    /// azimuth + lowers its declination so the suns read as distinct bodies across the sky.
+    private void ComposeExtraSuns()
+    {
+        int n = Mathf.Clamp(ExtraSunCount, 0, MaxExtraSuns);
+        if (n == 0) { return; }   // default path: never touch the shader → no regression
+        EnsureExtraSunLights(n);
+        float dayLen = Mathf.Max(Time.SunsetH - Time.SunriseH, 1e-3f);
+        float f = (Time.TimeOfDay - Time.SunriseH) / dayLen;
+        for (int i = 0; i < MaxExtraSuns; i++)
+        {
+            if (i < n)
+            {
+                float declScale = 0.85f;
+                float azOff = 50f * (i + 1);                       // spread the extras across the sky
+                float elev = Time.PeakElev * declScale * Mathf.Sin(Mathf.Pi * f);
+                float az = Mathf.Lerp(Time.AzStart, Time.AzEnd, f) + azOff;
+                var L = _extraSunLights[i];
+                L.RotationDegrees = new Vector3(-elev, az, 0f);    // same convention as OrientSun
+                Vector3 dir = L.Transform.Basis.Z.Normalized();   // local==world (parented to identity root)
+                float up = Mathf.Clamp((dir.Y + 0.02f) / 0.1f, 0f, 1f);   // above-horizon ramp (terrain light)
+                Color c = ExtraSunColors[i % ExtraSunColors.Length];
+                L.LightColor = c;
+                L.LightEnergy = BaseSunEnergy * 0.7f * up;         // dimmer than primary, gated above horizon
+                L.Visible = L.LightEnergy > 0.001f;
+                _extraDirs[i] = dir;
+                _extraCols[i] = new Vector3(c.R, c.G, c.B);
+                _extraSizes[i] = SunDisc.Size;
+                _extraEnergies[i] = 1.3f;                          // disc energy; the shader's horizonGate fades it below the horizon
+            }
+            else { _extraDirs[i] = Vector3.Up; _extraCols[i] = Vector3.Zero; _extraSizes[i] = 0.6f; _extraEnergies[i] = 0f; }
+        }
+        _host.Cloud?.SetExtraSuns(n, _extraDirs, _extraCols, _extraSizes, _extraEnergies);
+    }
+
+    /// Lazily build + deferred-add the extra-sun DirectionalLights (shadowless; the primary owns the shadow).
+    /// Deferred-add mirrors EnsureMoonLight (Compose first runs while the tree is busy in _Ready).
+    private void EnsureExtraSunLights(int count)
+    {
+        while (_extraSunLights.Count < count)
+        {
+            _extraSunLights.Add(new DirectionalLight3D { Name = $"ExtraSun{_extraSunLights.Count}", ShadowEnabled = false, LightEnergy = 0f, Visible = false });
+        }
+        var root = _host.SceneOwner.GetNodeOrNull<Node3D>("/root/TerrainLabRoot");
+        if (root == null) { return; }
+        for (int i = 0; i < count; i++)
+        {
+            var L = _extraSunLights[i];
+            if (!L.IsInsideTree() && _extraQueued.Add(L)) { root.CallDeferred(Node.MethodName.AddChild, L); }
+        }
     }
 
     /// C3 (Unit 2): represent the current sun + moon as Luminary entries and run the priority budgeter.
@@ -277,6 +346,7 @@ public sealed class LightingComposer
         float moonVis = moonUp * moonIllum;
 
         _luminaries.Clear();
+        var weights = new List<float>();
         _luminaries.Add(new Luminary
         {
             Id = "sun_primary", Kind = LuminaryKind.Sun,
@@ -284,6 +354,21 @@ public sealed class LightingComposer
             IsPhysicalLight = true, CastsShadow = true, ContributesToAtmosphere = true,
             Priority = 100f, LightColor = Time.SunColor, LightEnergy = BaseSunEnergy,
         });
+        weights.Add(100f * sunVis);
+        // C3 Unit 4: extra suns (shadowless — the primary owns the shadow atlas; budgeter enforces this).
+        int en = Mathf.Clamp(ExtraSunCount, 0, MaxExtraSuns);
+        for (int i = 0; i < en; i++)
+        {
+            float eUp = Mathf.Clamp((_extraDirs[i].Y + 0.02f) / 0.1f, 0f, 1f);
+            _luminaries.Add(new Luminary
+            {
+                Id = $"sun_extra{i}", Kind = LuminaryKind.Sun,
+                Size = SunDisc.Size, DiscEnergy = 1.3f,
+                IsPhysicalLight = true, CastsShadow = false, ContributesToAtmosphere = true,
+                Priority = 80f - i, LightColor = ExtraSunColors[i % ExtraSunColors.Length], LightEnergy = BaseSunEnergy * 0.7f,
+            });
+            weights.Add((80f - i) * eUp);
+        }
         _luminaries.Add(new Luminary
         {
             Id = "moon", Kind = LuminaryKind.Moon, Phase = Moon.Phase,
@@ -291,7 +376,7 @@ public sealed class LightingComposer
             IsPhysicalLight = true, CastsShadow = true, ContributesToAtmosphere = false,
             Priority = 10f, LightColor = Moon.LightColor, LightEnergy = Moon.LightEnergy,
         });
-        var weights = new[] { 100f * sunVis, 10f * moonVis };
+        weights.Add(10f * moonVis);
         Allocation = LuminaryBudget.Allocate(_luminaries, weights, Caps);
 
         // Log demotions ONCE per luminary-count change (no per-frame spam). With [sun, moon] under the

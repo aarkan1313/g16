@@ -233,6 +233,7 @@ public partial class TerrainLabUI : Control
         if (_glowCli >= 0) { GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.GlowEnabled = _glowCli == 1; }   // --glow diagnostic
         if (_nightDarkCli >= 0f) { _time.NightDarkness = _nightDarkCli; }   // --nightdark=N: night brightness lever (A/B)
         if (_moonPhaseCli >= 0f) { _moon.Phase = _moonPhaseCli; }           // --moonphase=N: moon phase (A/B)
+        if (_sunsCli >= 1) { _lighting.ExtraSunCount = _sunsCli - 1; }   // --suns=N → N-1 C3 extra suns (set before DriveTime so the first compose shows them)
         if (_timeCli >= 0f) { DriveTime(_timeCli); }   // --time=H drives the decoupled Time axis (overrides the spawn mood's sun/sky)
         // --lookatsun: aim the camera straight at the sun (for god-ray verification — removes the
         // guesswork of matching --cam yaw to the sun azimuth).
