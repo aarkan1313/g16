@@ -184,6 +184,19 @@ public partial class TerrainLabUI : Control
             var camCdlod = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
             CdlodQuadtree.SelfCheck(_params.RegionSizeM, 6, 2.5f, camCdlod.GlobalPosition);
         }
+        if (_morphCheckCli)   // S2b: geomorph pop-free numeric backstop (mirrors ground.gdshader morph math)
+        {
+            // Test across the actual leaf-size ladder (region/2^depth: 128..8192 m at GridN=65, MaxDepth=6).
+            // The pop-free property is scale-invariant, but checking each size confirms it holds end to end.
+            bool allOk = true; string worstMsg = "ok";
+            foreach (float s in new float[] { 128f, 256f, 512f, 1024f, 2048f, 4096f })
+            {
+                bool ok = MorphCheck.Run(65, 2.5f, s, out string m);
+                if (!ok) { allOk = false; worstMsg = $"size={s:F0}m: {m}"; break; }
+                worstMsg = $"size={s:F0}m: {m}";   // keep the last (largest) PASS message for the report
+            }
+            GD.Print($"MORPHCHECK: {(allOk ? "PASS" : "FAIL")}  {worstMsg}");
+        }
         if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
