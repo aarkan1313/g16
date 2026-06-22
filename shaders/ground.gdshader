@@ -86,6 +86,13 @@ uniform float cliff_lo = 0.45;
 uniform float cliff_hi = 0.72;
 uniform float ground_rough = 0.92;
 
+// S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
+// detail transitions share a single soft band (no quality-pop / no stacked rings). UNUSED today — the
+// placeholder ground has no distance-varying detail yet. Reserved seam for the surfacing arc.
+uniform float detail_fade_near = 400.0;
+uniform float detail_fade_far  = 1600.0;
+float detail_fade(float dist) { return 1.0 - smoothstep(detail_fade_near, detail_fade_far, dist); }
+
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)
 
