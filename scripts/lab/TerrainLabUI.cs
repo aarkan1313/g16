@@ -203,6 +203,11 @@ public partial class TerrainLabUI : Control
             bool ok = StitchCheck.Run(_params.RegionSizeM, 6, 2.5f, 65, camStitch.GlobalPosition, out string m);
             GD.Print($"STITCHCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
         }
+        if (_streamCheckCli)   // S3: streaming invariant-along-traverse + renderOrigin snap field-continuity
+        {
+            bool ok = StreamCheck.Run(_params.RegionSizeM, 6, 2.5f, out string m);
+            GD.Print($"STREAMCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
+        }
         if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
