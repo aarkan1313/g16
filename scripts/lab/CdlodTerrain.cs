@@ -164,6 +164,7 @@ public sealed partial class CdlodTerrain : Node3D
         snapped |= force;   // a forced re-apply re-pushes position+lod_viz+AABB to every live slot this frame
         _frame++;
         int births = 0;
+        bool budgetHit = false;   // did the birth cap stop us from creating every new leaf this frame?
         for (int i = 0; i < leaves.Count; i++)
         {
             CdlodChunk c = leaves[i];
@@ -175,7 +176,7 @@ public sealed partial class CdlodTerrain : Node3D
             }
             else
             {
-                if (births >= MaxChunkOps) { continue; }   // S3: churn budget — the rest appear next frame(s)
+                if (births >= MaxChunkOps) { budgetHit = true; continue; }   // S3: churn budget — rest appear next frame(s)
                 births++;
                 ChunkSlot ns = AcquireSlot();
                 ns.SeenFrame = _frame;
@@ -186,14 +187,24 @@ public sealed partial class CdlodTerrain : Node3D
         }
 
         // Retire slots not seen this frame → hide + return to the free-list (NOT freed; reused next birth).
-        _scratchDead.Clear();
-        foreach (var kv in _active) { if (kv.Value.SeenFrame != _frame) { _scratchDead.Add(kv.Key); } }
-        for (int i = 0; i < _scratchDead.Count; i++)
+        // VANISHING-CHUNK FIX: only retire when the birth budget was NOT hit. When flying fast a parent can
+        // leave the leaf set in the SAME frame its replacement children are budget-deferred (births capped at
+        // MaxChunkOps). Retiring the parent unconditionally then leaves a HOLE (parent hidden, children not yet
+        // born) for a frame or two → the brief flash the user saw at medium range while moving fast. If the
+        // budget was hit, KEEP the stale (un-stamped) chunks visible this frame; they harmlessly overlap the
+        // newcomers (a one-frame double-draw is invisible, a hole is not) and get retired on a later frame once
+        // births catch up. Steady-state (budget not hit) retires immediately as before, so no chunk lingers.
+        if (!budgetHit)
         {
-            ChunkSlot dead = _active[_scratchDead[i]];
-            dead.Mi.Visible = false;
-            _free.Push(dead.Mi);
-            _active.Remove(_scratchDead[i]);
+            _scratchDead.Clear();
+            foreach (var kv in _active) { if (kv.Value.SeenFrame != _frame) { _scratchDead.Add(kv.Key); } }
+            for (int i = 0; i < _scratchDead.Count; i++)
+            {
+                ChunkSlot dead = _active[_scratchDead[i]];
+                dead.Mi.Visible = false;
+                _free.Push(dead.Mi);
+                _active.Remove(_scratchDead[i]);
+            }
         }
 
         if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
@@ -223,12 +234,23 @@ public sealed partial class CdlodTerrain : Node3D
         if (isNew || snapped || (tightAvail && !slot.Tightened))
         {
             float lo, hi;
+            bool fromProbe = tightAvail;
             if (tightAvail) { (lo, hi) = _tightened[key]; slot.Tightened = true; }
             else { (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size); }
             // Margin scaled to the chunk's vertex spacing (the geomorph displacement bound) with an 8 m floor:
             // too tight → CSM cascade misses displaced verts → grid-aligned shadow acne; too loose → inflated
             // cascade depth → soft blobs (memory cdlod-chunk-shadow-aabb).
             float m = Mathf.Max(8f, c.Size / (GridN - 1) * 1.5f);
+            // S3.5 cull-pop fix: a TIGHTENED range comes from the coarse ProbeRes×ProbeRes height probe, whose
+            // samples are spaced size/(ProbeRes-1) apart — far wider than the mesh's verts on big chunks (e.g.
+            // an 8192 m chunk: ~1365 m probe vs 128 m mesh). The probe can MISS a real peak/valley the mesh
+            // renders, so its lo/hi can be too short → when the tighten lands a few frames after birth, Godot
+            // frustum/shadow-culls the chunk while its true geometry is still on screen → it DISAPPEARS, then
+            // reappears on the next re-eval (the intermittent "vanishing chunk"). Pad the margin by half the
+            // probe spacing so the tightened AABB can never be shorter than the mesh between probe samples. This
+            // scales with chunk size, so far/big chunks (coarsest probe, least shadow-precision need) get a
+            // looser-but-safe box while near/small chunks (fine probe) stay tight.
+            if (fromProbe) { m = Mathf.Max(m, c.Size / Mathf.Max(1, _aabbProvider.ProbeRes - 1) * 0.5f); }
             mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f), new Vector3(1f, (hi - lo) + 2f * m, 1f));
         }
         // S2d: edge-stitch variant — reassign the mesh ONLY when this chunk's mask changed (avoids per-frame
