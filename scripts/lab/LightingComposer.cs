@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 
 namespace WG16.Lab;
 
@@ -44,6 +45,16 @@ public sealed class LightingComposer
     public float SunAngle { get; set; } = 35f;
     public float SunAzimuth { get; set; } = 40f;
     public Vector3 LastMoonDir { get; private set; } = Vector3.Zero;   // last composed moon dir (for --lookatmoon)
+
+    // ── C3 luminary model integration (Unit 2 — data wired, rendering still single-sun + moon). ──
+    // The composer maintains the current sun + moon as a Luminary list and runs the budgeter each Compose.
+    // The allocation is NOT yet driving rendering (that's Unit 4, gated) — this proves the model + budgeter
+    // integrate with ZERO look change, and is the source of truth the N-sun rendering will read.
+    public LuminaryCaps Caps { get; } = new();
+    private readonly List<Luminary> _luminaries = new();
+    public IReadOnlyList<Luminary> Luminaries => _luminaries;
+    public LuminaryAllocation? Allocation { get; private set; }
+    private int _lastLumCount = -1;
 
     private bool _shadowTuned = false;             // #5: directional shadow atlas size set once (RenderingServer global)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
@@ -247,7 +258,53 @@ public sealed class LightingComposer
 
         ApplyOvercastScaling();           // sun energy + ambient + fog color (overcast-scaled) — the one writer of these
         _host.SyncLightControlsToScene(); // Light-tab sliders reflect the composed state
+
+        RebuildAndBudget();               // C3: keep the luminary list + allocation current (no rendering effect yet)
     }
+
+    /// C3 (Unit 2): represent the current sun + moon as Luminary entries and run the priority budgeter.
+    /// Pure bookkeeping today — the allocation is not yet consumed by rendering (Unit 4 wires it to the
+    /// disc-array shader + a DirectionalLight pool), so this has ZERO effect on the look. It exercises the
+    /// data model + LuminaryBudget in-context so Unit 4 is wiring, not new logic. Weights = priority ×
+    /// current visibility (elevation), so the budgeter ranks bodies exactly as it will with N suns.
+    private void RebuildAndBudget()
+    {
+        // Sun visibility from its elevation (deg → 0 below horizon .. 1 at zenith). Moon from its up-ramp ×
+        // illuminated fraction (mirrors the moonlight gating), using the dir composed above.
+        float sunVis = Mathf.Clamp(Mathf.Sin(Mathf.DegToRad(Time.SunAngle)), 0f, 1f);
+        float moonUp = Mathf.Clamp((LastMoonDir.Y + 0.05f) / 0.15f, 0f, 1f) * _nightFactor;
+        float moonIllum = 0.5f + 0.5f * Mathf.Cos((1f - Moon.Phase) * Mathf.Pi);
+        float moonVis = moonUp * moonIllum;
+
+        _luminaries.Clear();
+        _luminaries.Add(new Luminary
+        {
+            Id = "sun_primary", Kind = LuminaryKind.Sun,
+            Color = Time.SunColor, Size = SunDisc.Size, Limb = SunDisc.Limb, DiscEnergy = sun_disc_ref(),
+            IsPhysicalLight = true, CastsShadow = true, ContributesToAtmosphere = true,
+            Priority = 100f, LightColor = Time.SunColor, LightEnergy = BaseSunEnergy,
+        });
+        _luminaries.Add(new Luminary
+        {
+            Id = "moon", Kind = LuminaryKind.Moon, Phase = Moon.Phase,
+            Color = Moon.Color, Size = Moon.Size, Limb = Moon.Limb, DiscEnergy = Moon.DiscEnergy,
+            IsPhysicalLight = true, CastsShadow = true, ContributesToAtmosphere = false,
+            Priority = 10f, LightColor = Moon.LightColor, LightEnergy = Moon.LightEnergy,
+        });
+        var weights = new[] { 100f * sunVis, 10f * moonVis };
+        Allocation = LuminaryBudget.Allocate(_luminaries, weights, Caps);
+
+        // Log demotions ONCE per luminary-count change (no per-frame spam). With [sun, moon] under the
+        // default caps nothing is demoted, so this is silent today — it surfaces only when suns are added.
+        if (_luminaries.Count != _lastLumCount)
+        {
+            _lastLumCount = _luminaries.Count;
+            foreach (var note in Allocation.Notes) { GD.Print($"[luminary] {note}"); }
+        }
+    }
+
+    // The primary sun's disc brightness reference (kept equal to the existing sun_disc_energy push).
+    private float sun_disc_ref() => 1.3f;
 
     /// TIME-OF-DAY driver (Task 4): one `hour` knob moves the sun along the analytic arc AND interpolates
     /// the day color script into Time, then composes. Mood-pick (MoodToStates) and time-scrub both write
