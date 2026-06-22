@@ -320,26 +320,25 @@ default-safe and land alongside the lane work. Verdicts were adversarially verif
 ## 🌍 Phase B — make it a WORLD (after Phase A is done)
 Gated by the scale infra; hybrid build (spine first, content designed region-first + stream-aware).
 
-### 🏔️ TERRAIN LOD (T1–T3) — the foundational spine
-**Status 2026-06-21:** T1 = pop-free continuous LOD on the fixed 8 km region. **S1 (quadtree skeleton) ✅
-DONE; S2a (chunks render) ✅ DONE (5.6 ms, 4.4× under budget). S2b (geomorph + pop-free verification) 🔨
-IN PROGRESS.** Spec `specs/2026-06-18-terrain-lod-roadmap-design.md`; current design
-`specs/2026-06-21-s2b-geomorph-design.md`; implementation plan `plans/2026-06-21-s2b-geomorph.md`.
+### 🏔️ TERRAIN LOD — the foundational spine
+**Status 2026-06-22.** LIVE map is the **S1→S2→S3→S4** spec `specs/2026-06-21-infinite-terrain-cdlod-design.md`
+(it SUPERSEDED the old T1/T2/T3 framing — a baked region has no LOD so a standalone fixed-region gate was
+payoff-free; folded into S2). Full status: `docs/TERRAIN-LOD-IMPLEMENTATION-ROADMAP.md`.
+- **S1 perf go/no-go ✅** (live field 34 ms full-mesh → ~6.4 ms with S2 LOD — the quadtree closed the gap).
+- **S2 quadtree + geomorph + edge-stitch ✅ DONE.** Pop-free (`--morphcheck`; the pop bug was a morphK sign
+  inversion, fixed) + crack-free (`--stitchcheck`; 16 welded mesh variants, skirt eliminated). Shadows (sky
+  lane CSM) integrated; per-chunk AABB scaled for geomorph displacement (acne fix); shadow knobs lab-tunable.
+  User eye-gated. **The graveyard gate (WG1–15's killer) is passed: pop-free + crack-free continuous LOD.**
+- **S3 streaming infinite 🔨 SPEC + PLAN WRITTEN, NOT BUILT.** Spec `specs/2026-06-22-s3-streaming-infinite-design.md`,
+  plan `plans/2026-06-22-s3-streaming-infinite.md`. Unpin the root → roams with the camera → infinite;
+  floating-origin FOLDED in (snapped camera-relative coords, no drift = subsumes "S4"); per-chunk AABB
+  tightened by an async GPU height-range. Next action = execute the S3 plan (handoff:
+  `docs/handoffs/2026-06-22-s3-streaming-start-here.md`).
+- **S4 floating-origin** → folded into S3.
 
-**T1 arc (pop-free proof):** The graveyard gate — WG1–15 all died at terrain LOD pops. S2b adds per-vertex
-geomorph (each vertex morphs its grid position toward the coarser LOD via its own camera-distance factor,
-sampling the SAME field at the morphed XZ → elevation pop is structurally impossible) + a reusable
-LOD-crossing test harness (3 scripted camera paths: low-fast horizontal, vertical altitude drop, slow
-boundary isolation; keys + `--testpath=N`; per-path perf + invariant-checked-along-path). **The eye-gate:**
-the user flies the 3 paths in motion and confirms ZERO elevation pops, ZERO cracks, ZERO quality pops
-across LOD bands. **That is T1's definition of done.** Chunking, streaming, tiles are T2–T3; they cannot
-proceed until T1 proves pop-free.
-
-**T2 & T3 (after T1 eye-gate):**
-- **T2 — stable world tiles.** Chunk the 8 km fixed region into world-XZ tiles (the unit splat/breakup/
-  erosion need), per-tile LOD select, edge stitch, frustum culling. Re-point per-region bakes to per-tile.
-- **T3 — streaming.** Load/unload tiles around the camera → true-infinite. Foundation for erosion E4,
-  world-editing, flora LOD.
+**After S3:** the async per-chunk DATA grid (carvable height), then **surfacing** (the LAST arc — Skyrim-look
+ground; fixes the placeholder "smooth mess" + the residual shadow stipple), then erosion/water/biomes/
+collision/flora/world-editing — each its own arc plugging into the chunk contract (`infinite-terrain` spec §2).
 
 **Other Phase-B systems (dependent on T1–T3 spine):**
 - **Biomes** — climate field (moisture/temperature) selects per-region material palettes + rules +
