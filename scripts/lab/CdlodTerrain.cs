@@ -12,11 +12,13 @@ public sealed partial class CdlodTerrain : Node3D
 {
     private ShaderMaterial _mat = null!;
     private PlaneMesh _grid = null!;
+    private ArrayMesh[] _variants = System.Array.Empty<ArrayMesh>();   // S2d: [stitchMask] -> welded edge-stitch mesh
     private CdlodQuadtree _qt = null!;
     private float _minH, _maxH, _regionSize;
     private float[] _heights = System.Array.Empty<float>();   // baked heightmap (row-major, res²), for per-chunk AABB
     private int _hRes;
     private readonly List<MeshInstance3D> _pool = new();
+    private readonly List<int> _poolMask = new();   // S2d: per-pool-slot last-assigned stitch mask (-1 = unset); avoids per-frame mesh re-upload
     private List<CdlodChunk> _lastLeaves = new();   // S2b: last Tick's selected leaves (for the test-path along-path invariant/count report)
     private bool _enabled;
     private bool _lodViz;
@@ -38,6 +40,7 @@ public sealed partial class CdlodTerrain : Node3D
         _mat = mat; _minH = minH; _maxH = maxH; _regionSize = p.RegionSizeM;
         _heights = heights; _hRes = p.HeightmapRes;
         _grid = CdlodMesh.BuildGrid(GridN);
+        _variants = CdlodMesh.BuildStitchedVariants(GridN);   // S2d: 16 welded edge-stitch variants (by mask)
         _qt = new CdlodQuadtree(-_regionSize * 0.5f, -_regionSize * 0.5f, _regionSize, MaxDepth, SplitFactor);
         GD.Print($"CdlodTerrain: setup gridN={GridN} maxDepth={MaxDepth} split={SplitFactor} region={_regionSize:F0}");
     }
@@ -102,6 +105,14 @@ public sealed partial class CdlodTerrain : Node3D
             mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f),
                                      new Vector3(1f, (hi - lo) + 2f * m, 1f));
             mi.SetInstanceShaderParameter("lod_viz", _lodViz ? (float)c.Level : -1.0f);
+            // S2d: pick the edge-stitch variant for this chunk's neighbor configuration (mask). Welded
+            // edges coincide with the coarser neighbor -> no crack. Falls back to the flat grid if variants
+            // somehow weren't built. Only reassign when the mask CHANGED (avoid per-frame mesh re-upload churn).
+            if (_variants.Length == 16)
+            {
+                int sm = c.StitchMask & 15;
+                if (_poolMask[i] != sm) { mi.Mesh = _variants[sm]; _poolMask[i] = sm; }
+            }
             mi.Visible = true;
         }
         for (int i = leaves.Count; i < _pool.Count; i++) { _pool[i].Visible = false; }
@@ -114,6 +125,7 @@ public sealed partial class CdlodTerrain : Node3D
             var mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat };
             AddChild(mi);
             _pool.Add(mi);
+            _poolMask.Add(-1);   // S2d: -1 = no variant assigned yet (forces first Tick to set the mesh)
         }
     }
 }
