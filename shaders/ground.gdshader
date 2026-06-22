@@ -22,6 +22,8 @@ instance uniform float lod_viz = -1.0;     // S2a debug: >=0 tints this chunk by
 // S2b geomorph inputs (chunk branch only). cam_world is re-declared post-strip (TerrainLab.SetCameraWorld
 // already pushes it every frame; the stripped shader had dropped the uniform so the push was a no-op).
 uniform vec3  cam_world = vec3(0.0);    // camera world pos (chunk geomorph per-vertex distance)
+uniform vec3  render_origin = vec3(0.0);   // S3: world-XZ offset of the camera-relative render space; add to
+                                           // render-relative pos to recover TRUE world XZ for field_height.
 uniform float grid_n = 65.0;            // chunk grid resolution (verts/side) — for odd->even snap
 uniform float split_factor = 2.5;       // quadtree split rule: subdivide when camDist < size*split_factor
 // Godot's shading language requires ONE variable per uniform statement (no comma lists).
@@ -116,8 +118,9 @@ void vertex() {
         // from its parent) at camDist == 2*chunk_size*split_factor. Morph 0->1 over the FAR HALF of that
         // band (start morphing at the midpoint, fully morphed by the coarsen distance) — the standard
         // CDLOD morph window.
-        vec3 vworld_fine = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;   // pre-displacement world pos (y≈0)
-        float d = distance(cam_world.xz, vworld_fine.xz);
+        vec3 vworld_fine = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;          // render-relative pre-displacement pos
+        vec2 vtrue_fine = vworld_fine.xz + render_origin.xz;               // S3: TRUE world XZ (cam_world is true-world)
+        float d = distance(cam_world.xz, vtrue_fine);                       // morph distance in a CONSISTENT (true) frame
         float far_d  = 2.0 * chunk_size * split_factor;    // band outer (this LOD just appeared)
         float near_d = 1.0 * chunk_size * split_factor;    // band inner (about to coarsen)
         float mid_d  = mix(near_d, far_d, 0.5);
@@ -131,7 +134,7 @@ void vertex() {
         float morphK = clamp((d - mid_d) / max(far_d - mid_d, 1e-3), 0.0, 1.0);  // 0 near .. 1 far edge
 
         vec2 u_morph = mix(u_fine, u_coarse, morphK);
-        vec2 wxz = (MODEL_MATRIX * vec4(u_morph.x - 0.5, 0.0, u_morph.y - 0.5, 1.0)).xz;  // morphed world XZ
+        vec2 wxz = (MODEL_MATRIX * vec4(u_morph.x - 0.5, 0.0, u_morph.y - 0.5, 1.0)).xz + render_origin.xz;  // S3: TRUE morphed world XZ
 
         float h0 = analytic_h(wxz);
 

@@ -27,6 +27,13 @@ public sealed partial class CdlodTerrain : Node3D
     public int MaxDepth = 6;          // finest LOD depth; tunable
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
 
+    // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
+    // DOWN to _coarseSnap so render-relative coords stay bounded (no float drift) AND the field samples
+    // bit-identical TRUE world XZ across snaps (relative + snapped origin == true world).
+    private float _coarseSnap = 8192f;   // set in Setup to the root size (largest chunk grid → snap-invariant)
+    private Vector3 _renderOrigin = Vector3.Zero;
+    public Vector3 RenderOrigin => _renderOrigin;
+
     // S2b: exposed to TerrainLab so it can push the matching geomorph uniforms to the shader.
     public float GridResolution => GridN;
     public float SplitFactorValue => SplitFactor;
@@ -42,6 +49,7 @@ public sealed partial class CdlodTerrain : Node3D
         _grid = CdlodMesh.BuildGrid(GridN);
         _variants = CdlodMesh.BuildStitchedVariants(GridN);   // S2d: 16 welded edge-stitch variants (by mask)
         _qt = new CdlodQuadtree(-_regionSize * 0.5f, -_regionSize * 0.5f, _regionSize, MaxDepth, SplitFactor);
+        _coarseSnap = _regionSize;   // S3: snap renderOrigin to the coarsest chunk grid (root size)
         GD.Print($"CdlodTerrain: setup gridN={GridN} maxDepth={MaxDepth} split={SplitFactor} region={_regionSize:F0}");
     }
 
@@ -87,7 +95,12 @@ public sealed partial class CdlodTerrain : Node3D
     {
         if (!_enabled) { return; }
         if (!IsInsideTree()) { return; }   // the AddChild is deferred (see TerrainLab.Build); skip until in-tree
-        List<CdlodChunk> leaves = _qt.Select(camPos);
+        // S3: snapped camera-relative render origin (folded floating-origin).
+        _renderOrigin = new Vector3(
+            Mathf.Floor(camPos.X / _coarseSnap) * _coarseSnap, 0f,
+            Mathf.Floor(camPos.Z / _coarseSnap) * _coarseSnap);
+        _mat?.SetShaderParameter("render_origin", _renderOrigin);
+        List<CdlodChunk> leaves = _qt.Select(camPos);   // still TRUE-world select (root fixed until Task 2)
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
         EnsurePool(leaves.Count);
         for (int i = 0; i < leaves.Count; i++)
@@ -95,7 +108,8 @@ public sealed partial class CdlodTerrain : Node3D
             CdlodChunk c = leaves[i];
             MeshInstance3D mi = _pool[i];
             float half = c.Size * 0.5f;
-            mi.Position = new Vector3(c.OriginXZ.X + half, 0f, c.OriginXZ.Y + half);
+            // S3: RENDER-RELATIVE position (true center − renderOrigin); shader adds render_origin back.
+            mi.Position = new Vector3(c.OriginXZ.X + half - _renderOrigin.X, 0f, c.OriginXZ.Y + half - _renderOrigin.Z);
             mi.Scale = new Vector3(c.Size, 1f, c.Size);    // X/Z = chunk size; Y = 1 (world-unit height)
             // CustomAabb is LOCAL (pre-node-scale): X/Z = the unit grid (the node Scale stretches it to
             // the chunk footprint); Y = this chunk's TIGHT world height range (Y scale is 1). Tight Y is
