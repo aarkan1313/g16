@@ -26,20 +26,20 @@
       "sky_tint": [1.0, 0.6, 0.42], "cloud_coverage": 0.45, "exposure": 1.0
     },
     "binary_suns": {
-      "sun": "golden_hour", "extra_suns": 1,
+      "sun": "golden_hour", "extra_suns": 1, "time_of_day": 14.0,
       "sky_tint": [1.0, 0.9, 0.78], "cloud_coverage": 0.2, "exposure": 1.0
     },
     "trinary_worlds": {
-      "sun": "alien", "extra_suns": 2,
+      "sun": "alien", "extra_suns": 2, "time_of_day": 13.0,
       "sky_tint": [0.92, 0.96, 1.0], "cloud_coverage": 0.25, "exposure": 0.95
     },
     "twin_moons": {
-      "celestial": "full_moon_clear", "extra_moons": 1,
+      "celestial": "full_moon_clear", "extra_moons": 1, "time_of_day": 23.0,
       "moon_color": [0.88, 0.9, 1.0], "moonlight_color": [0.62, 0.7, 1.0],
       "sky_tint": [0.86, 0.9, 1.0], "cloud_coverage": 0.12, "exposure": 1.0
     },
     "triple_moons": {
-      "celestial": "full_moon_clear", "extra_moons": 2,
+      "celestial": "full_moon_clear", "extra_moons": 2, "time_of_day": 23.0,
       "moon_color": [0.95, 0.92, 0.85], "moonlight_color": [0.7, 0.72, 0.9],
       "sky_tint": [0.9, 0.9, 0.96], "cloud_coverage": 0.1, "exposure": 1.0
     }

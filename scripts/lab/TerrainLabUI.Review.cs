@@ -23,6 +23,7 @@ public partial class TerrainLabUI : Control
     private int _atmoStep;        // AT-1 atmosphere time-of-day preset on review key 8 (cycles dawn→noon→golden→dusk→night)
     private int _nsReviewIdx = -1; // Celestial C1 night-sky preset on review key 2 (-1 = tuned default, then cycles the 4)
     private int _shadowPresetIdx;  // shadow tuning preset on review key 4 (cycles default→crisp→acne-killer→soft)
+    private int _c3Idx;            // Celestial C3 multi-luminary on review key 5 (cycles 2/3/4 suns → 2/3 moons)
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -87,7 +88,37 @@ public partial class TerrainLabUI : Control
                 title = "3 · Night clouds — moonlit";
                 judge = "Night, moon up, clouds on: do the clouds get silver-lit edges/undersides (not flat black)? Tune Night tab 'moonlight on clouds' (+ 'moon brightness' / 'moon phase'). Drop it / new moon → clouds go dark (intended — no-moon night).";
                 break;
-            // case 5 (ground) removed in the 2026-06-21 ground strip.
+            case 5: // Celestial C3 — multi-luminary. Press 5 to cycle: 2 suns → 3 suns → 4 suns (day) →
+                    // 2 moons → 3 moons (night). Each step sets the count + the right time + camera framing.
+                if (_lastPreset != 5) { _c3Idx = 0; } else { _c3Idx = (_c3Idx + 1) % 5; }
+                Set("cloud_coverage", 0.06f);   // mostly clear so the discs read
+                if (_c3Idx <= 2)
+                {
+                    int suns = _c3Idx + 2;                       // 2, 3, 4 total suns
+                    Set("extra_moons", 0f);
+                    Set("extra_suns", (float)(suns - 1));        // extra count = total - 1 (primary)
+                    Set("time_of_day", 13f);                    // daytime so the suns are up
+                    LookAtSun();
+                    title = $"5 · C3 — {suns} SUNS (day)  (press 5 to cycle)";
+                    judge = "Multiple suns: distinct discs (size/color), each lighting terrain; the sky scatters toward them. Companions are spread by azimuth — fly around / pan to see them all. Colors/sizes/spread are placeholder constants in LightingComposer — tell me what to change.";
+                }
+                else
+                {
+                    int moons = _c3Idx - 1;                      // idx3→2, idx4→3 total moons
+                    Set("extra_suns", 0f);
+                    Set("extra_moons", (float)(moons - 1));
+                    Set("time_of_day", 23f);                    // night so the moons are up (also updates _lastMoonDir)
+                    var camC3 = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+                    if (camC3 != null)
+                    {
+                        camC3.Position = new Vector3(0, 280, 200);
+                        if (_lastMoonDir != Vector3.Zero) { camC3.LookAt(camC3.GlobalPosition + _lastMoonDir, Vector3.Up); }
+                        else { camC3.RotationDegrees = new Vector3(28, 180, 0); }
+                    }
+                    title = $"5 · C3 — {moons} MOONS (night)  (press 5 to cycle)";
+                    judge = "Multiple moons: each its own size / color / PHASE on the clear night sky. Pan up/around to see them. Tune the ExtraMoon* constants in LightingComposer. Press 5 again to cycle back to the suns.";
+                }
+                break;
             case 4: // SHADOW tuning — press 4 to cycle: default → crisp → acne-killer → soft/cinematic.
                     // Drives the lab-tunable shadow knobs (shadow_bias / penumbra / soft / distance) so the
                     // CDLOD-terrain shadow stipple can be dialed live in motion. Midday clear sun = harshest
