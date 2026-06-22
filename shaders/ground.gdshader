@@ -103,6 +103,13 @@ varying vec2 v_surf_xz;  // true-world XZ for world-space texture tiling (set in
 // --- Minimal surfacing slice (readable landforms). Fixed-sampler textured path, A/B vs the colour ramp. ---
 uniform bool use_textures = false;   // false = legacy height/slope colour ramp (default); true = textured
 uniform float mat_tiling = 12.0;     // world metres per texture tile (smaller = more repeats)
+// placement bands (metres for height, normalized 0..1 slope = 1 - normal.y). Soft via fwidth.
+uniform float surf_h_sand  = 30.0;    // below → sand/low (mat0)
+uniform float surf_h_grass = 220.0;   // sand→grass band top (mat1 valley)
+uniform float surf_h_earth = 430.0;   // grass→earth band top (mat2 mid)
+uniform float surf_h_rock  = 560.0;   // earth→rock; above → snow (mat4) by height
+uniform float surf_slope_rock = 0.42; // slope above this forces rock (mat3) regardless of height
+uniform float surf_slope_soft = 0.10; // half-width of the slope transition
 uniform sampler2D mat0_alb : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D mat0_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
 uniform sampler2D mat0_rgh : filter_linear_mipmap, repeat_enable;
@@ -212,9 +219,32 @@ void fragment() {
     if (use_textures) {
         // Minimal surfacing slice. (Godot forbids `return` in fragment(), so the legacy ramp is the else.)
         vec2 uv = v_surf_xz / mat_tiling;
-        ALBEDO = texture(mat0_alb, uv).rgb;   // single material this task; placement comes in Task 2
-        ROUGHNESS = texture(mat0_rgh, uv).r;
-        NORMAL = v_normal;                    // geometric normal; real normal-map combine comes in Task 3
+        float h = v_h;
+        float slope = 1.0 - clamp(v_normal.y, 0.0, 1.0);   // 0 flat .. 1 vertical
+
+        // height-band weights with fwidth-soft edges (per-pixel boundary → no grid snap).
+        float fw = max(fwidth(h), 1.0);
+        float w_sand  = 1.0 - smoothstep(surf_h_sand - fw,  surf_h_sand + fw,  h);
+        float w_grass = smoothstep(surf_h_sand - fw, surf_h_sand + fw, h) * (1.0 - smoothstep(surf_h_grass - fw, surf_h_grass + fw, h));
+        float w_earth = smoothstep(surf_h_grass - fw, surf_h_grass + fw, h) * (1.0 - smoothstep(surf_h_earth - fw, surf_h_earth + fw, h));
+        float w_snow  = smoothstep(surf_h_earth - fw, surf_h_earth + fw, h);
+
+        // slope forces rock (mat3): blends OUT the height materials on steep faces.
+        float rock = smoothstep(surf_slope_rock - surf_slope_soft, surf_slope_rock + surf_slope_soft, slope);
+        float wr = 1.0 - rock;
+        float w0 = w_sand * wr, w1 = w_grass * wr, w2 = w_earth * wr, w4 = w_snow * wr;
+        float w3 = rock;
+        float sum = max(w0 + w1 + w2 + w3 + w4, 1e-4);
+
+        vec3 alb = (w0 * texture(mat0_alb, uv).rgb + w1 * texture(mat1_alb, uv).rgb
+                  + w2 * texture(mat2_alb, uv).rgb + w3 * texture(mat3_alb, uv).rgb
+                  + w4 * texture(mat4_alb, uv).rgb) / sum;
+        float rgh = (w0 * texture(mat0_rgh, uv).r + w1 * texture(mat1_rgh, uv).r
+                  + w2 * texture(mat2_rgh, uv).r + w3 * texture(mat3_rgh, uv).r
+                  + w4 * texture(mat4_rgh, uv).r) / sum;
+        ALBEDO = alb;
+        ROUGHNESS = clamp(rgh, 0.04, 1.0);
+        NORMAL = v_normal;   // real normal-map combine in Task 3
     } else {
         vec3 c = mix(col_low, col_mid, smoothstep(h_low, h_mid, v_h));
         c = mix(c, col_high, smoothstep(h_mid, h_high, v_h));
