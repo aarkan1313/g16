@@ -28,6 +28,14 @@ public partial class TerrainLabUI : Control
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;   // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
 
+    // Cached scene nodes — resolved once, not per-frame. ComposeLighting + ApplyOvercastScaling run every
+    // frame while the day/night cycle plays; re-walking "/root/TerrainLabRoot/Env|Sun" by string each time
+    // was ~4 GetNode lookups/frame for nodes that never move. Lazy so first access matches the old timing.
+    private WorldEnvironment? _envNode;
+    private DirectionalLight3D? _sunNode;
+    private WorldEnvironment EnvNode => _envNode ??= GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
+    private DirectionalLight3D SunNode => _sunNode ??= GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+
     /// Split a legacy mood dict into the axis states (same keys + defaults as the old ApplyMood).
     private void MoodToStates(Godot.Collections.Dictionary m)
     {
@@ -62,8 +70,8 @@ public partial class TerrainLabUI : Control
     /// (Task 4 sun arc, Task 6 atmosphere), not this composition.
     private void ComposeLighting()
     {
-        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
-        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        var env = EnvNode.Environment;
+        var sun = SunNode;
 
         // ── TIME: sun position + color, sky gradient. Sun ENERGY + AMBIENT energy come from
         //    ApplyOvercastScaling (the one writer for overcast-scaled fields). Capture the bases here. ──
@@ -101,8 +109,7 @@ public partial class TerrainLabUI : Control
             RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftHigh);   // PCF blur → dissolves texel "squares" cheaply
             // SSAO was the harsh "second shadow system": intensity 2.0 raked across the faceted 4 m mesh and read
             // as jagged shadows. Dial to subtle valley AO (the look fix); revisit when the higher-res CDLOD mesh lands.
-            var envNode = GetNodeOrNull<WorldEnvironment>("/root/TerrainLabRoot/Env");
-            if (envNode?.Environment != null) { envNode.Environment.SsaoIntensity = 0.6f; }
+            if (EnvNode.Environment != null) { EnvNode.Environment.SsaoIntensity = 0.6f; }
             _shadowTuned = true;
         }
         sun.DirectionalShadowBlendSplits = true;                        // cross-fade cascade seams
@@ -326,8 +333,8 @@ public partial class TerrainLabUI : Control
     /// slider updates) by the current _overcast amount.
     private void ApplyOvercastScaling()
     {
-        var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
-        var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        var env = EnvNode.Environment;
+        var sun = SunNode;
         float oc = _overcast;
         env.AmbientLightEnergy = _baseAmbient * Mathf.Lerp(1f, 0.7f, oc);     // sky fill DOWN (grey gloom)
         env.AmbientLightSkyContribution = _time.AmbientSky;

@@ -42,41 +42,54 @@ public record FieldParams(
 
     public float Spacing => RegionSizeM / HeightmapRes;
 
+    // Graceful getters: a missing/renamed key falls back to the default instead of throwing a
+    // KeyNotFoundException (which aborts the whole load + boot). Matches the other loaders'
+    // tolerance (CloudParams/LightingState use defaults), so editing field_params.json — or a key
+    // rename mid-refactor — degrades to the default for that one knob rather than killing the scene.
+    private static float F(JsonElement r, string k, float d) =>
+        r.TryGetProperty(k, out var v) ? v.GetSingle() : d;
+    private static int I(JsonElement r, string k, int d) =>
+        r.TryGetProperty(k, out var v) ? v.GetInt32() : d;
+    private static uint U(JsonElement r, string k, uint d) =>
+        r.TryGetProperty(k, out var v) ? v.GetUInt32() : d;
+
     public static FieldParams Load()
     {
         string abs = ProjectSettings.GlobalizePath(Path);
         using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(abs));
         JsonElement r = doc.RootElement;
+        // Defaults below are the WG15 proven base-field values (the committed field_params.json) — a
+        // present key always wins; the default only catches an absent/renamed one.
         return new FieldParams(
-            r.GetProperty("seed").GetUInt32(),
-            r.GetProperty("region_size_m").GetSingle(),
-            r.GetProperty("heightmap_res").GetInt32(),
-            r.GetProperty("base_freq").GetSingle(),
-            r.GetProperty("octaves").GetUInt32(),
-            r.GetProperty("lacunarity").GetSingle(),
-            r.GetProperty("gain").GetSingle(),
-            r.GetProperty("amplitude_m").GetSingle(),
-            r.GetProperty("cont_freq").GetSingle(),
-            r.GetProperty("cont_weight").GetSingle(),
-            r.GetProperty("uplift_freq").GetSingle(),
-            r.GetProperty("uplift_weight").GetSingle(),
-            r.GetProperty("uplift_lo").GetSingle(),
-            r.GetProperty("uplift_hi").GetSingle(),
-            r.GetProperty("macro_pivot").GetSingle(),
-            r.GetProperty("macro_amp").GetSingle(),
-            r.GetProperty("hill_damp").GetSingle(),
-            r.GetProperty("ridge_freq").GetSingle(),
-            r.GetProperty("ridge_amp").GetSingle(),
-            r.GetProperty("mtn_lo").GetSingle(),
-            r.GetProperty("mtn_hi").GetSingle(),
-            r.GetProperty("grain_stretch").GetSingle(),
-            r.GetProperty("cont_octaves").GetUInt32(),
-            r.GetProperty("cont_warp").GetSingle(),
-            r.GetProperty("uplift_warp").GetSingle(),
-            r.GetProperty("massif_freq").GetSingle(),
-            r.GetProperty("massif_floor").GetSingle(),
-            r.GetProperty("foothill_w").GetSingle(),
-            r.GetProperty("foothill_h").GetSingle());
+            U(r, "seed", 1234u),
+            F(r, "region_size_m", 8192.0f),
+            I(r, "heightmap_res", 2048),
+            F(r, "base_freq", 0.0011f),
+            U(r, "octaves", 6u),
+            F(r, "lacunarity", 2.0f),
+            F(r, "gain", 0.5f),
+            F(r, "amplitude_m", 240.0f),
+            F(r, "cont_freq", 0.00026f),
+            F(r, "cont_weight", 0.55f),
+            F(r, "uplift_freq", 0.00022f),
+            F(r, "uplift_weight", 0.78f),
+            F(r, "uplift_lo", 0.20f),
+            F(r, "uplift_hi", 0.82f),
+            F(r, "macro_pivot", 0.48f),
+            F(r, "macro_amp", 650.0f),
+            F(r, "hill_damp", 2.0f),
+            F(r, "ridge_freq", 0.00032f),
+            F(r, "ridge_amp", 180.0f),
+            F(r, "mtn_lo", 0.60f),
+            F(r, "mtn_hi", 0.95f),
+            F(r, "grain_stretch", 1.8f),
+            U(r, "cont_octaves", 5u),
+            F(r, "cont_warp", 0.18f),
+            F(r, "uplift_warp", 0.30f),
+            F(r, "massif_freq", 0.0005f),
+            F(r, "massif_floor", 0.10f),
+            F(r, "foothill_w", 2.4f),
+            F(r, "foothill_h", 0.28f));
     }
 
     public static ulong ModifiedTime() => FileAccess.GetModifiedTime(Path);
