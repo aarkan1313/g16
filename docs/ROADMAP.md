@@ -266,10 +266,14 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      **Do not re-attempt procedurally** — the only paths research suggests would clear the bar are authored/offline
      **textures** or expensive (>1 ms) lit volumetrics, neither in scope for a night-sky accent. See DECISIONS +
      `docs/superpowers/specs|plans/2026-06-21-celestial-galaxy-nebula-billboards*`. Night sky = moon + stars + meteors.
-   - **C3 — N suns + N moons. ✅ BUILT + PASSED 2026-06-22 (Units 1-6, NEEDS_REVIEW 12, review key 5: "it looks good").
-     NEXT: data-driven luminaries** — spec `specs/2026-06-22-data-driven-object-lists-design.md` (reusable `objectlist`
-     formula + luminaries as first consumer; the hardcoded `LightingComposer` per-body constants become editable data +
-     a list-editor UI + JSON save/load). Then **#7 perf pass** = the lane's last item. Resume:
+   - **C3 — N suns + N moons. ✅ BUILT + PASSED 2026-06-22 (Units 1-6, NEEDS_REVIEW 12, review key 5: "it looks good").**
+   - **Data-driven luminaries (objectlist formula). ✅ BUILT + numerically gated 2026-06-22 (NEEDS_REVIEW 13, live eye
+     owed).** Spec `specs/2026-06-22-data-driven-object-lists-design.md`; plan `plans/2026-06-22-data-driven-object-lists.md`.
+     A reusable `objectlist` registry type + `ObjectListControl` editor + item schema (U1), luminaries sourced from
+     `data/luminaries.json` via `LightingComposer.LoadLuminaries` with a Night-tab "Sky bodies" editor (U2, default
+     byte-identical), and named preset sets in an additive `lists` section (U3). Each unit deterministically gated:
+     `--objectlistcheck` / `--luminarycheck` (frozen-scene pixel diff vs the bare-recompose floor) / `--lumpresetcheck`
+     all PASS. Commits 7adfecf·4c752a2·d36f6e7. **NEXT: #7 perf pass** = the lane's last item. Resume:
      `handoffs/2026-06-22-sky-lane-handoff.md`.
      Spec `specs/2026-06-21-celestial-c3-n-luminaries-design.md`. Generalized single-sun+single-moon to a
      `List<Luminary>` + a **priority-budgeting layer** (≤4 `LIGHTn`, ≤2 shadow atlases, ≤3 atmosphere suns summed in

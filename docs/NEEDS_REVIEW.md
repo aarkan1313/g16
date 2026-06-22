@@ -394,6 +394,32 @@ Commits: 79497f3 (model) · 41e2fe9 (Unit 1) · 61686f0 (Unit 2) · aa62b38 + 2a
 
 ---
 
+### 13. Data-driven luminaries (objectlist formula) — BUILT + numerically gated 2026-06-22, live eye owed
+Made the luminaries **fully data-driven** (spec `2026-06-22-data-driven-object-lists-design.md`) — the C3 hardcoded
+per-body constants are now editable DATA. Built in 3 units, each gated by a deterministic check (per the user's "use
+math/test to prove good", not eyeballed A/B):
+- **U1 — `objectlist` formula** (`ObjectListControl` + item schema + a widget factory shared with the flat registry).
+  A reusable add/remove/duplicate/reorder list editor; parallel to the flat `_byId` registry (flat controls/presets/
+  randomizer untouched). Gate: `--objectlistcheck` (headless, pure-logic) **OBJECTLISTCHECK PASS**. Commit `7adfecf`.
+- **U2 — luminaries from data** (`data/luminaries.json` + `LightingComposer.LoadLuminaries`; a Night-tab **"Sky bodies"**
+  list editor adds/edits/removes bodies live → recompose). Extra-sun/moon palette/size/phase/az now read from the data
+  list; the old constants stay as the `--suns`/`--moons` fallback (verified `--suns=3` still renders 3 suns). Gate:
+  `--luminarycheck` (in-run frozen-scene pixel diff, self-calibrated against the bare-recompose floor) **LUMINARYCHECK
+  PASS** — default-vs-datapath diff=1 ≤ recompose-floor=1 (**byte-identical default**), default-vs-added-sun diff=28
+  (edits propagate). Commit `4c752a2`.
+- **U3 — named preset sets** (additive `lists` section in the user-preset JSON; Save captures the live bodies, Load
+  restores them via `SetItems` → recompose). Fixed the spec-flagged Color-doesn't-round-trip-through-Json risk by
+  storing colors as `[r,g,b]` arrays at the storage boundary. Gate: `--lumpresetcheck` (headless, exercises the real
+  save/load path incl. the storable conversion) **LUMPRESETCHECK PASS** — 4 bodies round-trip with all fields incl.
+  Color. Commit `d36f6e7`.
+**What's owed your live eye:** open Night → **Sky bodies**, add/edit/remove bodies, change colors/sizes/phases live, and
+save/load a named set — confirm the editor feels good and the sky tracks edits. (NOTE: editing the PRIMARY sun/moon's
+appearance via the list is not yet wired — only ADDED bodies render; the primary keeps its existing slider/day-script
+path so the default stays byte-identical. Wire primary-from-list as a follow-up if you want it.) The objectlist is also
+the **first module** of the eventual one-big-world-config JSON (direction B, out of scope here).
+
+---
+
 ## ⏸ Not "review" — build-when-you-can-see (eye-gated, parked)
 These need your eye to *build*, not just approve — listed so they're not forgotten:
 - **CDLOD terrain LOD (T1)** — the dominant remaining perf lever toward the **8 ms** target (mesh floor ~4 ms; also cuts SDFGI+shadow). Gate is pop-free-in-motion. Spec `specs/2026-06-18-terrain-lod-roadmap-design.md`.
