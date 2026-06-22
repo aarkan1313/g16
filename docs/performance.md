@@ -50,7 +50,37 @@ every "proxy/SDFGI ON" figure below for the shipped default.
 **Owed (needs a coordinated launch — don't unilaterally kill the terrain chat's Godot):**
 1. Fresh whole-frame `--profmove` decomposition for the *current* shipped default (after terrain/CDLOD settles).
 2. Re-measure the directional shadow map at 8192 vs 4096/6144 (the audit's "dial it down for non-5090 HW" lever).
-3. AT-3 readback throttle (folds into the #7 end-of-arc efficiency pass).
+3. ~~AT-3 readback throttle~~ — DONE (the sun-delta gate `CloudColorSunDelta`); the deeper "3-texel GPU output"
+   rewrite is **measured to save ~0.5 ms/cycle only** → not worth the shader risk on the shared branch (see #7 below).
+
+## 2026-06-22 — #7 END-OF-ARC code-efficiency pass (sky/light lane) — DONE
+
+> User: "look at code efficiency, not tuning." Measured first (per the [[cdlod-rebuild-spike-rootcause]] lesson:
+> don't trust the recorded diagnosis), then made only the behavior-neutral wins. RTX 5090 laptop, uncapped.
+
+**Measured (static cam, `--time=12`, default-on):** base **29.4 ms** (~34 fps) · clouds off **27.5 ms** → **clouds
+≈ 1.9 ms**. **Running cycle (`--autotime=3`, static cam):** AT-3 on **35.4 ms** · AT-3 off **34.9 ms** → **AT-3
+readback ≈ 0.5 ms/cycle**. **Conclusion: the frame is TERRAIN-MESH-bound (~27.5 ms un-LOD'd floor, the terrain
+chat's lane). The whole sky/light lane is ~2–3 ms GPU (clouds 1.9 + god rays ~1.1 + atmosphere ~0.9) and already
+efficient.** There is no large sky-lane GPU inefficiency to attack — the recorded state-of-record above held up.
+
+**Code-efficiency wins landed (commit `ee91c51`, behavior-neutral, `--luminarycheck` byte-identical still PASS):**
+- **Apply.cs: cached `UiEnv`/`UiSun` nodes** — `ApplySceneFloat` + the per-frame `SyncLightControlsToScene` (runs
+  every frame during a day/night cycle) re-walked `GetNode("/root/...")` for Env+Sun on every call; now lazy-cached
+  (mirrors the composer's `EnvNode`/`SunNode`). Kills the per-frame tree-walk storm in a running cycle.
+- **LightingComposer.RebuildAndBudget: reuse `_budgetWeights`** — was `new List<float>()` every frame in a cycle.
+
+**Verified NOT a problem (audit false positives — checked the code, didn't trust the label):** `Atmosphere.SetSun`
+already dirty-guards (`>1e-4`) so it is NOT recomputing the sky LUT per-frame; `CloudVolume` uniform-sets are cached
+(`_setsBuilt`); `AtmosphereCompute` full recompute is `_dirty`-gated, aerial is `_camDirty`-gated. These are
+exemplary; left untouched.
+
+**Deliberately NOT done (cost ÷ risk too low on a shared branch):** the AT-3 "read 3 texels via a tiny GPU output"
+rewrite (saves ~0.5 ms/cycle, needs a new `.glsl` = shader risk); the `CloudVolume.PackLayers` per-frame `float[192]`
+alloc (~768 B/frame GC, but it's in the cloud chat's CloudVolume hot path + already cheap); splitting `Compose()`
+into time-vs-static (CPU-only saving on a GPU-bound frame, risks the byte-identical default). Banked if a future
+profile shows the lane is no longer terrain-bound. The real next perf lever is **terrain mesh LOD** (CDLOD, the
+other lane) + the **8192→4096/6144 shadow-atlas dial-down** — both outside the sky lane.
 
 ## 2026-06-19 — IN-MOTION profiling (major correction) + GI/shadow proxy
 
