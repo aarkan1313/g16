@@ -1,3 +1,7 @@
+> **⚠ SUPERSEDED 2026-06-22 → see `handoffs/2026-06-22-sky-lane-handoff.md`** (current state: C3 multi-luminary
+> BUILT + PASSED; active task = data-driven object-lists formula + luminaries spec → writing-plans → build, then #7
+> perf pass). This 2026-06-21 doc is kept for history only.
+
 # Sky lane — NEXT STEPS (2026-06-21)
 
 Where the WG16 sky/light lane stands after today's session, and what's next. Read this first when picking the

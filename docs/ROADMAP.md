@@ -266,7 +266,11 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
      **Do not re-attempt procedurally** — the only paths research suggests would clear the bar are authored/offline
      **textures** or expensive (>1 ms) lit volumetrics, neither in scope for a night-sky accent. See DECISIONS +
      `docs/superpowers/specs|plans/2026-06-21-celestial-galaxy-nebula-billboards*`. Night sky = moon + stars + meteors.
-   - **C3 — N suns + N moons. 🟡 BUILT 2026-06-22 (Units 1-6), EYE-GATE OWED (NEEDS_REVIEW 12).**
+   - **C3 — N suns + N moons. ✅ BUILT + PASSED 2026-06-22 (Units 1-6, NEEDS_REVIEW 12, review key 5: "it looks good").
+     NEXT: data-driven luminaries** — spec `specs/2026-06-22-data-driven-object-lists-design.md` (reusable `objectlist`
+     formula + luminaries as first consumer; the hardcoded `LightingComposer` per-body constants become editable data +
+     a list-editor UI + JSON save/load). Then **#7 perf pass** = the lane's last item. Resume:
+     `handoffs/2026-06-22-sky-lane-handoff.md`.
      Spec `specs/2026-06-21-celestial-c3-n-luminaries-design.md`. Generalized single-sun+single-moon to a
      `List<Luminary>` + a **priority-budgeting layer** (≤4 `LIGHTn`, ≤2 shadow atlases, ≤3 atmosphere suns summed in
      ONE raymarch) so e.g. a **3-sun sky costs ≈ today** (verified: 4 suns @ ~36 fps, 3 moons @ ~57 fps; shadows stay
