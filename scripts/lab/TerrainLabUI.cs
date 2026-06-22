@@ -33,6 +33,10 @@ public partial class TerrainLabUI : Control
     private int _spikeFrame = -1;          // -1 = not started; >=0 = frames since the request
     private bool _spikeDone;
 
+    // S3 live pop meter (--popmeter): measures height/normal/origin-snap each frame as you fly + HUD line.
+    private LivePopMeter _popMeter;
+    private Label _popMeterLabel;
+
     /// One control: parsed registry fields + runtime state.
     private sealed class LabControl
     {
@@ -111,6 +115,39 @@ public partial class TerrainLabUI : Control
     /// deferred from TerrainLab.Build) so the path player is set up. Enables CDLOD (the harness needs the
     /// quadtree ticking), then starts the flight with cliQuit so the run prints its report and exits.
     private void StartTestPathDeferred() { _terrain.SetCdlod(true); _terrain.RunTestPath(_testPathCli, cliQuit: true); }
+
+    // S3 --popmeter: on-screen HUD line for the live pop meter (top-left under the panel area, large + outlined).
+    private void BuildPopMeterHud()
+    {
+        _popMeterLabel = new Label
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Text = "POPMETER  arming…",
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        _popMeterLabel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+        _popMeterLabel.OffsetTop = 40; _popMeterLabel.OffsetRight = -8; _popMeterLabel.OffsetLeft = -700;
+        _popMeterLabel.AddThemeFontSizeOverride("font_size", 16);
+        _popMeterLabel.AddThemeColorOverride("font_color", new Color(0.6f, 1f, 0.7f));
+        _popMeterLabel.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f));
+        _popMeterLabel.AddThemeConstantOverride("outline_size", 6);
+        var layer = GetNodeOrNull<CanvasLayer>("/root/TerrainLabRoot/UILayer");
+        Node parent = (Node)layer ?? this;
+        parent.CallDeferred(Node.MethodName.AddChild, _popMeterLabel);   // tree is mid-setup in _Ready → defer the add
+    }
+
+    // S3 --popmeter: per-frame live measurement. Lazily builds the meter once CdlodTerrain exists (deferred).
+    private void TickPopMeter(Vector3 camPos)
+    {
+        if (!_popMeterCli) { return; }
+        if (_popMeter == null)
+        {
+            if (_terrain.Cdlod == null) { return; }   // CdlodTerrain is deferred-added; wait for it
+            _popMeter = new LivePopMeter(_fc, _params, _terrain.Cdlod, 65, 2.5f);
+        }
+        _popMeter.Tick(camPos);
+        if (_popMeterLabel != null) { _popMeterLabel.Text = _popMeter.Hud; }
+    }
 
     /// Deferred cloud wiring (see _Ready). Adds the CloudVolume node to the scene
     /// root and attaches it to the Environment, now that tree setup has finished.
@@ -240,6 +277,11 @@ public partial class TerrainLabUI : Control
         {
             bool ok = PopCheck.Run(_fc, _params, 6, 2.5f, 65, out string m);
             GD.Print($"POPCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
+        }
+        if (_snapDiffCli)   // S3: does a fixed world point get the SAME leaf across a renderOrigin snap? (the snap-pop)
+        {
+            bool ok = SnapDiff.Run(_params.RegionSizeM, 6, 2.5f, out string m);
+            GD.Print($"SNAPDIFF: {(ok ? "PASS" : "FAIL")}  {m}");
         }
         if (_aabbSpikeCli)   // S3.5 SPIKE: kick off one async height-range; _Process collects + compares to sync
         {

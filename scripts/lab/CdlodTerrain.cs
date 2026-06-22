@@ -52,6 +52,7 @@ public sealed partial class CdlodTerrain : Node3D
     private FieldParams _fieldParams = null!;
     private ChunkAabbProvider _aabbProvider;
     public bool TightenAabb = true;                 // S3.5: disable → keep the generous AABB (fallback)
+    public bool PinOrigin = false;                  // DEBUG (--pinorigin): pin renderOrigin=0 (no snap) to isolate the snap-pop
     private readonly Dictionary<long, (float lo, float hi)> _tightened = new();   // key → landed tight range
 
     public int GridN = 65;            // verts/side per chunk (64 quads)
@@ -140,7 +141,7 @@ public sealed partial class CdlodTerrain : Node3D
         if (!_enabled) { return; }
         if (!IsInsideTree()) { return; }   // the AddChild is deferred (see TerrainLab.Build); skip until in-tree
         // S3: snapped camera-relative render origin (folded floating-origin).
-        _renderOrigin = new Vector3(
+        _renderOrigin = PinOrigin ? Vector3.Zero : new Vector3(
             Mathf.Floor(camPos.X / _coarseSnap) * _coarseSnap, 0f,
             Mathf.Floor(camPos.Z / _coarseSnap) * _coarseSnap);
         _mat?.SetShaderParameter("render_origin", _renderOrigin);

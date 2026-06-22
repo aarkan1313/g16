@@ -127,6 +127,10 @@ public partial class TerrainLabUI : Control
             else if (a == "--stitchcheck") { _stitchCheckCli = true; }   // S2d: edge-stitch crack-free numeric guard
             else if (a == "--streamcheck") { _streamCheckCli = true; }   // S3: streaming invariant + snap-continuity guard
             else if (a == "--popcheck") { _popCheckCli = true; }   // S3: pop detector — fixed-point sample-XZ continuity across a moving cam
+            else if (a == "--snapdiff") { _snapDiffCli = true; }   // S3: renderOrigin-snap seamlessness check
+            else if (a == "--pinorigin") { _pinOriginCli = true; }   // DEBUG: pin renderOrigin=0 (isolate snap-pop)
+            else if (a == "--debugwxz") { _debugWxzCli = true; }   // DEBUG: shader outputs sampled world-XZ as color
+            else if (a == "--popmeter") { _popMeterCli = true; }   // S3: LIVE pop meter — measure height/normal/origin-snap each frame as you fly
             else if (a == "--aabbspike") { _aabbSpikeCli = true; }   // S3.5: one async GPU height-range vs sync, prints AABBSPIKE
             else if (a == "--notighten") { _noTightenCli = true; }   // S3.5: disable async AABB tighten → generous AABB fallback
             else if (a.StartsWith("--aabbres=")) { int.TryParse(a.Substring("--aabbres=".Length), out _aabbResCli); }   // S3.5: ProbeRes
@@ -213,6 +217,9 @@ public partial class TerrainLabUI : Control
         {
             _terrain.ConfigureCdlodAabb(!_noTightenCli, _aabbResCli, _aabbReqCli);
         }
+        if (_popMeterCli) { BuildPopMeterHud(); }   // S3 live pop meter — HUD line; the meter inits lazily on first tick
+        if (_pinOriginCli) { _terrain.SetPinOrigin(true); }   // DEBUG: pin renderOrigin=0
+        if (_debugWxzCli) { _terrain.SetFloat("debug_wxz", 1.0f); }   // DEBUG: shader world-XZ color
         // S2b: --testpath=N. Deferred so the _testPaths sibling-add + SetupTestPaths (both deferred from
         // TerrainLab.Build) have completed before we Start the flight.
         if (_testPathCli >= 0) { CallDeferred(nameof(StartTestPathDeferred)); }
@@ -226,6 +233,10 @@ public partial class TerrainLabUI : Control
     private bool _stitchCheckCli;     // --stitchcheck → S2d edge-stitch seam-coincidence guard (PASS/FAIL)
     private bool _streamCheckCli;     // --streamcheck → S3 streaming invariant-along-traverse + snap field-continuity
     private bool _popCheckCli;        // --popcheck → S3 fixed-point morphed-sample-XZ continuity (pop detector)
+    private bool _snapDiffCli;        // --snapdiff → S3 renderOrigin-snap seamless check (PASS/FAIL)
+    private bool _pinOriginCli;       // --pinorigin → DEBUG pin renderOrigin=0
+    private bool _debugWxzCli;        // --debugwxz → DEBUG shader world-XZ color
+    private bool _popMeterCli;        // --popmeter → S3 live per-frame pop meter (HUD + log) while you fly
     private bool _aabbSpikeCli;       // --aabbspike → S3.5 async GPU height-range feasibility spike (vs sync ref)
     private bool _noTightenCli;       // --notighten → S3.5 disable the async AABB tighten (generous-AABB fallback)
     private int _aabbResCli;          // --aabbres=N → S3.5 ChunkAabbProvider.ProbeRes (0 = leave default)

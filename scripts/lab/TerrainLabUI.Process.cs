@@ -149,6 +149,7 @@ public partial class TerrainLabUI : Control
             _terrain.SetCameraWorld(camPos);
             _terrain.CdlodTick(camPos);   // S2a: rebuild the visible chunk set from the quadtree
             _cloud?.SetCameraWorld(camPos);
+            TickPopMeter(camPos);   // S3 --popmeter: live per-frame pop/snap measurement (no-op unless armed)
 
             // AT-2: push the camera to the atmosphere so the aerial froxel LUT (camera-frustum aligned)
             // re-marches from the current view each frame. invViewProj reconstructs world from NDC in the

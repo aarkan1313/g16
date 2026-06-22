@@ -97,6 +97,8 @@ float detail_fade(float dist) { return 1.0 - smoothstep(detail_fade_near, detail
 
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)
+varying vec2 v_wxz;      // DEBUG: reconstructed TRUE-world XZ the field was sampled at (snap-pop hunt)
+uniform float debug_wxz = 0.0;   // DEBUG: 1.0 = output reconstructed world XZ (mod 512) as R/G color
 
 float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 
@@ -160,6 +162,7 @@ void vertex() {
         v_normal = normalize(vec3(hxm - hxp, 2.0 * ns, hzm - hzp));
         NORMAL = v_normal;
         v_h = h0;
+        v_wxz = wxz;   // DEBUG: the true-world XZ this vertex sampled the field at
     } else if (use_analytic) {
         vec2 wxz = VERTEX.xz;                              // object==world at identity (matches field)
         float e = analytic_spacing;
@@ -192,6 +195,11 @@ void fragment() {
         float L = lod_viz;
         vec3 tint = vec3(fract(L * 0.27), fract(L * 0.53 + 0.33), fract(L * 0.81 + 0.66));
         c = mix(c, 0.5 + 0.5 * tint, 0.55);
+    }
+    if (debug_wxz > 0.5) {   // DEBUG: encode the sampled true-world XZ — must be IDENTICAL across a snap
+        // FINE band (mod 16 m) makes a sub-meter reconstruction shift visible; coarse band (mod 4096) shows
+        // any large offset. R = fine X phase, G = fine Z phase, B = coarse X phase.
+        c = vec3(fract(v_wxz.x / 16.0), fract(v_wxz.y / 16.0), fract(v_wxz.x / 4096.0));
     }
     ALBEDO = c;
     ROUGHNESS = ground_rough;
