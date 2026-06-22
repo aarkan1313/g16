@@ -98,6 +98,26 @@ float detail_fade(float dist) { return 1.0 - smoothstep(detail_fade_near, detail
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)
 varying vec2 v_wxz;      // DEBUG: reconstructed TRUE-world XZ the field was sampled at (snap-pop hunt)
+varying vec2 v_surf_xz;  // true-world XZ for world-space texture tiling (set in ALL vertex branches)
+
+// --- Minimal surfacing slice (readable landforms). Fixed-sampler textured path, A/B vs the colour ramp. ---
+uniform bool use_textures = false;   // false = legacy height/slope colour ramp (default); true = textured
+uniform float mat_tiling = 12.0;     // world metres per texture tile (smaller = more repeats)
+uniform sampler2D mat0_alb : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat0_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
+uniform sampler2D mat0_rgh : filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat1_alb : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat1_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
+uniform sampler2D mat1_rgh : filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat2_alb : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat2_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
+uniform sampler2D mat2_rgh : filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat3_alb : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat3_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
+uniform sampler2D mat3_rgh : filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat4_alb : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat4_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
+uniform sampler2D mat4_rgh : filter_linear_mipmap, repeat_enable;
 uniform float debug_wxz = 0.0;   // DEBUG: 1.0 = output reconstructed world XZ (mod 512) as R/G color
 
 float height_at(vec2 uv) { return texture(heightmap, uv).r; }
@@ -163,6 +183,7 @@ void vertex() {
         NORMAL = v_normal;
         v_h = h0;
         v_wxz = wxz;   // DEBUG: the true-world XZ this vertex sampled the field at
+        v_surf_xz = wxz;
     } else if (use_analytic) {
         vec2 wxz = VERTEX.xz;                              // object==world at identity (matches field)
         float e = analytic_spacing;
@@ -173,6 +194,7 @@ void vertex() {
         v_normal = normalize(vec3(h0 - hx, e, h0 - hz));   // normalize() makes the gradient magnitude immaterial
         NORMAL = v_normal;
         v_h = VERTEX.y;
+        v_surf_xz = wxz;
     } else {
         vec2 uv = (VERTEX.xz + vec2(region_size * 0.5)) / region_size;
         VERTEX.y = height_at(uv);
@@ -182,25 +204,34 @@ void vertex() {
         v_normal = normalize(vec3(hl - hr, 2.0 * texel_world, hd - hu));
         NORMAL = v_normal;   // object-space (== world at identity) -> Godot transforms to view for lighting
         v_h = VERTEX.y;
+        v_surf_xz = VERTEX.xz;
     }
 }
 
 void fragment() {
-    vec3 c = mix(col_low, col_mid, smoothstep(h_low, h_mid, v_h));
-    c = mix(c, col_high, smoothstep(h_mid, h_high, v_h));
-    c = mix(c, col_peak, smoothstep(h_high, h_peak, v_h));
-    float slope = 1.0 - v_normal.y;                       // 0 flat .. 1 vertical
-    c = mix(c, col_cliff, smoothstep(cliff_lo, cliff_hi, slope));   // steep faces -> rock
-    if (lod_viz >= 0.0) {   // S2a debug: distinct hue per LOD level so the bands are visible
-        float L = lod_viz;
-        vec3 tint = vec3(fract(L * 0.27), fract(L * 0.53 + 0.33), fract(L * 0.81 + 0.66));
-        c = mix(c, 0.5 + 0.5 * tint, 0.55);
+    if (use_textures) {
+        // Minimal surfacing slice. (Godot forbids `return` in fragment(), so the legacy ramp is the else.)
+        vec2 uv = v_surf_xz / mat_tiling;
+        ALBEDO = texture(mat0_alb, uv).rgb;   // single material this task; placement comes in Task 2
+        ROUGHNESS = texture(mat0_rgh, uv).r;
+        NORMAL = v_normal;                    // geometric normal; real normal-map combine comes in Task 3
+    } else {
+        vec3 c = mix(col_low, col_mid, smoothstep(h_low, h_mid, v_h));
+        c = mix(c, col_high, smoothstep(h_mid, h_high, v_h));
+        c = mix(c, col_peak, smoothstep(h_high, h_peak, v_h));
+        float slope = 1.0 - v_normal.y;                       // 0 flat .. 1 vertical
+        c = mix(c, col_cliff, smoothstep(cliff_lo, cliff_hi, slope));   // steep faces -> rock
+        if (lod_viz >= 0.0) {   // S2a debug: distinct hue per LOD level so the bands are visible
+            float L = lod_viz;
+            vec3 tint = vec3(fract(L * 0.27), fract(L * 0.53 + 0.33), fract(L * 0.81 + 0.66));
+            c = mix(c, 0.5 + 0.5 * tint, 0.55);
+        }
+        if (debug_wxz > 0.5) {   // DEBUG: encode the sampled true-world XZ — must be IDENTICAL across a snap
+            // FINE band (mod 16 m) makes a sub-meter reconstruction shift visible; coarse band (mod 4096) shows
+            // any large offset. R = fine X phase, G = fine Z phase, B = coarse X phase.
+            c = vec3(fract(v_wxz.x / 16.0), fract(v_wxz.y / 16.0), fract(v_wxz.x / 4096.0));
+        }
+        ALBEDO = c;
+        ROUGHNESS = ground_rough;
     }
-    if (debug_wxz > 0.5) {   // DEBUG: encode the sampled true-world XZ — must be IDENTICAL across a snap
-        // FINE band (mod 16 m) makes a sub-meter reconstruction shift visible; coarse band (mod 4096) shows
-        // any large offset. R = fine X phase, G = fine Z phase, B = coarse X phase.
-        c = vec3(fract(v_wxz.x / 16.0), fract(v_wxz.y / 16.0), fract(v_wxz.x / 4096.0));
-    }
-    ALBEDO = c;
-    ROUGHNESS = ground_rough;
 }

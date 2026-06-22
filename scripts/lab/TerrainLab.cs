@@ -76,6 +76,8 @@ public partial class TerrainLab : MeshInstance3D
         _mat.SetShaderParameter("fp_foothill_w", p.FoothillW);
         _mat.SetShaderParameter("fp_foothill_h", p.FoothillH);
 
+        LoadGroundMaterials();   // minimal surfacing slice: bind the textured-path materials (path itself off by default)
+
         // --- GI/shadow PROXY (perf): a coarse copy of the SAME heightfield. The render mesh has
         // ~4M verts for displacement detail, but SDFGI + shadow casting are low-frequency — a coarse
         // proxy can feed them ~60× cheaper. Created inert; SetGiProxy(true) flips the roles. Reuses
@@ -243,4 +245,28 @@ public partial class TerrainLab : MeshInstance3D
     public void SetBool(string param, bool v) => _mat.SetShaderParameter(param, v);
     public void SetTexture(string param, Texture2D tex) => _mat.SetShaderParameter(param, tex);
     public void SetCameraWorld(Vector3 p) => _mat.SetShaderParameter("cam_world", p);
+
+    // Minimal surfacing slice: bind ~5 fixed material sets from assets/materials by role. Fluid/disposable
+    // (the full surfacing arc replaces this with texture arrays); the placement/blend LOGIC in the shader is
+    // the kept work. Roles: 0 low/sand, 1 valley grass, 2 mid earth/scree, 3 slope rock, 4 peak snow.
+    private static readonly string[] _matRoles =
+    {
+        "03_coarse_sand", "01_tussock_grass", "02_muddy_with_stones",
+        "01_weathered_grey_bedrock", "01_fresh_powder",
+    };
+    public void LoadGroundMaterials()
+    {
+        for (int i = 0; i < _matRoles.Length; i++)
+        {
+            string b = $"res://assets/materials/{_matRoles[i]}/";
+            var alb = GD.Load<Texture2D>(b + "albedo.png");
+            var nrm = GD.Load<Texture2D>(b + "normal.png");
+            var rgh = GD.Load<Texture2D>(b + "roughness.png");
+            if (alb != null) { _mat.SetShaderParameter($"mat{i}_alb", alb); }
+            if (nrm != null) { _mat.SetShaderParameter($"mat{i}_nrm", nrm); }
+            if (rgh != null) { _mat.SetShaderParameter($"mat{i}_rgh", rgh); }
+        }
+        GD.Print($"TerrainLab: ground materials loaded ({_matRoles.Length} roles)");
+    }
+    public void SetTexturesOn(bool on) { _mat.SetShaderParameter("use_textures", on); }
 }
