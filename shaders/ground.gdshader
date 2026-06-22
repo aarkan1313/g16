@@ -121,9 +121,14 @@ void vertex() {
         float far_d  = 2.0 * chunk_size * split_factor;    // band outer (this LOD just appeared)
         float near_d = 1.0 * chunk_size * split_factor;    // band inner (about to coarsen)
         float mid_d  = mix(near_d, far_d, 0.5);
+        // morphK: 0 at the band's NEAR edge (d=near_d, chunk about to split into FINER children → keep
+        // full fine detail, no morph), 1 at the FAR edge (d=far_d, chunk about to be replaced by its
+        // COARSER parent → vertices must already sit on the coarse parent's grid so that swap is
+        // invisible). This is the standard Strugar CDLOD morph direction. (The original plan code added a
+        // `morphK = 1.0 - morphK` inversion here — that was a sign bug: it put the full-coarse morph at
+        // the NEAR edge, where the chunk actually gets FINER, so the far-edge hand-off to the coarse
+        // parent snapped raw → simultaneous height + normal pop. Removed 2026-06-21 after the eye-gate.)
         float morphK = clamp((d - mid_d) / max(far_d - mid_d, 1e-3), 0.0, 1.0);  // 0 near .. 1 far edge
-        // NOTE: morph toward coarse as the chunk APPROACHES coarsening, i.e. as d -> near_d. So invert:
-        morphK = 1.0 - morphK;                              // 1 at near edge (coarsen imminent), 0 at far
 
         vec2 u_morph = mix(u_fine, u_coarse, morphK);
         vec2 wxz = (MODEL_MATRIX * vec4(u_morph.x - 0.5, 0.0, u_morph.y - 0.5, 1.0)).xz;  // morphed world XZ
