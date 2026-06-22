@@ -27,6 +27,15 @@ public partial class TerrainLabUI : Control
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        // S3: the terrain-debug cycle key (T) is live in BOTH scenes (terrain_lab + review) — it doesn't need
+        // ReviewMode. One key steps the S3 streaming A/B views: default → no-tighten → lod-viz → single-mesh.
+        if (@event is InputEventKey tk && tk.Pressed && !tk.Echo && tk.Keycode == Key.T)
+        {
+            CycleTerrainDebug();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         if (!ReviewMode || _byId == null || _byId.Count == 0) return;
         if (@event is InputEventKey k && k.Pressed && !k.Echo)
         {
@@ -37,6 +46,44 @@ public partial class TerrainLabUI : Control
             };
             if (n > 0) { ApplyReview(n); GetViewport().SetInputAsHandled(); }
         }
+    }
+
+    private int _terrainDebugMode;   // S3: 0 default (CDLOD+tighten) · 1 no-tighten · 2 lod-viz · 3 single mesh
+
+    /// One key (T) cycles the four S3 terrain A/B states live — no relaunch, no separate flags. Each press
+    /// advances and updates the on-screen banner. State→action is idempotent (it sets the FULL config each
+    /// step, so cycling order can't leave a stale toggle).
+    private void CycleTerrainDebug()
+    {
+        if (!_ready || _terrain == null) { return; }   // ignore key presses during load
+        if (_reviewLabel == null) BuildReviewLabel();
+        _terrainDebugMode = (_terrainDebugMode + 1) % 4;
+        string title, judge;
+        switch (_terrainDebugMode)
+        {
+            case 1: // CDLOD on, async AABB tighten OFF → generous AABB (looser far-out shadows; the safe fallback)
+                _terrain.SetCdlod(true); _terrain.SetCdlodViz(false); _terrain.ConfigureCdlodAabb(false, 0, 0);
+                title = "TERRAIN  [T]  2/4 · CDLOD, tighten OFF (generous AABB)";
+                judge = "A/B the async shadow tightening: far-out shadows go slightly loose vs mode 1. Press T to continue.";
+                break;
+            case 2: // CDLOD on, tighten back on, LOD-viz tint (watch the bands roam)
+                _terrain.SetCdlod(true); _terrain.ConfigureCdlodAabb(true, 0, 0); _terrain.SetCdlodViz(true);
+                title = "TERRAIN  [T]  3/4 · LOD-viz (chunks tinted by level)";
+                judge = "Fly: the LOD bands should roam smoothly with you, finest near camera. No band edge at the horizon. Press T to continue.";
+                break;
+            case 3: // CDLOD OFF → the single full mesh (pre-S3 baseline A/B)
+                _terrain.SetCdlodViz(false); _terrain.SetCdlod(false);
+                title = "TERRAIN  [T]  4/4 · single mesh (CDLOD OFF — pre-S3 baseline)";
+                judge = "The non-streaming full mesh: finite region, no infinite world. A/B vs the CDLOD modes. Press T to return to mode 1.";
+                break;
+            default: // 0 — the shipping default: CDLOD + async tighten, no viz
+                _terrain.SetCdlod(true); _terrain.SetCdlodViz(false); _terrain.ConfigureCdlodAabb(true, 0, 0);
+                title = "TERRAIN  [T]  1/4 · CDLOD + async tight shadows (DEFAULT)";
+                judge = "The shipping S3 look: infinite streaming, tight shadows. Fly a minute + teleport far out — no edge/hitch/shimmer/jitter. Press T to cycle A/B views.";
+                break;
+        }
+        _reviewLabel.Text = $"{title}\n{judge}";
+        GD.Print($"[terraindebug] mode {_terrainDebugMode + 1}/4 — {title}");
     }
 
     private void ApplyReview(int n)

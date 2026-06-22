@@ -35,6 +35,8 @@ public sealed partial class CdlodTerrain : Node3D
         public int SeenFrame = -1;     // last Tick frame this slot was in the visible set (vs _frame → retire)
     }
     private int _frame;   // monotonic Tick counter for the seen-this-frame test (no per-slot Variant churn)
+    private bool _forceReapply;   // one-shot: re-push lod_viz + AABB to ALL live slots next Tick (live toggle A/B)
+    private bool _aabbReset;      // one-shot: clear landed tights so existing chunks revert to the generous AABB
     private readonly Dictionary<long, ChunkSlot> _active = new();   // live chunks by world-address key
     private readonly Stack<MeshInstance3D> _free = new();           // retired instances, hidden, ready to reuse
     private readonly List<long> _scratchDead = new();              // reused per-frame: keys to retire (no per-frame alloc)
@@ -109,19 +111,29 @@ public sealed partial class CdlodTerrain : Node3D
         GD.Print($"CdlodTerrain: {(on ? "ENABLED" : "disabled")}");
     }
 
-    public void SetLodViz(bool on) { _lodViz = on; }
+    public void SetLodViz(bool on) { _lodViz = on; _forceReapply = true; }   // re-push lod_viz to existing chunks
 
     /// S3.5: configure the async AABB tightener (CLI/lab tunables). probeRes/maxReq <= 0 leave the default.
     public void ConfigureAabb(bool tighten, int probeRes = 0, int maxReq = 0)
     {
+        bool was = TightenAabb;
         TightenAabb = tighten;
         if (_aabbProvider != null)
         {
             if (probeRes > 0) { _aabbProvider.ProbeRes = probeRes; }
             if (maxReq > 0) { _aabbProvider.MaxRequestsPerFrame = maxReq; }
         }
+        // Toggling tighten OFF→ON or ON→OFF must re-AABB the EXISTING chunks (live A/B), not just new ones.
+        if (was != tighten)
+        {
+            _forceReapply = true;
+            if (!tighten) { _aabbReset = true; }   // OFF: drop landed tights so existing chunks snap back to generous
+        }
         GD.Print($"CdlodTerrain: AABB tighten={(tighten ? "on" : "OFF")} probeRes={_aabbProvider?.ProbeRes} maxReq={_aabbProvider?.MaxRequestsPerFrame}");
     }
+
+    public bool TightenEnabled => TightenAabb;
+    public bool LodVizEnabled => _lodViz;
 
     public void Tick(Vector3 camPos)
     {
@@ -139,11 +151,15 @@ public sealed partial class CdlodTerrain : Node3D
 
         List<CdlodChunk> leaves = _qt.SelectRoaming(camPos);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
+        // Live A/B toggles (lodviz / tighten) force a one-frame full re-apply of existing chunks.
+        if (_aabbReset) { _tightened.Clear(); foreach (var kv in _active) { kv.Value.Tightened = false; } _aabbReset = false; }
+        bool force = _forceReapply; _forceReapply = false;
         DrainTightened();   // S3.5: collect any async height-ranges that landed since last frame
 
         // S3.6: identity-keyed reconcile. For each leaf still present: stamp it seen + UPDATE-ONLY-DELTAS.
         // Birth the genuinely-new (budget-capped). Retire whatever wasn't stamped this frame. A monotonic
         // _frame counter is the "seen" test — no per-slot Variant/Meta churn.
+        snapped |= force;   // a forced re-apply re-pushes position+lod_viz+AABB to every live slot this frame
         _frame++;
         int births = 0;
         for (int i = 0; i < leaves.Count; i++)
