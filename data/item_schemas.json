@@ -1,7 +1,14 @@
 {
-  "test3": [
-    { "id": "label",  "type": "enum",  "label": "label", "options": ["Alpha", "Beta", "Gamma"], "default": 0 },
-    { "id": "amount", "type": "float", "label": "amount", "min": 0.0, "max": 10.0, "default": 5.0 },
-    { "id": "on",     "type": "bool",  "label": "enabled", "default": true }
+  "luminary": [
+    { "id": "kind",        "type": "enum",  "label": "kind", "options": ["Sun", "Moon"], "default": 0 },
+    { "id": "color",       "type": "color", "label": "color", "default": [1.0, 0.95, 0.86] },
+    { "id": "size",        "type": "float", "label": "size (deg)", "min": 0.1, "max": 6.0, "default": 0.6 },
+    { "id": "phase",       "type": "float", "label": "phase (moon)", "min": 0.0, "max": 1.0, "default": 1.0 },
+    { "id": "az_offset",   "type": "float", "label": "az offset", "min": -180.0, "max": 180.0, "default": 0.0 },
+    { "id": "decl_scale",  "type": "float", "label": "arc height", "min": 0.1, "max": 1.2, "default": 1.0 },
+    { "id": "energy",      "type": "float", "label": "light energy", "min": 0.0, "max": 3.0, "default": 1.3 },
+    { "id": "casts_shadow","type": "bool",  "label": "casts shadow", "default": true },
+    { "id": "atmosphere",  "type": "bool",  "label": "scatters sky", "default": true },
+    { "id": "priority",    "type": "float", "label": "priority", "min": 0.0, "max": 100.0, "default": 50.0 }
   ]
 }

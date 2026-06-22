@@ -47,6 +47,7 @@
     { "id": "bright_star_brightness", "label": "bright star brightness", "tab": "Night", "type": "scenef", "scene": "bright_star_brightness", "min": 0.0, "max": 3.0, "default": 1.0, "rand": false },
     { "id": "extra_suns", "label": "extra suns (C3)", "tab": "Night", "type": "scenef", "scene": "extra_suns", "min": 0.0, "max": 3.0, "default": 0.0, "rand": false },
     { "id": "extra_moons", "label": "extra moons (C3)", "tab": "Night", "type": "scenef", "scene": "extra_moons", "min": 0.0, "max": 2.0, "default": 0.0, "rand": false },
+    { "type": "objectlist", "id": "luminaries", "tab": "Night", "label": "Sky bodies", "item_schema": "luminary", "data": "res://data/luminaries.json", "min_items": 1, "max_items": 7, "rand": false },
     { "id": "moon_color", "label": "moon color", "tab": "Night", "type": "scenecolor", "scene": "moon_color", "default": [0.85, 0.88, 1.0], "rand": false },
     { "id": "moonlight_color", "label": "moonlight color", "tab": "Night", "type": "scenecolor", "scene": "moonlight_color", "default": [0.6, 0.7, 1.0], "rand": false },
     { "id": "inspect_light", "label": "inspect light (L) energy", "tab": "Night", "type": "scenef", "scene": "inspect_energy", "min": 0.0, "max": 4.0, "default": 1.0, "rand": false },

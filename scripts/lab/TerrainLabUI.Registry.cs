@@ -107,6 +107,11 @@ public partial class TerrainLabUI : Control
         };
         if (c.TryGetProperty("min", out var mn)) { lc.Min = mn.GetSingle(); }
         if (c.TryGetProperty("max", out var mx)) { lc.Max = mx.GetSingle(); }
+        // U2: objectlist fields (item schema + data array + bounds). Harmless for other types.
+        lc.ItemSchema = c.TryGetProperty("item_schema", out var isc) ? isc.GetString() : null;
+        lc.DataPath = c.TryGetProperty("data", out var dp) ? dp.GetString() : null;
+        if (c.TryGetProperty("min_items", out var mi)) { lc.MinItems = mi.GetInt32(); }
+        if (c.TryGetProperty("max_items", out var ma)) { lc.MaxItems = ma.GetInt32(); }
         if (c.TryGetProperty("options", out var op)) { lc.Options = op.EnumerateArray().Select(e => e.GetString() ?? "").ToArray(); }
         if (c.TryGetProperty("default", out var d) && d.ValueKind != JsonValueKind.Array)
         {
@@ -218,26 +223,26 @@ public partial class TerrainLabUI : Control
                 col.AddChild(new HSeparator());
                 col.AddChild(new Label { Text = "fine-tune:" });
 
-                // U1 PROOF (throwaway): a test object-list wired to a GD.Print adapter.
-                // Replaced by the real luminary list in U2.
+                // U2: the data-driven "Sky bodies" luminary list editor (Night tab). Seeded from the
+                // bodies the composer loaded from luminaries.json; edits -> ApplyLuminaryDicts -> recompose.
+                var lumLc = _byId.TryGetValue("luminaries", out var lc0) ? lc0 : null;
                 var schemas = ItemSchemas.Load();
-                if (schemas.TryGetValue("test3", out var testSchema))
+                if (lumLc != null && lumLc.ItemSchema != null && schemas.TryGetValue(lumLc.ItemSchema, out var lumSchema))
                 {
                     var olc = new ObjectListControl();
                     col.AddChild(olc);
-                    var seed = new List<Godot.Collections.Dictionary>
+                    var seed = new List<Godot.Collections.Dictionary>();
+                    foreach (var b in _lighting.EditableLuminaries) { seed.Add(DictFromLuminary(b)); }
+                    if (seed.Count == 0)   // composer had no data (file missing) — seed one sun so the editor isn't empty
                     {
-                        new() { { "label", 0 }, { "amount", 5.0f }, { "on", true } },
-                    };
-                    olc.Init("TEST list (U1 proof)", testSchema, seed, 1, 7,
+                        seed.Add(new Godot.Collections.Dictionary { { "kind", 0 }, { "color", new Color(1f, 0.95f, 0.86f) }, { "size", 0.6f }, { "phase", 1f }, { "az_offset", 0f }, { "decl_scale", 1f }, { "energy", 1.3f }, { "casts_shadow", true }, { "atmosphere", true }, { "priority", 100f } });
+                    }
+                    olc.Init(lumLc.Label, lumSchema, seed, lumLc.MinItems, lumLc.MaxItems,
                         (f, initial, onChanged) => BuildFieldWidget(
                             f.Type, f.Label, f.Min, f.Max, f.Default, f.DefBool, f.DefColor, f.Options,
                             initial, onChanged, out _),
-                        items =>
-                        {
-                            GD.Print($"[objectlist:test3] {items.Count} items:");
-                            foreach (var it in items) { GD.Print($"  {Json.Stringify(it)}"); }
-                        });
+                        ApplyLuminaryDicts);
+                    _luminaryList = olc;   // U3 preset hookup
                 }
             }
             foreach (LabControl c in _controls.Where(c => c.Tab == tabName)) { BuildRow(col, c); }

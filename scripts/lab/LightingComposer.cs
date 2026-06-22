@@ -87,6 +87,37 @@ public sealed class LightingComposer
     private readonly float[] _exMoonSizes = new float[MaxExtraMoons];
     private readonly float[] _exMoonPhases = new float[MaxExtraMoons];
 
+    // ── U2 data-driven luminaries (the objectlist source of truth). The list is [primary sun, extra
+    //    suns..., primary moon, extra moons...] in load order. The FIRST Sun + FIRST Moon stay the
+    //    existing single-sun/single-moon RENDER paths (byte-identical default); entries beyond them set
+    //    ExtraSunCount/ExtraMoonCount + the per-extra appearance arrays — replacing the former hardcoded
+    //    ExtraSunColors/ExtraMoonColors/... constants (kept as the --suns/--moons fallback when no data).
+    private readonly List<Luminary> _editable = new();
+    public List<Luminary> EditableLuminaries => _editable;
+    private readonly Luminary?[] _extraSunData = new Luminary?[MaxExtraSuns];
+    private readonly Luminary?[] _extraMoonData = new Luminary?[MaxExtraMoons];
+
+    /// Replace the data-driven body list (from data/luminaries.json or a preset/editor) and re-derive the
+    /// extra sun/moon counts + per-body appearance. The caller recomposes after (ComposeLighting). With the
+    /// default [Sun, Moon] list the extra counts are 0 → the shader is never touched → byte-identical sky.
+    public void LoadLuminaries(List<Luminary> bodies)
+    {
+        _editable.Clear();
+        foreach (var b in bodies) { _editable.Add(b); }
+
+        var suns = new List<Luminary>();
+        var moons = new List<Luminary>();
+        foreach (var b in _editable)
+        {
+            if (b.Kind == LuminaryKind.Sun) { suns.Add(b); } else { moons.Add(b); }
+        }
+        // Extra suns/moons = list beyond the primary (entry 0 of each kind keeps the existing render path).
+        ExtraSunCount = Mathf.Clamp(suns.Count - 1, 0, MaxExtraSuns);
+        ExtraMoonCount = Mathf.Clamp(moons.Count - 1, 0, MaxExtraMoons);
+        for (int i = 0; i < MaxExtraSuns; i++) { _extraSunData[i] = (i + 1 < suns.Count) ? suns[i + 1] : null; }
+        for (int i = 0; i < MaxExtraMoons; i++) { _extraMoonData[i] = (i + 1 < moons.Count) ? moons[i + 1] : null; }
+    }
+
     private bool _shadowTuned = false;             // #5: directional shadow atlas size set once (RenderingServer global)
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;               // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
@@ -310,21 +341,24 @@ public sealed class LightingComposer
         {
             if (i < n)
             {
-                float declScale = 0.88f;
-                float azOff = 45f * (i + 1);                       // spread the extras across the sky (binary-ish at i=0)
+                // U2: per-extra appearance from the data list (falls back to the hardcoded palette/spread
+                // when no data — so --suns=N with no luminaries.json still works exactly as before).
+                var data = _extraSunData[i];
+                float declScale = (data != null && data.DeclScale > 0f) ? data.DeclScale : 0.88f;
+                float azOff = data != null ? data.AzOffset : 45f * (i + 1);   // spread the extras across the sky
                 float elev = Time.PeakElev * declScale * Mathf.Sin(Mathf.Pi * f);
                 float az = Mathf.Lerp(Time.AzStart, Time.AzEnd, f) + azOff;
                 var L = _extraSunLights[i];
                 L.RotationDegrees = new Vector3(-elev, az, 0f);    // same convention as OrientSun
                 Vector3 dir = L.Transform.Basis.Z.Normalized();   // local==world (parented to identity root)
                 float up = Mathf.Clamp((dir.Y + 0.02f) / 0.1f, 0f, 1f);   // above-horizon ramp (terrain light)
-                Color c = ExtraSunColors[i % ExtraSunColors.Length];
+                Color c = data?.Color ?? ExtraSunColors[i % ExtraSunColors.Length];
                 L.LightColor = c;
                 L.LightEnergy = BaseSunEnergy * 0.55f * up;        // companion fill, dimmer than primary, gated above horizon
                 L.Visible = L.LightEnergy > 0.001f;
                 _extraDirs[i] = dir;
                 _extraCols[i] = new Vector3(c.R, c.G, c.B);
-                _extraSizes[i] = SunDisc.Size * ExtraSunSizeFac[i % ExtraSunSizeFac.Length];   // companions read smaller
+                _extraSizes[i] = data != null ? data.Size : SunDisc.Size * ExtraSunSizeFac[i % ExtraSunSizeFac.Length];   // companions read smaller
                 _extraEnergies[i] = 1.05f;                         // disc energy (< primary's 1.3); horizonGate fades it below the horizon
             }
             else { _extraDirs[i] = Vector3.Up; _extraCols[i] = Vector3.Zero; _extraSizes[i] = 0.6f; _extraEnergies[i] = 0f; }
@@ -349,9 +383,11 @@ public sealed class LightingComposer
         {
             if (i < n)
             {
-                float phase = ExtraMoonPhases[i];
-                float azOff = 40f * (i + 1) + Moon.AzOffset;     // offset from the primary moon's path
-                float declScale = 0.78f;
+                // U2: per-extra moon appearance from the data list (fallback = hardcoded palette/phases).
+                var data = _extraMoonData[i];
+                float phase = data?.Phase ?? ExtraMoonPhases[i];
+                float azOff = (data != null ? data.AzOffset : 40f * (i + 1)) + Moon.AzOffset;   // offset from the primary moon's path
+                float declScale = (data != null && data.DeclScale > 0f) ? data.DeclScale : 0.78f;
                 float moonHour = Time.TimeOfDay - phase * 12f;   // own phase lag
                 moonHour -= Mathf.Floor(moonHour / 24f) * 24f;
                 float mf = (moonHour - Time.SunriseH) / moonDayLen;
@@ -359,9 +395,9 @@ public sealed class LightingComposer
                 float az = Mathf.Lerp(Time.AzStart, Time.AzEnd, mf) + azOff;
                 var b = Basis.FromEuler(new Vector3(Mathf.DegToRad(-elev), Mathf.DegToRad(az), 0f));
                 _exMoonDirs[i] = b.Z.Normalized();
-                Color c = ExtraMoonColors[i % ExtraMoonColors.Length];
+                Color c = data?.Color ?? ExtraMoonColors[i % ExtraMoonColors.Length];
                 _exMoonCols[i] = new Vector3(c.R, c.G, c.B);
-                _exMoonSizes[i] = Moon.Size * ExtraMoonSizeFac[i % ExtraMoonSizeFac.Length];
+                _exMoonSizes[i] = data != null ? data.Size : Moon.Size * ExtraMoonSizeFac[i % ExtraMoonSizeFac.Length];
                 _exMoonPhases[i] = phase;
             }
             else { _exMoonDirs[i] = Vector3.Up; _exMoonCols[i] = Vector3.Zero; _exMoonSizes[i] = 1f; _exMoonPhases[i] = 1f; }

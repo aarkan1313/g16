@@ -43,6 +43,88 @@ public partial class TerrainLabUI : Control, ILightingHost
     private void ApplyOvercastScaling() => _lighting.ApplyOvercastScaling();
     private void MoodToStates(Godot.Collections.Dictionary m) => _lighting.MoodToStates(m);
 
+    // ── U2: data-driven luminaries (data/luminaries.json -> composer source of truth). ──
+    private const string LuminariesPath = "res://data/luminaries.json";
+    private ObjectListControl? _luminaryList;   // the Night-tab "Sky bodies" list editor (built in BuildPanel)
+
+    /// Load data/luminaries.json -> List<Luminary> -> composer. Called at startup after LoadRegistry, before
+    /// the first compose. Missing/malformed file => the composer keeps its built-in defaults (no extras).
+    private void LoadLuminariesFromDisk()
+    {
+        string abs = ProjectSettings.GlobalizePath(LuminariesPath);
+        if (!System.IO.File.Exists(abs)) { return; }
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(abs));
+            var bodies = new System.Collections.Generic.List<Luminary>();
+            foreach (System.Text.Json.JsonElement e in doc.RootElement.EnumerateArray()) { bodies.Add(LuminaryFromJson(e)); }
+            if (bodies.Count > 0) { _lighting.LoadLuminaries(bodies); }
+        }
+        catch (System.Exception ex) { GD.PushWarning($"[luminaries] parse failed ({ex.Message}) -> defaults"); }
+    }
+
+    private static Luminary LuminaryFromJson(System.Text.Json.JsonElement e)
+    {
+        float G(string k, float fb) => e.TryGetProperty(k, out var v) ? v.GetSingle() : fb;
+        bool B(string k, bool fb) => e.TryGetProperty(k, out var v) ? v.GetBoolean() : fb;
+        Color C(string k, Color fb)
+        {
+            if (e.TryGetProperty(k, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                var a = new System.Collections.Generic.List<float>();
+                foreach (var x in v.EnumerateArray()) { a.Add(x.GetSingle()); }
+                if (a.Count >= 3) { return new Color(a[0], a[1], a[2]); }
+            }
+            return fb;
+        }
+        int kind = e.TryGetProperty("kind", out var kv) ? kv.GetInt32() : 0;
+        return new Luminary
+        {
+            Kind = kind == 1 ? LuminaryKind.Moon : LuminaryKind.Sun,
+            Color = C("color", new Color(1f, 0.95f, 0.86f)),
+            Size = G("size", 0.6f), Phase = G("phase", 1.0f), AzOffset = G("az_offset", 0f),
+            DeclScale = G("decl_scale", 1.0f), LightEnergy = G("energy", 1.3f),
+            CastsShadow = B("casts_shadow", true), ContributesToAtmosphere = B("atmosphere", true),
+            Priority = G("priority", 50f),
+        };
+    }
+
+    /// Adapter: the objectlist's Variant dicts -> List<Luminary> -> composer -> recompose (live edits).
+    private void ApplyLuminaryDicts(System.Collections.Generic.List<Godot.Collections.Dictionary> items)
+    {
+        var bodies = new System.Collections.Generic.List<Luminary>();
+        foreach (var d in items) { bodies.Add(LuminaryFromDict(d)); }
+        _lighting.LoadLuminaries(bodies);
+        ComposeLighting();
+    }
+
+    private static Luminary LuminaryFromDict(Godot.Collections.Dictionary d)
+    {
+        float G(string k, float fb) => d.ContainsKey(k) ? d[k].AsSingle() : fb;
+        bool B(string k, bool fb) => d.ContainsKey(k) ? d[k].AsBool() : fb;
+        Color C(string k, Color fb) => d.ContainsKey(k) ? d[k].AsColor() : fb;
+        int kind = d.ContainsKey("kind") ? d["kind"].AsInt32() : 0;
+        return new Luminary
+        {
+            Kind = kind == 1 ? LuminaryKind.Moon : LuminaryKind.Sun,
+            Color = C("color", new Color(1f, 0.95f, 0.86f)),
+            Size = G("size", 0.6f), Phase = G("phase", 1.0f), AzOffset = G("az_offset", 0f),
+            DeclScale = G("decl_scale", 1.0f), LightEnergy = G("energy", 1.3f),
+            CastsShadow = B("casts_shadow", true), ContributesToAtmosphere = B("atmosphere", true),
+            Priority = G("priority", 50f),
+        };
+    }
+
+    /// dict for one Luminary (objectlist seed + U3 preset save). Inverse of LuminaryFromDict.
+    private static Godot.Collections.Dictionary DictFromLuminary(Luminary b) => new()
+    {
+        { "kind", b.Kind == LuminaryKind.Moon ? 1 : 0 },
+        { "color", b.Color }, { "size", b.Size }, { "phase", b.Phase },
+        { "az_offset", b.AzOffset }, { "decl_scale", b.DeclScale }, { "energy", b.LightEnergy },
+        { "casts_shadow", b.CastsShadow }, { "atmosphere", b.ContributesToAtmosphere },
+        { "priority", b.Priority },
+    };
+
     // ── ILightingHost: what the composer reads/calls back. ──
     public Node SceneOwner => this;
     public CloudVolume? Cloud => _cloud;

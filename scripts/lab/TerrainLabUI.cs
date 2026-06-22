@@ -44,6 +44,8 @@ public partial class TerrainLabUI : Control
         public string[] Options = Array.Empty<string>();
         public bool Rand = true, Rebake;
         public int Zone = -1;                     // for material/companion (0..6), else -1
+        public string? ItemSchema, DataPath;      // for type "objectlist" (U2): schema name + data array file
+        public int MinItems = 1, MaxItems = 7;    // for type "objectlist": list bounds
         public Variant Value;                     // current value
         public bool Locked;
         public CheckBox? LockBox;
@@ -83,6 +85,7 @@ public partial class TerrainLabUI : Control
         LoadMoods();
         LightingPresets.Load();   // Time/Weather/Grade presets + the day color script (decoupled lighting)
         LoadRegistry();
+        LoadLuminariesFromDisk();   // U2: data-driven bodies become the composer's source of truth (before compose)
         BuildPanel();
         ApplyAll();              // push all defaults to the shader (also fixes the .Value-doesn't-fire issue)
         // Apply a default MOOD on spawn so the startup look matches picking a preset.
@@ -91,6 +94,7 @@ public partial class TerrainLabUI : Control
         // a CLI --mood override is set (headless captures choose their own).
         if (_probeMood < 0 && _moods.Count > 0) { ApplyDefaultMood(); }
         ApplyCliOverrides();
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--luminarycheck") >= 0) { _lumCheckT = 0.0; }   // U2 numeric gate arm
         _ready = true;
     }
 

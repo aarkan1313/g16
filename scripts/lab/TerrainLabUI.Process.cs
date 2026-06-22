@@ -70,6 +70,8 @@ public partial class TerrainLabUI : Control
     private bool _shadowEnabledOnce;
     public override void _Process(double delta)
     {
+        TickLuminaryCheck(delta);   // U2 numeric gate (--luminarycheck): no-op unless armed
+
         // --profmove: orbit the camera during a profile so the MOTION costs (SDFGI cascade
         // re-rasterization, shadow-frustum updates, cloud temporal reprojection, AR distance)
         // are paid every frame — a static --profile lets them converge and understates flying.
