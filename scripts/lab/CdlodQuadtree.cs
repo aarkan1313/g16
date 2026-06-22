@@ -11,6 +11,7 @@ public struct CdlodChunk
     public Vector2 OriginXZ;   // world-XZ min corner
     public float Size;         // side length (m)
     public int Level;          // 0 = finest
+    public int StitchMask;     // S2d: bit0=-X bit1=+X bit2=-Z bit3=+Z set iff that edge faces a COARSER neighbor
 }
 
 public sealed class CdlodQuadtree
@@ -29,7 +30,42 @@ public sealed class CdlodQuadtree
     {
         var leaves = new List<CdlodChunk>();
         Recurse(_rootX, _rootZ, _rootSize, 0, camPos, leaves);
+        // S2d: resolve each leaf's edge-stitch mask — a bit is set iff the neighbor across that edge is
+        // COARSER (a bigger leaf), the only case that can crack. Point-sample the SAME tree (same camPos so
+        // the neighbor matches what's rendered this frame). Bit convention: bit0=-X bit1=+X bit2=-Z bit3=+Z.
+        const float eps = 0.25f;   // probe inset (m): < smallest chunk (128 m), safely inside the neighbor
+        for (int i = 0; i < leaves.Count; i++)
+        {
+            CdlodChunk c = leaves[i];
+            float ox = c.OriginXZ.X, oz = c.OriginXZ.Y, s = c.Size, hs = s * 0.5f;
+            int mask = 0;
+            if (LeafSizeAt(ox - eps,     oz + hs,     camPos) > s) { mask |= 1; }   // bit0 -X
+            if (LeafSizeAt(ox + s + eps, oz + hs,     camPos) > s) { mask |= 2; }   // bit1 +X
+            if (LeafSizeAt(ox + hs,      oz - eps,    camPos) > s) { mask |= 4; }   // bit2 -Z
+            if (LeafSizeAt(ox + hs,      oz + s + eps, camPos) > s) { mask |= 8; }  // bit3 +Z
+            c.StitchMask = mask;
+            leaves[i] = c;   // struct — write back
+        }
         return leaves;
+    }
+
+    /// Size (m) of the leaf that would contain world point (px,pz) under the current split rule, or 0 if
+    /// the point is outside the root region. Walks the tree like Recurse but follows only the child that
+    /// contains the point — O(depth). Used by S2d stitch-mask resolution (a coarser neighbor = bigger size).
+    public float LeafSizeAt(float px, float pz, Vector3 camForSplit)
+    {
+        if (px < _rootX || px > _rootX + _rootSize || pz < _rootZ || pz > _rootZ + _rootSize) { return 0f; }
+        float x = _rootX, z = _rootZ, size = _rootSize; int depth = 0;
+        while (depth < _maxDepth)
+        {
+            float d = DistanceToCellXZ(x, z, size, camForSplit);
+            if (!(d < size * _splitFactor)) { break; }   // this cell is a leaf (not split) — stop
+            float h = size * 0.5f;
+            if (px >= x + h) { x += h; }                 // pick the child quadrant containing the point
+            if (pz >= z + h) { z += h; }
+            size = h; depth++;
+        }
+        return size;
     }
 
     private void Recurse(float x, float z, float size, int depth, Vector3 cam, List<CdlodChunk> outLeaves)
@@ -98,5 +134,7 @@ public sealed class CdlodQuadtree
         int minL = int.MaxValue, maxL = int.MinValue;
         foreach (var c in leaves) { minL = Mathf.Min(minL, c.Level); maxL = Mathf.Max(maxL, c.Level); }
         GD.Print($"CDLODCHECK: {(inv ? "PASS" : "FAIL")}  leaves={leaves.Count}  levels={minL}..{maxL}  invariant={msg}  cam=({camPos.X:F0},{camPos.Z:F0})");
+        int stitched = 0; foreach (var c in leaves) { if (c.StitchMask != 0) { stitched++; } }   // S2d
+        GD.Print($"CDLODCHECK: stitch — {stitched}/{leaves.Count} leaves have >=1 stitched edge");
     }
 }
