@@ -64,7 +64,10 @@ public sealed class LightingComposer
     private const int MaxExtraSuns = 3;   // matches MAX_EXTRA_SUNS in cloud_sky.gdshader
     private readonly List<DirectionalLight3D> _extraSunLights = new();
     private readonly HashSet<DirectionalLight3D> _extraQueued = new();
-    private static readonly Color[] ExtraSunColors = { new(1.0f, 0.65f, 0.35f), new(0.5f, 0.8f, 1.0f), new(0.85f, 0.6f, 1.0f) };
+    // Tasteful fantasy companion-sun palette + per-sun size (companions read smaller so the primary stays
+    // dominant): a warm gold 2nd, a smaller pale-blue hot companion, a rose 3rd. Tuned via auto-shots.
+    private static readonly Color[] ExtraSunColors = { new(1.0f, 0.72f, 0.40f), new(0.62f, 0.78f, 1.0f), new(1.0f, 0.58f, 0.62f) };
+    private static readonly float[] ExtraSunSizeFac = { 0.82f, 0.66f, 0.78f };
     private readonly Vector3[] _extraDirs = new Vector3[MaxExtraSuns];
     private readonly Vector3[] _extraCols = new Vector3[MaxExtraSuns];
     private readonly float[] _extraSizes = new float[MaxExtraSuns];
@@ -292,8 +295,8 @@ public sealed class LightingComposer
         {
             if (i < n)
             {
-                float declScale = 0.85f;
-                float azOff = 50f * (i + 1);                       // spread the extras across the sky
+                float declScale = 0.88f;
+                float azOff = 45f * (i + 1);                       // spread the extras across the sky (binary-ish at i=0)
                 float elev = Time.PeakElev * declScale * Mathf.Sin(Mathf.Pi * f);
                 float az = Mathf.Lerp(Time.AzStart, Time.AzEnd, f) + azOff;
                 var L = _extraSunLights[i];
@@ -302,12 +305,12 @@ public sealed class LightingComposer
                 float up = Mathf.Clamp((dir.Y + 0.02f) / 0.1f, 0f, 1f);   // above-horizon ramp (terrain light)
                 Color c = ExtraSunColors[i % ExtraSunColors.Length];
                 L.LightColor = c;
-                L.LightEnergy = BaseSunEnergy * 0.7f * up;         // dimmer than primary, gated above horizon
+                L.LightEnergy = BaseSunEnergy * 0.55f * up;        // companion fill, dimmer than primary, gated above horizon
                 L.Visible = L.LightEnergy > 0.001f;
                 _extraDirs[i] = dir;
                 _extraCols[i] = new Vector3(c.R, c.G, c.B);
-                _extraSizes[i] = SunDisc.Size;
-                _extraEnergies[i] = 1.3f;                          // disc energy; the shader's horizonGate fades it below the horizon
+                _extraSizes[i] = SunDisc.Size * ExtraSunSizeFac[i % ExtraSunSizeFac.Length];   // companions read smaller
+                _extraEnergies[i] = 1.05f;                         // disc energy (< primary's 1.3); horizonGate fades it below the horizon
             }
             else { _extraDirs[i] = Vector3.Up; _extraCols[i] = Vector3.Zero; _extraSizes[i] = 0.6f; _extraEnergies[i] = 0f; }
         }
