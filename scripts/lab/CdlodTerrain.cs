@@ -26,6 +26,7 @@ public sealed partial class CdlodTerrain : Node3D
     public int GridN = 65;            // verts/side per chunk (64 quads)
     public int MaxDepth = 6;          // finest LOD depth; tunable
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
+    public int MaxChunkOps = 24;      // S3: max pooled-chunk births per frame (amortize streaming churn; tunable)
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
     // DOWN to _coarseSnap so render-relative coords stay bounded (no float drift) AND the field samples
@@ -86,7 +87,8 @@ public sealed partial class CdlodTerrain : Node3D
         List<CdlodChunk> leaves = _qt.SelectRoaming(camPos);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
         EnsurePool(leaves.Count);
-        for (int i = 0; i < leaves.Count; i++)
+        int n = Mathf.Min(leaves.Count, _pool.Count);   // S3: budget may cap the pool below leaf count this frame
+        for (int i = 0; i < n; i++)
         {
             CdlodChunk c = leaves[i];
             MeshInstance3D mi = _pool[i];
@@ -119,17 +121,19 @@ public sealed partial class CdlodTerrain : Node3D
             }
             mi.Visible = true;
         }
-        for (int i = leaves.Count; i < _pool.Count; i++) { _pool[i].Visible = false; }
+        for (int i = n; i < _pool.Count; i++) { _pool[i].Visible = false; }
     }
 
     private void EnsurePool(int n)
     {
-        while (_pool.Count < n)
+        int births = 0;
+        while (_pool.Count < n && births < MaxChunkOps)   // S3: cap births/frame so a fast camera doesn't spike
         {
             var mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat };
             AddChild(mi);
             _pool.Add(mi);
             _poolMask.Add(-1);   // S2d: -1 = no variant assigned yet (forces first Tick to set the mesh)
+            births++;
         }
     }
 }
