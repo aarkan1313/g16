@@ -35,8 +35,10 @@ public sealed class Std430Writer
         if (rem != 0) { int pad = a - rem; Ensure(pad); for (int i = 0; i < pad; i++) { _buf[_len++] = 0; } }
     }
     private void Raw(float v) { Ensure(4); BitConverter.TryWriteBytes(_buf.AsSpan(_len), v); _len += 4; }
+    private void RawI(int v) { Ensure(4); BitConverter.TryWriteBytes(_buf.AsSpan(_len), v); _len += 4; }
 
     public Std430Writer F(float v)   { Align(4); Raw(v); return this; }
+    public Std430Writer Int(int v)   { Align(4); RawI(v); return this; }   // GLSL int (4-byte, 4-aligned)
     public Std430Writer Vec2(float x, float y) { Align(8); Raw(x); Raw(y); return this; }
     public Std430Writer Vec2(Vector2 v) => Vec2(v.X, v.Y);
     public Std430Writer Vec4(float x, float y, float z, float w) { Align(16); Raw(x); Raw(y); Raw(z); Raw(w); return this; }

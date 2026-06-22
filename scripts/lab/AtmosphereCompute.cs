@@ -35,6 +35,9 @@ public partial class AtmosphereCompute : Node
     private Rid _sampler, _paramBuf;
     private Rid _transSet, _msSet, _skySet;
     private bool _setsBuilt;
+    // AT-3 #7: tiny 3-texel cloud-light extractor (replaces two full-LUT TextureGetData reads with a 3x1 read).
+    private Rid _clShader, _clPipe, _clOutTex, _clCoordBuf, _clSet;
+    private bool _clReady;
     private Texture2Drd? _skyViewRd;
     private bool _ready;
 
@@ -153,6 +156,15 @@ public partial class AtmosphereCompute : Node
         _paramBuf = _rd.StorageBufferCreate((uint)BuildParams().Length);
         if (_skyViewRd != null) { _skyViewRd.TextureRdRid = _skyTex; }   // assign ONCE, before any sampling
         if (_aerialRd != null) { _aerialRd.TextureRdRid = _aerialTex; }  // assign ONCE (3D RID → Texture3Drd)
+        // AT-3 #7: the 3-texel cloud-light extractor (samples the sky + trans LUTs at 3 coords → a 3x1 image).
+        _clShader = Compile("res://shaders/atmosphere_cloudlight.glsl", "atmo_cloudlight");
+        if (_clShader.IsValid)
+        {
+            _clPipe = _rd.ComputePipelineCreate(_clShader);
+            _clOutTex = CreateTex(3, 1);                                  // 3x1 rgba16f output
+            _clCoordBuf = _rd.StorageBufferCreate(32);                    // ivec4 sky_coords + ivec4 trans_coords
+            _clReady = true;
+        }
         _ready = true;
         GD.Print("AtmosphereCompute: LUT compute initialized on render thread");
     }
@@ -238,6 +250,14 @@ public partial class AtmosphereCompute : Node
             var aM   = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; aM.AddId(_sampler); aM.AddId(_msTex);
             var aP   = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 3 }; aP.AddId(_paramBuf);
             _aerialSet = _rd.UniformSetCreate(new Array<RDUniform> { aImg, aT, aM, aP }, _aerialShader, 0);
+        }
+        if (_clReady)
+        {
+            var cImg = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; cImg.AddId(_clOutTex);
+            var cSky = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; cSky.AddId(_sampler); cSky.AddId(_skyTex);
+            var cTr  = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; cTr.AddId(_sampler); cTr.AddId(_transTex);
+            var cBuf = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 3 }; cBuf.AddId(_clCoordBuf);
+            _clSet = _rd.UniformSetCreate(new Array<RDUniform> { cImg, cSky, cTr, cBuf }, _clShader, 0);
         }
         _setsBuilt = true;
     }
@@ -334,6 +354,35 @@ public partial class AtmosphereCompute : Node
             bool spass = sfin && smin >= -1e-3f;
             GD.Print($"[atmocheck] skyview: horizonLuma={hor / Math.Max(1, hc):F4} zenithLuma={zen / Math.Max(1, zc):F4} min={smin:F4} max={smax:F4} finite={sfin} -> {(spass ? "PASS" : "FAIL")}");
         }
+
+        CompareCloudLightPaths();   // #7: prove the new 3-texel GPU extractor matches the old full-LUT CPU read
+    }
+
+    // #7 AT-3 gate: the GPU 3-texel extractor must return the SAME 3 colors as the old full-LUT CPU read at
+    // the same texel coords. Runs both, asserts byte-for-byte half-float equality. Prints CLOUDLIGHTCHECK.
+    private void CompareCloudLightPaths()
+    {
+        if (!_clReady || !_skyShader.IsValid) { GD.Print("CLOUDLIGHTCHECK: SKIP (extractor not ready)"); return; }
+        // New path (GPU extractor) populates CloudZenith/HorizonSun/SunTrans.
+        ComputeCloudLightColors();
+        Vector3 gZ = CloudZenith, gH = CloudHorizonSun, gT = CloudSunTrans;
+        // Old path (full-LUT CPU read) at the identical coords.
+        int zx = 0, zy = SkyH - 1;
+        Vector3 hd = new Vector3(_sunDir.X, 0.05f, _sunDir.Z);
+        if (hd.LengthSquared() < 1e-6f) { hd = new Vector3(0f, 0.05f, 1f); }
+        hd = hd.Normalized();
+        float az = Mathf.Atan2(hd.Z, hd.X); if (az < 0f) { az += 2f * Mathf.Pi; }
+        float el = Mathf.Asin(Mathf.Clamp(hd.Y, 0f, 1f));
+        int hx = Mathf.Clamp((int)(az / (2f * Mathf.Pi) * SkyW), 0, SkyW - 1);
+        int hy = Mathf.Clamp((int)(Mathf.Sqrt(el / (0.5f * Mathf.Pi)) * SkyH), 0, SkyH - 1);
+        int tx = Mathf.Clamp((int)((0.5f + 0.5f * _sunDir.Y) * TransW), 0, TransW - 1);
+        int ty = Mathf.Clamp((int)(0.02f * TransH), 0, TransH - 1);
+        byte[] sky = _rd.TextureGetData(_skyTex, 0);
+        byte[] tr  = _rd.TextureGetData(_transTex, 0);
+        Vector3 cZ = SkyTexel(sky, zx, zy), cH = SkyTexel(sky, hx, hy), cT = TransTexel(tr, tx, ty);
+        float d = Mathf.Max(gZ.DistanceTo(cZ), Mathf.Max(gH.DistanceTo(cH), gT.DistanceTo(cT)));
+        bool ok = d < 1e-4f;   // same half-float texels → should be exactly 0; allow rounding slack
+        GD.Print($"CLOUDLIGHTCHECK: {(ok ? "PASS" : "FAIL")}  maxdiff={d:F6}  gpu(zen={gZ},hor={gH},trans={gT}) cpu(zen={cZ},hor={cH},trans={cT})");
     }
 
     // AT-3: read back the 3 sun-dependent colors the clouds need (zenith sky, horizon-toward-sun sky, sun
@@ -341,10 +390,9 @@ public partial class AtmosphereCompute : Node
     private void ComputeCloudLightColors()
     {
         if (!_skyShader.IsValid) { return; }
-        byte[] sky = _rd.TextureGetData(_skyTex, 0);     // SkyW×SkyH rgba16f
-        byte[] tr  = _rd.TextureGetData(_transTex, 0);   // TransW×TransH rgba16f
+        // The 3 texel coords are the SAME mapping as before (atmo_dir_to_uv / getValFromLUT). Kept on the CPU.
         // zenith: atmo_dir_to_uv(0,1,0) → uv (0,1) → texel (0, SkyH-1)
-        CloudZenith = SkyTexel(sky, 0, SkyH - 1);
+        int zx = 0, zy = SkyH - 1;
         // horizon toward the sun: dir = normalize(sunDir.x, 0.05, sunDir.z); el small → low v row
         Vector3 hd = new Vector3(_sunDir.X, 0.05f, _sunDir.Z);
         if (hd.LengthSquared() < 1e-6f) { hd = new Vector3(0f, 0.05f, 1f); }
@@ -353,11 +401,36 @@ public partial class AtmosphereCompute : Node
         float el = Mathf.Asin(Mathf.Clamp(hd.Y, 0f, 1f));
         int hx = Mathf.Clamp((int)(az / (2f * Mathf.Pi) * SkyW), 0, SkyW - 1);
         int hy = Mathf.Clamp((int)(Mathf.Sqrt(el / (0.5f * Mathf.Pi)) * SkyH), 0, SkyH - 1);
-        CloudHorizonSun = SkyTexel(sky, hx, hy);
         // sun transmittance: uv = (0.5 + 0.5*sunCosZenith, ~0 altitude) (getValFromLUT, up = +Y)
         int tx = Mathf.Clamp((int)((0.5f + 0.5f * _sunDir.Y) * TransW), 0, TransW - 1);
         int ty = Mathf.Clamp((int)(0.02f * TransH), 0, TransH - 1);
-        CloudSunTrans = TransTexel(tr, tx, ty);
+
+        // #7 perf: GPU fetches the 3 texels into a 3x1 image → read back 3 texels (~24 B) instead of the two
+        // full LUTs (~297 KB). Falls back to the full-LUT CPU read if the extractor shader didn't compile.
+        if (_clReady)
+        {
+            var cw = new Std430Writer();
+            cw.Int(zx).Int(zy).Int(hx).Int(hy);   // ivec4 sky_coords
+            cw.Int(tx).Int(ty).Int(0).Int(0);      // ivec4 trans_coords
+            _rd.BufferUpdate(_clCoordBuf, 0, (uint)cw.ToArray().Length, cw.ToArray());
+            long l = _rd.ComputeListBegin();
+            _rd.ComputeListBindComputePipeline(l, _clPipe);
+            _rd.ComputeListBindUniformSet(l, _clSet, 0);
+            _rd.ComputeListDispatch(l, 1, 1, 1);
+            _rd.ComputeListEnd();
+            byte[] o = _rd.TextureGetData(_clOutTex, 0);   // 3x1 rgba16f = 24 bytes
+            CloudZenith     = new Vector3(Half(o, 0),  Half(o, 2),  Half(o, 4));
+            CloudHorizonSun = new Vector3(Half(o, 8),  Half(o, 10), Half(o, 12));
+            CloudSunTrans   = new Vector3(Half(o, 16), Half(o, 18), Half(o, 20));
+        }
+        else
+        {
+            byte[] sky = _rd.TextureGetData(_skyTex, 0);
+            byte[] tr  = _rd.TextureGetData(_transTex, 0);
+            CloudZenith = SkyTexel(sky, zx, zy);
+            CloudHorizonSun = SkyTexel(sky, hx, hy);
+            CloudSunTrans = TransTexel(tr, tx, ty);
+        }
         CloudLightReady = true;
     }
     private static Vector3 SkyTexel(byte[] d, int x, int y) { int o = (y * SkyW + x) * 8; return new Vector3(Half(d, o), Half(d, o + 2), Half(d, o + 4)); }
