@@ -59,6 +59,7 @@ public sealed partial class CdlodTerrain : Node3D
     public int MaxDepth = 6;          // finest LOD depth; tunable
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
     public int MaxChunkOps = 24;      // S3: max pooled-chunk births per frame (amortize streaming churn; tunable)
+    public int RetireGrace = 2;       // S3.6: frames a chunk may be unseen before retiring (bridges the budget-deferred birth hole without leaking; >=2 retires)
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
     // DOWN to _coarseSnap so render-relative coords stay bounded (no float drift) AND the field samples
@@ -164,7 +165,6 @@ public sealed partial class CdlodTerrain : Node3D
         snapped |= force;   // a forced re-apply re-pushes position+lod_viz+AABB to every live slot this frame
         _frame++;
         int births = 0;
-        bool budgetHit = false;   // did the birth cap stop us from creating every new leaf this frame?
         for (int i = 0; i < leaves.Count; i++)
         {
             CdlodChunk c = leaves[i];
@@ -176,7 +176,7 @@ public sealed partial class CdlodTerrain : Node3D
             }
             else
             {
-                if (births >= MaxChunkOps) { budgetHit = true; continue; }   // S3: churn budget — rest appear next frame(s)
+                if (births >= MaxChunkOps) { continue; }   // S3: churn budget — rest appear next frame(s); RetireGrace bridges the deferred-birth hole
                 births++;
                 ChunkSlot ns = AcquireSlot();
                 ns.SeenFrame = _frame;
@@ -187,24 +187,22 @@ public sealed partial class CdlodTerrain : Node3D
         }
 
         // Retire slots not seen this frame → hide + return to the free-list (NOT freed; reused next birth).
-        // VANISHING-CHUNK FIX: only retire when the birth budget was NOT hit. When flying fast a parent can
-        // leave the leaf set in the SAME frame its replacement children are budget-deferred (births capped at
-        // MaxChunkOps). Retiring the parent unconditionally then leaves a HOLE (parent hidden, children not yet
-        // born) for a frame or two → the brief flash the user saw at medium range while moving fast. If the
-        // budget was hit, KEEP the stale (un-stamped) chunks visible this frame; they harmlessly overlap the
-        // newcomers (a one-frame double-draw is invisible, a hole is not) and get retired on a later frame once
-        // births catch up. Steady-state (budget not hit) retires immediately as before, so no chunk lingers.
-        if (!budgetHit)
+        // VANISHING-CHUNK FIX (grace period): a chunk gets RetireGrace frames of being unseen before it's
+        // actually hidden. When flying fast a parent can leave the leaf set the SAME frame its replacement
+        // children are budget-deferred (births capped at MaxChunkOps) — retiring it immediately leaves a HOLE
+        // (parent hidden, children not yet born) → the brief flash the user saw. The grace bridges that: the
+        // deferred children (24/frame) land within a frame or two and cover the spot before the parent retires.
+        // CRUCIAL: the grace is BOUNDED (unlike the old "skip all retires when budgetHit", which under sustained
+        // orbit churn let `active` balloon to ~8× the leaf count — a leak). A chunk unseen for >= RetireGrace
+        // frames ALWAYS retires, so steady-state active stays ~leafCount and sustained saturation can't pile up.
+        _scratchDead.Clear();
+        foreach (var kv in _active) { if (_frame - kv.Value.SeenFrame >= RetireGrace) { _scratchDead.Add(kv.Key); } }
+        for (int i = 0; i < _scratchDead.Count; i++)
         {
-            _scratchDead.Clear();
-            foreach (var kv in _active) { if (kv.Value.SeenFrame != _frame) { _scratchDead.Add(kv.Key); } }
-            for (int i = 0; i < _scratchDead.Count; i++)
-            {
-                ChunkSlot dead = _active[_scratchDead[i]];
-                dead.Mi.Visible = false;
-                _free.Push(dead.Mi);
-                _active.Remove(_scratchDead[i]);
-            }
+            ChunkSlot dead = _active[_scratchDead[i]];
+            dead.Mi.Visible = false;
+            _free.Push(dead.Mi);
+            _active.Remove(_scratchDead[i]);
         }
 
         if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
