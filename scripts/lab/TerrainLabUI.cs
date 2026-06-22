@@ -64,6 +64,15 @@ public partial class TerrainLabUI : Control
             GetTree().Quit();
             return;
         }
+        // U3 self-check (--lumpresetcheck): luminary preset round-trip through the Json save/load path.
+        // Pure logic — runs before FieldCompute (RenderingDevice-free), then quits.
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--lumpresetcheck") >= 0)
+        {
+            bool lpOk = LuminaryPresetCheck.Run(DictFromLuminary, LuminaryFromDict, LumDictToStorable, LumDictFromStorable, out string lpMsg);
+            GD.Print($"LUMPRESETCHECK: {(lpOk ? "PASS" : "FAIL")}  {lpMsg}");
+            GetTree().Quit();
+            return;
+        }
 
         _fc = new FieldCompute();
         _params = FieldParams.Load();

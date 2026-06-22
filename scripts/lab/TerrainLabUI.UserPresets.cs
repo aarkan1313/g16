@@ -21,7 +21,16 @@ public partial class TerrainLabUI : Control
             vals[kv.Key] = kv.Value.Value;
             if (kv.Value.Locked) { locks[kv.Key] = true; }
         }
-        _presets[name] = new Godot.Collections.Dictionary { { "v", vals }, { "lock", locks } };
+        // U3: additive `lists` section — captures the live object-lists (today: the Sky-bodies luminaries)
+        // alongside the flat controls. Old presets without `lists` still load (LoadSelectedPreset guards it).
+        var lists = new Godot.Collections.Dictionary();
+        if (_luminaryList != null)
+        {
+            var arr = new Godot.Collections.Array();
+            foreach (var it in _luminaryList.Items) { arr.Add(LumDictToStorable(it)); }   // Color -> [r,g,b] (Json-safe)
+            lists["luminaries"] = arr;
+        }
+        _presets[name] = new Godot.Collections.Dictionary { { "v", vals }, { "lock", locks }, { "lists", lists } };
         WritePresets();
         RefreshPresetList();
         GD.Print($"TerrainLab: saved preset '{name}'");
@@ -48,8 +57,55 @@ public partial class TerrainLabUI : Control
             kv.Value.Locked = lk;
             if (kv.Value.LockBox != null) { kv.Value.LockBox.ButtonPressed = lk; }
         }
+        // U3: restore the object-lists (guarded — old presets have no `lists`). SetItems rebuilds the editor
+        // AND fires the ListChanged callback (ApplyLuminaryDicts -> recompose), so the sky updates too.
+        if (entry.ContainsKey("lists") && _luminaryList != null)
+        {
+            var lists = entry["lists"].AsGodotDictionary();
+            if (lists.ContainsKey("luminaries"))
+            {
+                var arr = lists["luminaries"].AsGodotArray();
+                var items = new System.Collections.Generic.List<Godot.Collections.Dictionary>();
+                foreach (var v in arr) { items.Add(LumDictFromStorable(v.AsGodotDictionary())); }   // [r,g,b] -> Color
+                _luminaryList.SetItems(items);
+            }
+        }
         _ready = wasReady;
         GD.Print($"TerrainLab: loaded preset '{name}'");
+    }
+
+    // U3 Color serialization: Godot Color Variants do NOT round-trip through Json (Stringify writes
+    // "(r,g,b,a)" which ParseString can't read back → black). So at the storage boundary we convert any
+    // Color value to a [r,g,b] float array (the established preset convention) and back. Non-color fields
+    // pass through untouched. The live Items model stays Color-based (ColorPickerButton + AsColor()).
+    private static Godot.Collections.Dictionary LumDictToStorable(Godot.Collections.Dictionary d)
+    {
+        var o = new Godot.Collections.Dictionary();
+        foreach (var kv in d)
+        {
+            if (kv.Value.VariantType == Variant.Type.Color)
+            {
+                var c = kv.Value.AsColor();
+                o[kv.Key] = new Godot.Collections.Array { c.R, c.G, c.B };
+            }
+            else { o[kv.Key] = kv.Value; }
+        }
+        return o;
+    }
+
+    private static Godot.Collections.Dictionary LumDictFromStorable(Godot.Collections.Dictionary d)
+    {
+        var o = new Godot.Collections.Dictionary();
+        foreach (var kv in d)
+        {
+            if (kv.Value.VariantType == Variant.Type.Array)
+            {
+                var a = kv.Value.AsGodotArray();
+                if (a.Count >= 3) { o[kv.Key] = new Color(a[0].AsSingle(), a[1].AsSingle(), a[2].AsSingle()); continue; }
+            }
+            o[kv.Key] = kv.Value;
+        }
+        return o;
     }
 
     private void RefreshPresetList()
