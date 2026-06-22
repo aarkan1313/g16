@@ -436,10 +436,10 @@ vec3 bright_stars(vec3 sr){
     return acc;
 }
 
-// NORTH STAR: one prominent fixed pole star near the rotation axis (barely moves). Realistic naked-eye look:
-// a bright bluish-white point + soft small halo + gentle twinkle. No lens-style spikes.
+// NORTH STAR: a true pole star ~7° off the Y rotation axis, so it stays effectively fixed while the sky
+// rotates around it. Realistic naked-eye look: a bright bluish-white point + soft halo + gentle twinkle.
 vec3 north_star(vec3 sr){
-    vec3 nd = normalize(vec3(0.1, 0.95, 0.3));               // high, near the celestial pole
+    vec3 nd = normalize(vec3(0.06, 0.99, 0.10));             // near the celestial pole (Y axis) → effectively fixed
     float cd = dot(sr, nd);
     if (cd < 0.9) return vec3(0.0);                          // early-out
     float ang = acos(clamp(cd, 0.0, 1.0));
