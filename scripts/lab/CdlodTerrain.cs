@@ -101,7 +101,14 @@ public sealed partial class CdlodTerrain : Node3D
             // the chunk footprint); Y = this chunk's TIGHT world height range (Y scale is 1). Tight Y is
             // required for shadow-cascade depth precision — see ChunkHeightRange.
             var (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size);
-            const float m = 8f;   // margin for sub-sample peaks + the analytic-vs-baked epsilon
+            // Vertical AABB margin. ChunkHeightRange samples the baked map at a COARSE stride, and S2b's
+            // geomorph displaces each vertex's sample by up to ~one chunk vertex-span (chunk_size/(GridN-1))
+            // toward the coarse grid — so on steep ground the actual displaced verts can sit well outside a
+            // flat 8 m margin. Too tight -> the CSM cascade depth range misses those verts -> grid-aligned
+            // shadow ACNE (dotted stipple, worst on slopes). Too loose -> inflated cascade depth -> soft
+            // blobs (memory cdlod-chunk-shadow-aabb). Scale the margin to the chunk's vertex spacing (the
+            // morph-displacement bound) with an 8 m floor: tight for fine chunks, enough for coarse ones.
+            float m = Mathf.Max(8f, c.Size / (GridN - 1) * 1.5f);
             mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f),
                                      new Vector3(1f, (hi - lo) + 2f * m, 1f));
             mi.SetInstanceShaderParameter("lod_viz", _lodViz ? (float)c.Level : -1.0f);
