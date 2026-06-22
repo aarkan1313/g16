@@ -246,7 +246,12 @@ Master architecture: `specs/2026-06-20-sun-light-system-architecture.md`.
        head + trail + per-meteor color variety, gated night×horizon, ~free when idle). 7 Night-tab tunables
        (`meteors on`/`rate`/`brightness`/`length`/`speed`/`color`/`color variety`) + `--meteordebug`. Spec/plan
        `2026-06-21-celestial-c2-meteors*`; commits 29c52e4 · 14ec581 · 371332d. Optional follow-up: meteor presets.
-     - **Then:** planets (bright slow-moving points/discs) → optional brighter named-star accents. Each its own gate.
+     - **Planets + named stars + north star — ✅ PASS 2026-06-21 (eye-gate, review key 2), default-on.** Curated
+       in-shader (`cloud_sky.gdshader` `planets()`/`bright_stars()`/`north_star()`): ~5 bright steady FANTASY-colored
+       planet points (cyan/magenta/emerald/amber/violet) + glow, ~7 landmark stars (slow twinkle), one prominent
+       cool-white pole star; all ride the celestial sphere, night-gated. Night-tab knobs: `planets`/`planet
+       brightness`, `bright stars`/`bright star brightness`. Also dimmed the moon default + glow. Spec/plan
+       `2026-06-21-celestial-c2-planets*`; commits a480a3e · 198e10d.
 
    - **C1-v2 — Galaxy / Nebula. ❌ KILLED 2026-06-21 (feature dropped).** Rebuilt as billboards: structured
      non-noise generator → flocculent/domain-warped → **volumetric raymarch** (Beer + color ramp) → **lit
