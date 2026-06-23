@@ -67,6 +67,22 @@ public partial class ErosionLab : Node3D
                     GD.Print($"COARSECHECK: {(ok ? "PASS" : "FAIL")} deterministic={same} finite={finite} mapping={mapping}");
                     SetProcess(false); GetTree().Quit(); return;
                 }
+                if (a == "--drainagecheck")
+                {
+                    var hp = new WG16.Hydrology.HydrologyParams();
+                    int cres = 96;
+                    var cf = WG16.Hydrology.CoarseField.Build(fc, p, -3000f, -3000f, hp.CoarseSpacing, cres);
+                    var g = WG16.Hydrology.DrainageGraph.Build(cf, hp);
+                    // gates: filled >= original everywhere (fill never lowers); area has dynamic range (trunks >> mean);
+                    // segments exist and low-order segments outnumber high-order (a real Strahler hierarchy).
+                    bool fillOk = true;
+                    for (int z = 0; z < cres; z++) for (int x = 0; x < cres; x++) if (g.Filled[z*cres+x] < cf.H(x,z) - 1e-3f) fillOk = false;
+                    float amax = 0, amean = 0; foreach (float v in g.Area) { if (v > amax) amax = v; amean += v; } amean /= g.Area.Length;
+                    int o1 = 0, ohi = 0; foreach (int o in g.Order) { if (o == 1) o1++; else if (o >= 3) ohi++; }
+                    bool ok = fillOk && g.Segments.Count > 50 && amax / amean > 20f && o1 > ohi;
+                    GD.Print($"DRAINAGECHECK: {(ok ? "PASS" : "FAIL")} fillOk={fillOk} segs={g.Segments.Count} area max/mean={amax/amean:F0} order1={o1} order>=3={ohi}");
+                    SetProcess(false); GetTree().Quit(); return;
+                }
                 if (a == "--erosioncheck")
                 {
                     int steps = 600;
