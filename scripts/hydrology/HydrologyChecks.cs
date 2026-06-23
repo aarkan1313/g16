@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 namespace WG16.Hydrology;
 
 /// CLI self-check host (the codebase's TDD equivalent — no unit-test framework). Each check is
@@ -12,6 +13,7 @@ public static class HydrologyChecks
             case "params": return CheckParams();
             case "drainage": return CheckDrainage();
             case "rivers": return CheckRivers();
+            case "lakes": return CheckLakes();
             default: GD.PrintErr($"WATERCHECK: unknown check '{check}'"); return false;
         }
     }
@@ -64,6 +66,23 @@ public static class HydrologyChecks
         }
         bool ok = any && descend;
         GD.Print($"WATERCHECK rivers: {(ok ? "PASS" : "FAIL")} reaches={rivers.Count} descend={descend}");
+        return ok;
+    }
+
+    private static bool CheckLakes()
+    {
+        var fp = WG16.Field.FieldParams.Load();
+        var wp = WaterParams.Load();
+        var d = new CoarseDrainage(fp, wp, 0, 0);
+        var t = new WaterTable(wp, fp.Seed);
+        var lakes = LakeGating.GatedLakes(d, t, wp, fp.RegionSizeM);
+        float km2 = (fp.RegionSizeM / 1000f) * (fp.RegionSizeM / 1000f);
+        float perKm2 = lakes.Count / km2;
+        float avgArea = lakes.Count > 0 ? lakes.Average(l => l.AreaM2) : 0f;
+        // PASS = under the density cap AND lakes actually exist (a gate that yields zero is a starved gate).
+        bool ok = perKm2 <= wp.LakeDensityPerKm2 + 1e-3f && lakes.Count > 0;
+        GD.Print($"WATERCHECK lakes: {(ok ? "PASS" : "FAIL")} lakes={lakes.Count} perKm2={perKm2:0.000} " +
+                 $"cap={wp.LakeDensityPerKm2} avgAreaM2={avgArea:0}");
         return ok;
     }
 }
