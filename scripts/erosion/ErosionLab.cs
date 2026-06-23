@@ -27,6 +27,8 @@ public partial class ErosionLab : Node3D
     private WG16.Hydrology.ValleyCarve _vc = null!;
     private WG16.Hydrology.ValleyCarve.CarveResult _carve = null!;
     private bool _lbDown, _rbDown;
+    private MeshInstance3D _water = null!;
+    private ShaderMaterial _waterMat = null!;
     private int _shotCountdown = -1;   // --hydroshot: frames to wait before capturing the real viewport render
 
     public override void _Ready()
@@ -341,6 +343,17 @@ public partial class ErosionLab : Node3D
             : $"ErosionLab (pipe-model): seeded {_res}² region. space=run S=step R=reset D=debug-view");
 
         if (_hydroMode && System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--hydroshot") >= 0) { _shotCountdown = 8; }
+
+        // lower + closer initial camera so the first view is a judgeable close-up (not a far top-down).
+        if (_hydroMode)
+        {
+            var cam = GetNodeOrNull<Camera3D>("Camera");
+            if (cam != null)
+            {
+                cam.Position = new Vector3(0, 700, 1400);
+                cam.LookAt(new Vector3(0, 100, 0), Vector3.Up);
+            }
+        }
     }
 
     /// Build the drainage substrate once: coarse drainage graph (+halo) -> GPU valley carve -> display.
@@ -355,6 +368,7 @@ public partial class ErosionLab : Node3D
         _carve = _vc.Carve(baseH, g, _hp);
         if (_hp.PolishSteps > 0) { _carve.Height = PolishCarve(_carve.Height, _hp.PolishSteps); }
         UploadHeight(_carve.Height);
+        BuildWater();
         GD.Print($"  hydrology: {g.Segments.Count} river segments, carve_strength={_hp.CarveStrength:F1}, polish={_hp.PolishSteps}");
     }
 
@@ -432,6 +446,38 @@ public partial class ErosionLab : Node3D
         };
         _hud.Text = $"erosion lab  steps={_totalSteps}  {(_running ? "RUNNING" : "paused")}  view={view}\n" +
                     $"space=run S=step R=reset D=view (lit→water→sed→flow→accum→channel→wlevel)   {Engine.GetFramesPerSecond():0} fps";
+    }
+
+    /// Static water surface from the substrate (Arc 2 start + the judging lens): a grid mesh lifted to
+    /// water_level where wet, collapsed under terrain where dry. Translucent blue, depth-shaded. Rebuilt
+    /// alongside the carve so it always agrees with the terrain.
+    private void BuildWater()
+    {
+        if (_water == null)
+        {
+            _water = new MeshInstance3D
+            {
+                Mesh = new PlaneMesh
+                {
+                    Size = new Vector2(_res * _cell, _res * _cell),
+                    SubdivideWidth = _res - 1,
+                    SubdivideDepth = _res - 1,
+                },
+            };
+            _waterMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/water_surface.gdshader") };
+            _waterMat.SetShaderParameter("region_size", _res * _cell);
+            _water.MaterialOverride = _waterMat;
+            AddChild(_water);
+        }
+        _waterMat.SetShaderParameter("water_level_tex", RFTex(_carve.WaterLevel));
+        _waterMat.SetShaderParameter("terrain_height_tex", RFTex(_carve.Height));
+    }
+
+    private ImageTexture RFTex(float[] f)
+    {
+        var bytes = new byte[f.Length * 4];
+        System.Buffer.BlockCopy(f, 0, bytes, 0, bytes.Length);
+        return ImageTexture.CreateFromImage(Image.CreateFromData(_res, _res, false, Image.Format.Rf, bytes));
     }
 
     /// EROSION POLISH (research war52lnu6, the decisive "make it natural" lever): run a SHORT stream-power
