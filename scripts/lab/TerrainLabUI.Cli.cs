@@ -166,11 +166,16 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cloudtex=")) { if (int.TryParse(a.Substring("--cloudtex=".Length), out int th) && th >= 64) { CloudVolume.TexH = th; CloudVolume.TexW = th * 4; } }
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
             else if (a.StartsWith("--watercheck=")) { _waterCheck = a.Substring("--watercheck=".Length); }
+            else if (a.StartsWith("--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
     }
     private string? _waterCheck;   // --watercheck=<name> → run a HydrologyChecks self-check then quit
+    private int _waterCli = -1;     // --water[=1] → bind region (0,0)'s water texture + carve for eye-gate
+    private WG16.Hydrology.WorldWaterRegion? _waterRegion;   // kept for Task 7 mesh spawn
+    private WG16.Hydrology.WaterParams? _waterParams;        // kept for Task 7/8
+    private Material? _waterMat;                             // kept for Task 7/8
 
     private void ApplyCliOverrides()
     {
@@ -223,6 +228,15 @@ public partial class TerrainLabUI : Control
         if (_cdlodCli == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
         {
             _terrain.ConfigureCdlodAabb(!_noTightenCli, _aabbResCli, _aabbReqCli);
+        }
+        if (_waterCli == 1)
+        {
+            _waterParams = WG16.Hydrology.WaterParams.Load();
+            _waterRegion = new WG16.Hydrology.WorldWaterRegion(_params, _waterParams, 0, 0);
+            _terrain.BindWaterRegion(_waterRegion, _waterParams);   // Task 6: carve. Task 7 adds meshes.
+            _terrain.SetBool("water_debug", true);                  // start with the overlay ON (key H toggles)
+            GD.Print($"[water] region(0,0) rivers={_waterRegion.Rivers.Count} lakes={_waterRegion.Lakes.Count} " +
+                     $"— overlay ON (key H), carve ON. Fly near world origin (0..8192).");
         }
         if (_popMeterCli) { BuildPopMeterHud(); }   // S3 live pop meter — HUD line; the meter inits lazily on first tick
         if (_pinOriginCli) { _terrain.SetPinOrigin(true); }   // DEBUG: pin renderOrigin=0

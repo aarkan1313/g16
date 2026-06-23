@@ -91,9 +91,14 @@ uniform float ground_rough = 0.92;
 // S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
 // detail transitions share a single soft band (no quality-pop / no stacked rings). UNUSED today — the
 // placeholder ground has no distance-varying detail yet. Reserved seam for the surfacing arc.
-uniform float detail_fade_near = 400.0;
-uniform float detail_fade_far  = 1600.0;
+uniform float detail_fade_near = 250.0;    // albedo speckle dissolves to texture mean across this band — start
+uniform float detail_fade_far  = 1400.0;   // close enough to clear the near moiré, done before the far resonance
 float detail_fade(float dist) { return 1.0 - smoothstep(detail_fade_near, detail_fade_far, dist); }
+// Footprint anti-moiré band (texels per screen-pixel): below lo = full per-texel detail, above hi = flat texture
+// mean. Tunable; ~2..8 dissolves high-contrast speckle right as it stops being resolvable (kills the dot-grid).
+uniform float detail_fp_lo = 1.0;
+uniform float detail_fp_hi = 3.0;
+uniform float detail_fade_on = 1.0;   // live A/B (key G): 1 = anti-moiré detail-fade ON, 0 = OFF (raw speckle)
 
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)
@@ -103,6 +108,7 @@ varying vec2 v_surf_xz;  // true-world XZ for world-space texture tiling (set in
 // --- Minimal surfacing slice (readable landforms). Fixed-sampler textured path, A/B vs the colour ramp. ---
 uniform bool use_textures = true;    // true = textured (default, minimal surfacing slice); --textures=0 = legacy colour ramp
 uniform float mat_tiling = 12.0;     // world metres per texture tile (smaller = more repeats)
+uniform float toksvig_k = 0.5;       // Toksvig specular-AA sensitivity: higher = roughen sooner as normal-map variance rises
 // placement bands (metres for height, normalized 0..1 slope = 1 - normal.y). Soft via fwidth.
 uniform float surf_h_sand  = 30.0;    // below → sand/low (mat0)
 uniform float surf_h_grass = 220.0;   // sand→grass band top (mat1 valley)
@@ -110,26 +116,62 @@ uniform float surf_h_earth = 430.0;   // grass→earth band top (mat2 mid)
 uniform float surf_h_rock  = 560.0;   // earth→rock; above → snow (mat4) by height
 uniform float surf_slope_rock = 0.42; // slope above this forces rock (mat3) regardless of height
 uniform float surf_slope_soft = 0.10; // half-width of the slope transition
-uniform sampler2D mat0_alb : source_color, filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat0_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
-uniform sampler2D mat0_rgh : filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat1_alb : source_color, filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat1_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
-uniform sampler2D mat1_rgh : filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat2_alb : source_color, filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat2_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
-uniform sampler2D mat2_rgh : filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat3_alb : source_color, filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat3_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
-uniform sampler2D mat3_rgh : filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat4_alb : source_color, filter_linear_mipmap, repeat_enable;
-uniform sampler2D mat4_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
-uniform sampler2D mat4_rgh : filter_linear_mipmap, repeat_enable;
+uniform sampler2D mat0_alb : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat0_nrm : filter_linear_mipmap_anisotropic, repeat_enable, hint_normal;
+uniform sampler2D mat0_rgh : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat1_alb : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat1_nrm : filter_linear_mipmap_anisotropic, repeat_enable, hint_normal;
+uniform sampler2D mat1_rgh : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat2_alb : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat2_nrm : filter_linear_mipmap_anisotropic, repeat_enable, hint_normal;
+uniform sampler2D mat2_rgh : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat3_alb : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat3_nrm : filter_linear_mipmap_anisotropic, repeat_enable, hint_normal;
+uniform sampler2D mat3_rgh : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat4_alb : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat4_nrm : filter_linear_mipmap_anisotropic, repeat_enable, hint_normal;
+uniform sampler2D mat4_rgh : filter_linear_mipmap_anisotropic, repeat_enable;
 // Erosion-lab debug overlay: false-colour a scalar field (water/sediment/flow) by region UV. 0 = off.
 // Zero-impact on the terrain (default off); only the erosion lab sets it.
 uniform float debug_field = 0.0;
 uniform sampler2D debug_field_tex : filter_linear;
 uniform float debug_wxz = 0.0;   // DEBUG: 1.0 = output reconstructed world XZ (mod 512) as R/G color
+uniform float diag_mode = 0.0;   // RING HUNT: 0 normal, 1 grey base, 2 +albedo, 3 +roughness, 4 +normalmap (key H steps)
+
+// --- HYDROLOGY carve. The region water texture: R=dist-to-river(m), G=bedDepth(m), B=flow, A=wet mask.
+// Carve = subtract a compact-support groove where wet. Default OFF (no texture bound) so the base field
+// is byte-identical until water is explicitly enabled (--fieldcheck 0m). ---
+uniform sampler2D water_tex : filter_linear;
+uniform vec2  water_region_origin = vec2(0.0);
+uniform float water_region_m = 8192.0;
+uniform float carve_width_m = 36.0;
+uniform float carve_depth_scale = 1.0;
+uniform float carve_profile_exp = 2.0;
+uniform bool  water_carve_on = false;
+
+uniform bool water_debug = false;   // DEBUG (key H): paint wet pixels cyan / banks blue so the carve is visible
+
+// Debug overlay: tint by the water texture — bright cyan where wet (river/lake), blue in the carve band.
+vec3 water_debug_tint(vec3 base, vec2 wxz) {
+    if (!water_debug || !water_carve_on) return base;
+    vec2 uv = (wxz - water_region_origin) / water_region_m;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return base;
+    vec4 w = texture(water_tex, uv);
+    if (w.a > 0.5) return vec3(0.0, 0.9, 1.0);                       // wet channel/lake → bright cyan
+    if (w.r < carve_width_m) return mix(base, vec3(0.1, 0.3, 0.8), 0.6); // carve band → blue
+    return base;
+}
+
+float carve_offset(vec2 wxz) {
+    if (!water_carve_on) return 0.0;
+    vec2 uv = (wxz - water_region_origin) / water_region_m;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;  // outside the bound region
+    vec4 w = texture(water_tex, uv);
+    if (w.a < 0.001 && w.r >= carve_width_m) return 0.0;
+    float t = clamp(w.r / carve_width_m, 0.0, 1.0);     // 0 at channel centre .. 1 at bank
+    float profile = pow(1.0 - t * t, carve_profile_exp); // compact support, 0 at bank (C1)
+    return w.g * carve_depth_scale * profile;            // metres to subtract
+}
 
 float height_at(vec2 uv) { return texture(heightmap, uv).r; }
 
@@ -169,7 +211,7 @@ void vertex() {
         vec2 u_morph = mix(u_fine, u_coarse, morphK);
         vec2 wxz = (MODEL_MATRIX * vec4(u_morph.x - 0.5, 0.0, u_morph.y - 0.5, 1.0)).xz + render_origin.xz;  // S3: TRUE morphed world XZ
 
-        float h0 = analytic_h(wxz);
+        float h0 = analytic_h(wxz) - carve_offset(wxz);
 
         // S2d: NO SKIRT. Edge-stitched mesh variants (CdlodMesh.BuildStitchedVariants) collapse a chunk's
         // odd boundary verts onto the coarse neighbor's spacing where edges meet a coarser LOD, so seams
@@ -186,10 +228,10 @@ void vertex() {
         // field's own analytic_spacing so shading detail tracks the field, not the triangulation (correct:
         // shading detail is decoupled from geometry LOD, the AAA approach). h0 stays the morphed height.
         float ns = max(analytic_spacing, 1.0);             // fixed FD step (m), LOD-independent
-        float hxp = analytic_h(wxz + vec2(ns, 0.0));
-        float hxm = analytic_h(wxz - vec2(ns, 0.0));
-        float hzp = analytic_h(wxz + vec2(0.0, ns));
-        float hzm = analytic_h(wxz - vec2(0.0, ns));
+        float hxp = analytic_h(wxz + vec2(ns, 0.0)) - carve_offset(wxz + vec2(ns, 0.0));
+        float hxm = analytic_h(wxz - vec2(ns, 0.0)) - carve_offset(wxz - vec2(ns, 0.0));
+        float hzp = analytic_h(wxz + vec2(0.0, ns)) - carve_offset(wxz + vec2(0.0, ns));
+        float hzm = analytic_h(wxz - vec2(0.0, ns)) - carve_offset(wxz - vec2(0.0, ns));
         v_normal = normalize(vec3(hxm - hxp, 2.0 * ns, hzm - hzp));
         NORMAL = v_normal;
         v_h = h0;
@@ -198,10 +240,10 @@ void vertex() {
     } else if (use_analytic) {
         vec2 wxz = VERTEX.xz;                              // object==world at identity (matches field)
         float e = analytic_spacing;
-        float h0 = analytic_h(wxz);                        // center: reused for height AND the normal
+        float h0 = analytic_h(wxz) - carve_offset(wxz);    // center: reused for height AND the normal
         VERTEX.y = h0;
-        float hx = analytic_h(wxz + vec2(e, 0.0));         // forward diff (2 taps, not 4): 5 evals -> 3
-        float hz = analytic_h(wxz + vec2(0.0, e));
+        float hx = analytic_h(wxz + vec2(e, 0.0)) - carve_offset(wxz + vec2(e, 0.0));
+        float hz = analytic_h(wxz + vec2(0.0, e)) - carve_offset(wxz + vec2(0.0, e));
         v_normal = normalize(vec3(h0 - hx, e, h0 - hz));   // normalize() makes the gradient magnitude immaterial
         NORMAL = v_normal;
         v_h = VERTEX.y;
@@ -219,20 +261,56 @@ void vertex() {
     }
 }
 
+// Per-texture mean colour = its highest mip (1×1), via a large explicit LOD. Used to FADE per-texel detail
+// toward the flat average with distance, so far-field terrain carries no high-contrast speckle (the cause of
+// the grazing-angle dot-grid moiré). textureLod with a big lod always lands on the top mip regardless of res.
+vec3 tex_mean(sampler2D t) { return textureLod(t, vec2(0.5), 16.0).rgb; }
+float texr_mean(sampler2D t) { return textureLod(t, vec2(0.5), 16.0).r; }
+// Distance detail-fade amount: 0 near (full per-texel detail) → 1 far (flat mean). Rides the shared
+// detail_fade() band so albedo/roughness/normal all dissolve together (no stacked rings).
+float detail_dissolve(float dist) { return 1.0 - detail_fade(dist); }
+
 // Triplanar albedo/scalar sample by world position (no UV needed) — kills cliff stretching on steep faces.
-vec3 tri_sample(sampler2D t, vec3 wpos, vec3 wn, float scale) {
+// `dissolve` (0..1) blends each plane's sample toward the texture mean so far faces lose their speckle.
+vec3 tri_sample(sampler2D t, vec3 wpos, vec3 wn, float scale, float dissolve) {
     vec3 bw = pow(abs(wn), vec3(4.0));
     bw /= max(bw.x + bw.y + bw.z, 1e-4);
-    vec3 cx = texture(t, wpos.zy / scale).rgb;
-    vec3 cy = texture(t, wpos.xz / scale).rgb;
-    vec3 cz = texture(t, wpos.xy / scale).rgb;
+    vec3 mean = tex_mean(t);
+    vec3 cx = mix(texture(t, wpos.zy / scale).rgb, mean, dissolve);
+    vec3 cy = mix(texture(t, wpos.xz / scale).rgb, mean, dissolve);
+    vec3 cz = mix(texture(t, wpos.xy / scale).rgb, mean, dissolve);
     return cx * bw.x + cy * bw.y + cz * bw.z;
 }
-// Perturb a world normal by a tangent-space normal map sampled on the dominant (XZ) plane. Cheap, tangent-free
-// (good enough for the legibility bar): rotate the map's xy into world XZ, keep the geometric normal as the base.
+// Perturb a world normal by a tangent-space normal map sampled on the dominant (XZ) plane (used by the diag stepper).
 vec3 apply_nrm(vec3 geo_n, sampler2D nmap, vec2 uv, float strength) {
     vec3 n = texture(nmap, uv).xyz * 2.0 - 1.0;
     return normalize(geo_n + vec3(n.x, 0.0, n.y) * strength);
+}
+// Proper tangent-space normal application: build a world-aligned tangent frame from the geometric normal (the
+// terrain mesh carries no TANGENT/BINORMAL). For near-flat terrain a world-Z-referenced basis is stable across
+// chunks and lights correctly (the old apply_nrm rotated the map's xy straight into world XZ — wrong basis).
+// `strength` scales only the tangent deflection; 0 = pure geometric normal.
+vec3 apply_nrm_tangent(vec3 geo_n, sampler2D nmap, vec2 uv, float strength) {
+    vec3 N = normalize(geo_n);
+    vec3 T = cross(vec3(0.0, 0.0, 1.0), N);
+    if (!(dot(T, T) > 1e-6)) { T = cross(vec3(1.0, 0.0, 0.0), N); }   // N ~parallel to +Z → different ref axis
+    T = normalize(T);
+    vec3 B = cross(N, T);
+    vec3 ts = texture(nmap, uv).xyz * 2.0 - 1.0;
+    ts.xy *= strength;
+    return normalize(ts.x * T + ts.y * B + ts.z * N);
+}
+// Toksvig specular anti-aliasing. The mip-filtered tangent normal SHORTENS (|n| < 1) where sub-pixel normal
+// variance is high (i.e. far / grazing). Map that to a gloss factor, then to a roughness FLOOR: low gloss →
+// rough → no specular / lit↔shadowed flicker. texture() here uses the same trilinear+aniso mip the lighting
+// sees, so it tracks the real footprint → the camera-distance normal-map rings collapse automatically.
+float toksvig_gloss(sampler2D nmap, vec2 uv, float k) {
+    vec3 ts = texture(nmap, uv).xyz * 2.0 - 1.0;     // mip-filtered → magnitude < 1 under variance
+    float len = clamp(length(ts), 1e-3, 1.0);
+    return len / mix(1.0, len, clamp(k, 0.0, 1.0));   // k=0 → gloss=1 (off), k=1 → gloss=len (max effect)
+}
+float toksvig_rough_floor(float gloss) {
+    return sqrt(clamp(1.0 - gloss, 0.0, 1.0));         // normal variance → minimum roughness
 }
 
 void fragment() {
@@ -263,19 +341,62 @@ void fragment() {
         float sum = max(w0 + w1 + w2 + w3 + w4, 1e-4);
 
         vec3 wpos = vec3(v_surf_xz.x, v_h, v_surf_xz.y);
+        // FOOTPRINT DETAIL-FADE: blend every per-texel sample toward its texture MEAN as the texture footprint
+        // per screen-pixel grows, so wherever a pixel covers many texels (far AND/OR grazing) the surface goes
+        // flat average colour with NO high-contrast speckle. That speckle (stones in mat2, grains in mat0) is
+        // what aliased into the fixed-distance "dot-grid"/concentric-rings moiré: it reads as a screen-locked
+        // OVERLAY (not sliding with the terrain) because minification moiré's beat frequency is set by the pixel
+        // grid, not the surface. Mips+anisotropy can't kill it (contrast too high, 12 m tiling resonates), so we
+        // remove the high frequencies at the source. Driving the fade by fwidth(uv) (texels/pixel) — not raw
+        // distance — auto-targets BOTH distance and grazing angle, and keeps head-on near ground fully sharp.
+        float dist = distance(cam_world, wpos);
+        float dis = detail_dissolve(dist) * detail_fade_on;    // 0 near .. 1 far (gated by the live G toggle)
         // rock (mat3) uses triplanar (steep faces); others use planar world-XZ uv (cheaper, they're flat-ish).
-        vec3 a0 = texture(mat0_alb, uv).rgb, a1 = texture(mat1_alb, uv).rgb, a2 = texture(mat2_alb, uv).rgb;
-        vec3 a3 = tri_sample(mat3_alb, wpos, v_normal, mat_tiling), a4 = texture(mat4_alb, uv).rgb;
+        vec3 a0 = mix(texture(mat0_alb, uv).rgb, tex_mean(mat0_alb), dis);
+        vec3 a1 = mix(texture(mat1_alb, uv).rgb, tex_mean(mat1_alb), dis);
+        vec3 a2 = mix(texture(mat2_alb, uv).rgb, tex_mean(mat2_alb), dis);
+        vec3 a3 = tri_sample(mat3_alb, wpos, v_normal, mat_tiling, dis);
+        vec3 a4 = mix(texture(mat4_alb, uv).rgb, tex_mean(mat4_alb), dis);
         vec3 alb = (w0 * a0 + w1 * a1 + w2 * a2 + w3 * a3 + w4 * a4) / sum;
-        float rgh = (w0 * texture(mat0_rgh, uv).r + w1 * texture(mat1_rgh, uv).r + w2 * texture(mat2_rgh, uv).r
-                   + w3 * texture(mat3_rgh, uv).r + w4 * texture(mat4_rgh, uv).r) / sum;
-        // dominant material's normal map perturbs the geometric normal (cheap; legibility, not exactness).
-        vec3 nrm = v_normal;
-        nrm = apply_nrm(nrm, mat1_nrm, uv, (w1 + w2) / sum);   // grass/earth meso relief
-        nrm = apply_nrm(nrm, mat0_nrm, uv, w0 / sum);          // sand ripples
-        ALBEDO = alb;
-        ROUGHNESS = clamp(rgh, 0.04, 1.0);
-        NORMAL = normalize(nrm);
+        float r0 = mix(texture(mat0_rgh, uv).r, texr_mean(mat0_rgh), dis);
+        float r1 = mix(texture(mat1_rgh, uv).r, texr_mean(mat1_rgh), dis);
+        float r2 = mix(texture(mat2_rgh, uv).r, texr_mean(mat2_rgh), dis);
+        float r3 = mix(texture(mat3_rgh, uv).r, texr_mean(mat3_rgh), dis);
+        float r4 = mix(texture(mat4_rgh, uv).r, texr_mean(mat4_rgh), dis);
+        float rgh = (w0 * r0 + w1 * r1 + w2 * r2 + w3 * r3 + w4 * r4) / sum;
+        // Normal-map perturbation (restored, for the diag stepper). diag_mode controls which channel is live so
+        // we can pin the ring source by adding ONE channel at a time onto the known-clean flat-grey base.
+        // Normal-map perturbation, rolled OFF with distance (nfade: 1 near .. 0 far) so far normals collapse to
+        // the smooth geometric normal (belt-and-suspenders with Toksvig). Proper tangent-space basis.
+        float nfade = (1.0 - dis);
+        vec3 nrm_pert = v_normal;
+        nrm_pert = apply_nrm_tangent(nrm_pert, mat1_nrm, uv, (w1 + w2) / sum * nfade);
+        nrm_pert = apply_nrm_tangent(nrm_pert, mat0_nrm, uv, w0 / sum * nfade);
+
+        // TOKSVIG roughness floor from the ground normal maps (mat0/mat1), weighted like the perturbation.
+        // Raises roughness where sub-pixel normal variance is high → kills the normal-map specular/shading rings.
+        float tk = toksvig_rough_floor(toksvig_gloss(mat1_nrm, uv, toksvig_k)) * ((w1 + w2) / sum)
+                 + toksvig_rough_floor(toksvig_gloss(mat0_nrm, uv, toksvig_k)) * (w0 / sum);
+        float rgh_aa = max(clamp(rgh, 0.04, 1.0), tk);
+
+        // diag_mode: 0 = normal render (all channels). 1 = flat grey base (no textures). 2 = +albedo only.
+        // 3 = +roughness only. 4 = +normal-map only. Each builds on the grey base so exactly one channel varies.
+        // Each mode tinted a DISTINCT colour so you can identify it without counting H presses:
+        // 0 = normal (untinted), 1 = RED grey, 2 = GREEN +albedo, 3 = BLUE +roughness, 4 = YELLOW +normalmap.
+        int dm = int(diag_mode + 0.5);
+        if (dm == 0) {
+            // LIVE render (the shipping look): faded albedo + Toksvig roughness + tangent normal rolled off far.
+            ALBEDO = water_debug_tint(alb, v_surf_xz); ROUGHNESS = rgh_aa; NORMAL = normalize(nrm_pert);
+        } else if (dm == 1) {
+            ALBEDO = vec3(0.40, 0.12, 0.12); ROUGHNESS = 1.0; NORMAL = normalize(v_normal);    // RED: clean base (no textures)
+        } else if (dm == 2) {
+            ALBEDO = alb * vec3(0.5, 1.0, 0.5); ROUGHNESS = 1.0; NORMAL = normalize(v_normal); // GREEN: +albedo only
+        } else if (dm == 3) {
+            ALBEDO = vec3(0.12, 0.12, 0.40); ROUGHNESS = clamp(rgh, 0.04, 1.0); NORMAL = normalize(v_normal); // BLUE: +roughness only
+        } else {
+            // YELLOW: +normal-map, at a glossy base floored by Toksvig — proves the AA kills the normal rings.
+            ALBEDO = vec3(0.45, 0.42, 0.10); ROUGHNESS = max(0.4, tk); NORMAL = normalize(nrm_pert);
+        }
     } else {
         vec3 c = mix(col_low, col_mid, smoothstep(h_low, h_mid, v_h));
         c = mix(c, col_high, smoothstep(h_mid, h_high, v_h));
@@ -285,14 +406,14 @@ void fragment() {
         if (lod_viz >= 0.0) {   // S2a debug: distinct hue per LOD level so the bands are visible
             float L = lod_viz;
             vec3 tint = vec3(fract(L * 0.27), fract(L * 0.53 + 0.33), fract(L * 0.81 + 0.66));
-            c = mix(c, 0.5 + 0.5 * tint, 0.55);
+            c = mix(c, 0.5 + 0.5 * tint, 0.9);   // strong tint so the LOD bands are unmistakable (was 0.55)
         }
         if (debug_wxz > 0.5) {   // DEBUG: encode the sampled true-world XZ — must be IDENTICAL across a snap
             // FINE band (mod 16 m) makes a sub-meter reconstruction shift visible; coarse band (mod 4096) shows
             // any large offset. R = fine X phase, G = fine Z phase, B = coarse X phase.
             c = vec3(fract(v_wxz.x / 16.0), fract(v_wxz.y / 16.0), fract(v_wxz.x / 4096.0));
         }
-        ALBEDO = c;
+        ALBEDO = water_debug_tint(c, v_surf_xz);
         ROUGHNESS = ground_rough;
     }
 }

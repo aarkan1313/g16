@@ -246,6 +246,20 @@ public partial class TerrainLab : MeshInstance3D
     public void SetTexture(string param, Texture2D tex) => _mat.SetShaderParameter(param, tex);
     public void SetCameraWorld(Vector3 p) => _mat.SetShaderParameter("cam_world", p);
 
+    /// Bind ONE region's water texture for the terrain carve. The vertex shader subtracts a thin
+    /// profile-blended groove where the texture says "wet". Until this is called, water_carve_on stays
+    /// false → the base field is byte-identical (--fieldcheck 0m).
+    public void BindWaterRegion(WG16.Hydrology.WorldWaterRegion reg, WG16.Hydrology.WaterParams wp)
+    {
+        _mat.SetShaderParameter("water_tex", reg.Texture);
+        _mat.SetShaderParameter("water_region_origin", reg.RegionOriginWorld);
+        _mat.SetShaderParameter("water_region_m", reg.RegionM);
+        _mat.SetShaderParameter("carve_width_m", wp.CarveWidthM);
+        _mat.SetShaderParameter("carve_depth_scale", wp.CarveDepthScale);
+        _mat.SetShaderParameter("carve_profile_exp", wp.CarveProfileExp);
+        _mat.SetShaderParameter("water_carve_on", true);
+    }
+
     // Minimal surfacing slice: bind ~5 fixed material sets from assets/materials by role. Fluid/disposable
     // (the full surfacing arc replaces this with texture arrays); the placement/blend LOGIC in the shader is
     // the kept work. Roles: 0 low/sand, 1 valley grass, 2 mid earth/scree, 3 slope rock, 4 peak snow.

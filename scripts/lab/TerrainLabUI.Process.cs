@@ -222,11 +222,12 @@ public partial class TerrainLabUI : Control
                 bool kSlash = Input.IsKeyPressed(Key.Slash);
                 if (kSlash && !_lastF6) { _godraysOn = !_godraysOn; _godraysScreen?.SetEnabled(_godraysOn); GD.Print($"[dbg] (/) God rays = {_godraysOn}"); }
                 _lastF6 = kSlash;
-                // J atmosphere (AT-1 GPU sky tint), K aerial perspective (AT-2 camera froxel) — the two
+                // O atmosphere (AT-1 GPU sky tint), K aerial perspective (AT-2 camera froxel) — the two
                 // camera-aligned volumes NOT covered above; froxel volumes are the classic concentric-ring suspect.
-                bool kJ = Input.IsKeyPressed(Key.J);
-                if (kJ && !_lastF7) { _atmosphereOn = !_atmosphereOn; _cloud.SetAtmosphereOn(_atmosphereOn); _atmosphere?.SetEnabled(_atmosphereOn); GD.Print($"[dbg] (J) Atmosphere AT-1 = {_atmosphereOn}"); }
-                _lastF7 = kJ;
+                // (O not J — J is the ring-hunt diag stepper below.)
+                bool kO = Input.IsKeyPressed(Key.O);
+                if (kO && !_lastF7) { _atmosphereOn = !_atmosphereOn; _cloud.SetAtmosphereOn(_atmosphereOn); _atmosphere?.SetEnabled(_atmosphereOn); GD.Print($"[dbg] (O) Atmosphere AT-1 = {_atmosphereOn}"); }
+                _lastF7 = kO;
                 bool kK = Input.IsKeyPressed(Key.K);
                 if (kK && !_lastF8) { _aerialOn = !_aerialOn; _aerial?.SetEnabled(_aerialOn); GD.Print($"[dbg] (K) Aerial AT-2 = {_aerialOn}"); }
                 _lastF8 = kK;

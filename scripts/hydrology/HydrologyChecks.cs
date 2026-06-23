@@ -16,6 +16,7 @@ public static class HydrologyChecks
             case "lakes": return CheckLakes();
             case "texture": return CheckTexture();
             case "continuity": return CheckContinuity();
+            case "where": return CheckWhere();
             default: GD.PrintErr($"WATERCHECK: unknown check '{check}'"); return false;
         }
     }
@@ -125,5 +126,28 @@ public static class HydrologyChecks
         bool ok = frac >= 0.95f;
         GD.Print($"WATERCHECK continuity: {(ok ? "PASS" : "FAIL")} agree={frac:0.000}");
         return ok;
+    }
+
+    // Where are the rivers/lakes in region (0,0)? Prints the largest reaches' world XZ so we can fly to one.
+    private static bool CheckWhere()
+    {
+        var fp = WG16.Field.FieldParams.Load();
+        var wp = WaterParams.Load();
+        var reg = new WorldWaterRegion(fp, wp, 0, 0);
+        GD.Print($"WATERCHECK where: region(0,0) origin=({reg.RegionOriginWorld.X:0},{reg.RegionOriginWorld.Y:0}) " +
+                 $"rivers={reg.Rivers.Count} lakes={reg.Lakes.Count}");
+        // top 5 longest reaches that fall inside the CORE region (0..regionM)
+        int shown = 0;
+        foreach (var r in reg.Rivers)
+        {
+            var mid = r.Points[r.Points.Length / 2];
+            if (mid.X < 0 || mid.X > reg.RegionM || mid.Y < 0 || mid.Y > reg.RegionM) continue;
+            if (r.Points.Length < 30) continue;
+            GD.Print($"  reach len={r.Points.Length} midXZ=({mid.X:0},{mid.Y:0}) width~{r.Width[r.Width.Length/2]:0.0}m");
+            if (++shown >= 5) break;
+        }
+        foreach (var lk in reg.Lakes)
+            GD.Print($"  LAKE center=({lk.Center.X:0},{lk.Center.Y:0}) r={lk.Radius:0}m level={lk.WaterLevel:0}m");
+        return true;
     }
 }
