@@ -72,7 +72,11 @@ public partial class ErosionLab : Node3D
                 },
             };
             _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/ground.gdshader") };
-            _mat.SetShaderParameter("use_textures", true);
+            // Use the height/slope COLOUR RAMP (not the textured path): the lab binds no material textures,
+            // so use_textures=true would sample unbound samplers → black albedo, making erosion hard to read
+            // (black surface lit only by slope makes every micro-facet pop). The ramp needs no assets and gives
+            // a clean readable height/slope view for judging valleys.
+            _mat.SetShaderParameter("use_textures", false);
             _mesh.MaterialOverride = _mat;
             AddChild(_mesh);
             UploadHeight(seed);

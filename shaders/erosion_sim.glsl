@@ -34,9 +34,10 @@ void main() {
     if (c.x >= P.res || c.y >= P.res) { return; }
     int i = idx(c.x, c.y);
 
-    if (pc.phase == 1) {                      // FLUX: water virtual pipes to 4 neighbors (read h+w, write own flux)
-        w[i] += P.rain * P.dt;
-        float hc = h[i] + w[i];
+    if (pc.phase == 1) {                      // FLUX: water virtual pipes to 4 neighbors (READ-ONLY on h/w)
+        // Rain is added in phase 2 (the gather pass that owns the w[i] write). Phase 1 must NOT write w[i] —
+        // neighbors read w[] via H() in this same dispatch, so writing here is a read-while-write race.
+        float hc = h[i] + w[i] + P.rain * P.dt;   // local rain-adjusted surface (matches phase 2's increment)
         vec4 f = flux[i];
         float k = P.dt * P.gravity / P.cell_size;
         f.x = max(0.0, f.x + k * (hc - H(c.x-1, c.y)));
@@ -44,7 +45,7 @@ void main() {
         f.z = max(0.0, f.z + k * (hc - H(c.x, c.y-1)));
         f.w = max(0.0, f.w + k * (hc - H(c.x, c.y+1)));
         float tot = f.x + f.y + f.z + f.w;
-        float avail = w[i] * P.cell_size * P.cell_size / max(P.dt, 1e-6);
+        float avail = (w[i] + P.rain * P.dt) * P.cell_size * P.cell_size / max(P.dt, 1e-6);
         float scale = (tot > 1e-6) ? min(1.0, avail / tot) : 0.0;
         flux[i] = f * scale;                  // writes OWN flux only — race-free
     }
@@ -55,7 +56,7 @@ void main() {
         float inT = (c.y > 0)        ? flux[idx(c.x, c.y-1)].w : 0.0;
         float inB = (c.y < P.res-1)  ? flux[idx(c.x, c.y+1)].z : 0.0;
         float dV = (inL + inR + inT + inB - (fo.x + fo.y + fo.z + fo.w)) * P.dt;
-        float wn = max(0.0, w[i] + dV / (P.cell_size * P.cell_size));
+        float wn = max(0.0, w[i] + P.rain * P.dt + dV / (P.cell_size * P.cell_size));   // rain added here (race-free)
         vel[i] = vec2((inL - fo.x + fo.y - inR), (inT - fo.z + fo.w - inB)) * 0.5;
         w[i] = wn * (1.0 - P.evaporate * P.dt);   // writes OWN water only
     }
@@ -86,9 +87,8 @@ void main() {
         t.x = max(0.0, dL - thr); t.y = max(0.0, dR - thr);
         t.z = max(0.0, dT - thr); t.w = max(0.0, dB - thr);
         float tot = t.x + t.y + t.z + t.w;
-        // send at most talus_rate of the excess, and never invert (cap total to half the largest drop)
-        float cap = P.talus_rate * tot;
-        float sc = (tot > 1e-6) ? min(1.0, cap / tot) : 0.0;
+        // send at most talus_rate of the excess this step (talus_rate < 1 keeps it stable / non-inverting)
+        float sc = (tot > 1e-6) ? min(1.0, P.talus_rate) : 0.0;
         tflux[i] = t * sc;                    // writes OWN tflux only — race-free
     }
     else if (pc.phase == 5) {                 // APPLY: own erode delta + GATHER thermal (conservative slump)
