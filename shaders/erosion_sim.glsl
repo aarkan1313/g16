@@ -55,4 +55,19 @@ void main() {
         wn *= (1.0 - P.evaporate * P.dt);     // converge
         w[i] = wn;
     }
+    else if (pc.phase == 3) {                 // ERODE/DEPOSIT: from the shared flow state
+        float hl = h[idx(max(c.x-1,0), c.y)], hr = h[idx(min(c.x+1,P.res-1), c.y)];
+        float ht = h[idx(c.x, max(c.y-1,0))], hb = h[idx(c.x, min(c.y+1,P.res-1))];
+        float slope = max(P.min_tilt, length(vec2(hr-hl, hb-ht)) / (2.0 * P.cell_size));
+        float speed = length(vel[i]);
+        float cap = P.capacity * slope * speed;            // transport capacity
+        float sed = s[i];
+        if (cap > sed) {                                   // erode bedrock into suspension
+            float amt = min(P.erode * (cap - sed) * P.dt, P.max_erode);   // hard cap = anti-overshoot
+            h[i] -= amt; s[i] = sed + amt;
+        } else {                                            // deposit
+            float amt = P.deposit * (sed - cap) * P.dt;
+            h[i] += amt; s[i] = sed - amt;
+        }
+    }
 }
