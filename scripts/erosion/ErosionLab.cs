@@ -320,6 +320,7 @@ public partial class ErosionLab : Node3D
                     else if (a.StartsWith("--width=")) { _hp.WidthPerOrder = a.Substring(8).ToFloat(); }
                     else if (a.StartsWith("--carve=")) { _hp.CarveStrength = a.Substring(8).ToFloat(); }
                     else if (a.StartsWith("--carvemin=")) { _hp.CarveMinOrder = (int)a.Substring(11).ToFloat(); }
+                    else if (a.StartsWith("--lakemin=")) { _hp.LakeMinDepth = a.Substring(10).ToFloat(); }
                 }
                 BuildHydrology(p, fc);
             }
