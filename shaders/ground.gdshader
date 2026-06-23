@@ -125,6 +125,10 @@ uniform sampler2D mat3_rgh : filter_linear_mipmap, repeat_enable;
 uniform sampler2D mat4_alb : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D mat4_nrm : filter_linear_mipmap, repeat_enable, hint_normal;
 uniform sampler2D mat4_rgh : filter_linear_mipmap, repeat_enable;
+// Erosion-lab debug overlay: false-colour a scalar field (water/sediment/flow) by region UV. 0 = off.
+// Zero-impact on the terrain (default off); only the erosion lab sets it.
+uniform float debug_field = 0.0;
+uniform sampler2D debug_field_tex : filter_linear;
 uniform float debug_wxz = 0.0;   // DEBUG: 1.0 = output reconstructed world XZ (mod 512) as R/G color
 
 float height_at(vec2 uv) { return texture(heightmap, uv).r; }
@@ -232,7 +236,13 @@ vec3 apply_nrm(vec3 geo_n, sampler2D nmap, vec2 uv, float strength) {
 }
 
 void fragment() {
-    if (use_textures) {
+    if (debug_field > 0.5) {   // erosion-lab false-colour overlay (water/sediment/flow), region-UV sampled
+        vec2 ruv = v_surf_xz / region_size + vec2(0.5);
+        float val = texture(debug_field_tex, ruv).r;
+        // blue→cyan→yellow→red ramp on the scalar (clamped); reads as a heat/flow map.
+        vec3 cc = clamp(vec3(val * 2.0 - 1.0, 1.0 - abs(val * 2.0 - 1.0), 1.0 - val * 2.0), 0.0, 1.0);
+        ALBEDO = cc; ROUGHNESS = 1.0; NORMAL = v_normal;
+    } else if (use_textures) {
         // Minimal surfacing slice. (Godot forbids `return` in fragment(), so the legacy ramp is the else.)
         vec2 uv = v_surf_xz / mat_tiling;
         float h = v_h;

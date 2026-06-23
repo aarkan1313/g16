@@ -10,11 +10,14 @@ public sealed class ErosionSim : IDisposable
 {
     private readonly RenderingDevice _rd;
     private readonly Rid _shader, _pipeline;
-    private Rid _params, _height, _water, _sediment, _flux, _velocity, _uset;
+    private Rid _params, _height, _water, _sediment, _flux, _velocity, _dh, _tflux, _sed2, _uset;
     private readonly int _res, _cells;
     public ErosionParams Params { get; set; } = new();
 
-    private const int PHASE_FLUX = 1, PHASE_WATER = 2, PHASE_ERODE = 3, PHASE_TRANSPORT = 4, PHASE_THERMAL = 5;
+    // Race-free phase order: water flux/gather, erode→dh, thermal flux, apply (dh + gathered thermal),
+    // transport→s2, swap s. No phase reads neighbor h/s while writing h/s (see the kernel's race rule).
+    private const int PHASE_FLUX = 1, PHASE_WATER = 2, PHASE_ERODE = 3, PHASE_THERMAL_FLUX = 4,
+                      PHASE_APPLY = 5, PHASE_TRANSPORT = 6, PHASE_SWAP_S = 7;
 
     public ErosionSim(int res)
     {
@@ -47,8 +50,11 @@ public sealed class ErosionSim : IDisposable
         _sediment = Sb(_cells * 4);
         _flux     = Sb(_cells * 16);   // vec4
         _velocity = Sb(_cells * 8);    // vec2
+        _dh       = Sb(_cells * 4);    // erode height delta
+        _tflux    = Sb(_cells * 16);   // vec4 thermal slump outflow
+        _sed2     = Sb(_cells * 4);    // transport double-buffer
         var u = new Godot.Collections.Array<RDUniform>();
-        Rid[] bufs = { _params, _height, _water, _sediment, _flux, _velocity };
+        Rid[] bufs = { _params, _height, _water, _sediment, _flux, _velocity, _dh, _tflux, _sed2 };
         for (int b = 0; b < bufs.Length; b++)
         {
             var ru = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = b };
@@ -62,6 +68,7 @@ public sealed class ErosionSim : IDisposable
     {
         Clear(_water, _cells * 4); Clear(_sediment, _cells * 4);
         Clear(_flux, _cells * 16); Clear(_velocity, _cells * 8);
+        Clear(_dh, _cells * 4); Clear(_tflux, _cells * 16); Clear(_sed2, _cells * 4);
     }
 
     public void Seed(float[] height)
@@ -89,16 +96,18 @@ public sealed class ErosionSim : IDisposable
         _rd.Submit(); _rd.Sync();   // local RD is blocking; fine for an offline tool
     }
 
-    /// One full coupled step = all phases in order, sharing the same state.
+    /// One full coupled step = all phases in race-free order, sharing the same state.
     public void Step(int n)
     {
         for (int k = 0; k < n; k++)
         {
-            Dispatch(PHASE_FLUX);
-            Dispatch(PHASE_WATER);
-            Dispatch(PHASE_ERODE);
-            Dispatch(PHASE_TRANSPORT);
-            Dispatch(PHASE_THERMAL);
+            Dispatch(PHASE_FLUX);          // water pipes (read h+w, write own flux)
+            Dispatch(PHASE_WATER);         // gather flux → own water + velocity
+            Dispatch(PHASE_ERODE);         // read h/vel/s → own dh + own s
+            Dispatch(PHASE_THERMAL_FLUX);  // read h → own slump outflow
+            Dispatch(PHASE_APPLY);         // own dh + gathered thermal → own h
+            Dispatch(PHASE_TRANSPORT);     // backtrace read s → s2
+            Dispatch(PHASE_SWAP_S);        // s = s2
         }
     }
 
@@ -125,7 +134,7 @@ public sealed class ErosionSim : IDisposable
 
     public void Dispose()
     {
-        foreach (var r in new[] { _uset, _params, _height, _water, _sediment, _flux, _velocity, _pipeline, _shader })
+        foreach (var r in new[] { _uset, _params, _height, _water, _sediment, _flux, _velocity, _dh, _tflux, _sed2, _pipeline, _shader })
         {
             if (r.IsValid) { _rd.FreeRid(r); }
         }
