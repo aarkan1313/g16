@@ -21,6 +21,7 @@ public static class HydrologyChecks
             if (a == "--determinismcheck") { Determinism(p, fc); return true; }
             if (a == "--carvecheck") { Carve(p, fc, res, cell); return true; }
             if (a == "--waterbudgetcheck") { WaterBudget(p, fc); return true; }
+            if (a == "--watercoverage") { WaterCoverage(p, fc, res, cell); return true; }
         }
         return false;
     }
@@ -38,6 +39,30 @@ public static class HydrologyChecks
         float lakesPerKm2 = wb.Lakes.Count / regionKm2;
         bool ok = lakesPerKm2 <= wp.LakeDensityPerKm2 + 1e-3f;
         GD.Print($"WATERBUDGETCHECK: {(ok ? "PASS" : "FAIL")} region={regionKm2:F1}km² lakes={wb.Lakes.Count} ({lakesPerKm2:F2}/km², cap {wp.LakeDensityPerKm2}) rivers={wb.Rivers.Count}");
+    }
+
+    // Picks a sensible sea level: prints carved-height percentiles + flood coverage at each, so the sea sits low
+    // (most land DRY). Use the level near the target coverage (~12%) for "not too much water".
+    private static void WaterCoverage(FieldParams p, FieldCompute fc, int res, float cell)
+    {
+        var hp = new HydrologyParams { Res = res, CellSize = cell };
+        var pipe = new HydrologyPipeline(res, cell);
+        var carve = pipe.Build(p, fc, hp);
+        float[] h = carve.Height; int n = h.Length;
+        var s = (float[])h.Clone(); System.Array.Sort(s);
+        float Pct(float q) => s[(int)Mathf.Clamp(q * (n - 1), 0, n - 1)];
+        System.Text.StringBuilder sb = new("WATERCOVERAGE: percentiles ");
+        foreach (float q in new[] { 0.05f, 0.10f, 0.15f, 0.20f, 0.30f, 0.50f })
+            sb.Append($"p{(int)(q*100)}={Pct(q):F0} ");
+        // coverage at a few candidate levels
+        sb.Append(" | coverage ");
+        foreach (float lvl in new[] { Pct(0.08f), Pct(0.12f), Pct(0.18f) })
+        {
+            int wet = 0; foreach (float v in h) { if (v < lvl) { wet++; } }
+            sb.Append($"sea={lvl:F0}->{100f*wet/n:F0}% ");
+        }
+        pipe.Dispose();
+        GD.Print(sb.ToString());
     }
 
     private static void Coarse(FieldParams p, FieldCompute fc)

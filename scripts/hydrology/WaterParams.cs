@@ -10,7 +10,8 @@ public sealed class WaterParams
     public bool  RiversEnabled = true;
 
     // --- tier 1: sea ---
-    public float SeaLevel      = 40f;    // world Y of the global sea surface
+    public float SeaLevel      = -104f;  // world Y of the global sea — LOW so most land is dry (~12% flood in the
+                                         // lab region; height p50≈+85, basins to -131). Was 40 (flooded >half).
 
     // --- tier 2: significant lakes (the "limited amounts" budget) ---
     public float LakeMinAreaM2     = 40000f; // min lake surface area (m²) to qualify (~200m across) — kills speckle
