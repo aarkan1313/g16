@@ -83,6 +83,35 @@ public partial class ErosionLab : Node3D
                     GD.Print($"DRAINAGECHECK: {(ok ? "PASS" : "FAIL")} fillOk={fillOk} segs={g.Segments.Count} area max/mean={amax/amean:F0} order1={o1} order>=3={ohi}");
                     SetProcess(false); GetTree().Quit(); return;
                 }
+                if (a == "--determinismcheck")
+                {
+                    var hp = new WG16.Hydrology.HydrologyParams();
+                    float sp = hp.CoarseSpacing; int cres = 128;
+                    // region A: origin O. region B: origin O shifted by +16 coarse cells in x (overlap = the other 112 cols).
+                    float ox = -4000f, oz = -4000f; int shift = 16;
+                    var ga = WG16.Hydrology.DrainageGraph.Build(WG16.Hydrology.CoarseField.Build(fc, p, ox, oz, sp, cres), hp);
+                    var gb = WG16.Hydrology.DrainageGraph.Build(WG16.Hydrology.CoarseField.Build(fc, p, ox + shift * sp, oz, sp, cres), hp);
+                    // collect segments whose BOTH endpoints lie WELL INSIDE the shared overlap: exclude a margin
+                    // near each fill's boundary (priority-flood is edge-sensitive; chunks always carry halo beyond
+                    // their visible extent, so the interior is what streaming relies on). margin = 4 coarse cells.
+                    float margin = 4f * sp;
+                    float lo = ox + shift * sp + margin, hi = ox + cres * sp - margin;
+                    System.Func<WG16.Hydrology.DrainageGraph, System.Collections.Generic.HashSet<string>> band = g =>
+                    {
+                        var s = new System.Collections.Generic.HashSet<string>();
+                        foreach (var seg in g.Segments)
+                            if (seg.Ax >= lo && seg.Ax <= hi && seg.Bx >= lo && seg.Bx <= hi)
+                                s.Add($"{seg.Ax:F1},{seg.Az:F1}->{seg.Bx:F1},{seg.Bz:F1}:{seg.Order}");
+                        return s;
+                    };
+                    var sa = band(ga); var sb = band(gb);
+                    int matched = 0, total = 0;
+                    foreach (var k in sa) { total++; if (sb.Contains(k)) matched++; }
+                    float frac = total > 0 ? (float)matched / total : 0f;
+                    bool ok = frac > 0.95f;   // >95% of interior-overlap segments identical => tile-coherent
+                    GD.Print($"DETERMINISMCHECK: {(ok ? "PASS" : "FAIL")} overlap segments={total} identical={matched} frac={frac:F3} (need >0.95)");
+                    SetProcess(false); GetTree().Quit(); return;
+                }
                 if (a == "--erosioncheck")
                 {
                     int steps = 600;
