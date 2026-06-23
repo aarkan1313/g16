@@ -106,7 +106,8 @@ void main() {
     }
 
     // substrate, derived from the CARVED-channel tracker (coherent with the actual valley geometry).
-    float chanW = max(P.cell_size * 1.5, cvHalfw * 0.25);       // channel-water band scales with the real valley
+    // channel-water band = a real fraction of the valley half-width so rivers read as WATER (not a hairline).
+    float chanW = max(P.cell_size * 2.5, cvHalfw * 0.45);
     cmask[i]  = cvOrder >= 1.0 ? (1.0 - smoothstep(0.0, chanW, cvDist)) * clamp(cvOrder / 6.0, 0.2, 1.0) : 0.0;
     accum[i]  = anyArea * (1.0 - smoothstep(0.0, max(P.width_per_order, 1.0), anyDist));  // full-network magnitude
     sed[i]    = (cvDist < cvHalfw) ? P.bank_sediment : 0.0;     // banks along the carved valley

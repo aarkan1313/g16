@@ -66,7 +66,10 @@ public sealed class ValleyCarve : IDisposable
         BitConverter.GetBytes(graph.CoarseOriginX).CopyTo(push, 16);
         BitConverter.GetBytes(graph.CoarseOriginZ).CopyTo(push, 20);
         BitConverter.GetBytes(graph.CoarseSpacing).CopyTo(push, 24);
-        BitConverter.GetBytes(hp.LakeMinDepth).CopyTo(push, 28);
+        // LakeFill spectrum -> effective depth threshold: fill=1 => LakeMinDepth (most basins pool);
+        // fill=0 => a huge threshold (no basin is deep enough => no lakes, everything drains out as rivers).
+        float lakeThresh = Lerp(2000f, hp.LakeMinDepth, Mathf.Clamp(hp.LakeFill, 0f, 1f));
+        BitConverter.GetBytes(lakeThresh).CopyTo(push, 28);
 
         long l = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(l, _pipeline);
@@ -89,6 +92,7 @@ public sealed class ValleyCarve : IDisposable
         return res;
     }
 
+    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
     private Rid Sb(int bytes) => _rd.StorageBufferCreate((uint)bytes);
     private Rid SbBytes(byte[] b) => _rd.StorageBufferCreate((uint)b.Length, b);
     private Rid SbFloats(float[] f) { var b = new byte[f.Length*4]; Buffer.BlockCopy(f, 0, b, 0, b.Length); return _rd.StorageBufferCreate((uint)b.Length, b); }

@@ -24,7 +24,10 @@ public sealed class HydrologyParams
     public float DepthPerOrder = 12f;   // metres of incision added per Strahler order at the channel line
     public float WidthPerOrder = 40f;   // valley half-width (m) added per Strahler order (smooth falloff radius)
     public float BankSediment  = 0.3f;  // sediment value written within the valley (placeholder for surfacing)
-    public float LakeMinDepth  = 3f;     // min fill-depth (m) for a coarse cell to count as a lake (else dry flat)
+    public float LakeFill      = 0.5f;   // LAKE SPECTRUM [0..1]: 0 = no lakes (basins drain out as rivers), 1 =
+                                         // basins fill freely to spill level. Maps to an effective depth threshold
+                                         // (low fill => only very deep closed basins pool; high fill => most pool).
+    public float LakeMinDepth  = 3f;     // floor on the lake depth threshold at LakeFill=1 (m)
     public int   PolishSteps   = 40;     // stream-power erosion-relaxation steps on the CARVED field (0 = off).
                                          // The decisive "make it natural" lever (Schott 2023): relax confluence
                                          // seams / valley-width steps / basin flats into natural form. A LAYER on

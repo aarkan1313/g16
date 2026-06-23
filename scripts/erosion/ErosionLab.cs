@@ -325,6 +325,7 @@ public partial class ErosionLab : Node3D
                     else if (a.StartsWith("--lakemin=")) { _hp.LakeMinDepth = a.Substring(10).ToFloat(); }
                     else if (a.StartsWith("--polish=")) { _hp.PolishSteps = (int)a.Substring(9).ToFloat(); }
                     else if (a.StartsWith("--mfd=")) { _hp.MfdExp = a.Substring(6).ToFloat(); }
+                    else if (a.StartsWith("--lakefill=")) { _hp.LakeFill = a.Substring(11).ToFloat(); }
                 }
                 BuildHydrology(p, fc);
             }
