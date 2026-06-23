@@ -27,9 +27,10 @@ public sealed class ValleyCarve : IDisposable
         _pipeline = _rd.ComputePipelineCreate(_shader);
     }
 
-    public CarveResult Carve(float[] baseHeight, IReadOnlyList<DrainageGraph.Segment> segments, HydrologyParams hp)
+    public CarveResult Carve(float[] baseHeight, DrainageGraph graph, HydrologyParams hp)
     {
         hp.Res = _res;
+        var segments = graph.Segments;
         // pack segments: 8 floats each [Ax,Az,Bx,Bz,Order,Area,BedA,BedB]. (>=1 float even if empty so RID valid.)
         int sc = segments.Count;
         var segF = new float[Math.Max(sc * 8, 1)];
@@ -39,12 +40,16 @@ public sealed class ValleyCarve : IDisposable
             segF[o] = g.Ax; segF[o+1] = g.Az; segF[o+2] = g.Bx; segF[o+3] = g.Bz;
             segF[o+4] = g.Order; segF[o+5] = g.Area; segF[o+6] = g.BedA; segF[o+7] = g.BedB;
         }
+        // coarse lake fields: Filled (spill surface = lake water level) + LakeDepth (>0 = submerged by fill).
+        // sampled bilinearly in the shader to set wlevel for LAKES (not just channels) + flatten lake floors.
 
         Rid ppar = SbBytes(hp.Pack());
         Rid pbase = SbFloats(baseHeight);
         Rid pout = Sb(_cells*4), pacc = Sb(_cells*4), pcm = Sb(_cells*4), pwl = Sb(_cells*4), psd = Sb(_cells*4);
         Rid pseg = SbFloats(segF);
-        Rid[] bufs = { ppar, pbase, pout, pacc, pcm, pwl, psd, pseg };
+        Rid pfilled = SbFloats(graph.Filled);
+        Rid plake = SbFloats(graph.LakeDepth);
+        Rid[] bufs = { ppar, pbase, pout, pacc, pcm, pwl, psd, pseg, pfilled, plake };
         var u = new Godot.Collections.Array<RDUniform>();
         for (int b = 0; b < bufs.Length; b++)
         { var ru = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = b }; ru.AddId(bufs[b]); u.Add(ru); }
@@ -52,10 +57,16 @@ public sealed class ValleyCarve : IDisposable
 
         // origin: lab carves the region centered on 0, matching how ErosionLab seeds the base field.
         float originX = -_res * hp.CellSize * 0.5f, originZ = -_res * hp.CellSize * 0.5f;
-        byte[] push = new byte[16];
+        // push: segCount, carveOrigin xz, coarse grid res + its origin/spacing (for sampling lake fields).
+        byte[] push = new byte[32];
         BitConverter.GetBytes(sc).CopyTo(push, 0);
         BitConverter.GetBytes(originX).CopyTo(push, 4);
         BitConverter.GetBytes(originZ).CopyTo(push, 8);
+        BitConverter.GetBytes(graph.Res).CopyTo(push, 12);
+        BitConverter.GetBytes(graph.CoarseOriginX).CopyTo(push, 16);
+        BitConverter.GetBytes(graph.CoarseOriginZ).CopyTo(push, 20);
+        BitConverter.GetBytes(graph.CoarseSpacing).CopyTo(push, 24);
+        BitConverter.GetBytes(hp.LakeMinDepth).CopyTo(push, 28);
 
         long l = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(l, _pipeline);

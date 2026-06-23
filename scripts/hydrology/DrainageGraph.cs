@@ -19,17 +19,22 @@ public sealed class DrainageGraph
     public readonly float[] Area;     // upstream drainage (cell count, includes self=1)
     public readonly int[]   Order;    // Strahler order where channel, else 0
     public readonly float[] Bed;      // river-bed elevation per cell (monotonic downstream; from Filled)
+    public readonly int[]   FloodRecv;// receiver from the priority-flood (the cell each was discovered from);
+                                      // guarantees a drain path on flats where steepest-descent would dead-end
+    public readonly float[] LakeDepth;// Filled - originalH: how deep the fill submerged this cell (>0 = under water)
+    public float CoarseOriginX, CoarseOriginZ, CoarseSpacing;   // world transform of the coarse grid (for sampling)
     public readonly List<Segment> Segments = new();
 
     private readonly int _n;
     private int Idx(int x, int z) => z * Res + x;
 
     private DrainageGraph(int res)
-    { Res = res; _n = res * res; Filled = new float[_n]; DownIdx = new int[_n]; Area = new float[_n]; Order = new int[_n]; Bed = new float[_n]; }
+    { Res = res; _n = res * res; Filled = new float[_n]; DownIdx = new int[_n]; Area = new float[_n]; Order = new int[_n]; Bed = new float[_n]; FloodRecv = new int[_n]; LakeDepth = new float[_n]; }
 
     public static DrainageGraph Build(CoarseField cf, HydrologyParams hp)
     {
         var g = new DrainageGraph(cf.Res);
+        g.CoarseOriginX = cf.OriginX; g.CoarseOriginZ = cf.OriginZ; g.CoarseSpacing = cf.Spacing;
         g.FillDepressions(cf);
         g.RouteSteepestDescent();
         g.AccumulateArea();
@@ -62,11 +67,14 @@ public sealed class DrainageGraph
         }
     }
 
-    // Priority-flood (Barnes 2014): flood inward from the edge, raising each cell to at least its lowest
-    // already-processed neighbor. Guarantees every cell drains to the region edge. Deterministic: the priority
-    // queue ties break by cell index, so identical inputs => identical fill.
+    // Priority-flood + flow-direction (Barnes 2014, combined variant): flood inward from the edge, raising each
+    // cell to at least its lowest already-processed neighbor, AND record the receiver (the cell each was
+    // discovered FROM) — giving every cell a guaranteed drain path to the edge even across filled flats, where
+    // pure steepest-descent would dead-end. Also record LakeDepth = Filled - originalH (how far the fill
+    // submerged the cell). Deterministic: priority-queue ties break by cell index.
     private void FillDepressions(CoarseField cf)
     {
+        for (int i = 0; i < _n; i++) { FloodRecv[i] = -1; }
         var closed = new bool[_n];
         // min-heap of (height, index); tie-break by index for determinism
         var open = new SortedSet<(float h, int i)>(Comparer<(float h, int i)>.Create((a, b) =>
@@ -77,13 +85,15 @@ public sealed class DrainageGraph
         {
             var (h, i) = open.Min; open.Remove(open.Min);
             Filled[i] = h;
+            LakeDepth[i] = h - cf.H(i % Res, i / Res);   // >0 => fill raised water above original ground = lake
             int cx = i % Res, cz = i / Res;
             foreach (var (nx, nz, _) in Neigh8(cx, cz))
             {
                 int ni = Idx(nx, nz);
                 if (closed[ni]) { continue; }
                 closed[ni] = true;
-                float nh = Math.Max(cf.H(nx, nz), h);   // raise into a depression to the spill level
+                FloodRecv[ni] = i;                       // discovered from i => drains toward i (toward the edge)
+                float nh = Math.Max(cf.H(nx, nz), h);    // raise into a depression to the spill level
                 open.Add((nh, ni));
             }
         }
@@ -108,8 +118,11 @@ public sealed class DrainageGraph
         }
     }
 
-    // steepest-descent (by SLOPE, D8) on the FILLED surface. No pits remain, so every non-edge cell has a
-    // downhill neighbor; diagonals let rivers run at 45° instead of staircasing along the axes.
+    // D8 steepest-descent (by SLOPE) on the FILLED surface, FALLING BACK to the flood receiver on flats. On a
+    // priority-flood plateau (filled depression spill-surface) no neighbor is strictly lower, so steepest-
+    // descent alone would dead-end mid-domain; the flood receiver (the cell this was discovered from) always
+    // points toward the edge, guaranteeing a complete drain path. Border cells with no flood receiver are true
+    // outlets (-1).
     private void RouteSteepestDescent()
     {
         for (int z = 0; z < Res; z++) for (int x = 0; x < Res; x++)
@@ -117,7 +130,8 @@ public sealed class DrainageGraph
             int i = Idx(x, z); float hc = Filled[i]; int best = -1; float bestSlope = 0f;
             foreach (var (nx, nz, dist) in Neigh8(x, z))
             { int ni = Idx(nx, nz); float slope = (hc - Filled[ni]) / dist; if (slope > bestSlope) { bestSlope = slope; best = ni; } }
-            DownIdx[i] = best;   // -1 => edge outlet (no lower neighbor)
+            // no strictly-lower neighbor (flat) → use the flood receiver so flow still reaches the edge.
+            DownIdx[i] = best >= 0 ? best : FloodRecv[i];
         }
     }
 

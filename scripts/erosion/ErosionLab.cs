@@ -87,8 +87,20 @@ public partial class ErosionLab : Node3D
                     for (int z = 0; z < cres; z++) for (int x = 0; x < cres; x++) if (g.Filled[z*cres+x] < cf.H(x,z) - 1e-3f) fillOk = false;
                     float amax = 0, amean = 0; foreach (float v in g.Area) { if (v > amax) amax = v; amean += v; } amean /= g.Area.Length;
                     int o1 = 0, ohi = 0; foreach (int o in g.Order) { if (o == 1) o1++; else if (o >= 3) ohi++; }
-                    bool ok = fillOk && g.Segments.Count > 50 && amax / amean > 20f && o1 > ohi;
-                    GD.Print($"DRAINAGECHECK: {(ok ? "PASS" : "FAIL")} fillOk={fillOk} segs={g.Segments.Count} area max/mean={amax/amean:F0} order1={o1} order>=3={ohi}");
+                    // DRAINAGE COMPLETENESS (audit finding 3+5): every interior cell must reach an edge outlet by
+                    // following DownIdx (no dead-end / cycle). Lake cells (deep fill) are allowed to be tracked
+                    // separately but must still route. Walk DownIdx with a hop cap; fail if any cell never exits.
+                    int undrained = 0, lakes = 0;
+                    for (int c0 = 0; c0 < cres * cres; c0++)
+                    {
+                        if (g.LakeDepth[c0] > hp.LakeMinDepth) { lakes++; }
+                        int cur = c0, hops = 0; bool drained = false;
+                        while (hops++ < cres * cres) { int d = g.DownIdx[cur]; if (d < 0) { drained = true; break; } cur = d; }
+                        if (!drained) { undrained++; }
+                    }
+                    bool drainsAll = undrained == 0;
+                    bool ok = fillOk && g.Segments.Count > 50 && amax / amean > 20f && o1 > ohi && drainsAll;
+                    GD.Print($"DRAINAGECHECK: {(ok ? "PASS" : "FAIL")} fillOk={fillOk} segs={g.Segments.Count} area max/mean={amax/amean:F0} order1={o1} order>=3={ohi} undrained={undrained} lakes={lakes}");
                     SetProcess(false); GetTree().Quit(); return;
                 }
                 if (a == "--determinismcheck")
@@ -129,10 +141,11 @@ public partial class ErosionLab : Node3D
                         (int)((_res * _cell + 2 * hp.HaloMetres) / hp.CoarseSpacing));
                     var g = WG16.Hydrology.DrainageGraph.Build(cf, hp);
                     using var vc = new WG16.Hydrology.ValleyCarve(_res);
-                    // MODULARITY: zero segments => height == base (carve_strength irrelevant when nothing to carve)
-                    var r0 = vc.Carve(baseH, new System.Collections.Generic.List<WG16.Hydrology.DrainageGraph.Segment>(), hp);
+                    // MODULARITY: carve_strength=0 => height == base (the design's disable guarantee).
+                    var hp0 = new WG16.Hydrology.HydrologyParams { Res = _res, CellSize = _cell, CarveStrength = 0f };
+                    var r0 = vc.Carve(baseH, g, hp0);
                     bool untouched = true; for (int k = 0; k < baseH.Length; k++) if (Mathf.Abs(r0.Height[k] - baseH[k]) > 1e-3f) untouched = false;
-                    var r = vc.Carve(baseH, g.Segments, hp);
+                    var r = vc.Carve(baseH, g, hp);
                     // anti-terracing: 2nd-diff roughness low + isotropic (z/x ~ 1).
                     double rx = 0, rz = 0; long nn = 0;
                     for (int z = 1; z < _res-1; z++) for (int x = 1; x < _res-1; x++)
@@ -336,7 +349,7 @@ public partial class ErosionLab : Node3D
         var cf = WG16.Hydrology.CoarseField.Build(fc, p, bo - _hp.HaloMetres, bo - _hp.HaloMetres, _hp.CoarseSpacing, cres);
         var g = WG16.Hydrology.DrainageGraph.Build(cf, _hp);
         _vc ??= new WG16.Hydrology.ValleyCarve(_res);
-        _carve = _vc.Carve(baseH, g.Segments, _hp);
+        _carve = _vc.Carve(baseH, g, _hp);
         UploadHeight(_carve.Height);
         GD.Print($"  hydrology: {g.Segments.Count} river segments, carve_strength={_hp.CarveStrength:F1}");
     }
