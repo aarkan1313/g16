@@ -8,7 +8,7 @@ layout(set = 0, binding = 0, std430) restrict buffer Params {
     float evaporate; float gravity; float capacity; float erode;
     float deposit; float max_erode; float talus_angle; float talus_rate;
     float min_tilt; float stream_m; float stream_n; float accum_rate;
-    float channel_threshold; float _p1; float _p2; float _p3;
+    float channel_threshold; float flow_exp; float _p2; float _p3;
 } P;
 
 layout(set = 0, binding = 1, std430) restrict buffer Height   { float h[]; };
@@ -21,9 +21,10 @@ layout(set = 0, binding = 7, std430) restrict buffer TFlux    { vec4 tflux[]; };
 layout(set = 0, binding = 8, std430) restrict buffer Sed2     { float s2[]; };    // transport double-buffer
 layout(set = 0, binding = 9, std430) restrict buffer Accum    { float a[]; };     // upstream drainage area A
 layout(set = 0, binding =10, std430) restrict buffer Accum2   { float a2[]; };    // accum double-buffer
-layout(set = 0, binding =11, std430) restrict buffer AFlux    { vec4 aflux[]; };  // downhill area-routing weights L,R,T,B
-layout(set = 0, binding =12, std430) restrict buffer CMask    { float cmask[]; }; // channel mask (stream-order proxy)
-layout(set = 0, binding =13, std430) restrict buffer WLevel   { float wlevel[]; };// basin standing-water surface
+layout(set = 0, binding =11, std430) restrict buffer AFlux    { vec4 aflux[]; };  // D8 area weights cardinal L,R,T,B
+layout(set = 0, binding =12, std430) restrict buffer AFlux2   { vec4 aflux2[]; }; // D8 area weights diagonal TL,TR,BL,BR
+layout(set = 0, binding =13, std430) restrict buffer CMask    { float cmask[]; }; // channel mask (stream-order proxy)
+layout(set = 0, binding =14, std430) restrict buffer WLevel   { float wlevel[]; };// basin standing-water surface
 
 // push_constant selects the phase (so one shader = all phases).
 layout(push_constant, std430) uniform Push { int phase; } pc;
@@ -67,18 +68,31 @@ void main() {
         w[i] = wn * (1.0 - P.evaporate * P.dt);   // writes OWN water only
     }
     else if (pc.phase == 3) {                 // ERODE/DEPOSIT: STREAM-POWER E ∝ A^m·S^n (read h(neighbors)+A+s)
-        float hl = h[idx(max(c.x-1,0), c.y)], hr = h[idx(min(c.x+1,P.res-1), c.y)];
-        float ht = h[idx(c.x, max(c.y-1,0))], hb = h[idx(c.x, min(c.y+1,P.res-1))];
-        float slope = max(P.min_tilt, length(vec2(hr-hl, hb-ht)) / (2.0 * P.cell_size));
-        // Stream power: erosive capacity ∝ (accumulated drainage area)^m · slope^n. THIS is what makes rivers —
-        // incision concentrates where upstream area A is large (channels), not uniformly (diffuse hillslope).
-        float area = a[i] * P.cell_size * P.cell_size;          // A in m² (a[i] = cell count upstream)
+        // Stream power S is the DOWNSTREAM gradient along the channel — the drop to the steepest-descent
+        // neighbor over its distance — NOT the centered-difference |∇h|. The centered slope creates a
+        // grid-aligned self-deepening feedback (incise → steeper centered slope → incise more) that combs the
+        // terrain into vertical grooves. The downstream drop is the physically-correct S and is grid-stable.
+        float hc = h[i];
+        int xl = max(c.x-1,0), xr = min(c.x+1,P.res-1), zt = max(c.y-1,0), zb = min(c.y+1,P.res-1);
+        const float INVD = 0.70710678;
+        float dcard[4]; dcard[0]=hc-h[idx(xl,c.y)]; dcard[1]=hc-h[idx(xr,c.y)];
+                        dcard[2]=hc-h[idx(c.x,zt)]; dcard[3]=hc-h[idx(c.x,zb)];
+        float ddiag[4]; ddiag[0]=(hc-h[idx(xl,zt)])*INVD; ddiag[1]=(hc-h[idx(xr,zt)])*INVD;
+                        ddiag[2]=(hc-h[idx(xl,zb)])*INVD; ddiag[3]=(hc-h[idx(xr,zb)])*INVD;
+        float drop = 0.0, outletH = hc;                  // steepest downstream drop + that neighbor's height
+        for (int k=0;k<4;k++){ if(dcard[k]>drop){drop=dcard[k];} }
+        for (int k=0;k<4;k++){ if(ddiag[k]>drop){drop=ddiag[k];} }
+        // recover the outlet (lowest neighbor) height to clamp incision so we never cut below the outlet.
+        float minN = min(min(h[idx(xl,c.y)],h[idx(xr,c.y)]), min(h[idx(c.x,zt)],h[idx(c.x,zb)]));
+        minN = min(minN, min(min(h[idx(xl,zt)],h[idx(xr,zt)]), min(h[idx(xl,zb)],h[idx(xr,zb)])));
+        float slope = max(P.min_tilt, drop / P.cell_size);
+        float area = a[i] * P.cell_size * P.cell_size;   // A in m² (a[i] = cell count upstream)
         float cap = P.capacity * pow(area, P.stream_m) * pow(slope, P.stream_n);
-        // gate by presence of water so bone-dry uplands don't incise from area alone (channels carry the water).
-        cap *= clamp(w[i] * 40.0, 0.0, 1.0);
+        cap *= clamp(w[i] * 40.0, 0.0, 1.0);             // water-gated: dry uplands don't incise from area alone
         float sed = s[i];
         if (cap > sed) {
             float amt = min(P.erode * (cap - sed) * P.dt, P.max_erode);
+            amt = min(amt, max(0.0, hc - minN) * 0.5);   // never incise below (toward) the outlet → no runaway groove
             dh[i] = -amt; s[i] = sed + amt;        // dh applied in phase 5 (no neighbor reads h[i] mid-erode)
         } else {
             float amt = P.deposit * (sed - cap) * P.dt;
@@ -122,29 +136,49 @@ void main() {
     else if (pc.phase == 7) {                 // SWAP: s = s2 (commit the advected sediment)
         s[i] = s2[i];
     }
-    else if (pc.phase == 8) {                 // ACCUM_WEIGHT: route A downhill on BEDROCK topology (read-only h/a)
-        // Drainage area follows the terrain SURFACE (bedrock), not the transient water film. Distribute each
-        // cell's area to its LOWER neighbors in proportion to slope (D-infinity-style multi-flow). Steeper
-        // descent gets more — this smooths the network off the grid axes so rivers branch naturally.
-        float hc = h[i];
-        float dL = hc - h[idx(max(c.x-1,0),       c.y)];
-        float dR = hc - h[idx(min(c.x+1,P.res-1), c.y)];
-        float dT = hc - h[idx(c.x, max(c.y-1,0))];
-        float dB = hc - h[idx(c.x, min(c.y+1,P.res-1))];
-        vec4 wgt = max(vec4(dL, dR, dT, dB), vec4(0.0));   // only downhill directions receive flow
-        float tot = wgt.x + wgt.y + wgt.z + wgt.w;
-        aflux[i] = (tot > 1e-9) ? wgt / tot : vec4(0.0);   // own fractions sum to 1 (or 0 at a pit). race-free.
+    else if (pc.phase == 8) {                 // ACCUM_WEIGHT: D8 area routing on the WATER SURFACE (read-only h/w/a)
+        // CRITICAL: route on the water surface H = h + w, NOT bedrock h. A pitted bedrock surface fragments
+        // drainage into thousands of internal basins (each local pit terminates flow → starburst, not rivers).
+        // The pipe-model water already FILLS pits with standing water and overflows at the lowest sill, exactly
+        // like real water — so routing on h+w lets accumulation flow THROUGH filled depressions to the domain
+        // edge, forming a connected dendritic network. D8 + slope^flow_exp gives crisp off-axis channels.
+        float hc = h[i] + w[i];
+        int xl = max(c.x-1,0), xr = min(c.x+1,P.res-1), zt = max(c.y-1,0), zb = min(c.y+1,P.res-1);
+        #define HW(X,Z) (h[idx(X,Z)] + w[idx(X,Z)])
+        const float INV_DIAG = 0.70710678;   // 1/sqrt(2): diagonal step is sqrt(2)·cell_size farther
+        // cardinal slopes (Δ(h+w) per cell), diagonal slopes scaled by 1/sqrt(2)
+        vec4 card = max(vec4(hc - HW(xl,c.y), hc - HW(xr,c.y),
+                             hc - HW(c.x,zt), hc - HW(c.x,zb)), vec4(0.0));
+        vec4 diag = max(vec4(hc - HW(xl,zt), hc - HW(xr,zt),
+                             hc - HW(xl,zb), hc - HW(xr,zb)), vec4(0.0)) * INV_DIAG;
+        #undef HW
+        // slope^flow_exp concentration (flow_exp≈4 ≈ near-steepest-descent, but differentiable)
+        card = pow(card, vec4(P.flow_exp)); diag = pow(diag, vec4(P.flow_exp));
+        float tot = card.x+card.y+card.z+card.w + diag.x+diag.y+diag.z+diag.w;
+        float inv = (tot > 1e-12) ? 1.0/tot : 0.0;
+        aflux[i]  = card * inv;               // L,R,T,B fractions       (own write — race-free)
+        aflux2[i] = diag * inv;               // TL,TR,BL,BR fractions
     }
-    else if (pc.phase == 9) {                 // ACCUM_GATHER: a2[i] = own rain + inflow from UPHILL neighbors
-        // Each neighbor sends a fraction of ITS A toward me along the direction pointing at me.
-        // Left neighbor's R-fraction (aflux.y) flows right → into me; etc. Race-free: read a/aflux, write own a2.
-        float inL = (c.x > 0)        ? aflux[idx(c.x-1, c.y)].y * a[idx(c.x-1, c.y)] : 0.0;
-        float inR = (c.x < P.res-1)  ? aflux[idx(c.x+1, c.y)].x * a[idx(c.x+1, c.y)] : 0.0;
-        float inT = (c.y > 0)        ? aflux[idx(c.x, c.y-1)].w * a[idx(c.x, c.y-1)] : 0.0;
-        float inB = (c.y < P.res-1)  ? aflux[idx(c.x, c.y+1)].z * a[idx(c.x, c.y+1)] : 0.0;
-        // 1.0 = this cell's own rain cell. accum_rate relaxes toward the new estimate for stability as h shifts.
-        float target = 1.0 + (inL + inR + inT + inB);
-        a2[i] = mix(a[i], target, P.accum_rate);
+    else if (pc.phase == 9) {                 // ACCUM_GATHER: a2[i] = own rain + D8 inflow from UPHILL neighbors
+        // Each neighbor sends a fraction of ITS A toward me along the direction pointing at me. For the diagonal
+        // from neighbor at (dx,dz), the fraction it sends toward me is its weight in the OPPOSITE diagonal slot.
+        // aflux2 layout: .x=TL .y=TR .z=BL .w=BR (the neighbor offset that cell sends to).
+        int xl=c.x-1, xr=c.x+1, zt=c.y-1, zb=c.y+1;
+        bool hl=xl>=0, hr=xr<P.res, ht=zt>=0, hb=zb<P.res;
+        float in_ = 0.0;
+        // cardinals: left neighbor's R-send (aflux.y), right's L (.x), top's B (.w), bottom's T (.z)
+        if (hl) in_ += aflux[idx(xl,c.y)].y * a[idx(xl,c.y)];
+        if (hr) in_ += aflux[idx(xr,c.y)].x * a[idx(xr,c.y)];
+        if (ht) in_ += aflux[idx(c.x,zt)].w * a[idx(c.x,zt)];
+        if (hb) in_ += aflux[idx(c.x,zb)].z * a[idx(c.x,zb)];
+        // diagonals: my TL neighbor sends toward me via ITS BR slot (.w); my TR via its BL (.z);
+        // my BL via its TR (.y); my BR via its TL (.x).
+        if (hl&&ht) in_ += aflux2[idx(xl,zt)].w * a[idx(xl,zt)];
+        if (hr&&ht) in_ += aflux2[idx(xr,zt)].z * a[idx(xr,zt)];
+        if (hl&&hb) in_ += aflux2[idx(xl,zb)].y * a[idx(xl,zb)];
+        if (hr&&hb) in_ += aflux2[idx(xr,zb)].x * a[idx(xr,zb)];
+        float target = 1.0 + in_;             // 1.0 = own rain cell
+        a2[i] = mix(a[i], target, P.accum_rate);   // relax for stability as h shifts
     }
     else if (pc.phase == 10) {                // ACCUM_SWAP: a = a2 (commit the propagated drainage area)
         a[i] = a2[i];

@@ -27,7 +27,25 @@ public partial class ErosionLab : Node3D
         using (var fc = new FieldCompute())
         {
             float[] seed = fc.ProducePage(p, -_res * _cell * 0.5f, -_res * _cell * 0.5f, _cell, _res, 0);
-            _sim = new ErosionSim(_res) { Params = new ErosionParams { Res = _res, CellSize = _cell } };
+            var ep = new ErosionParams { Res = _res, CellSize = _cell };
+            // CLI param overrides for cheap isolation/tuning: --sm= --sn= --maxerode= --erode= --rain= --evap=
+            // --capacity= --deposit= --flowexp= --accumrate= --talus= --talusrate=
+            foreach (string a in OS.GetCmdlineUserArgs())
+            {
+                if (a.StartsWith("--sm=")) { ep.StreamM = a.Substring(5).ToFloat(); }
+                else if (a.StartsWith("--sn=")) { ep.StreamN = a.Substring(5).ToFloat(); }
+                else if (a.StartsWith("--maxerode=")) { ep.MaxErode = a.Substring(11).ToFloat(); }
+                else if (a.StartsWith("--erode=")) { ep.Erode = a.Substring(8).ToFloat(); }
+                else if (a.StartsWith("--rain=")) { ep.Rain = a.Substring(7).ToFloat(); }
+                else if (a.StartsWith("--evap=")) { ep.Evaporate = a.Substring(7).ToFloat(); }
+                else if (a.StartsWith("--capacity=")) { ep.Capacity = a.Substring(11).ToFloat(); }
+                else if (a.StartsWith("--deposit=")) { ep.Deposit = a.Substring(10).ToFloat(); }
+                else if (a.StartsWith("--flowexp=")) { ep.FlowExp = a.Substring(10).ToFloat(); }
+                else if (a.StartsWith("--accumrate=")) { ep.AccumRate = a.Substring(12).ToFloat(); }
+                else if (a.StartsWith("--talus=")) { ep.TalusAngle = a.Substring(8).ToFloat(); }
+                else if (a.StartsWith("--talusrate=")) { ep.TalusRate = a.Substring(12).ToFloat(); }
+            }
+            _sim = new ErosionSim(_res) { Params = ep };
             _sim.Seed(seed);
 
             // numeric self-check path (--erosioncheck): step + assert finite/bounded, print, quit.
@@ -61,6 +79,97 @@ public partial class ErosionLab : Node3D
                     GD.Print($"EROSIONCHECK: {(ok ? "PASS" : "FAIL")}  finite={finite} range=[{lo:F1},{hi:F1}] roughness={rough:F4} (sawtooth if >0.02) flow_accum max={amax:F0} mean={amean:F1} ratio={aratio:F0} (channels if >10) after {steps} steps");
                     _sim.Dispose(); _sim = null!;
                     SetProcess(false);   // stop _Process firing on the disposed sim before the tree tears down
+                    GetTree().Quit();
+                    return;
+                }
+                if (a == "--accumtest")
+                {
+                    // ISOLATE routing convergence: run ONLY accumulation on the pristine base field (no erosion).
+                    // If a dendritic network forms here, the routing is sound and the 600-step streaks are an
+                    // erosion-feedback artifact. If it stays starbursts, the routing/convergence itself is broken.
+                    // count local minima (pits) in the PRISTINE base field — many pits fragment drainage.
+                    {
+                        float[] hb = _sim.ReadHeight(); int pits = 0;
+                        for (int z = 1; z < _res - 1; z++)
+                        for (int x = 1; x < _res - 1; x++)
+                        {
+                            int j = z * _res + x; float v = hb[j]; bool lowest = true;
+                            for (int dz = -1; dz <= 1 && lowest; dz++)
+                            for (int dx = -1; dx <= 1; dx++)
+                            {
+                                if (dx == 0 && dz == 0) { continue; }
+                                if (hb[j + dz * _res + dx] < v) { lowest = false; break; }
+                            }
+                            if (lowest) { pits++; }
+                        }
+                        GD.Print($"ACCUMTEST: base field has {pits} local-minimum pits out of {(_res-2)*(_res-2)} interior cells ({100f*pits/((_res-2)*(_res-2)):F2}%)");
+                    }
+                    DumpHillshade(_sim.ReadHeight(), "accumtest_hillshade.png");
+                    _sim.AccumOnly(50);   DumpField(_sim.ReadDebug(3), "accumtest_50.png",   logScale: true);
+                    _sim.AccumOnly(450);  DumpField(_sim.ReadDebug(3), "accumtest_500.png",  logScale: true);
+                    _sim.AccumOnly(1500); DumpField(_sim.ReadDebug(3), "accumtest_2000.png", logScale: true);
+                    var (mx, mn) = _sim.AccumStats();
+                    // DISCRIMINATOR: are high-accumulation cells in VALLEYS (low h, correct rivers) or on RIDGES
+                    // (high h, inverted routing)? Compare mean height of the top-1% accum cells vs the global mean.
+                    float[] hh = _sim.ReadHeight();
+                    float[] aa = _sim.ReadDebug(3);
+                    int nc = hh.Length;
+                    var ord = new int[nc]; for (int q = 0; q < nc; q++) { ord[q] = q; }
+                    System.Array.Sort(ord, (p, q) => aa[q].CompareTo(aa[p]));   // descending accum
+                    int top = nc / 100;
+                    double hAll = 0; foreach (float v in hh) { hAll += v; } hAll /= nc;
+                    double hTop = 0; for (int q = 0; q < top; q++) { hTop += hh[ord[q]]; } hTop /= top;
+                    GD.Print($"ACCUMTEST: accum max={mx:F0} mean={mn:F1} ratio={mx/Mathf.Max(mn,1e-6f):F0}  " +
+                             $"height: global_mean={hAll:F1}  top1%-accum_mean={hTop:F1}  " +
+                             $"({(hTop < hAll ? "VALLEYS ok" : "RIDGES — INVERTED!")})");
+                    _sim.Dispose(); _sim = null!;
+                    SetProcess(false);
+                    GetTree().Quit();
+                    return;
+                }
+                if (a == "--riverdump")
+                {
+                    // Dump full-res PNGs of the drainage skeleton so the river topology can be judged off-screen
+                    // (downscaled viewport shots hide thin channels — ground-texture-feedback lesson). Greyscale:
+                    // flow_accum log-scaled, channel_mask, and a hillshade of the eroded height.
+                    // dump BEFORE erosion to isolate base-field structure from sim-introduced artifacts
+                    DumpHillshade(_sim.ReadHeight(), "river_hillshade_step0.png");
+                    // accum after enough steps to converge routing but with erosion's height change still tiny:
+                    // if THIS already streaks vertically, the routing is biased on the (near-)pristine surface.
+                    _sim.Step(40);
+                    DumpField(_sim.ReadDebug(3), "river_accum_early.png", logScale: true);
+                    _sim.Step(560);
+                    DumpField(_sim.ReadDebug(3), "river_accum.png", logScale: true);
+                    DumpField(_sim.ReadDebug(4), "river_channel.png", logScale: false);
+                    float[] hER = _sim.ReadHeight();
+                    DumpHillshade(hER, "river_hillshade.png");
+                    DumpHeightHeat(hER, "river_height.png");   // raw height heatmap (no hand-rolled shading)
+                    DumpRiverMap(hER, _sim.ReadDebug(3), "river_map.png");   // blue rivers over hillshade (the real read)
+                    // ANISOTROPY PROBE: real vertical combing = much higher cell-to-cell roughness ALONG z than x.
+                    double rx = 0, rz = 0; long nn = 0;
+                    for (int z = 1; z < _res - 1; z++)
+                    for (int x = 1; x < _res - 1; x++)
+                    {
+                        int j = z * _res + x;
+                        rx += Mathf.Abs(2f * hER[j] - hER[j - 1] - hER[j + 1]);
+                        rz += Mathf.Abs(2f * hER[j] - hER[j - _res] - hER[j + _res]);
+                        nn++;
+                    }
+                    // also probe the ACCUM field anisotropy (channel mask combing lives here, not in height).
+                    float[] aER = _sim.ReadDebug(3);
+                    double arx = 0, arz = 0;
+                    for (int z = 1; z < _res - 1; z++)
+                    for (int x = 1; x < _res - 1; x++)
+                    {
+                        int j = z * _res + x;
+                        arx += Mathf.Abs(2f * aER[j] - aER[j - 1] - aER[j + 1]);
+                        arz += Mathf.Abs(2f * aER[j] - aER[j - _res] - aER[j + _res]);
+                    }
+                    GD.Print($"RIVERDUMP: wrote PNGs. HEIGHT anisotropy rough_x={rx / nn:F4} rough_z={rz / nn:F4} " +
+                             $"ratio_z/x={rz / Mathf.Max(rx, 1e-9):F2}  |  ACCUM anisotropy rough_x={arx / nn:F2} " +
+                             $"rough_z={arz / nn:F2} ratio_z/x={arz / Mathf.Max(arx, 1e-9):F2} (>>1 = vertical comb in accum)");
+                    _sim.Dispose(); _sim = null!;
+                    SetProcess(false);
                     GetTree().Quit();
                     return;
                 }
@@ -121,14 +230,18 @@ public partial class ErosionLab : Node3D
         _rDown = r;
 
         bool d = Input.IsPhysicalKeyPressed(Key.D);
-        if (d && !_dDown) { _debug = _debug >= 2 ? -1 : _debug + 1; RefreshDisplay(); }
+        if (d && !_dDown) { _debug = _debug >= 5 ? -1 : _debug + 1; RefreshDisplay(); }
         _dDown = d;
 
         if (_running) { _sim.Step(_stepsPerFrame); _totalSteps += _stepsPerFrame; RefreshDisplay(); }
 
-        string view = _debug < 0 ? "lit height" : (_debug == 0 ? "water" : (_debug == 1 ? "sediment" : "flow"));
+        string view = _debug switch
+        {
+            < 0 => "lit height", 0 => "water", 1 => "sediment", 2 => "flow",
+            3 => "flow_accum (rivers)", 4 => "channel_mask", _ => "water_level",
+        };
         _hud.Text = $"erosion lab  steps={_totalSteps}  {(_running ? "RUNNING" : "paused")}  view={view}\n" +
-                    $"space=run S=step R=reset D=view   {Engine.GetFramesPerSecond():0} fps";
+                    $"space=run S=step R=reset D=view (lit→water→sed→flow→accum→channel→wlevel)   {Engine.GetFramesPerSecond():0} fps";
     }
 
     private void RefreshDisplay()
@@ -143,11 +256,28 @@ public partial class ErosionLab : Node3D
         }
         else
         {
-            float[] f = _sim.ReadDebug(_debug);   // 0 water, 1 sediment, 2 flow
-            // normalize to ~[0,1] for the false-colour ramp (robust max).
-            float mx = 1e-6f;
-            for (int i = 0; i < f.Length; i++) { if (f[i] > mx) { mx = f[i]; } }
-            for (int i = 0; i < f.Length; i++) { f[i] /= mx; }
+            float[] f = _sim.ReadDebug(_debug);   // 0 water,1 sediment,2 flow,3 flow_accum,4 cmask,5 water_level
+            if (_debug == 3)
+            {
+                // flow_accum spans 1..thousands → log-scale so the dendritic skeleton is visible, not just the
+                // few trunk cells. log(1+A)/log(1+max) maps the whole river network into [0,1].
+                float mx = 1e-6f;
+                for (int i = 0; i < f.Length; i++) { if (f[i] > mx) { mx = f[i]; } }
+                float lm = Mathf.Log(1f + mx);
+                for (int i = 0; i < f.Length; i++) { f[i] = Mathf.Log(1f + f[i]) / Mathf.Max(lm, 1e-6f); }
+            }
+            else if (_debug == 5)
+            {
+                // water_level uses -1e9 as the "no standing water" sentinel → show a clean presence mask (1/0).
+                for (int i = 0; i < f.Length; i++) { f[i] = f[i] > -1e8f ? 1f : 0f; }
+            }
+            else
+            {
+                // normalize to ~[0,1] for the false-colour ramp (robust max).
+                float mx = 1e-6f;
+                for (int i = 0; i < f.Length; i++) { if (f[i] > mx) { mx = f[i]; } }
+                for (int i = 0; i < f.Length; i++) { f[i] /= mx; }
+            }
             var bytes = new byte[f.Length * 4];
             System.Buffer.BlockCopy(f, 0, bytes, 0, bytes.Length);
             var img = Image.CreateFromData(_res, _res, false, Image.Format.Rf, bytes);
@@ -157,4 +287,82 @@ public partial class ErosionLab : Node3D
     }
 
     public override void _ExitTree() { _sim?.Dispose(); }
+
+    // --- offline river-topology dumps (--riverdump): full-res greyscale PNGs so thin channels stay visible ---
+    private void DumpField(float[] f, string name, bool logScale)
+    {
+        float mx = 1e-6f;
+        for (int i = 0; i < f.Length; i++) { if (f[i] > mx) { mx = f[i]; } }
+        float lm = Mathf.Log(1f + mx);
+        var img = Image.CreateEmpty(_res, _res, false, Image.Format.Rgb8);
+        for (int z = 0; z < _res; z++)
+        for (int x = 0; x < _res; x++)
+        {
+            float v = f[z * _res + x];
+            v = logScale ? Mathf.Log(1f + v) / Mathf.Max(lm, 1e-6f) : v / mx;
+            img.SetPixel(x, z, new Color(v, v, v));
+        }
+        img.SavePng(ProjectSettings.GlobalizePath("res://" + name));
+    }
+
+    // The real river-network read: hillshade terrain in grey, drainage as blue where log-accum is high.
+    private void DumpRiverMap(float[] h, float[] accum, string name)
+    {
+        float amx = 1e-6f;
+        for (int i = 0; i < accum.Length; i++) { if (accum[i] > amx) { amx = accum[i]; } }
+        float lm = Mathf.Log(1f + amx);
+        Vector3 lightDir = new Vector3(-0.4f, 0.85f, -0.35f).Normalized();
+        var img = Image.CreateEmpty(_res, _res, false, Image.Format.Rgb8);
+        for (int z = 0; z < _res; z++)
+        for (int x = 0; x < _res; x++)
+        {
+            int xl = Mathf.Max(x - 1, 0), xr = Mathf.Min(x + 1, _res - 1);
+            int zt = Mathf.Max(z - 1, 0), zb = Mathf.Min(z + 1, _res - 1);
+            Vector3 nrm = new Vector3(-(h[z * _res + xr] - h[z * _res + xl]), 2f * _cell,
+                                      -(h[zb * _res + x] - h[zt * _res + x])).Normalized();
+            float shade = Mathf.Clamp(nrm.Dot(lightDir), 0f, 1f) * 0.8f + 0.2f;
+            float riv = Mathf.Log(1f + accum[z * _res + x]) / Mathf.Max(lm, 1e-6f);
+            riv = Mathf.Clamp((riv - 0.25f) / 0.75f, 0f, 1f);   // show the drainage network down to small tributaries
+            // lerp terrain grey → river blue by drainage strength
+            float r = Mathf.Lerp(shade, 0.05f, riv);
+            float g = Mathf.Lerp(shade, 0.25f, riv);
+            float b = Mathf.Lerp(shade, 0.95f, riv);
+            img.SetPixel(x, z, new Color(r, g, b));
+        }
+        img.SavePng(ProjectSettings.GlobalizePath("res://" + name));
+    }
+
+    private void DumpHeightHeat(float[] h, string name)
+    {
+        float lo = 1e9f, hi = -1e9f;
+        foreach (float v in h) { if (v < lo) { lo = v; } if (v > hi) { hi = v; } }
+        float rng = Mathf.Max(hi - lo, 1e-6f);
+        var img = Image.CreateEmpty(_res, _res, false, Image.Format.Rgb8);
+        for (int z = 0; z < _res; z++)
+        for (int x = 0; x < _res; x++)
+        {
+            float t = (h[z * _res + x] - lo) / rng;
+            img.SetPixel(x, z, new Color(t, t, t));
+        }
+        img.SavePng(ProjectSettings.GlobalizePath("res://" + name));
+    }
+
+    private void DumpHillshade(float[] h, string name)
+    {
+        var img = Image.CreateEmpty(_res, _res, false, Image.Format.Rgb8);
+        // simple Lambert hillshade from a NW light so valleys/ridges read as relief.
+        Vector3 lightDir = new Vector3(-0.5f, 0.8f, -0.5f).Normalized();
+        for (int z = 0; z < _res; z++)
+        for (int x = 0; x < _res; x++)
+        {
+            int xl = Mathf.Max(x - 1, 0), xr = Mathf.Min(x + 1, _res - 1);
+            int zt = Mathf.Max(z - 1, 0), zb = Mathf.Min(z + 1, _res - 1);
+            float dhx = h[z * _res + xr] - h[z * _res + xl];
+            float dhz = h[zb * _res + x] - h[zt * _res + x];
+            Vector3 nrm = new Vector3(-dhx, 2f * _cell, -dhz).Normalized();
+            float l = Mathf.Clamp(nrm.Dot(lightDir), 0f, 1f) * 0.85f + 0.15f;
+            img.SetPixel(x, z, new Color(l, l, l));
+        }
+        img.SavePng(ProjectSettings.GlobalizePath("res://" + name));
+    }
 }

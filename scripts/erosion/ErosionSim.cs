@@ -11,7 +11,7 @@ public sealed class ErosionSim : IDisposable
     private readonly RenderingDevice _rd;
     private readonly Rid _shader, _pipeline;
     private Rid _params, _height, _water, _sediment, _flux, _velocity, _dh, _tflux, _sed2, _uset;
-    private Rid _accum, _accum2, _aflux, _cmask, _wlevel;
+    private Rid _accum, _accum2, _aflux, _aflux2, _cmask, _wlevel;
     private readonly int _res, _cells;
     public ErosionParams Params { get; set; } = new();
 
@@ -59,12 +59,13 @@ public sealed class ErosionSim : IDisposable
         _sed2     = Sb(_cells * 4);    // transport double-buffer
         _accum    = Sb(_cells * 4);    // upstream drainage area A
         _accum2   = Sb(_cells * 4);    // accum double-buffer
-        _aflux    = Sb(_cells * 16);   // vec4 downhill area-routing weights
+        _aflux    = Sb(_cells * 16);   // vec4 D8 cardinal area weights
+        _aflux2   = Sb(_cells * 16);   // vec4 D8 diagonal area weights
         _cmask    = Sb(_cells * 4);    // channel mask
         _wlevel   = Sb(_cells * 4);    // basin water surface
         var u = new Godot.Collections.Array<RDUniform>();
         Rid[] bufs = { _params, _height, _water, _sediment, _flux, _velocity, _dh, _tflux, _sed2,
-                       _accum, _accum2, _aflux, _cmask, _wlevel };
+                       _accum, _accum2, _aflux, _aflux2, _cmask, _wlevel };
         for (int b = 0; b < bufs.Length; b++)
         {
             var ru = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = b };
@@ -79,7 +80,7 @@ public sealed class ErosionSim : IDisposable
         Clear(_water, _cells * 4); Clear(_sediment, _cells * 4);
         Clear(_flux, _cells * 16); Clear(_velocity, _cells * 8);
         Clear(_dh, _cells * 4); Clear(_tflux, _cells * 16); Clear(_sed2, _cells * 4);
-        Clear(_aflux, _cells * 16); Clear(_cmask, _cells * 4);
+        Clear(_aflux, _cells * 16); Clear(_aflux2, _cells * 16); Clear(_cmask, _cells * 4);
         // accum starts at 1.0 (each cell = its own rain unit); relaxation propagates upstream area downhill.
         var ones = new byte[_cells * 4]; var one = BitConverter.GetBytes(1.0f);
         for (int i = 0; i < _cells; i++) { Buffer.BlockCopy(one, 0, ones, i * 4, 4); }
@@ -114,6 +115,18 @@ public sealed class ErosionSim : IDisposable
         _rd.ComputeListDispatch(l, g, g, 1);
         _rd.ComputeListEnd();
         _rd.Submit(); _rd.Sync();   // local RD is blocking; fine for an offline tool
+    }
+
+    /// Diagnostic: run ONLY the flow-accumulation passes n times on the current (fixed) height. Isolates
+    /// routing convergence from the erosion feedback — does a dendritic network form on the pristine surface?
+    public void AccumOnly(int n)
+    {
+        for (int k = 0; k < n; k++)
+        {
+            Dispatch(PHASE_ACCUM_WEIGHT);
+            Dispatch(PHASE_ACCUM_GATHER);
+            Dispatch(PHASE_ACCUM_SWAP);
+        }
     }
 
     /// One full coupled step = all phases in race-free order, sharing the same state.
@@ -174,7 +187,7 @@ public sealed class ErosionSim : IDisposable
     public void Dispose()
     {
         foreach (var r in new[] { _uset, _params, _height, _water, _sediment, _flux, _velocity, _dh, _tflux, _sed2,
-                                  _accum, _accum2, _aflux, _cmask, _wlevel, _pipeline, _shader })
+                                  _accum, _accum2, _aflux, _aflux2, _cmask, _wlevel, _pipeline, _shader })
         {
             if (r.IsValid) { _rd.FreeRid(r); }
         }
