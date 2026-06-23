@@ -1,19 +1,47 @@
 # HANDOFF — Erosion + Hydrology · START HERE (new chat)
 
-**Date:** 2026-06-23 · **Branch:** `experiment/presentation` (pushed) · **Lane:** terrain shape + water.
-The **graveyard arc** — erosion killed WG1–15. Discipline high: prove each arc great before the next; one
-coherent coupled model (NOT a solver stack); base field untouched; eye-gate in motion; STOP if it can't be
-made great (don't grind 19 versions).
+**Date:** 2026-06-23 (updated) · **Branch:** `experiment/presentation` · **Lane:** terrain shape + water.
+The **graveyard arc** — erosion killed WG1–15. Discipline high: prove each arc great before the next; base
+field untouched; eye-gate in motion; STOP if it can't be made great (don't grind versions).
+
+## ⚠️ PIVOT (read this): pipe-model erosion is RETIRED as the macro producer
+
+The per-cell pipe-model hydraulic sim (flow-accumulation + stream-power) was BUILT and **REJECTED at the live
+eye-gate** — it makes TERRACED, stair-stepped terrain + thread-rivers, not a playable surface. Root cause:
+that sim is good at micro erosion detail, structurally bad at macro playable structure. **Arc 1's producer is
+now STRUCTURE-FIRST drainage synthesis** (a deterministic coarse drainage GRAPH → GPU analytic valley carve).
+Ignore the pipe-model framing below the "older context" line.
 
 ## TL;DR — what to do next
 
-**Execute the Arc 1 plan: make the erosion sim form real dendritic RIVERS (add flow-accumulation + stream-power),
-then user eye-gate it live.**
+**Arc 1 = drainage-network synthesis + analytic valley carve. BUILT; substrate audit-fixed; final eye-gate is
+the open gate. Then build Arc 2 static water on the substrate.**
 
-- **Master roadmap (the durable plan):** `docs/superpowers/specs/2026-06-23-erosion-hydrology-master-design.md`.
-- **Arc 1 spec:** `docs/superpowers/specs/2026-06-23-erosion-arc1-substrate-design.md`.
-- **Arc 1 plan (execute this):** `docs/superpowers/plans/2026-06-23-erosion-arc1-substrate.md` (4 tasks).
-- **Execute DIRECT/inline** (user's standing preference all session; subagent dispatch hit 529s before).
+- **CURRENT design (the producer):** `docs/superpowers/specs/2026-06-23-erosion-arc1-drainage-synthesis-design.md`.
+- **CURRENT plan:** `docs/superpowers/plans/2026-06-23-erosion-arc1-drainage-synthesis.md` (5 tasks, all built).
+- **The carving METHOD (critical reference):** memory [[river-valley-carving-method]] — carve TOWARD a monotonic
+  per-node bed elevation + smooth blend; NEVER subtract-depth-from-bumpy-base (= disconnected gouges).
+- **Master roadmap (still valid — substrate contract unchanged):** `specs/2026-06-23-erosion-hydrology-master-design.md`.
+- **Execute DIRECT/inline** (user's standing preference; subagent dispatch hit 529s).
+- **NEVER eye-gate from a hand-rolled hillshade** — probe the DATA numerically + show the REAL shader render.
+
+## State of the drainage-synthesis Arc 1 (BUILT on experiment/presentation)
+
+Files: `scripts/hydrology/{HydrologyParams,CoarseField,DrainageGraph,ValleyCarve}.cs`, `shaders/valley_carve.glsl`,
+hydrology path in `scripts/erosion/ErosionLab.cs` (DEFAULT lab view; pipe-model behind `--pipemodel`).
+Pipeline: coarse base-field sample (+halo) → priority-flood fill (+flood-receiver routing, lake classification)
+→ D8 steepest-descent → upstream-area → Strahler → per-node BED elevation → Chaikin-smoothed reaches → GPU carve
+TOWARD bed + smooth blend (discharge-scaled width, `CarveMinOrder` skips rivulets) → substrate (height,
+flow_accum, channel_mask, water_level incl. LAKES, sediment). Three visual artifacts fixed in sequence (gouges→
+carve-toward-bed; right-angles→D8; herringbone→smoothing+CarveMinOrder). Substrate AUDIT addressed (lakes,
+coherence, robust routing). **Gates all PASS:** `--carvecheck` (antiterrace z/x 0.98, modular), `--drainagecheck`
+(undrained=0, lakes>0, Strahler hierarchy), `--determinismcheck` (tile-coherence 0.984), `--fieldcheck` 0m.
+Lab keys: D=substrate views, `[`/`]`=carve strength, R=rebuild; CLI `--chanmin --depth --width --carve
+--carvemin --coarsesp`. **OPEN: final user eye-gate verdict** (closest yet; lakes not dramatic in the default
+4km view but the substrate data is correct + gated).
+
+---
+### Older context (pipe-model — RETIRED as producer, kept on disk behind `--pipemodel`)
 
 ## The system (decided this session — don't re-litigate)
 
