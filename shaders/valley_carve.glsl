@@ -108,11 +108,15 @@ void main() {
     // substrate, derived from the CARVED-channel tracker (coherent with the actual valley geometry).
     // channel-water band = a real fraction of the valley half-width so rivers read as WATER (not a hairline).
     float chanW = max(P.cell_size * 2.5, cvHalfw * 0.45);
-    cmask[i]  = cvOrder >= 1.0 ? (1.0 - smoothstep(0.0, chanW, cvDist)) * clamp(cvOrder / 6.0, 0.2, 1.0) : 0.0;
+    float chanProx = cvOrder >= 1.0 ? (1.0 - smoothstep(0.0, chanW, cvDist)) : 0.0;  // 1 at channel line -> 0 at band edge
+    cmask[i]  = chanProx * clamp(cvOrder / 6.0, 0.2, 1.0);
     accum[i]  = anyArea * (1.0 - smoothstep(0.0, max(P.width_per_order, 1.0), anyDist));  // full-network magnitude
     sed[i]    = (cvDist < cvHalfw) ? P.bank_sediment : 0.0;     // banks along the carved valley
-    // river water surface = carved channel thalweg where masked; lakes handled below.
-    wlevel[i] = (cmask[i] > 0.5) ? cvBed : -1e9;
+    // RIVER WATER SURFACE: fill the channel within the band, surface a shallow column ABOVE the thalweg floor so
+    // the water sits IN the channel (not at/below the carved floor → z-fight/invisible). Threshold on channel
+    // PROXIMITY (not the order-scaled cmask, which never reached 0.5 for low-order rivers = no water bug).
+    float riverDepth = max(0.6, P.depth_per_order * 0.25);     // shallow water column in the channel
+    wlevel[i] = (chanProx > 0.25) ? (cvBed + riverDepth) : -1e9;
 
     // LAKE pass (audit finding 1): where the coarse depression-fill submerged the ground beyond lake_min_depth,
     // this cell is under a lake whose surface = the spill level (coarse Filled). Set water_level to that surface
