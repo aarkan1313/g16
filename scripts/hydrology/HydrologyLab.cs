@@ -57,8 +57,24 @@ public partial class HydrologyLab : Node3D
 
         if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--hydroshot") >= 0) { _shotCountdown = 8; }
 
+        // Initial camera: high vantage over the dry HIGH ground (south/+Z side sits above median height),
+        // looking north-down ACROSS the terrain so both dry land and the low water read — not straight into the
+        // basin. --cam=x,y,z,tx,ty,tz overrides (pos + look-at target).
         var cam = GetNodeOrNull<Camera3D>("Camera");
-        if (cam != null) { cam.Position = new Vector3(0, 350, 700); cam.LookAt(new Vector3(0, 60, 0), Vector3.Up); }
+        if (cam != null)
+        {
+            Vector3 pos = new(0, 900, 2200), tgt = new(0, 0, -400);
+            foreach (string a in OS.GetCmdlineUserArgs())
+            {
+                if (a.StartsWith("--cam="))
+                {
+                    var v = a.Substring(6).Split(',');
+                    if (v.Length == 6)
+                    { pos = new Vector3(v[0].ToFloat(), v[1].ToFloat(), v[2].ToFloat()); tgt = new Vector3(v[3].ToFloat(), v[4].ToFloat(), v[5].ToFloat()); }
+                }
+            }
+            cam.Position = pos; cam.LookAt(tgt, Vector3.Up);
+        }
     }
 
     private void ApplyCliOverrides()
