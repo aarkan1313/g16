@@ -226,20 +226,28 @@ Splat/breakup/scatter load with their tiles. No pops, no visible seams at tile b
 - **Purpose:** make landforms legible so the NEXT arc (erosion) can be eye-judged. This slice is a stop-gap;
   the full texture-array surfacing arc (below) supersedes it later (build-alongside-then-flip).
 
-### 🔨 NEXT — Erosion E1 (coupled pipe-model sim core + live lab): SPEC + PLAN WRITTEN, NOT BUILT
-- **Spec:** `specs/2026-06-22-erosion-e1-sim-core-design.md` (refreshes the 2026-06-17 arc's E1 for post-S3 +
-  locks the model). **Plan:** `plans/2026-06-22-erosion-e1-sim-core.md` (5 tasks + eye-gate).
+### 🔨 IN PROGRESS — Erosion E1 (coupled pipe-model sim core + live lab): BUILT, mechanically verified, USER EYE-GATE PENDING
+- **Spec:** `specs/2026-06-22-erosion-e1-sim-core-design.md`. **Plan:** `plans/2026-06-22-erosion-e1-sim-core.md`.
 - **Model (pillars choice):** pipe-model hydraulic erosion — ONE coupled GPU loop (water flux → velocity →
-  stream-power incision + capacity sediment transport/deposition + thermal talus, all from one shared state
-  per step), fixing WG15's fighting-solver root cause by construction. Droplet erosion rejected (not
-  ship-correct for the streamed infinite target).
-- **Shape:** standalone erosion lab (`scenes/erosion_lab.tscn` + `ErosionSim`/`ErosionParams`/`erosion_sim.glsl`),
-  seeded from `FieldCompute`, local-RD compute (windowed), displayed on its own mesh — NOT wired into the live
-  CDLOD terrain (that's E3/E4, now unblocked since S3 built the chunk system). Built ship-correct (coarse
-  drainage = a first-class output → E2 bakes it, E3 conditions per-chunk detail; no throwaway lab sim).
-- **Gate:** numeric `--erosioncheck` (finite/bounded) then USER eye-gate — valleys cut logically, converge,
-  tunable. **STOP** if it can't be made great after fair effort (the graveyard arc; don't grind 19 versions).
-- **Base field untouched** (`--fieldcheck` stays 0 m); standalone so nothing existing can regress.
+  stream-power incision + capacity sediment transport/deposition + thermal talus), fixing WG15's
+  fighting-solver root cause by construction. Droplet erosion rejected (not ship-correct for streamed infinite).
+- **Built (T1–T5):** `scenes/erosion_lab.tscn` + `scripts/erosion/{ErosionSim,ErosionParams,ErosionLab}.cs` +
+  `shaders/erosion_sim.glsl`. Standalone lab seeded from `FieldCompute`, local-RD compute (windowed), own mesh.
+  NOT wired into the live CDLOD terrain (E3/E4). Lab controls: space=run S=step R=reset D=debug-view (water/
+  sediment/flow false-colour overlay added to `ground.gdshader`, default off). Built ship-correct (water/flow =
+  the coarse drainage skeleton E2 will bake; no throwaway lab sim).
+- **A real bug was found + fixed (NOT tuning):** the first run sawtoothed ("millions of cuts" at 10k steps) —
+  root cause was a GPU READ-WRITE RACE (erode + thermal read neighbor h and wrote h[i] in the SAME parallel
+  dispatch → grid-aligned oscillation) + non-conservative thermal. Restructured race-free (erode→dh delta;
+  thermal = slump-flux + gather-apply, conservative; transport double-buffered) — the correct Mei structure.
+  An audit then fixed a smaller phase-1 water race, dead thermal-cap code, and the lab's lit view (was
+  use_textures=true with no textures bound → black albedo, which made the sawtooth read worse than it was; now
+  the height/slope colour ramp). Memory `erosion-e1-pipemodel-race`.
+- **Gate status:** `--erosioncheck` PASS (finite, bounded, **roughness 0.0045** vs the >0.02 sawtooth signature
+  — mechanical proof the grid oscillation is gone). **USER EYE-GATE NOT YET DONE** (deferred — user couldn't
+  test). The real "does erosion look great / valleys cut logically / converges" judgment is still OPEN; E1 is
+  NOT signed off until that passes. **STOP criterion still in force** (graveyard arc; don't grind versions).
+- **Base field untouched** (`--fieldcheck` 0 m); standalone so nothing existing can regress.
 
 ### ⏸ Deferred / later
 - **The async per-chunk DATA grid** (carvable height for erosion/water) — reserved-dormant; S3 builds only the
