@@ -358,14 +358,17 @@ payoff-free; folded into S2). Full status: `docs/TERRAIN-LOD-IMPLEMENTATION-ROAD
 - **S4 floating-origin** → folded into S3 (delivered).
 
 **After S3:** a **minimal surfacing slice ✅ DONE** (readable landforms — 5 textured materials by height/slope,
-no grid, triplanar; spec/plan `2026-06-22-surfacing-minimal-slice*`) shipped first so erosion is eye-judgeable
-on terrain that reads as terrain. The NEXT arc is now **erosion E1** (coupled pipe-model sim core + live lab) —
-**SPEC + PLAN WRITTEN** (`specs/2026-06-22-erosion-e1-sim-core-design.md`, `plans/2026-06-22-erosion-e1-sim-core.md`),
-standalone lab, judged live before any bake/stream infra. Then E2 bake (drainage skeleton) → E3 per-chunk
-detail → E4 streaming (all now unblocked by the built S3 chunk system), then biomes, then the **FULL surfacing
-arc LAST** (`2026-06-21-ground-material-system-reset-design.md`: texture arrays / placement engine / POM /
-biomes — supersedes the minimal slice; resolves the residual shadow stipple). The async per-chunk DATA grid
-(carvable height) stays reserved-dormant until E2 wakes it. Each arc plugs into the chunk contract.
+no grid, triplanar; spec/plan `2026-06-22-surfacing-minimal-slice*`) shipped first so erosion is eye-judgeable.
+The NEXT system is **EROSION + HYDROLOGY**, now designed as ONE thing — master roadmap
+`specs/2026-06-23-erosion-hydrology-master-design.md`: erosion and water share ONE **drainage substrate**
+(carved height + flow_accum + channel_mask + water_level + sediment) consumed at two tiers (always-on **static
+water** render + optional bounded **live water** GPU sim). Three arcs in order: **Arc 1 erosion+substrate**
+(the pipe-model sim — race-free core built as "E1", needs a flow-accumulation pass so dendritic rivers form;
+then bake → per-chunk synth) → **Arc 2 static water** → **Arc 3 live water (toggle, last)**. Then biomes
+(consume flow_accum as moisture), then the **FULL surfacing arc LAST** (`2026-06-21-ground-material-system-
+reset-design.md`: texture arrays / placement engine / POM — consumes the substrate's material+wetness;
+resolves the residual shadow stipple). The async per-chunk DATA grid stays reserved-dormant until Arc 1's bake
+wakes it. Each arc plugs into the S3 chunk contract; each its own spec→plan→build→eye-gate; STOP criterion per arc.
 
 **Other Phase-B systems (dependent on T1–T3 spine):**
 - **Biomes** — climate field (moisture/temperature) selects per-region material palettes + rules +

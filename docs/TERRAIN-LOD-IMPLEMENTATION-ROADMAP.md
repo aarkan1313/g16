@@ -226,7 +226,13 @@ Splat/breakup/scatter load with their tiles. No pops, no visible seams at tile b
 - **Purpose:** make landforms legible so the NEXT arc (erosion) can be eye-judged. This slice is a stop-gap;
   the full texture-array surfacing arc (below) supersedes it later (build-alongside-then-flip).
 
-### 🔨 IN PROGRESS — Erosion E1 (coupled pipe-model sim core + live lab): BUILT, mechanically verified, USER EYE-GATE PENDING
+### 🗺️ EROSION + HYDROLOGY — now ONE system (master roadmap `specs/2026-06-23-erosion-hydrology-master-design.md`)
+Erosion and water are one **drainage substrate** (carved height + flow_accum + channel_mask + water_level +
+sediment) consumed at two tiers: **static water** (always-on render) + **live water** (optional bounded GPU sim).
+Three arcs, in order: **Arc 1 erosion+substrate** (← active; folds in E1 below, adds flow-accumulation so rivers
+form) → **Arc 2 static water render** → **Arc 3 live water (toggle, last)**. Each its own spec→plan→build→eye-gate.
+
+### 🔨 ARC 1 PHASE 1 — Erosion sim core (was "E1"): BUILT race-free, mechanically verified, NEEDS the river fix + eye-gate
 - **Spec:** `specs/2026-06-22-erosion-e1-sim-core-design.md`. **Plan:** `plans/2026-06-22-erosion-e1-sim-core.md`.
 - **Model (pillars choice):** pipe-model hydraulic erosion — ONE coupled GPU loop (water flux → velocity →
   stream-power incision + capacity sediment transport/deposition + thermal talus), fixing WG15's
@@ -248,16 +254,23 @@ Splat/breakup/scatter load with their tiles. No pops, no visible seams at tile b
   test). The real "does erosion look great / valleys cut logically / converges" judgment is still OPEN; E1 is
   NOT signed off until that passes. **STOP criterion still in force** (graveyard arc; don't grind versions).
 - **Base field untouched** (`--fieldcheck` 0 m); standalone so nothing existing can regress.
+- **NEXT CONCRETE STEP (Arc 1 phase 1, the river fix):** the race-free sim erodes but the channel-forming
+  feedback is WEAK — incision scales with LOCAL water depth/velocity, not ACCUMULATED upstream drainage area,
+  so it gives diffuse hillslope erosion, not dendritic rivers. Add a **flow-accumulation pass** feeding a
+  stream-power incision (E ∝ Aᵐ·Sⁿ) + lake/basin fill → `water_level` + `channel_mask`. THEN re-eye-gate.
+  This is what makes the substrate the master spec's Arcs 2–3 consume. (Spec for Arc 1 to be written.)
 
 ### ⏸ Deferred / later
 - **The async per-chunk DATA grid** (carvable height for erosion/water) — reserved-dormant; S3 builds only the
-  AABB slice of the async path. E2 wakes it (the carvable height erosion writes deltas into).
-- **Surfacing (Skyrim-look ground) — the FULL arc** — the LAST arc per the infinite-terrain build order
-  (`specs/2026-06-21-ground-material-system-reset-design.md`: texture arrays, per-pixel placement engine,
-  POM/relief, biomes). Supersedes the minimal slice above. The residual shadow stipple resolves here. NOT next.
-- **Erosion E2–E4** (drainage skeleton bake → per-chunk semi-procedural detail → coarse global pre-solve +
-  streaming) — each its own later plan on the S3 chunk contract, after E1's sim is judged great.
-- **Biomes, water, collision, flora, world-editing** — each its own later arc on the chunk contract.
+  AABB slice. Arc 1's bake phase wakes it (the drainage substrate's per-chunk delta).
+- **Surfacing (Skyrim-look ground) — the FULL arc** — `specs/2026-06-21-ground-material-system-reset-design.md`
+  (texture arrays, per-pixel placement engine, POM/relief). Consumes the substrate's sediment/material + wetness.
+  Supersedes the minimal slice above; the residual shadow stipple resolves here. NOT next.
+- **Erosion + hydrology — the rest of the master arc** (`specs/2026-06-23-erosion-hydrology-master-design.md`):
+  Arc 1 phases 2–3 (bake the coarse substrate → per-chunk detail synthesis), **Arc 2 static water render**,
+  **Arc 3 live water (toggle, last)**. Each its own spec→plan→build→eye-gate, in order.
+- **Biomes, collision, flora, world-editing** — each its own later arc on the chunk contract (biomes consume
+  the substrate's flow_accum as moisture; flora consumes flow_accum + sediment).
 - **Old "S2c proxy shadows"** — largely subsumed (shadows are the sky lane's CSM now; terrain casts the LOD'd
   mesh). Not a separate live stage.
 - **Chunk-rebuild frame spike** — FIXED in the S3 perf pass (5fbdd50); see the S3 entry above. No longer open.
