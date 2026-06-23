@@ -165,13 +165,16 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--fantasy=")) { int.TryParse(a.Substring("--fantasy=".Length), out _fantasyCli); }
             else if (a.StartsWith("--cloudtex=")) { if (int.TryParse(a.Substring("--cloudtex=".Length), out int th) && th >= 64) { CloudVolume.TexH = th; CloudVolume.TexW = th * 4; } }
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
+            else if (a.StartsWith("--watercheck=")) { _waterCheck = a.Substring("--watercheck=".Length); }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
     }
+    private string? _waterCheck;   // --watercheck=<name> → run a HydrologyChecks self-check then quit
 
     private void ApplyCliOverrides()
     {
+        if (_waterCheck != null) { WG16.Hydrology.HydrologyChecks.Run(_waterCheck); GetTree().Quit(); return; }
         if (_overrideMask >= 0) { OverrideEnum("mask_mode", _overrideMask); }
         if (_overrideBlend >= 0) { OverrideEnum("blend_mode", _overrideBlend); }
         if (_overrideTile >= 0) { OverrideEnum("tile_mode", _overrideTile); }

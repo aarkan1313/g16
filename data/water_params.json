@@ -1,0 +1,21 @@
+{
+  "coarse_res": 256,
+  "halo_regions": 1,
+  "river_accum_threshold": 60.0,
+  "channel_width_scale": 1.4,
+  "carve_width_m": 36.0,
+  "carve_depth_scale": 1.0,
+  "carve_profile_exp": 2.0,
+  "bed_depth_m": 7.0,
+  "water_table_freq": 0.0002,
+  "lake_table_threshold": 0.55,
+  "lake_min_area_m2": 40000.0,
+  "lake_min_depth_m": 4.0,
+  "lake_min_inflow": 30.0,
+  "lake_density_per_km2": 0.4,
+  "flow_speed": 0.15,
+  "wave_scale": 1.0,
+  "foam_width_m": 6.0,
+  "water_shallow_color": [0.16, 0.42, 0.52],
+  "water_deep_color": [0.03, 0.13, 0.26]
+}
