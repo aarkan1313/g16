@@ -71,7 +71,10 @@ public sealed class ValleyCarve : IDisposable
             Height = Read(pout), FlowAccum = Read(pacc), ChannelMask = Read(pcm),
             WaterLevel = Read(pwl), Sediment = Read(psd)
         };
-        foreach (var r in bufs) _rd.FreeRid(r); _rd.FreeRid(set);
+        // free the uniform SET before its buffers (freeing a buffer still referenced by a live set triggers
+        // Godot's "invalid ID" cascade).
+        _rd.FreeRid(set);
+        foreach (var r in bufs) { _rd.FreeRid(r); }
         return res;
     }
 
