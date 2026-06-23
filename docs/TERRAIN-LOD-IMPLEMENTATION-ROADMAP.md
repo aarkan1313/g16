@@ -254,11 +254,13 @@ form) → **Arc 2 static water render** → **Arc 3 live water (toggle, last)**.
   test). The real "does erosion look great / valleys cut logically / converges" judgment is still OPEN; E1 is
   NOT signed off until that passes. **STOP criterion still in force** (graveyard arc; don't grind versions).
 - **Base field untouched** (`--fieldcheck` 0 m); standalone so nothing existing can regress.
-- **NEXT CONCRETE STEP (Arc 1 phase 1, the river fix):** the race-free sim erodes but the channel-forming
-  feedback is WEAK — incision scales with LOCAL water depth/velocity, not ACCUMULATED upstream drainage area,
-  so it gives diffuse hillslope erosion, not dendritic rivers. Add a **flow-accumulation pass** feeding a
-  stream-power incision (E ∝ Aᵐ·Sⁿ) + lake/basin fill → `water_level` + `channel_mask`. THEN re-eye-gate.
-  This is what makes the substrate the master spec's Arcs 2–3 consume. (Spec for Arc 1 to be written.)
+- **NEXT CONCRETE STEP (Arc 1 phase 1, the river fix) — SPEC + PLAN WRITTEN, ready to execute:** the race-free
+  sim erodes but the channel-forming feedback is WEAK — incision scales with LOCAL water depth/velocity, not
+  ACCUMULATED upstream drainage area, so it gives diffuse hillslope erosion, not dendritic rivers. Add a
+  **flow-accumulation pass** feeding a stream-power incision (E ∝ Aᵐ·Sⁿ) + channel_mask + basin water_level →
+  the master spec's substrate. Spec `specs/2026-06-23-erosion-arc1-substrate-design.md`, plan
+  `plans/2026-06-23-erosion-arc1-substrate.md` (4 tasks). **Resume from `handoffs/2026-06-23-erosion-hydrology-
+  start-here.md`.** THEN user eye-gate (dendritic rivers in motion).
 
 ### ⏸ Deferred / later
 - **The async per-chunk DATA grid** (carvable height for erosion/water) — reserved-dormant; S3 builds only the
