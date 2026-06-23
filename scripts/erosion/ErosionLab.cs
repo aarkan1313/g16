@@ -21,6 +21,14 @@ public partial class ErosionLab : Node3D
     private long _totalSteps;
     private bool _sDown, _rDown, _dDown;
 
+    // --- hydrology (drainage-synthesis) path: the default lab view (pipe-model is behind --pipemodel) ---
+    private bool _hydroMode;
+    private WG16.Hydrology.HydrologyParams _hp = null!;
+    private WG16.Hydrology.ValleyCarve _vc = null!;
+    private WG16.Hydrology.ValleyCarve.CarveResult _carve = null!;
+    private bool _lbDown, _rbDown;
+    private int _shotCountdown = -1;   // --hydroshot: frames to wait before capturing the real viewport render
+
     public override void _Ready()
     {
         var p = FieldParams.Load();
@@ -264,6 +272,7 @@ public partial class ErosionLab : Node3D
                 }
             }
 
+            // --- shared display setup (mesh + ground-shader colour-ramp material) ---
             _mesh = new MeshInstance3D
             {
                 Mesh = new PlaneMesh
@@ -281,14 +290,45 @@ public partial class ErosionLab : Node3D
             _mat.SetShaderParameter("use_textures", false);
             _mesh.MaterialOverride = _mat;
             AddChild(_mesh);
-            UploadHeight(seed);
+
+            // DEFAULT = hydrology (drainage synthesis + analytic valley carve). Pipe-model behind --pipemodel.
+            bool pipeMode = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--pipemodel") >= 0;
+            _hydroMode = !pipeMode;
+            if (_hydroMode)
+            {
+                _sim?.Dispose(); _sim = null!;   // hydrology doesn't use the pipe-model sim
+                _hp = new WG16.Hydrology.HydrologyParams { Res = _res, CellSize = _cell };
+                BuildHydrology(p, fc);
+            }
+            else
+            {
+                UploadHeight(seed);
+            }
         }
 
         _hud = new Label { Position = new Vector2(12, 12) };
         var ui = new CanvasLayer();
         ui.AddChild(_hud);
         AddChild(ui);
-        GD.Print($"ErosionLab: seeded {_res}² region ({_res * _cell:F0} m). space=run S=step R=reset D=debug-view");
+        GD.Print(_hydroMode
+            ? $"HydrologyLab: {_res}² region ({_res * _cell:F0} m). D=cycle substrate views  [ ]=carve strength  R=rebuild"
+            : $"ErosionLab (pipe-model): seeded {_res}² region. space=run S=step R=reset D=debug-view");
+
+        if (_hydroMode && System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--hydroshot") >= 0) { _shotCountdown = 8; }
+    }
+
+    /// Build the drainage substrate once: coarse drainage graph (+halo) -> GPU valley carve -> display.
+    private void BuildHydrology(FieldParams p, FieldCompute fc)
+    {
+        float bo = -_res * _cell * 0.5f;
+        float[] baseH = fc.ProducePage(p, bo, bo, _cell, _res, 0);
+        int cres = (int)((_res * _cell + 2 * _hp.HaloMetres) / _hp.CoarseSpacing);
+        var cf = WG16.Hydrology.CoarseField.Build(fc, p, bo - _hp.HaloMetres, bo - _hp.HaloMetres, _hp.CoarseSpacing, cres);
+        var g = WG16.Hydrology.DrainageGraph.Build(cf, _hp);
+        _vc ??= new WG16.Hydrology.ValleyCarve(_res);
+        _carve = _vc.Carve(baseH, g.Segments, _hp);
+        UploadHeight(_carve.Height);
+        GD.Print($"  hydrology: {g.Segments.Count} river segments, carve_strength={_hp.CarveStrength:F1}");
     }
 
     private void UploadHeight(float[] h)
@@ -306,6 +346,40 @@ public partial class ErosionLab : Node3D
 
     public override void _Process(double delta)
     {
+        if (_hydroMode)
+        {
+            // --hydroshot: capture the REAL viewport render (the actual ground.gdshader, not a hand-rolled
+            // hillshade — the v1 lesson), then quit. Wait a few frames so shadows/sky settle.
+            if (_shotCountdown >= 0)
+            {
+                if (_shotCountdown == 0)
+                {
+                    var img = GetViewport().GetTexture().GetImage();
+                    img.SavePng(ProjectSettings.GlobalizePath("res://hydro_shot.png"));
+                    GD.Print("HYDROSHOT: wrote hydro_shot.png (real viewport render)");
+                    SetProcess(false); GetTree().Quit(); return;
+                }
+                _shotCountdown--;
+                return;
+            }
+
+            bool dh = Input.IsPhysicalKeyPressed(Key.D);
+            if (dh && !_dDown) { _debug = _debug >= 4 ? -1 : _debug + 1; RefreshHydroDisplay(); }
+            _dDown = dh;
+            bool lb = Input.IsPhysicalKeyPressed(Key.Bracketleft), rb = Input.IsPhysicalKeyPressed(Key.Bracketright);
+            if (lb && !_lbDown) { _hp.CarveStrength = Mathf.Max(0f, _hp.CarveStrength - 0.1f); RebuildCarve(); }
+            if (rb && !_rbDown) { _hp.CarveStrength += 0.1f; RebuildCarve(); }
+            _lbDown = lb; _rbDown = rb;
+            bool rr = Input.IsPhysicalKeyPressed(Key.R);
+            if (rr && !_rDown) { RebuildCarve(); }
+            _rDown = rr;
+            string vh = _debug switch
+            { < 0 => "lit carved", 0 => "flow_accum", 1 => "channel_mask", 2 => "water_level", 3 => "sediment", _ => "flow_accum" };
+            _hud.Text = $"hydrology lab  carve_strength={_hp.CarveStrength:F1}  view={vh}\n" +
+                        $"[ ] = carve strength   D = view (lit→accum→channel→wlevel→sed)   R = rebuild   {Engine.GetFramesPerSecond():0} fps";
+            return;
+        }
+
         if (_sim == null) { return; }
 
         if (Input.IsActionJustPressed("ui_accept")) { _running = !_running; }   // space
@@ -331,6 +405,40 @@ public partial class ErosionLab : Node3D
         };
         _hud.Text = $"erosion lab  steps={_totalSteps}  {(_running ? "RUNNING" : "paused")}  view={view}\n" +
                     $"space=run S=step R=reset D=view (lit→water→sed→flow→accum→channel→wlevel)   {Engine.GetFramesPerSecond():0} fps";
+    }
+
+    /// Rebuild the carve from scratch (live carve-strength/knob change). Re-creates a FieldCompute since the
+    /// _Ready-scope one is disposed; cheap enough for an interactive tuning step.
+    private void RebuildCarve()
+    {
+        var pf = FieldParams.Load();
+        using var fc = new FieldCompute();
+        BuildHydrology(pf, fc);
+        RefreshHydroDisplay();
+    }
+
+    /// Display the carved height + a false-coloured substrate field (drainage/channel/water/sediment).
+    private void RefreshHydroDisplay()
+    {
+        UploadHeight(_carve.Height);
+        if (_debug < 0) { _mat.SetShaderParameter("debug_field", 0.0f); return; }
+        float[] src = _debug switch
+        { 0 => _carve.FlowAccum, 1 => _carve.ChannelMask, 2 => _carve.WaterLevel, 3 => _carve.Sediment, _ => _carve.FlowAccum };
+        var disp = (float[])src.Clone();
+        if (_debug == 0)
+        {
+            float mx = 1e-6f; foreach (float v in disp) { if (v > mx) { mx = v; } }
+            float lm = Mathf.Log(1f + mx);
+            for (int k = 0; k < disp.Length; k++) { disp[k] = Mathf.Log(1f + disp[k]) / Mathf.Max(lm, 1e-6f); }
+        }
+        else if (_debug == 2)   // water_level: -1e9 sentinel → presence mask
+        { for (int k = 0; k < disp.Length; k++) { disp[k] = disp[k] > -1e8f ? 1f : 0f; } }
+        else
+        { float mx = 1e-6f; foreach (float v in disp) { if (v > mx) { mx = v; } } for (int k = 0; k < disp.Length; k++) { disp[k] /= mx; } }
+        var bytes = new byte[disp.Length * 4]; System.Buffer.BlockCopy(disp, 0, bytes, 0, bytes.Length);
+        var img = Image.CreateFromData(_res, _res, false, Image.Format.Rf, bytes);
+        _mat.SetShaderParameter("debug_field_tex", ImageTexture.CreateFromImage(img));
+        _mat.SetShaderParameter("debug_field", 1.0f);
     }
 
     private void RefreshDisplay()
@@ -375,7 +483,7 @@ public partial class ErosionLab : Node3D
         }
     }
 
-    public override void _ExitTree() { _sim?.Dispose(); }
+    public override void _ExitTree() { _sim?.Dispose(); _vc?.Dispose(); }
 
     // --- offline river-topology dumps (--riverdump): full-res greyscale PNGs so thin channels stay visible ---
     private void DumpField(float[] f, string name, bool logScale)
