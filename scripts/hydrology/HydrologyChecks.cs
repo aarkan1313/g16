@@ -20,8 +20,24 @@ public static class HydrologyChecks
             if (a == "--drainagecheck") { Drainage(p, fc); return true; }
             if (a == "--determinismcheck") { Determinism(p, fc); return true; }
             if (a == "--carvecheck") { Carve(p, fc, res, cell); return true; }
+            if (a == "--waterbudgetcheck") { WaterBudget(p, fc); return true; }
         }
         return false;
+    }
+
+    // proves "limited amounts" numerically: significant lakes must stay within the per-km² density cap on a
+    // large region (NOT a pond flood — far below the naive-fill 2602-cell signature).
+    private static void WaterBudget(FieldParams p, FieldCompute fc)
+    {
+        var hp = new HydrologyParams(); var wp = new WaterParams();
+        int cres = 160; float sp = hp.CoarseSpacing;
+        var cf = CoarseField.Build(fc, p, -6000f, -6000f, sp, cres);
+        var g = DrainageGraph.Build(cf, hp);
+        var wb = WaterBodies.Build(g, wp);
+        float regionKm2 = (cres * sp) * (cres * sp) / 1e6f;
+        float lakesPerKm2 = wb.Lakes.Count / regionKm2;
+        bool ok = lakesPerKm2 <= wp.LakeDensityPerKm2 + 1e-3f;
+        GD.Print($"WATERBUDGETCHECK: {(ok ? "PASS" : "FAIL")} region={regionKm2:F1}km² lakes={wb.Lakes.Count} ({lakesPerKm2:F2}/km², cap {wp.LakeDensityPerKm2}) rivers={wb.Rivers.Count}");
     }
 
     private static void Coarse(FieldParams p, FieldCompute fc)
