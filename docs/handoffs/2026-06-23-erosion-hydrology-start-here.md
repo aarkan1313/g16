@@ -28,17 +28,33 @@ the open gate. Then build Arc 2 static water on the substrate.**
 ## State of the drainage-synthesis Arc 1 (BUILT on experiment/presentation)
 
 Files: `scripts/hydrology/{HydrologyParams,CoarseField,DrainageGraph,ValleyCarve}.cs`, `shaders/valley_carve.glsl`,
-hydrology path in `scripts/erosion/ErosionLab.cs` (DEFAULT lab view; pipe-model behind `--pipemodel`).
-Pipeline: coarse base-field sample (+halo) → priority-flood fill (+flood-receiver routing, lake classification)
-→ D8 steepest-descent → upstream-area → Strahler → per-node BED elevation → Chaikin-smoothed reaches → GPU carve
-TOWARD bed + smooth blend (discharge-scaled width, `CarveMinOrder` skips rivulets) → substrate (height,
-flow_accum, channel_mask, water_level incl. LAKES, sediment). Three visual artifacts fixed in sequence (gouges→
-carve-toward-bed; right-angles→D8; herringbone→smoothing+CarveMinOrder). Substrate AUDIT addressed (lakes,
-coherence, robust routing). **Gates all PASS:** `--carvecheck` (antiterrace z/x 0.98, modular), `--drainagecheck`
-(undrained=0, lakes>0, Strahler hierarchy), `--determinismcheck` (tile-coherence 0.984), `--fieldcheck` 0m.
-Lab keys: D=substrate views, `[`/`]`=carve strength, R=rebuild; CLI `--chanmin --depth --width --carve
---carvemin --coarsesp`. **OPEN: final user eye-gate verdict** (closest yet; lakes not dramatic in the default
-4km view but the substrate data is correct + gated).
+`shaders/water_surface.gdshader`, hydrology path in `scripts/erosion/ErosionLab.cs` (DEFAULT lab view; pipe-model
+behind `--pipemodel`). Pipeline: coarse sample (+halo) → priority-flood fill (+flood-receiver routing, LakeDepth)
+→ **MFD** area accumulation → Strahler → per-node BED elevation → Chaikin-smoothed reaches → GPU carve TOWARD bed
+via **normalized Wyvill compact-support blend** (seam-free; discharge-scaled width; `CarveMinOrder` skips
+rivulets) → **stream-power erosion POLISH pass** (reuses race-free ErosionSim as a LAYER) → substrate (height,
+flow_accum, channel_mask, water_level incl. lakes+rivers, sediment).
+
+**THE 3-PART RESEARCH FIX (deep-research war52lnu6, see memory [[clean-river-terrain-pipeline]]):** the carve
+looked artifact-ridden because (1) D8 routing = worst grid faceting → **MFD**; (2) per-segment min()-merge creased
+confluences → **normalized Wyvill SDF blend**; (3) missing the decisive lever → **erosion polish pass**. All three
+BUILT. `--carvecheck` antiterrace z/x **1.00** (perfectly isotropic).
+
+**THE LENS (was the real blocker):** can't judge terrain through the flat colour-ramp debug view. Built
+`water_surface.gdshader` (mesh lifted to substrate water_level, translucent depth-shaded) + low close-up camera.
+This is also **Arc 2 (static water) start**. Fixed a "no river water" bug (surface was at the thalweg floor →
+z-fight; threshold never triggered for low-order rivers).
+
+**LAKES = tunable spectrum:** `HydrologyParams.LakeFill` [0..1] (`--lakefill=`): 0 = no lakes (basins drain out as
+rivers, kills the giant flat-slab over-flood), 1 = full basin fill. The big lake was a genuine deep closed basin,
+not over-flooding.
+
+**Gates all PASS:** `--carvecheck` (antiterrace 1.00, modular), `--drainagecheck` (undrained=0, lakes, Strahler),
+`--determinismcheck` (0.984), `--fieldcheck` 0m. Lab keys: D=substrate views, `[`/`]`=carve strength, R=rebuild;
+CLI `--carve --depth --width --chanmin --carvemin --coarsesp --mfd --polish --lakefill --lakemin`. **OPEN: user
+eye-gate WITH the water lens up close.** Last user note: "didn't see water" at lakefill=0.3 → fixed (water now
+renders; spawn camera dropped low). Likely next: tune LakeFill/carve to taste, confirm rivers read as water up
+close, then formalize Arc 2 static water (this shader is the seed).
 
 ---
 ### Older context (pipe-model — RETIRED as producer, kept on disk behind `--pipemodel`)

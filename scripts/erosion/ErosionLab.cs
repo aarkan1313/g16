@@ -351,8 +351,8 @@ public partial class ErosionLab : Node3D
             var cam = GetNodeOrNull<Camera3D>("Camera");
             if (cam != null)
             {
-                cam.Position = new Vector3(0, 700, 1400);
-                cam.LookAt(new Vector3(0, 100, 0), Vector3.Up);
+                cam.Position = new Vector3(0, 350, 700);
+                cam.LookAt(new Vector3(0, 60, 0), Vector3.Up);
             }
         }
     }
