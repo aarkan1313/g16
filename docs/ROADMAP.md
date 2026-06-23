@@ -357,13 +357,15 @@ payoff-free; folded into S2). Full status: `docs/TERRAIN-LOD-IMPLEMENTATION-ROAD
   no pop/flash. Memory `cdlod-renderorigin-snap-pop`.
 - **S4 floating-origin** → folded into S3 (delivered).
 
-**After S3 (canonical build order — infinite world → erosion+water → biomes → ground textures):** the NEXT arc
-is **E1 erosion** (coupled sim core + live lab; spec `specs/2026-06-17-erosion-arc-design.md`, not yet planned),
-then water (consumes the erosion drainage skeleton), then biomes, then **surfacing LAST** (Skyrim-look ground;
-fixes the placeholder "smooth mess" + the residual shadow stipple — it must consume the eroded+biomed terrain,
-hence last). The async per-chunk DATA grid (carvable height) stays reserved-dormant until erosion/collision
-wakes it. Each arc plugs into the chunk contract (`infinite-terrain` spec §2). NOTE: surfacing-vs-erosion FIRST
-is an open user call (surfacing = bigger visible win now but risks rework when erosion reshapes the bones).
+**After S3:** a **minimal surfacing slice ✅ DONE** (readable landforms — 5 textured materials by height/slope,
+no grid, triplanar; spec/plan `2026-06-22-surfacing-minimal-slice*`) shipped first so erosion is eye-judgeable
+on terrain that reads as terrain. The NEXT arc is now **erosion E1** (coupled pipe-model sim core + live lab) —
+**SPEC + PLAN WRITTEN** (`specs/2026-06-22-erosion-e1-sim-core-design.md`, `plans/2026-06-22-erosion-e1-sim-core.md`),
+standalone lab, judged live before any bake/stream infra. Then E2 bake (drainage skeleton) → E3 per-chunk
+detail → E4 streaming (all now unblocked by the built S3 chunk system), then biomes, then the **FULL surfacing
+arc LAST** (`2026-06-21-ground-material-system-reset-design.md`: texture arrays / placement engine / POM /
+biomes — supersedes the minimal slice; resolves the residual shadow stipple). The async per-chunk DATA grid
+(carvable height) stays reserved-dormant until E2 wakes it. Each arc plugs into the chunk contract.
 
 **Other Phase-B systems (dependent on T1–T3 spine):**
 - **Biomes** — climate field (moisture/temperature) selects per-region material palettes + rules +

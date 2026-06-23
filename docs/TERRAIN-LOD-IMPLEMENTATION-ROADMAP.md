@@ -226,15 +226,30 @@ Splat/breakup/scatter load with their tiles. No pops, no visible seams at tile b
 - **Purpose:** make landforms legible so the NEXT arc (erosion) can be eye-judged. This slice is a stop-gap;
   the full texture-array surfacing arc (below) supersedes it later (build-alongside-then-flip).
 
+### 🔨 NEXT — Erosion E1 (coupled pipe-model sim core + live lab): SPEC + PLAN WRITTEN, NOT BUILT
+- **Spec:** `specs/2026-06-22-erosion-e1-sim-core-design.md` (refreshes the 2026-06-17 arc's E1 for post-S3 +
+  locks the model). **Plan:** `plans/2026-06-22-erosion-e1-sim-core.md` (5 tasks + eye-gate).
+- **Model (pillars choice):** pipe-model hydraulic erosion — ONE coupled GPU loop (water flux → velocity →
+  stream-power incision + capacity sediment transport/deposition + thermal talus, all from one shared state
+  per step), fixing WG15's fighting-solver root cause by construction. Droplet erosion rejected (not
+  ship-correct for the streamed infinite target).
+- **Shape:** standalone erosion lab (`scenes/erosion_lab.tscn` + `ErosionSim`/`ErosionParams`/`erosion_sim.glsl`),
+  seeded from `FieldCompute`, local-RD compute (windowed), displayed on its own mesh — NOT wired into the live
+  CDLOD terrain (that's E3/E4, now unblocked since S3 built the chunk system). Built ship-correct (coarse
+  drainage = a first-class output → E2 bakes it, E3 conditions per-chunk detail; no throwaway lab sim).
+- **Gate:** numeric `--erosioncheck` (finite/bounded) then USER eye-gate — valleys cut logically, converge,
+  tunable. **STOP** if it can't be made great after fair effort (the graveyard arc; don't grind 19 versions).
+- **Base field untouched** (`--fieldcheck` stays 0 m); standalone so nothing existing can regress.
+
 ### ⏸ Deferred / later
 - **The async per-chunk DATA grid** (carvable height for erosion/water) — reserved-dormant; S3 builds only the
-  AABB slice of the async path.
+  AABB slice of the async path. E2 wakes it (the carvable height erosion writes deltas into).
 - **Surfacing (Skyrim-look ground) — the FULL arc** — the LAST arc per the infinite-terrain build order
   (`specs/2026-06-21-ground-material-system-reset-design.md`: texture arrays, per-pixel placement engine,
   POM/relief, biomes). Supersedes the minimal slice above. The residual shadow stipple resolves here. NOT next.
-- **Erosion, water, biomes, collision, flora, world-editing** — each its own later arc on the chunk contract.
-  Per the infinite-terrain build order, the NEXT arc after S3 is **E1 (coupled erosion sim core + live lab)** —
-  spec at `docs/superpowers/specs/2026-06-17-erosion-arc-design.md` (not yet planned). (Surfacing is LAST.)
+- **Erosion E2–E4** (drainage skeleton bake → per-chunk semi-procedural detail → coarse global pre-solve +
+  streaming) — each its own later plan on the S3 chunk contract, after E1's sim is judged great.
+- **Biomes, water, collision, flora, world-editing** — each its own later arc on the chunk contract.
 - **Old "S2c proxy shadows"** — largely subsumed (shadows are the sky lane's CSM now; terrain casts the LOD'd
   mesh). Not a separate live stage.
 - **Chunk-rebuild frame spike** — FIXED in the S3 perf pass (5fbdd50); see the S3 entry above. No longer open.
