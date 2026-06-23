@@ -6,7 +6,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 // 4 width_per_order, 5 bank_sediment, rest pad.
 layout(set=0, binding=0, std430) restrict buffer Params {
     int res; float cell_size; float carve_strength; float depth_per_order;
-    float width_per_order; float bank_sediment; float _p6; float _p7;
+    float width_per_order; float bank_sediment; float carve_min_order; float _p7;
     float _p8; float _p9; float _p10; float _p11; float _p12; float _p13; float _p14; float _p15;
 } P;
 
@@ -50,6 +50,13 @@ void main() {
         float order = seg[o+4], area = seg[o+5], bedA = seg[o+6], bedB = seg[o+7];
         float t; float d = seg_dist(wp, a, b, t);
         float uz = mix(bedA, bedB, t);                          // bed elevation at the projection (descends A->B)
+
+        // substrate nearest-channel tracking uses ALL orders (full network feeds flow_accum/mask);
+        // but only reaches of >= carve_min_order CARVE a visible valley (skip tiny rivulet herringbone).
+        if (order < P.carve_min_order) {
+            if (d < nearDist) { nearDist = d; nearOrder = order; nearArea = area; nearBed = uz; }
+            continue;
+        }
 
         // discharge-scaled valley half-width (continuous, NOT quantized order): phi = 0.42*A^0.69 (Genevaux/
         // Peytavie). width_per_order acts as an overall valley-width gain; order gives a gentle extra widening.

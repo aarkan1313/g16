@@ -11,6 +11,9 @@ public sealed class HydrologyParams
     public float HaloMetres    = 2048f; // region halo so cross-chunk rivers resolve identically (>= max segment reach)
     public float ChannelMinArea = 8f;   // min upstream cell-count for a coarse cell to seed a channel/segment
     public int   TributarySteps = 0;    // extra headward-growth passes (0 = steepest-descent only; raised in tuning)
+    public int   CarveMinOrder  = 2;    // min Strahler order a reach must have to CARVE a visible valley (lower-
+                                        // order rivulets still feed the substrate but don't gouge hillslopes →
+                                        // kills the herringbone of hundreds of tiny parallel tributary valleys)
 
     // --- valley carve (GPU; packed below) ---
     public int   Res        = 512;      // high-res carve grid per side
@@ -20,14 +23,14 @@ public sealed class HydrologyParams
     public float WidthPerOrder = 40f;   // valley half-width (m) added per Strahler order (smooth falloff radius)
     public float BankSediment  = 0.3f;  // sediment value written within the valley (placeholder for surfacing)
 
-    // std430 for valley_carve.glsl Params: slot0 res(int bits), slots1..5 floats, 6..15 pad -> 16 scalars=64B.
+    // std430 for valley_carve.glsl Params: slot0 res(int bits), slots1..6 floats, 7..15 pad -> 16 scalars=64B.
     // (segment data is a SEPARATE buffer, not in Params.)
     public byte[] Pack()
     {
         var f = new float[16];
         f[1] = CellSize; f[2] = CarveStrength; f[3] = DepthPerOrder;
-        f[4] = WidthPerOrder; f[5] = BankSediment;
-        // 6..15 pad/reserved
+        f[4] = WidthPerOrder; f[5] = BankSediment; f[6] = CarveMinOrder;   // compared as float in shader
+        // 7..15 pad/reserved
         var bytes = new byte[f.Length * sizeof(float)];
         Buffer.BlockCopy(f, 0, bytes, 0, bytes.Length);
         BitConverter.GetBytes(Res).CopyTo(bytes, 0);   // slot 0 read as int res in GLSL

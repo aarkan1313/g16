@@ -298,6 +298,16 @@ public partial class ErosionLab : Node3D
             {
                 _sim?.Dispose(); _sim = null!;   // hydrology doesn't use the pipe-model sim
                 _hp = new WG16.Hydrology.HydrologyParams { Res = _res, CellSize = _cell };
+                // hydrology CLI overrides: --chanmin= --coarsesp= --depth= --width= --carve= --tribmin=
+                foreach (string a in OS.GetCmdlineUserArgs())
+                {
+                    if (a.StartsWith("--chanmin=")) { _hp.ChannelMinArea = a.Substring(10).ToFloat(); }
+                    else if (a.StartsWith("--coarsesp=")) { _hp.CoarseSpacing = a.Substring(11).ToFloat(); }
+                    else if (a.StartsWith("--depth=")) { _hp.DepthPerOrder = a.Substring(8).ToFloat(); }
+                    else if (a.StartsWith("--width=")) { _hp.WidthPerOrder = a.Substring(8).ToFloat(); }
+                    else if (a.StartsWith("--carve=")) { _hp.CarveStrength = a.Substring(8).ToFloat(); }
+                    else if (a.StartsWith("--carvemin=")) { _hp.CarveMinOrder = (int)a.Substring(11).ToFloat(); }
+                }
                 BuildHydrology(p, fc);
             }
             else

@@ -151,15 +151,77 @@ public sealed class DrainageGraph
         }
     }
 
+    // Emit SMOOTH river reaches, not raw grid hops. Raw cell->receiver segments are quantized to the 8 D8
+    // directions → valleys feather/herringbone. Instead we partition the channel network into reaches (maximal
+    // chains between a path-start and the next confluence/outlet), then Chaikin corner-cut each reach into a
+    // smooth polyline (positions + bed elevations together) and emit the smoothed sub-segments. The carve loop
+    // is unchanged; it just sees smooth curves. Confluences stay connected because a downstream reach starts at
+    // the confluence cell where its tributaries ended.
     private void EmitSegments(CoarseField cf, HydrologyParams hp)
     {
+        // count channel contributors per cell to find confluences + path starts.
+        var inDeg = new int[_n];
+        for (int i = 0; i < _n; i++)
+        { int d = DownIdx[i]; if (d >= 0 && Order[i] >= 1 && Order[d] >= 1) { inDeg[d]++; } }
+
         for (int i = 0; i < _n; i++)
         {
-            int d = DownIdx[i];
-            if (d < 0 || Order[i] < 1) { continue; }
-            int ax = i % Res, az = i / Res, bx = d % Res, bz = d / Res;
-            var (wax, waz) = cf.World(ax, az); var (wbx, wbz) = cf.World(bx, bz);
-            Segments.Add(new Segment(wax, waz, wbx, wbz, Order[i], Area[i], Bed[i], Bed[d]));
+            if (Order[i] < 1 || DownIdx[i] < 0 || Order[DownIdx[i]] < 1) { continue; }
+            // a reach STARTS at a headwater (no channel contributor) or just below a confluence (the cell whose
+            // receiver has >1 contributor is an END, so its receiver is a START). Simplest partition: start a
+            // reach at any channel cell whose contributor count != 1 (headwater=0, confluence>=2). Single-in
+            // cells are mid-reach and are swallowed by the walk from their start.
+            if (inDeg[i] == 1) { continue; }
+
+            // walk downstream collecting the reach until the next confluence (inDeg>1) or outlet/non-channel.
+            var pts = new List<(float x, float z, float bed, int order, float area)>();
+            int cur = i;
+            int axc = cur % Res, azc = cur / Res; var (wx0, wz0) = cf.World(axc, azc);
+            pts.Add((wx0, wz0, Bed[cur], Order[cur], Area[cur]));
+            while (true)
+            {
+                int d = DownIdx[cur];
+                if (d < 0 || Order[d] < 1) { break; }
+                int dx = d % Res, dz = d / Res; var (wx, wz) = cf.World(dx, dz);
+                pts.Add((wx, wz, Bed[d], Order[d], Area[d]));
+                if (inDeg[d] > 1) { break; }   // reached a confluence: it starts the next reach
+                cur = d;
+            }
+            if (pts.Count < 2) { continue; }
+
+            EmitSmoothReach(pts);
         }
     }
+
+    // Chaikin corner-cutting (2 iterations) on a reach polyline, then emit consecutive smoothed sub-segments.
+    // Bed/order/area are carried per point and lerp'd by the same cutting weights so they stay consistent.
+    private void EmitSmoothReach(List<(float x, float z, float bed, int order, float area)> pts)
+    {
+        for (int iter = 0; iter < 2; iter++)
+        {
+            if (pts.Count < 3) { break; }
+            var np = new List<(float x, float z, float bed, int order, float area)>();
+            np.Add(pts[0]);                                   // keep endpoints (preserve connectivity)
+            for (int k = 0; k < pts.Count - 1; k++)
+            {
+                var p = pts[k]; var q = pts[k + 1];
+                // Q point (1/4 from p) and R point (3/4 from p); carry bed/order/area by the same weights
+                np.Add((Lerp(p.x, q.x, 0.25f), Lerp(p.z, q.z, 0.25f), Lerp(p.bed, q.bed, 0.25f),
+                        p.order, Lerp(p.area, q.area, 0.25f)));
+                np.Add((Lerp(p.x, q.x, 0.75f), Lerp(p.z, q.z, 0.75f), Lerp(p.bed, q.bed, 0.75f),
+                        q.order, Lerp(p.area, q.area, 0.75f)));
+            }
+            np.Add(pts[pts.Count - 1]);
+            pts = np;
+        }
+        for (int k = 0; k < pts.Count - 1; k++)
+        {
+            var a = pts[k]; var b = pts[k + 1];
+            int order = Math.Max(a.order, b.order);
+            float area = Math.Max(a.area, b.area);
+            Segments.Add(new Segment(a.x, a.z, b.x, b.z, order, area, a.bed, b.bed));
+        }
+    }
+
+    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 }
