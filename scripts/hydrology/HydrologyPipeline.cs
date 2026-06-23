@@ -31,11 +31,15 @@ public sealed class HydrologyPipeline : System.IDisposable
         var carve = _vc.Carve(baseH, g, hp);
         if (hp.PolishSteps > 0) { carve.Height = Polish(carve.Height, hp.PolishSteps); }
         SegmentCount = g.Segments.Count;
+        LastGraph = g;
         return carve;
     }
 
     /// Last build's river-segment count (for HUD / logging).
     public int SegmentCount { get; private set; }
+
+    /// The DrainageGraph from the last Build (consumed by WaterBodies for lakes/rivers). Null before first Build.
+    public DrainageGraph LastGraph { get; private set; }
 
     /// Short gentle stream-power relaxation on the CARVED field: relaxes confluence seams / valley-width steps /
     /// carve shoulders into natural weathered form (research war52lnu6, the "make it natural" lever). Gentle

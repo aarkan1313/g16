@@ -2,40 +2,42 @@ using Godot;
 
 namespace WG16.Hydrology;
 
-/// Static water surface renderer (Arc-2 seed): owns a grid MeshInstance3D + water_surface.gdshader material,
-/// driven by a CarveResult's water_level + height. Lifts the mesh to the substrate water surface where wet,
-/// collapses it under terrain where dry. Decoupled from the lab — feed it a CarveResult, it renders water that
-/// agrees with the terrain. Add it under any parent Node3D.
+/// Renders the water surfaces. Tier 1 (this task): one large sea plane positioned at WaterParams.SeaLevel,
+/// depth-shaded against the terrain height texture. Lakes/rivers added in later tasks. Decoupled from the lab.
+/// The mesh NODE is placed at the water-surface Y (plane flat at local 0); the shader does depth/foam/motion.
 public sealed class WaterRenderer
 {
-    private readonly int _res;
-    private readonly float _cell;
-    private MeshInstance3D _mesh;
-    private ShaderMaterial _mat;
+    private readonly int _res; private readonly float _cell;
+    private MeshInstance3D _sea; private ShaderMaterial _seaMat;
 
     public WaterRenderer(int res, float cell) { _res = res; _cell = cell; }
 
-    /// Create the water mesh under `parent` (once) and/or update it from a fresh CarveResult.
-    public void Update(Node parent, ValleyCarve.CarveResult carve)
+    public void BuildSea(Node parent, WaterParams wp, float[] terrainHeight)
     {
-        if (_mesh == null)
+        if (_sea == null)
         {
-            _mesh = new MeshInstance3D
+            _sea = new MeshInstance3D
             {
-                Mesh = new PlaneMesh
-                {
-                    Size = new Vector2(_res * _cell, _res * _cell),
-                    SubdivideWidth = _res - 1,
-                    SubdivideDepth = _res - 1,
-                },
+                Mesh = new PlaneMesh { Size = new Vector2(_res * _cell, _res * _cell), SubdivideWidth = 128, SubdivideDepth = 128 },
             };
-            _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/water_surface.gdshader") };
-            _mat.SetShaderParameter("region_size", _res * _cell);
-            _mesh.MaterialOverride = _mat;
-            parent.AddChild(_mesh);
+            _seaMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/water_surface.gdshader") };
+            _seaMat.SetShaderParameter("region_size", _res * _cell);
+            _sea.MaterialOverride = _seaMat;
+            parent.AddChild(_sea);
         }
-        _mat.SetShaderParameter("water_level_tex", RFTex(carve.WaterLevel));
-        _mat.SetShaderParameter("terrain_height_tex", RFTex(carve.Height));
+        _sea.Visible = wp.SeaEnabled;
+        _sea.Position = new Vector3(0f, wp.SeaLevel, 0f);     // node at the sea surface; plane flat at local 0
+        _seaMat.SetShaderParameter("water_level", wp.SeaLevel);
+        _seaMat.SetShaderParameter("terrain_height_tex", RFTex(terrainHeight));
+        UpdateLook(wp);
+    }
+
+    public void UpdateLook(WaterParams wp)
+    {
+        if (_seaMat == null) { return; }
+        _seaMat.SetShaderParameter("shallow_depth", wp.ShallowDepthM);
+        _seaMat.SetShaderParameter("flow_speed", wp.FlowSpeed);
+        _seaMat.SetShaderParameter("wave_scale", wp.WaveScale);
     }
 
     private ImageTexture RFTex(float[] f)

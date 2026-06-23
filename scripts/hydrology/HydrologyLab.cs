@@ -15,6 +15,8 @@ public partial class HydrologyLab : Node3D
 
     private HydrologyPipeline _pipeline = null!;
     private WaterRenderer _water = null!;
+    private WaterParams _wp = null!;
+    private DrainageGraph _lastGraph = null!;
     private HydrologyParams _hp = null!;
     private ValleyCarve.CarveResult _carve = null!;
     private MeshInstance3D _mesh = null!;
@@ -33,6 +35,7 @@ public partial class HydrologyLab : Node3D
             if (HydrologyChecks.TryRun(p, fc, Res, Cell)) { SetProcess(false); GetTree().Quit(); return; }
 
             _hp = new HydrologyParams { Res = Res, CellSize = Cell };
+            _wp = new WaterParams();
             ApplyCliOverrides();
 
             _mesh = new MeshInstance3D
@@ -72,16 +75,23 @@ public partial class HydrologyLab : Node3D
             else if (a.StartsWith("--polish=")) { _hp.PolishSteps = (int)a.Substring(9).ToFloat(); }
             else if (a.StartsWith("--mfd=")) { _hp.MfdExp = a.Substring(6).ToFloat(); }
             else if (a.StartsWith("--lakefill=")) { _hp.LakeFill = a.Substring(11).ToFloat(); }
+            // water knobs
+            else if (a.StartsWith("--sea=")) { _wp.SeaLevel = a.Substring(6).ToFloat(); }
+            else if (a == "--nosea") { _wp.SeaEnabled = false; }
+            else if (a.StartsWith("--shallow=")) { _wp.ShallowDepthM = a.Substring(10).ToFloat(); }
+            else if (a.StartsWith("--wave=")) { _wp.WaveScale = a.Substring(7).ToFloat(); }
+            else if (a.StartsWith("--flow=")) { _wp.FlowSpeed = a.Substring(7).ToFloat(); }
         }
     }
 
     private void Rebuild(FieldParams p, FieldCompute fc)
     {
         _carve = _pipeline.Build(p, fc, _hp);
+        _lastGraph = _pipeline.LastGraph;
         UploadHeight(_carve.Height);
-        _water.Update(this, _carve);
+        _water.BuildSea(this, _wp, _carve.Height);   // tier 1: global sea (lakes/rivers added in T4/T5)
         RefreshDebug();
-        GD.Print($"HydrologyLab: {_pipeline.SegmentCount} segments, carve={_hp.CarveStrength:F1}, polish={_hp.PolishSteps}, lakefill={_hp.LakeFill:F1}");
+        GD.Print($"HydrologyLab: {_pipeline.SegmentCount} segments, carve={_hp.CarveStrength:F1}, sea={(_wp.SeaEnabled ? _wp.SeaLevel.ToString("F0") : "off")}");
     }
 
     private void Rebuild()   // live-knob rebuild (re-creates a FieldCompute; the _Ready one is disposed)

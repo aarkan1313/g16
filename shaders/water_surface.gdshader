@@ -1,47 +1,42 @@
 shader_type spatial;
 render_mode cull_disabled, depth_draw_always;
 
-// Minimal static-water surface for the hydrology lab / Arc 2: a grid mesh lifted to the substrate's
-// water_level where wet, collapsed far below where dry (so dry cells render under terrain = invisible).
-// Translucent blue with depth-based deepening + a soft fresnel. Reads the substrate, agrees with terrain.
+// Modular AAA water surface. Used by sea (one global plane) + later lakes/rivers (per-body planes). The mesh
+// NODE is positioned at the water surface Y in C# (plane stays flat at local y=0); this shader does the look:
+// depth/transparency, surface motion, shoreline foam. SSR reflections + flow-aligned normals land in Task 6.
+uniform float water_level = 40.0;          // world Y of this water surface (matches the node's Y position)
+uniform sampler2D terrain_height_tex;      // R32F carved terrain height per cell (for depth + shoreline)
+uniform float region_size = 4096.0;        // world metres across the terrain grid (for UV mapping)
+uniform float shallow_depth = 10.0;        // water depth that reaches full deep colour
+uniform float wave_scale = 1.0;
+uniform float flow_speed = 0.15;
+uniform vec3 shallow_color : source_color = vec3(0.30, 0.62, 0.66);
+uniform vec3 deep_color    : source_color = vec3(0.03, 0.14, 0.30);
+uniform vec3 foam_color    : source_color = vec3(0.85, 0.92, 0.95);
+uniform float foam_width = 2.5;            // metres of shoreline foam band
 
-uniform sampler2D water_level_tex;   // R32F: water surface elevation per cell, or a large-negative sentinel = dry
-uniform sampler2D terrain_height_tex;// R32F: carved terrain height per cell (for water depth → colour)
-uniform float region_size = 4096.0;  // world metres across the grid
-uniform float dry_sentinel = -1.0e8;  // water_level below this = dry (hide)
+varying vec3 v_world;
 
-uniform vec3 shallow_color : source_color = vec3(0.25, 0.55, 0.62);
-uniform vec3 deep_color    : source_color = vec3(0.04, 0.16, 0.35);
-uniform float depth_for_deep = 12.0;  // metres of water depth that reaches full deep_color
-uniform float alpha_min = 0.55;
-uniform float alpha_max = 0.92;
-
-varying float v_depth;     // water depth (surface - bed) at this vertex
-varying float v_wet;       // 1 wet, 0 dry
-
-void vertex() {
-    vec2 uv = (VERTEX.xz / region_size) + vec2(0.5);
-    float wl = texture(water_level_tex, uv).r;
-    float th = texture(terrain_height_tex, uv).r;
-    if (wl < dry_sentinel) {
-        v_wet = 0.0; v_depth = 0.0;
-        VERTEX.y = th - 1000.0;          // collapse dry cells far under terrain → not visible
-    } else {
-        v_wet = 1.0;
-        v_depth = max(wl - th, 0.0);
-        VERTEX.y = wl;                   // lift to the water surface elevation
-    }
-}
+void vertex() { v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 
 void fragment() {
-    if (v_wet < 0.5) { discard; }
-    float t = clamp(v_depth / depth_for_deep, 0.0, 1.0);
-    vec3 col = mix(shallow_color, deep_color, t);
-    // soft fresnel brighten at grazing angles
-    float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
-    ALBEDO = col + fres * 0.15;
-    METALLIC = 0.0;
-    ROUGHNESS = 0.08;
-    SPECULAR = 0.6;
-    ALPHA = mix(alpha_min, alpha_max, t);
+    // sample terrain bed under this fragment (region-global UV, so offset lake planes still hit the right cell).
+    vec2 uv = (v_world.xz / region_size) + vec2(0.5);
+    float bed = texture(terrain_height_tex, uv).r;
+    float depth = water_level - bed;
+    if (depth <= 0.0) { discard; }                 // bed above the surface here → dry land (coastline edge)
+
+    // cheap procedural ripple normal (normal-map upgrade in Task 6)
+    float t = TIME * flow_speed;
+    vec2 n2 = vec2(sin(v_world.x * 0.05 * wave_scale + t), cos(v_world.z * 0.05 * wave_scale - t)) * 0.06;
+    NORMAL = normalize(vec3(n2.x, 1.0, n2.y));
+
+    float td = clamp(depth / shallow_depth, 0.0, 1.0);
+    vec3 col = mix(shallow_color, deep_color, td);
+    float foam = 1.0 - smoothstep(0.0, foam_width, depth);   // foam band at the shoreline
+    col = mix(col, foam_color, foam * 0.7);
+
+    ALBEDO = col;
+    METALLIC = 0.0; ROUGHNESS = mix(0.02, 0.12, td); SPECULAR = 0.7;
+    ALPHA = mix(0.6, 0.95, td);
 }
