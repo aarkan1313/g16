@@ -14,6 +14,8 @@ public static class HydrologyChecks
             case "drainage": return CheckDrainage();
             case "rivers": return CheckRivers();
             case "lakes": return CheckLakes();
+            case "texture": return CheckTexture();
+            case "continuity": return CheckContinuity();
             default: GD.PrintErr($"WATERCHECK: unknown check '{check}'"); return false;
         }
     }
@@ -83,6 +85,45 @@ public static class HydrologyChecks
         bool ok = perKm2 <= wp.LakeDensityPerKm2 + 1e-3f && lakes.Count > 0;
         GD.Print($"WATERCHECK lakes: {(ok ? "PASS" : "FAIL")} lakes={lakes.Count} perKm2={perKm2:0.000} " +
                  $"cap={wp.LakeDensityPerKm2} avgAreaM2={avgArea:0}");
+        return ok;
+    }
+
+    private static bool CheckTexture()
+    {
+        var fp = WG16.Field.FieldParams.Load();
+        var wp = WaterParams.Load();
+        var reg = new WorldWaterRegion(fp, wp, 0, 0);
+        var img = reg.Texture.GetImage();
+        int wet = 0; bool rangeOk = true;
+        for (int y = 0; y < img.GetHeight(); y += 4)
+            for (int x = 0; x < img.GetWidth(); x += 4)
+            {
+                Color c = img.GetPixel(x, y);
+                if (c.A > 0.5f) wet++;
+                if (c.A < -0.01f || c.A > 1.01f) rangeOk = false;
+            }
+        bool ok = wet > 0 && rangeOk;
+        GD.Print($"WATERCHECK texture: {(ok ? "PASS" : "FAIL")} wetSamples={wet} rangeOk={rangeOk}");
+        return ok;
+    }
+
+    private static bool CheckContinuity()
+    {
+        var fp = WG16.Field.FieldParams.Load();
+        var wp = WaterParams.Load();
+        var a = new WorldWaterRegion(fp, wp, 0, 0);
+        var b = new WorldWaterRegion(fp, wp, 1, 0);             // neighbor to the +X
+        float seamX = fp.RegionSizeM;
+        int agree = 0, total = 0;
+        for (float z = 200; z < fp.RegionSizeM; z += 200)
+        {
+            bool wa = a.IsWet(seamX - 1f, z);
+            bool wb = b.IsWet(seamX + 1f, z);
+            total++; if (wa == wb) agree++;
+        }
+        float frac = total > 0 ? agree / (float)total : 1f;
+        bool ok = frac >= 0.95f;
+        GD.Print($"WATERCHECK continuity: {(ok ? "PASS" : "FAIL")} agree={frac:0.000}");
         return ok;
     }
 }
