@@ -66,13 +66,16 @@ void main() {
         vel[i] = vec2((inL - fo.x + fo.y - inR), (inT - fo.z + fo.w - inB)) * 0.5;
         w[i] = wn * (1.0 - P.evaporate * P.dt);   // writes OWN water only
     }
-    else if (pc.phase == 3) {                 // ERODE/DEPOSIT: read h(neighbors)+vel+s, write OWN dh + OWN s
+    else if (pc.phase == 3) {                 // ERODE/DEPOSIT: STREAM-POWER E ∝ A^m·S^n (read h(neighbors)+A+s)
         float hl = h[idx(max(c.x-1,0), c.y)], hr = h[idx(min(c.x+1,P.res-1), c.y)];
         float ht = h[idx(c.x, max(c.y-1,0))], hb = h[idx(c.x, min(c.y+1,P.res-1))];
         float slope = max(P.min_tilt, length(vec2(hr-hl, hb-ht)) / (2.0 * P.cell_size));
-        float speed = length(vel[i]);
-        // capacity weighted by WATER (flow accumulation): dry cells barely erode → channels gather, no rill-everywhere
-        float cap = P.capacity * slope * speed * clamp(w[i] * 40.0, 0.0, 1.0);
+        // Stream power: erosive capacity ∝ (accumulated drainage area)^m · slope^n. THIS is what makes rivers —
+        // incision concentrates where upstream area A is large (channels), not uniformly (diffuse hillslope).
+        float area = a[i] * P.cell_size * P.cell_size;          // A in m² (a[i] = cell count upstream)
+        float cap = P.capacity * pow(area, P.stream_m) * pow(slope, P.stream_n);
+        // gate by presence of water so bone-dry uplands don't incise from area alone (channels carry the water).
+        cap *= clamp(w[i] * 40.0, 0.0, 1.0);
         float sed = s[i];
         if (cap > sed) {
             float amt = min(P.erode * (cap - sed) * P.dt, P.max_erode);
