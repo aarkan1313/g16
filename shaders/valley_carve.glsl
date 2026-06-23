@@ -62,14 +62,15 @@ void main() {
     // segment whose VALLEY most lowers us, taking the interpolated bed elevation u_z at the projection and a
     // smooth cross-section rising from the channel out to the valley edge. The floor is the (monotonic-
     // downstream) bed, so it's continuous along-channel; tributaries grade into trunks (shared bed field).
-    float target = base;          // carved valley surface (only ever <= base: carving lowers, never raises)
-    // TWO trackers (substrate coherence, audit finding 2): the CARVED-channel tracker (only reaches that
-    // actually carve a valley, order >= carve_min_order) drives the visible-water substrate (channel_mask,
-    // water_level, the carved valley floor) so those NEVER latch onto a tiny uncarved rivulet. A separate
-    // any-order drainage tracker feeds flow_accum MAGNITUDE (the full network's upstream area is physically real
-    // even where no valley is carved). carvedHalfw at the projection lets cmask follow the actual valley width.
-    float cvDist = 1e9, cvOrder = 0.0, cvBed = base, cvHalfw = 0.0;   // nearest CARVED channel
-    float anyArea = 0.0, anyDist = 1e9;                              // nearest channel of ANY order (for accum)
+    // PART 2 (research war52lnu6): seam-free confluence blending via NORMALIZED compact-support weighting
+    // (Génevaux 2013: w=(1-d²/r²)², h=Σ(w·h_seg)/Σw), NOT a per-segment min() merge. min() creates a crease
+    // where two valleys of different depth meet (a confluence seam / patch); the weighted average grades them
+    // continuously. Exact distance-to-(smoothed)-segment, so no JFA approximation error at confluences.
+    float wsum = 0.0, zsum = 0.0;   // Σw, Σ(w · carved-valley-elevation) over all carving segments near p
+    // TWO trackers (substrate coherence): CARVED-channel tracker drives the visible-water substrate; any-order
+    // tracker feeds flow_accum magnitude.
+    float cvDist = 1e9, cvOrder = 0.0, cvBed = base, cvHalfw = 0.0;
+    float anyArea = 0.0, anyDist = 1e9;
 
     for (int s = 0; s < pc.seg_count; s++) {
         int o = s * 8;
@@ -79,27 +80,30 @@ void main() {
         float uz = mix(bedA, bedB, t);                          // bed elevation at the projection (descends A->B)
 
         if (d < anyDist) { anyDist = d; anyArea = area; }       // any-order: feeds flow_accum magnitude
-
         if (order < P.carve_min_order) { continue; }            // sub-threshold rivulet: no valley, no water signal
 
-        // discharge-scaled valley half-width (continuous, NOT quantized order): phi = 0.42*A^0.69 (Genevaux/
-        // Peytavie). width_per_order acts as an overall valley-width gain; order gives a gentle extra widening.
+        // discharge-scaled valley half-width (continuous): phi = 0.42*A^0.69 (Genevaux/Peytavie).
         float discharge = 0.42 * pow(max(area, 1.0), 0.69);
         float halfw = P.width_per_order * (0.6 + 0.4 * order) * (0.5 + 0.5 * sqrt(discharge / 8.0));
         halfw = max(halfw, P.cell_size * 2.0);
 
         if (d < halfw) {
-            // cross-section: valley floor sits at uz at the channel line, rises smoothly to terrain at halfw.
             float thalweg = P.depth_per_order * (0.5 + 0.5 * order);
-            float k = smoothstep(0.0, halfw, d);                // 0 at channel, 1 at valley edge
-            float carvedZ = mix(uz - thalweg, base, k);         // C1 cross-section, no terracing
-            float w = (1.0 - k);                                // compact-support smooth weight
-            float cand = mix(base, carvedZ, P.carve_strength * w);
-            if (cand < target) { target = cand; }               // keep the deepest (valleys merge, no double-dip)
+            float r = d / halfw;
+            float carvedZ = uz - thalweg * (1.0 - smoothstep(0.0, 1.0, r));  // floor at thalweg, eases up the wall
+            float w = (1.0 - r * r); w = w * w;                 // Wyvill (1-d²/r²)² compact-support kernel
+            wsum += w; zsum += w * carvedZ;                     // normalized weighted blend (seam-free)
         }
         if (d < cvDist) { cvDist = d; cvOrder = order; cvBed = uz - P.depth_per_order * (0.5 + 0.5 * order); cvHalfw = halfw; }
     }
-    outh[i] = min(base, target);                                // never raise terrain
+    // blend the weighted-average carved valley elevation against base by total influence; carving never raises.
+    if (wsum > 1e-6) {
+        float carved = zsum / wsum;                             // seam-free valley surface
+        float infl = clamp(P.carve_strength * clamp(wsum, 0.0, 1.0), 0.0, 1.0);
+        outh[i] = min(base, mix(base, carved, infl));
+    } else {
+        outh[i] = base;
+    }
 
     // substrate, derived from the CARVED-channel tracker (coherent with the actual valley geometry).
     float chanW = max(P.cell_size * 1.5, cvHalfw * 0.25);       // channel-water band scales with the real valley
