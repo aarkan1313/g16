@@ -30,6 +30,18 @@ public partial class TerrainLabUI : Control
     private bool _lastLDown;
     private bool _lastKey1Down;             // debounce for the analytic/baked toggle (key 1)
     private bool _lastKey5Down, _lastKey6Down, _lastKey7Down;   // S2b: debounce for the test-path keys (5/6/7)
+    // Debug isolation bank (F1..F6): live-flip the screen-space effects that produce camera-locked stipple/ring
+    // artifacts, so a "dots in a shifting ring" report can be pinned to ONE system in the running window.
+    private bool _lastF1, _lastF2, _lastF3, _lastF4, _lastF5, _lastF6, _lastF7, _lastF8, _lastF9;
+    private bool _lastG;        // G toggles the anti-moiré detail-fade live
+    private bool _lastWaterH;   // H toggles the water debug overlay live
+    private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
+    private bool _detailFadeOn = true;   // anti-moiré detail-fade default state (matches shader default)
+    private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
+    private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
+    private bool _lodVizLive;   // V toggles the LOD-band tint live
+    private bool _terrainCloudShadowOn = true;   // mirrors cloud_shadow_on (set true once the cloud RID is live); F5 flips it
+    private bool _godraysOn = true;               // god rays default on; F6 flips it
     private bool _analyticOn = true;        // ground source: live field (default) vs baked; toggled by key 1
     private float _inspectEnergy = 1.0f;   // L-light brightness (Night tab 'inspect light')
 
@@ -185,6 +197,67 @@ public partial class TerrainLabUI : Control
             bool lDown = Input.IsKeyPressed(Key.L);
             if (lDown && !_lastLDown) { ToggleInspectLight(); }
             _lastLDown = lDown;
+
+            // --- Debug isolation bank (B N M , . /) --------------------------------------------------------
+            // Live-flip each camera-locked screen-space effect to pin a "dots in a shifting ring" artifact to
+            // its source. Each prints its new state. (Moved off F-keys: those get grabbed by the OS/IDE and
+            // never reach the game window.) B SSAO, N SSIL, M SDFGI, , sun shadows, . cloud-shadow, / god rays.
+            {
+                var env = UiEnv.Environment;
+                bool kB = Input.IsKeyPressed(Key.B);
+                if (kB && !_lastF1) { env.SsaoEnabled = !env.SsaoEnabled; GD.Print($"[dbg] (B) SSAO = {env.SsaoEnabled}"); }
+                _lastF1 = kB;
+                bool kN = Input.IsKeyPressed(Key.N);
+                if (kN && !_lastF2) { env.SsilEnabled = !env.SsilEnabled; GD.Print($"[dbg] (N) SSIL = {env.SsilEnabled}"); }
+                _lastF2 = kN;
+                bool kM = Input.IsKeyPressed(Key.M);
+                if (kM && !_lastF3) { env.SdfgiEnabled = !env.SdfgiEnabled; GD.Print($"[dbg] (M) SDFGI = {env.SdfgiEnabled}"); }
+                _lastF3 = kM;
+                bool kComma = Input.IsKeyPressed(Key.Comma);
+                if (kComma && !_lastF4) { UiSun.ShadowEnabled = !UiSun.ShadowEnabled; GD.Print($"[dbg] (,) Sun shadows = {UiSun.ShadowEnabled}"); }
+                _lastF4 = kComma;
+                bool kPeriod = Input.IsKeyPressed(Key.Period);
+                if (kPeriod && !_lastF5) { _terrainCloudShadowOn = !_terrainCloudShadowOn; _terrain.SetBool("cloud_shadow_on", _terrainCloudShadowOn); GD.Print($"[dbg] (.) Cloud shadow on terrain = {_terrainCloudShadowOn}"); }
+                _lastF5 = kPeriod;
+                bool kSlash = Input.IsKeyPressed(Key.Slash);
+                if (kSlash && !_lastF6) { _godraysOn = !_godraysOn; _godraysScreen?.SetEnabled(_godraysOn); GD.Print($"[dbg] (/) God rays = {_godraysOn}"); }
+                _lastF6 = kSlash;
+                // J atmosphere (AT-1 GPU sky tint), K aerial perspective (AT-2 camera froxel) — the two
+                // camera-aligned volumes NOT covered above; froxel volumes are the classic concentric-ring suspect.
+                bool kJ = Input.IsKeyPressed(Key.J);
+                if (kJ && !_lastF7) { _atmosphereOn = !_atmosphereOn; _cloud.SetAtmosphereOn(_atmosphereOn); _atmosphere?.SetEnabled(_atmosphereOn); GD.Print($"[dbg] (J) Atmosphere AT-1 = {_atmosphereOn}"); }
+                _lastF7 = kJ;
+                bool kK = Input.IsKeyPressed(Key.K);
+                if (kK && !_lastF8) { _aerialOn = !_aerialOn; _aerial?.SetEnabled(_aerialOn); GD.Print($"[dbg] (K) Aerial AT-2 = {_aerialOn}"); }
+                _lastF8 = kK;
+                // V: live LOD-band tint toggle — flip on to see if the dot-rings line up with LOD boundaries.
+                bool kV = Input.IsKeyPressed(Key.V);
+                if (kV && !_lastF9) { _lodVizLive = !_lodVizLive; _terrain.SetCdlodViz(_lodVizLive); GD.Print($"[dbg] (V) LOD-band tint = {_lodVizLive}"); }
+                _lastF9 = kV;
+                // G: live A/B the anti-moiré detail-fade (the dot-grid fix). Flip OFF to see the speckle moiré
+                // return, ON to see it dissolve to flat mean colour with distance.
+                bool kG = Input.IsKeyPressed(Key.G);
+                if (kG && !_lastG) { _detailFadeOn = !_detailFadeOn; _terrain.SetFloat("detail_fade_on", _detailFadeOn ? 1f : 0f); GD.Print($"[dbg] (G) anti-moiré detail-fade = {_detailFadeOn}"); }
+                _lastG = kG;
+                // H: live WATER debug overlay — paint wet pixels cyan / carve band blue so the rivers/lakes
+                // + the carve are visible right on the terrain (the carve groove alone is subtle from altitude).
+                bool kH = Input.IsKeyPressed(Key.H);
+                if (kH && !_lastWaterH) { _waterDebugOn = !_waterDebugOn; _terrain.SetBool("water_debug", _waterDebugOn); GD.Print($"[dbg] (H) water overlay = {_waterDebugOn}"); }
+                _lastWaterH = kH;
+                // J: RING HUNT stepper (surfacing AA eye-gate). Cycles diag_mode 0→1→2→3→4. 0 normal,
+                // 1 red=flat base, 2 green=+albedo, 3 blue=+roughness, 4 yellow=+normal-map — colored so each
+                // channel is unmistakable; pins which channel makes the camera-fixed rings.
+                bool kJ = Input.IsKeyPressed(Key.J);
+                if (kJ && !_lastJ)
+                {
+                    _diagMode = (_diagMode + 1) % 5;
+                    _terrain.SetFloat("diag_mode", _diagMode);
+                    string[] names = { "0 NORMAL render", "1 RED base (no textures)", "2 GREEN +albedo", "3 BLUE +roughness", "4 YELLOW +normal-map" };
+                    GD.Print($"[ringhunt] (J) diag_mode = {names[_diagMode]}");
+                }
+                _lastJ = kJ;
+            }
+            // ----------------------------------------------------------------------------------------------
 
             // Key 1: live-flip ground source between the analytic field and the baked texture
             // (A/B the S1.5 normal in motion). Skipped when ReviewMode owns the number keys.
