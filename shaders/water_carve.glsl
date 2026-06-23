@@ -36,10 +36,16 @@ void main() {
         vec2 ctr = vec2(lake[o], lake[o+1]); vec2 ext = vec2(lake[o+2], lake[o+3]); float surf = lake[o+4];
         vec2 d2 = abs(wp - ctr) - ext;                          // SDF of an axis-aligned box (ext = half-extents)
         float sd = length(max(d2, vec2(0.0))) + min(max(d2.x, d2.y), 0.0);
-        if (sd < P.lake_blend) {
+        // ORGANIC, not rectangular: only carve where the terrain is genuinely AT/BELOW the lake surface (the real
+        // basin shape) — gate by submergence depth, smoothly faded, so the bowl follows the basin outline, never
+        // the bounding box. Cells above the surface within the AABB are left as dry shoreline/land.
+        float submerge = surf - h;                               // >0 where this cell is under the lake surface
+        if (sd < P.lake_blend && submerge > -P.lake_blend) {
             float floorZ = surf - P.lake_depth;                  // bowl floor below the water surface
-            float k = clamp(sd / P.lake_blend, 0.0, 1.0);        // 0 inside → 1 at blend edge
-            float bowl = mix(floorZ, h, smoothstep(0.0, 1.0, k));// floor inside, easing to terrain at the rim
+            float boxK = clamp(sd / P.lake_blend, 0.0, 1.0);     // box-rim falloff
+            float shoreK = clamp(-submerge / P.lake_blend, 0.0, 1.0); // 0 deep-in-basin → 1 just past the waterline
+            float k = max(boxK, shoreK);                         // organic: rim is the BASIN waterline, not the box
+            float bowl = mix(floorZ, h, smoothstep(0.0, 1.0, k));
             target = min(target, bowl);
         }
     }
