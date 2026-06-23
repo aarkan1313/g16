@@ -23,6 +23,7 @@ public static class HydrologyChecks
             if (a == "--waterbudgetcheck") { WaterBudget(p, fc); return true; }
             if (a == "--watercoverage") { WaterCoverage(p, fc, res, cell); return true; }
             if (a == "--watercarvecheck") { WaterCarveCheck(p, fc, res, cell); return true; }
+            if (a == "--worldwatercheck") { WorldWater(p, fc); return true; }
         }
         return false;
     }
@@ -89,6 +90,28 @@ public static class HydrologyChecks
         pipe.Dispose();
         GD.Print($"WATERCARVECHECK: lakes={wb.Lakes.Count} rivers={wb.Rivers.Count} cells_changed={changed} ({pct:F1}%) maxDrop={maxDrop:F1}m meanDrop={(changed>0?sumDrop/changed:0):F1}m");
         GD.Print($"  biggest lake center=({bcx:F0},{bcz:F0}) surface={big.SurfaceLevel:F0} extent=({big.MaxX-big.MinX:F0}x{big.MaxZ-big.MinZ:F0}m)  → fly here for a close-up");
+    }
+
+    // the coarse WORLD water map (RT1): limited lakes over a big world span, deterministic, sane coverage.
+    private static void WorldWater(FieldParams p, FieldCompute fc)
+    {
+        var hp = new HydrologyParams(); var wp = new WaterParams();
+        float cover = 16000f;   // 16 km world span
+        var w1 = CoarseWorldWater.Build(fc, p, wp, hp, 0, 0, cover);
+        var w2 = CoarseWorldWater.Build(fc, p, wp, hp, 0, 0, cover);   // determinism: same span → same map
+        // sample coverage over a grid of world points
+        int samp = 200; int wet = 0; bool det = true; var rng = cover * 0.5f;
+        for (int j = 0; j < samp; j++)
+        for (int i = 0; i < samp; i++)
+        {
+            float wx = -rng + 2 * rng * i / (samp - 1), wz = -rng + 2 * rng * j / (samp - 1);
+            float s1 = w1.SurfaceAt(wx, wz); if (s1 > CoarseWorldWater.NoWater) { wet++; }
+            if (s1 != w2.SurfaceAt(wx, wz)) { det = false; }
+        }
+        float cov = 100f * wet / (samp * samp);
+        float km2 = (cover / 1000f) * (cover / 1000f);
+        bool ok = det && w1.LakeCount / km2 <= wp.LakeDensityPerKm2 + 1e-3f;
+        GD.Print($"WORLDWATERCHECK: {(ok ? "PASS" : "FAIL")} span={cover/1000f:F0}km det={det} lakes={w1.LakeCount} ({w1.LakeCount/km2:F2}/km², cap {wp.LakeDensityPerKm2}) wetCoverage={cov:F1}% sea={(wp.SeaEnabled ? "on" : "off")}");
     }
 
     private static void Coarse(FieldParams p, FieldCompute fc)
