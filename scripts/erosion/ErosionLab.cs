@@ -112,6 +112,34 @@ public partial class ErosionLab : Node3D
                     GD.Print($"DETERMINISMCHECK: {(ok ? "PASS" : "FAIL")} overlap segments={total} identical={matched} frac={frac:F3} (need >0.95)");
                     SetProcess(false); GetTree().Quit(); return;
                 }
+                if (a == "--carvecheck")
+                {
+                    var hp = new WG16.Hydrology.HydrologyParams { Res = _res, CellSize = _cell };
+                    float bo = -_res * _cell * 0.5f;
+                    float[] baseH = fc.ProducePage(p, bo, bo, _cell, _res, 0);
+                    var cf = WG16.Hydrology.CoarseField.Build(fc, p, bo - hp.HaloMetres, bo - hp.HaloMetres, hp.CoarseSpacing,
+                        (int)((_res * _cell + 2 * hp.HaloMetres) / hp.CoarseSpacing));
+                    var g = WG16.Hydrology.DrainageGraph.Build(cf, hp);
+                    using var vc = new WG16.Hydrology.ValleyCarve(_res);
+                    // MODULARITY: zero segments => height == base (carve_strength irrelevant when nothing to carve)
+                    var r0 = vc.Carve(baseH, new System.Collections.Generic.List<WG16.Hydrology.DrainageGraph.Segment>(), hp);
+                    bool untouched = true; for (int k = 0; k < baseH.Length; k++) if (Mathf.Abs(r0.Height[k] - baseH[k]) > 1e-3f) untouched = false;
+                    var r = vc.Carve(baseH, g.Segments, hp);
+                    // anti-terracing: 2nd-diff roughness low + isotropic (z/x ~ 1).
+                    double rx = 0, rz = 0; long nn = 0;
+                    for (int z = 1; z < _res-1; z++) for (int x = 1; x < _res-1; x++)
+                    { int j = z*_res+x; rx += Mathf.Abs(2f*r.Height[j]-r.Height[j-1]-r.Height[j+1]); rz += Mathf.Abs(2f*r.Height[j]-r.Height[j-_res]-r.Height[j+_res]); nn++; }
+                    float aniso = (float)(rz / System.Math.Max(rx, 1e-9));
+                    // valley/ridge discriminator on flow_accum: high accum should sit at LOW carved height.
+                    var ord = new int[r.Height.Length]; for (int q = 0; q < ord.Length; q++) ord[q] = q;
+                    System.Array.Sort(ord, (x, y) => r.FlowAccum[y].CompareTo(r.FlowAccum[x]));
+                    int top = ord.Length / 100; double hTop = 0, hAll = 0;
+                    for (int q = 0; q < top; q++) hTop += r.Height[ord[q]]; hTop /= top;
+                    foreach (float v in r.Height) hAll += v; hAll /= r.Height.Length;
+                    bool ok = untouched && aniso > 0.7f && aniso < 1.4f && hTop < hAll;
+                    GD.Print($"CARVECHECK: {(ok ? "PASS" : "FAIL")} zeroSeg_untouched={untouched} antiterrace_z/x={aniso:F2} (want ~1) valleys(hTop={hTop:F1}<hAll={hAll:F1})={hTop<hAll}");
+                    SetProcess(false); GetTree().Quit(); return;
+                }
                 if (a == "--erosioncheck")
                 {
                     int steps = 600;
