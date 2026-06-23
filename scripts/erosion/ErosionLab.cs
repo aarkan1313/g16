@@ -51,6 +51,22 @@ public partial class ErosionLab : Node3D
             // numeric self-check path (--erosioncheck): step + assert finite/bounded, print, quit.
             foreach (string a in OS.GetCmdlineUserArgs())
             {
+                if (a == "--coarsecheck")
+                {
+                    // verify the coarse sampler is deterministic + finite, and the halo math lines up.
+                    var hp = new WG16.Hydrology.HydrologyParams();
+                    int cres = 64;
+                    var cf1 = WG16.Hydrology.CoarseField.Build(fc, p, -1000f, -1000f, hp.CoarseSpacing, cres);
+                    var cf2 = WG16.Hydrology.CoarseField.Build(fc, p, -1000f, -1000f, hp.CoarseSpacing, cres);
+                    bool same = true, finite = true;
+                    for (int z = 0; z < cres; z++) for (int x = 0; x < cres; x++)
+                    { if (cf1.H(x, z) != cf2.H(x, z)) { same = false; } if (!float.IsFinite(cf1.H(x, z))) { finite = false; } }
+                    var (wx, wz) = cf1.World(1, 0);
+                    bool mapping = Mathf.Abs(wx - (-1000f + hp.CoarseSpacing)) < 1e-3f && Mathf.Abs(wz - (-1000f)) < 1e-3f;
+                    bool ok = same && finite && mapping;
+                    GD.Print($"COARSECHECK: {(ok ? "PASS" : "FAIL")} deterministic={same} finite={finite} mapping={mapping}");
+                    SetProcess(false); GetTree().Quit(); return;
+                }
                 if (a == "--erosioncheck")
                 {
                     int steps = 600;
