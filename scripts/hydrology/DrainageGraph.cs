@@ -37,7 +37,7 @@ public sealed class DrainageGraph
         g.CoarseOriginX = cf.OriginX; g.CoarseOriginZ = cf.OriginZ; g.CoarseSpacing = cf.Spacing;
         g.FillDepressions(cf);
         g.RouteSteepestDescent();
-        g.AccumulateArea();
+        g.AccumulateArea(hp);
         g.StrahlerOrder(hp);
         g.ComputeBed(cf, hp);
         g.EmitSegments(cf, hp);
@@ -135,14 +135,34 @@ public sealed class DrainageGraph
         }
     }
 
-    // upstream area = self + sum of cells draining into this one. Process cells high->low so contributions
-    // arrive before a cell forwards them downstream (a topo order via height sort; deterministic by index tie).
-    private void AccumulateArea()
+    // upstream area via MULTIPLE-FLOW-DIRECTION (MFD): distribute each cell's area to ALL lower D8 neighbors,
+    // weighted by slope^p (p≈MfdExp). Pure D8 single-receiver bakes the strongest grid-orientation bias of any
+    // router (flow locked to 45° multiples, zero dispersion) → grid-faceted accumulation → faceted channel
+    // initiation. MFD is nearly orientation-invariant, so drainage area (which drives discharge/width) is smooth
+    // and the network de-facets. Processed high->low so a cell's full area is known before it disperses it.
+    // (DownIdx stays single-receiver for topology/bed/segments; only ACCUMULATION is multi-flow.)
+    private void AccumulateArea(HydrologyParams hp)
     {
         for (int i = 0; i < _n; i++) { Area[i] = 1f; }
         var order = new int[_n]; for (int i = 0; i < _n; i++) { order[i] = i; }
         Array.Sort(order, (a, b) => Filled[b] != Filled[a] ? Filled[b].CompareTo(Filled[a]) : a.CompareTo(b)); // high->low
-        foreach (int i in order) { int d = DownIdx[i]; if (d >= 0) { Area[d] += Area[i]; } }
+        float p = hp.MfdExp;
+        var w = new float[8];
+        foreach (int i in order)
+        {
+            int cx = i % Res, cz = i / Res; float hc = Filled[i];
+            float tot = 0f; int k = 0;
+            foreach (var (nx, nz, dist) in Neigh8(cx, cz))
+            {
+                float slope = (hc - Filled[Idx(nx, nz)]) / dist;
+                float wk = slope > 0f ? MathF.Pow(slope, p) : 0f;
+                w[k++] = wk; tot += wk;
+            }
+            if (tot <= 1e-12f) { continue; }   // pit/flat: area stays (lake) — DownIdx fallback still routes topology
+            float ai = Area[i]; k = 0;
+            foreach (var (nx, nz, _) in Neigh8(cx, cz))
+            { float frac = w[k++] / tot; if (frac > 0f) { Area[Idx(nx, nz)] += ai * frac; } }
+        }
     }
 
     // Strahler: a cell is a channel if Area >= ChannelMinArea. Order rises where two equal-order channels meet.

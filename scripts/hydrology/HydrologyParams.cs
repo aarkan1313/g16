@@ -11,6 +11,8 @@ public sealed class HydrologyParams
     public float HaloMetres    = 2048f; // region halo so cross-chunk rivers resolve identically (>= max segment reach)
     public float ChannelMinArea = 8f;   // min upstream cell-count for a coarse cell to seed a channel/segment
     public int   TributarySteps = 0;    // extra headward-growth passes (0 = steepest-descent only; raised in tuning)
+    public float MfdExp        = 3.5f;  // multiple-flow-direction slope exponent (≈3.5 ≈ rotationally symmetric;
+                                        // higher = more channelized/D8-like, lower = more dispersed/hillslope-like)
     public int   CarveMinOrder  = 2;    // min Strahler order a reach must have to CARVE a visible valley (lower-
                                         // order rivulets still feed the substrate but don't gouge hillslopes →
                                         // kills the herringbone of hundreds of tiny parallel tributary valleys)
