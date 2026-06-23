@@ -25,6 +25,10 @@ public sealed class HydrologyParams
     public float WidthPerOrder = 40f;   // valley half-width (m) added per Strahler order (smooth falloff radius)
     public float BankSediment  = 0.3f;  // sediment value written within the valley (placeholder for surfacing)
     public float LakeMinDepth  = 3f;     // min fill-depth (m) for a coarse cell to count as a lake (else dry flat)
+    public int   PolishSteps   = 40;     // stream-power erosion-relaxation steps on the CARVED field (0 = off).
+                                         // The decisive "make it natural" lever (Schott 2023): relax confluence
+                                         // seams / valley-width steps / basin flats into natural form. A LAYER on
+                                         // the good macro structure, NOT the shaping authority.
 
     // std430 for valley_carve.glsl Params: slot0 res(int bits), slots1..6 floats, 7..15 pad -> 16 scalars=64B.
     // (segment data is a SEPARATE buffer, not in Params.)

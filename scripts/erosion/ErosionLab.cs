@@ -321,6 +321,8 @@ public partial class ErosionLab : Node3D
                     else if (a.StartsWith("--carve=")) { _hp.CarveStrength = a.Substring(8).ToFloat(); }
                     else if (a.StartsWith("--carvemin=")) { _hp.CarveMinOrder = (int)a.Substring(11).ToFloat(); }
                     else if (a.StartsWith("--lakemin=")) { _hp.LakeMinDepth = a.Substring(10).ToFloat(); }
+                    else if (a.StartsWith("--polish=")) { _hp.PolishSteps = (int)a.Substring(9).ToFloat(); }
+                    else if (a.StartsWith("--mfd=")) { _hp.MfdExp = a.Substring(6).ToFloat(); }
                 }
                 BuildHydrology(p, fc);
             }
@@ -351,8 +353,9 @@ public partial class ErosionLab : Node3D
         var g = WG16.Hydrology.DrainageGraph.Build(cf, _hp);
         _vc ??= new WG16.Hydrology.ValleyCarve(_res);
         _carve = _vc.Carve(baseH, g, _hp);
+        if (_hp.PolishSteps > 0) { _carve.Height = PolishCarve(_carve.Height, _hp.PolishSteps); }
         UploadHeight(_carve.Height);
-        GD.Print($"  hydrology: {g.Segments.Count} river segments, carve_strength={_hp.CarveStrength:F1}");
+        GD.Print($"  hydrology: {g.Segments.Count} river segments, carve_strength={_hp.CarveStrength:F1}, polish={_hp.PolishSteps}");
     }
 
     private void UploadHeight(float[] h)
@@ -429,6 +432,26 @@ public partial class ErosionLab : Node3D
         };
         _hud.Text = $"erosion lab  steps={_totalSteps}  {(_running ? "RUNNING" : "paused")}  view={view}\n" +
                     $"space=run S=step R=reset D=view (lit→water→sed→flow→accum→channel→wlevel)   {Engine.GetFramesPerSecond():0} fps";
+    }
+
+    /// EROSION POLISH (research war52lnu6, the decisive "make it natural" lever): run a SHORT stream-power
+    /// relaxation on the CARVED field so confluence seams, valley-width steps, and basin flats relax into
+    /// natural form. Reuses the race-free pipe-model sim as a LAYER (gentle params: it relaxes, doesn't
+    /// re-author the macro shape). NOT the terrain-shaping authority — that's the structure-first carve.
+    private float[] PolishCarve(float[] carvedHeight, int steps)
+    {
+        var pp = new WG16.Erosion.ErosionParams
+        {
+            Res = _res, CellSize = _cell,
+            Erode = 0.15f, MaxErode = 0.02f,   // gentle incision: relax, don't re-carve macro valleys
+            Deposit = 0.6f,                     // fill the seams/steps it smooths
+            Rain = 0.02f, Evaporate = 0.02f,
+            TalusAngle = 0.6f, TalusRate = 0.4f,// thermal relaxes the carve's sharp shoulders into natural slopes
+        };
+        using var sim = new WG16.Erosion.ErosionSim(_res) { Params = pp };
+        sim.Seed(carvedHeight);
+        sim.Step(steps);
+        return sim.ReadHeight();
     }
 
     /// Rebuild the carve from scratch (live carve-strength/knob change). Re-creates a FieldCompute since the
