@@ -70,4 +70,26 @@ void main() {
             h[i] += amt; s[i] = sed - amt;
         }
     }
+    else if (pc.phase == 4) {                 // TRANSPORT: advect suspended sediment back along velocity
+        vec2 p = vec2(c) - vel[i] * P.dt;     // semi-Lagrangian backtrace
+        p = clamp(p, vec2(0.0), vec2(float(P.res-1)));
+        ivec2 b = ivec2(floor(p)); vec2 fr = fract(p);
+        int bx1 = min(b.x+1, P.res-1), bz1 = min(b.y+1, P.res-1);
+        float s00 = s[idx(b.x, b.y)],  s10 = s[idx(bx1, b.y)];
+        float s01 = s[idx(b.x, bz1)],  s11 = s[idx(bx1, bz1)];
+        s[i] = mix(mix(s00, s10, fr.x), mix(s01, s11, fr.x), fr.y);
+    }
+    else if (pc.phase == 5) {                 // THERMAL: slump bedrock above the rest angle
+        float hc = h[i]; float move = 0.0;
+        int nx[4] = int[](c.x-1, c.x+1, c.x, c.x);
+        int nz[4] = int[](c.y, c.y, c.y-1, c.y+1);
+        for (int k = 0; k < 4; k++) {
+            int x = clamp(nx[k], 0, P.res-1), z = clamp(nz[k], 0, P.res-1);
+            float d = hc - h[idx(x, z)];
+            if (d / P.cell_size > P.talus_angle) {
+                move += P.talus_rate * (d - P.talus_angle * P.cell_size) * 0.25;
+            }
+        }
+        h[i] = hc - move * P.dt;
+    }
 }
