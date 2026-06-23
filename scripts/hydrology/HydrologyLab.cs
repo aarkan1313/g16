@@ -16,6 +16,7 @@ public partial class HydrologyLab : Node3D
     private HydrologyPipeline _pipeline = null!;
     private WaterRenderer _water = null!;
     private WaterParams _wp = null!;
+    private WaterCarve _waterCarve = null!;
     private DrainageGraph _lastGraph = null!;
     private HydrologyParams _hp = null!;
     private ValleyCarve.CarveResult _carve = null!;
@@ -104,10 +105,14 @@ public partial class HydrologyLab : Node3D
     {
         _carve = _pipeline.Build(p, fc, _hp);
         _lastGraph = _pipeline.LastGraph;
+        var wb = WaterBodies.Build(_lastGraph, _wp);           // significance-filtered lakes + river reaches
+        // WATER CARVE (pillars): deepen lake basins (bowls+banks) + thin river grooves so water sits IN the
+        // terrain, not as a flooding plane on raw slope. On a COPY — base field untouched.
+        _waterCarve ??= new WaterCarve(Res, Cell);
+        _carve.Height = _waterCarve.Apply(_carve.Height, wb.Lakes, wb.Rivers, _wp);
         UploadHeight(_carve.Height);
-        _water.BuildSea(this, _wp, _carve.Height);             // tier 1: global sea
-        var wb = WaterBodies.Build(_lastGraph, _wp);           // tier 2/3: significance-filtered bodies
-        _water.BuildLakes(this, wb.Lakes, _wp, _carve.Height); // tier 2: significant lakes (rivers in T5)
+        _water.BuildSea(this, _wp, _carve.Height);             // tier 1: sea (off by default in the mountain lab)
+        _water.BuildLakes(this, wb.Lakes, _wp, _carve.Height); // tier 2: lake surfaces (now sitting in bowls)
         RefreshDebug();
         GD.Print($"HydrologyLab: {_pipeline.SegmentCount} segments, sea={(_wp.SeaEnabled ? _wp.SeaLevel.ToString("F0") : "off")}, lakes={wb.Lakes.Count}, rivers={wb.Rivers.Count}");
     }
@@ -183,5 +188,5 @@ public partial class HydrologyLab : Node3D
         _mat.SetShaderParameter("debug_field", 1.0f);
     }
 
-    public override void _ExitTree() { _pipeline?.Dispose(); }
+    public override void _ExitTree() { _pipeline?.Dispose(); _waterCarve?.Dispose(); }
 }
