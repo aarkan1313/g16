@@ -1,9 +1,8 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/lab/TerrainLab.cs" id="1"]
 [ext_resource type="Script" path="res://scripts/lab/TerrainLabUI.cs" id="2"]
 [ext_resource type="Script" path="res://scripts/workbench/FlyCamera.cs" id="3"]
-[ext_resource type="Script" path="res://scripts/hydrology/InfiniteWater.cs" id="4"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.30, 0.48, 0.74, 1)
@@ -65,9 +64,6 @@ volumetric_fog_ambient_inject = 0.2
 
 [node name="TerrainLab" type="MeshInstance3D" parent="."]
 script = ExtResource("1")
-
-[node name="InfiniteWater" type="Node3D" parent="."]
-script = ExtResource("4")
 
 [node name="Camera" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.707, 0.707, 0, -0.707, 0.707, 0, 1400, 1200)
