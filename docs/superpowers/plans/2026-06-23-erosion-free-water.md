@@ -2,6 +2,31 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## REVISION 2026-06-23 — coarse world map + CDLOD-first (supersedes T5-T7 below)
+
+T1-T4 + WaterCarve are BUILT (sea/lakes/shader/carve in `scripts/hydrology/*`). Per the spec revision, the
+remaining work changes shape: the water PRODUCER becomes a **coarse world water map** (compute once, cache,
+sample), and we get water into the **infinite CDLOD world** to judge it (the lab's single 5.7km basin is a bad
+stage). Revised remaining tasks:
+
+- **RT1 — `CoarseWorldWater` map.** Build the drainage/lakes/sea on a cheap low-res world-spanning grid (the
+  existing `DrainageGraph`/`WaterBodies` run at a coarse world scale), cache it as sampleable fields (per-cell:
+  is-water, water-surface-Y, water-depth, is-river). Tileable with a halo for infinite. Gate: `--worldwatercheck`
+  prints lake count / coverage over a big world span (limited-amounts holds) + is deterministic.
+- **RT2 — Sample-based water in the lab.** Re-point the lab's water + carve to SAMPLE the coarse map instead of
+  building a per-region graph. Confirms the map drives the same look. (Keeps the close-up lens.)
+- **RT3 — Sea into the infinite CDLOD world (additive, FIRST).** A global sea plane following the camera in
+  `terrain_lab.tscn`; zero per-chunk cost, cannot hitch or touch terrain geometry. Fly the real world with water.
+  Gate: `--fieldcheck` 0m (terrain untouched), no perf regression on the CDLOD rebuild path.
+- **RT4 — Lakes + rivers per-chunk via the map (additive sibling meshes).** On chunk birth (`_active[key]=ns`
+  in `CdlodTerrain`), build that chunk's water sibling mesh by SAMPLING the coarse map (no graph build → no
+  hitch); free on chunk death. Carve-delta via the reserved slot only. Gate: water-coherence across chunk
+  overlap + `--fieldcheck` 0m + CDLOD perf unchanged.
+- **RT5 — AAA shader polish** (SSR reflections + flow-aligned normals) — unchanged from old T6, applied once the
+  water reads right in the real world.
+
+Old T5-T7 below are SUPERSEDED (their ideas fold into RT1-RT5). T1-T4 history retained for reference.
+
 **Goal:** Render believable AAA water over the untouched base field — a global sea level, a deliberately-limited set of significant lakes, and thin-channel rivers — with no erosion, judged through a real water-shader lens, and wired into infinite CDLOD streaming last.
 
 **Architecture:** Water is an additive rendering layer, not terrain shaping. Reuse the tile-coherent `DrainageGraph` for basins + river centerlines. A pure-C# `WaterBodies` applies a significance filter + per-km² density cap (the "limited amounts" guarantee). A thin `ChannelCarve` grooves only under river centerlines (carve-delta, base field untouched). One modular `water_surface.gdshader` renders sea/lakes/rivers with reflections + depth + flow + foam. Built sea→lakes→rivers in the standalone hydrology lab (with the real shader + close-up camera as the lens), then attached to CDLOD chunks additively as the final task.
