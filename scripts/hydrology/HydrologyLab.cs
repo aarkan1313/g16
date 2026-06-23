@@ -89,9 +89,11 @@ public partial class HydrologyLab : Node3D
         _carve = _pipeline.Build(p, fc, _hp);
         _lastGraph = _pipeline.LastGraph;
         UploadHeight(_carve.Height);
-        _water.BuildSea(this, _wp, _carve.Height);   // tier 1: global sea (lakes/rivers added in T4/T5)
+        _water.BuildSea(this, _wp, _carve.Height);             // tier 1: global sea
+        var wb = WaterBodies.Build(_lastGraph, _wp);           // tier 2/3: significance-filtered bodies
+        _water.BuildLakes(this, wb.Lakes, _wp, _carve.Height); // tier 2: significant lakes (rivers in T5)
         RefreshDebug();
-        GD.Print($"HydrologyLab: {_pipeline.SegmentCount} segments, carve={_hp.CarveStrength:F1}, sea={(_wp.SeaEnabled ? _wp.SeaLevel.ToString("F0") : "off")}");
+        GD.Print($"HydrologyLab: {_pipeline.SegmentCount} segments, sea={(_wp.SeaEnabled ? _wp.SeaLevel.ToString("F0") : "off")}, lakes={wb.Lakes.Count}, rivers={wb.Rivers.Count}");
     }
 
     private void Rebuild()   // live-knob rebuild (re-creates a FieldCompute; the _Ready one is disposed)
