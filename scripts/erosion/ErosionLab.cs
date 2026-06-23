@@ -53,8 +53,12 @@ public partial class ErosionLab : Node3D
                     }
                     float rough = (float)(lap / System.Math.Max(n, 1)) / Mathf.Max(hi - lo, 1f);
                     bool smooth = rough < 0.02f;   // empirical: sawtooth >> 0.02, real erosion well under
-                    bool ok = finite && (hi - lo) < 5000f && smooth;
-                    GD.Print($"EROSIONCHECK: {(ok ? "PASS" : "FAIL")}  finite={finite} range=[{lo:F1},{hi:F1}] roughness={rough:F4} (sawtooth if >0.02) after {steps} steps");
+                    // flow_accum dynamic range: channels concentrate drainage, so max should be >> mean.
+                    var (amax, amean) = _sim.AccumStats();
+                    float aratio = amax / Mathf.Max(amean, 1e-6f);
+                    bool drains = aratio > 10f;     // dendritic networks concentrate flow far above the mean
+                    bool ok = finite && (hi - lo) < 5000f && smooth && drains;
+                    GD.Print($"EROSIONCHECK: {(ok ? "PASS" : "FAIL")}  finite={finite} range=[{lo:F1},{hi:F1}] roughness={rough:F4} (sawtooth if >0.02) flow_accum max={amax:F0} mean={amean:F1} ratio={aratio:F0} (channels if >10) after {steps} steps");
                     _sim.Dispose(); _sim = null!;
                     SetProcess(false);   // stop _Process firing on the disposed sim before the tree tears down
                     GetTree().Quit();

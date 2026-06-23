@@ -7,7 +7,8 @@ layout(set = 0, binding = 0, std430) restrict buffer Params {
     int res; float cell_size; float dt; float rain;
     float evaporate; float gravity; float capacity; float erode;
     float deposit; float max_erode; float talus_angle; float talus_rate;
-    float min_tilt; float _p0; float _p1; float _p2;
+    float min_tilt; float stream_m; float stream_n; float accum_rate;
+    float channel_threshold; float _p1; float _p2; float _p3;
 } P;
 
 layout(set = 0, binding = 1, std430) restrict buffer Height   { float h[]; };
@@ -18,6 +19,11 @@ layout(set = 0, binding = 5, std430) restrict buffer Velocity { vec2 vel[]; };
 layout(set = 0, binding = 6, std430) restrict buffer DHeight  { float dh[]; };    // erode height delta (race-free)
 layout(set = 0, binding = 7, std430) restrict buffer TFlux    { vec4 tflux[]; };  // thermal slump outflow L,R,T,B
 layout(set = 0, binding = 8, std430) restrict buffer Sed2     { float s2[]; };    // transport double-buffer
+layout(set = 0, binding = 9, std430) restrict buffer Accum    { float a[]; };     // upstream drainage area A
+layout(set = 0, binding =10, std430) restrict buffer Accum2   { float a2[]; };    // accum double-buffer
+layout(set = 0, binding =11, std430) restrict buffer AFlux    { vec4 aflux[]; };  // downhill area-routing weights L,R,T,B
+layout(set = 0, binding =12, std430) restrict buffer CMask    { float cmask[]; }; // channel mask (stream-order proxy)
+layout(set = 0, binding =13, std430) restrict buffer WLevel   { float wlevel[]; };// basin standing-water surface
 
 // push_constant selects the phase (so one shader = all phases).
 layout(push_constant, std430) uniform Push { int phase; } pc;
@@ -112,5 +118,45 @@ void main() {
     }
     else if (pc.phase == 7) {                 // SWAP: s = s2 (commit the advected sediment)
         s[i] = s2[i];
+    }
+    else if (pc.phase == 8) {                 // ACCUM_WEIGHT: route A downhill on BEDROCK topology (read-only h/a)
+        // Drainage area follows the terrain SURFACE (bedrock), not the transient water film. Distribute each
+        // cell's area to its LOWER neighbors in proportion to slope (D-infinity-style multi-flow). Steeper
+        // descent gets more — this smooths the network off the grid axes so rivers branch naturally.
+        float hc = h[i];
+        float dL = hc - h[idx(max(c.x-1,0),       c.y)];
+        float dR = hc - h[idx(min(c.x+1,P.res-1), c.y)];
+        float dT = hc - h[idx(c.x, max(c.y-1,0))];
+        float dB = hc - h[idx(c.x, min(c.y+1,P.res-1))];
+        vec4 wgt = max(vec4(dL, dR, dT, dB), vec4(0.0));   // only downhill directions receive flow
+        float tot = wgt.x + wgt.y + wgt.z + wgt.w;
+        aflux[i] = (tot > 1e-9) ? wgt / tot : vec4(0.0);   // own fractions sum to 1 (or 0 at a pit). race-free.
+    }
+    else if (pc.phase == 9) {                 // ACCUM_GATHER: a2[i] = own rain + inflow from UPHILL neighbors
+        // Each neighbor sends a fraction of ITS A toward me along the direction pointing at me.
+        // Left neighbor's R-fraction (aflux.y) flows right → into me; etc. Race-free: read a/aflux, write own a2.
+        float inL = (c.x > 0)        ? aflux[idx(c.x-1, c.y)].y * a[idx(c.x-1, c.y)] : 0.0;
+        float inR = (c.x < P.res-1)  ? aflux[idx(c.x+1, c.y)].x * a[idx(c.x+1, c.y)] : 0.0;
+        float inT = (c.y > 0)        ? aflux[idx(c.x, c.y-1)].w * a[idx(c.x, c.y-1)] : 0.0;
+        float inB = (c.y < P.res-1)  ? aflux[idx(c.x, c.y+1)].z * a[idx(c.x, c.y+1)] : 0.0;
+        // 1.0 = this cell's own rain cell. accum_rate relaxes toward the new estimate for stability as h shifts.
+        float target = 1.0 + (inL + inR + inT + inB);
+        a2[i] = mix(a[i], target, P.accum_rate);
+    }
+    else if (pc.phase == 10) {                // ACCUM_SWAP: a = a2 (commit the propagated drainage area)
+        a[i] = a2[i];
+    }
+    else if (pc.phase == 11) {                // CHANNEL_MASK: soft stream-order proxy from A (own-index, race-free)
+        float ai = a[i];
+        cmask[i] = (ai > P.channel_threshold) ? clamp(log(ai) / 12.0, 0.0, 1.0) : 0.0;
+    }
+    else if (pc.phase == 12) {                // BASIN_WATER: standing water where flow pools (own-index, race-free)
+        // Phase-1 cheap basin proxy: mark cells holding meaningful standing water (a local minimum collects it).
+        // A cell is "basin" when its surface sits at/below all 4 neighbors' bedrock (a sink) OR holds deep water.
+        float hc = h[i];
+        bool sink = hc <= h[idx(max(c.x-1,0),c.y)] && hc <= h[idx(min(c.x+1,P.res-1),c.y)]
+                 && hc <= h[idx(c.x,max(c.y-1,0))] && hc <= h[idx(c.x,min(c.y+1,P.res-1))];
+        float depth = w[i];
+        wlevel[i] = ((sink && depth > 1e-4) || depth > 0.02) ? hc + depth : -1e9;   // -1e9 = no standing water
     }
 }
