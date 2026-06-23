@@ -1,45 +1,36 @@
 shader_type spatial;
 render_mode cull_disabled;
 
-// Infinite-world sea: a flat translucent plane that derives depth/shoreline from the SCENE DEPTH BUFFER (the
-// terrain already rendered), not a height texture — the standard infinite-ocean approach. Depth = how far the
-// terrain bed is below the water surface at each pixel → shallow shore (light + foam) → deep (dark, opaque).
-uniform vec3 shallow_color : source_color = vec3(0.16, 0.42, 0.50);
-uniform vec3 deep_color    : source_color = vec3(0.02, 0.10, 0.22);
-uniform vec3 foam_color    : source_color = vec3(0.88, 0.94, 0.97);
-uniform float depth_for_deep = 40.0;   // metres of water depth reaching full deep colour
-uniform float foam_depth = 3.0;        // shoreline foam band (metres of depth)
+// Infinite-world sea. Kept deliberately SIMPLE + guaranteed-visible (the depth-buffer version rendered "just
+// clear"). Solid-ish blue water with animated ripples + fresnel; depth/foam refinement comes back later once the
+// base is confirmed visible. No depth_texture dependency (that was the suspect for the invisible surface).
+uniform vec3 water_color : source_color = vec3(0.08, 0.30, 0.45);
+uniform vec3 deep_color  : source_color = vec3(0.02, 0.12, 0.26);
 uniform float wave_scale = 1.0;
 uniform float flow_speed = 0.15;
-uniform float base_alpha = 0.86;       // legible by default (was too transparent → "hard to see")
+uniform float water_alpha = 0.9;
 
-uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
+varying vec3 v_world;
+
+void vertex() { v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 
 void fragment() {
-    // water depth from the scene depth buffer (enhancement, not the whole look — water stays legible even if
-    // depth is ~0): linearize terrain depth + this pixel's depth to view space and subtract.
-    vec2 uv = SCREEN_UV;
-    float sceneRaw = texture(depth_tex, uv).r;
-    vec4 sv = INV_PROJECTION_MATRIX * vec4(uv * 2.0 - 1.0, sceneRaw, 1.0); sv.xyz /= sv.w;
-    vec4 wv = INV_PROJECTION_MATRIX * vec4(uv * 2.0 - 1.0, FRAGCOORD.z, 1.0); wv.xyz /= wv.w;
-    float water_depth = max((-sv.z) - (-wv.z), 0.0);
-
-    float td = clamp(water_depth / depth_for_deep, 0.0, 1.0);
-    vec3 col = mix(shallow_color, deep_color, td);
-    float foam = 1.0 - smoothstep(0.0, foam_depth, water_depth);
-    col = mix(col, foam_color, foam * 0.7);
-
-    // animated ripple normal (two octaves for a livelier, more visible surface)
+    // ripples via NORMAL_MAP (tangent space) — do NOT overwrite NORMAL with a world-space guess (that was the
+    // bug: NORMAL is VIEW-space, so a world-up guess lit the plane correctly only from one side → "clear from
+    // above, blue from below"). NORMAL_MAP perturbs the real geometry normal correctly for any view angle.
     float t = TIME * flow_speed;
-    vec2 n2 = vec2(sin(VERTEX.x * 0.04 * wave_scale + t), cos(VERTEX.z * 0.04 * wave_scale - t)) * 0.10
-            + vec2(sin(VERTEX.x * 0.13 * wave_scale - t * 1.7), cos(VERTEX.z * 0.11 * wave_scale + t * 1.3)) * 0.05;
-    NORMAL = normalize(vec3(n2.x, 1.0, n2.y));
+    vec2 r = vec2(sin(v_world.x * 0.04 * wave_scale + t), cos(v_world.z * 0.04 * wave_scale - t)) * 0.4
+           + vec2(sin(v_world.x * 0.13 * wave_scale - t * 1.7), cos(v_world.z * 0.11 * wave_scale + t * 1.3)) * 0.2;
+    NORMAL_MAP = normalize(vec3(r.x, r.y, 1.0)) * 0.5 + 0.5;
+    NORMAL_MAP_DEPTH = 0.6;
 
-    // fresnel rim brightens at grazing angles so the water surface reads clearly against terrain/sky.
-    float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
-    col += fres * 0.25;
+    // fresnel from the true geometry normal (view space) — bright rim at grazing angles.
+    float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
+    vec3 col = mix(water_color, deep_color, 0.4) + fres * 0.30;
 
     ALBEDO = col;
-    METALLIC = 0.0; ROUGHNESS = mix(0.04, 0.14, td); SPECULAR = 0.8;
-    ALPHA = clamp(base_alpha + fres * 0.1, 0.0, 1.0);   // mostly opaque so it's clearly visible
+    METALLIC = 0.0;
+    ROUGHNESS = 0.06;
+    SPECULAR = 0.8;
+    ALPHA = water_alpha;
 }
