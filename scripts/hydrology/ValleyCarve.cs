@@ -30,13 +30,14 @@ public sealed class ValleyCarve : IDisposable
     public CarveResult Carve(float[] baseHeight, IReadOnlyList<DrainageGraph.Segment> segments, HydrologyParams hp)
     {
         hp.Res = _res;
-        // pack segments: 6 floats each. (a buffer of >=1 float even if empty so the RID is valid.)
+        // pack segments: 8 floats each [Ax,Az,Bx,Bz,Order,Area,BedA,BedB]. (>=1 float even if empty so RID valid.)
         int sc = segments.Count;
-        var segF = new float[Math.Max(sc * 6, 1)];
+        var segF = new float[Math.Max(sc * 8, 1)];
         for (int s = 0; s < sc; s++)
         {
-            var g = segments[s]; int o = s * 6;
-            segF[o] = g.Ax; segF[o+1] = g.Az; segF[o+2] = g.Bx; segF[o+3] = g.Bz; segF[o+4] = g.Order; segF[o+5] = g.Area;
+            var g = segments[s]; int o = s * 8;
+            segF[o] = g.Ax; segF[o+1] = g.Az; segF[o+2] = g.Bx; segF[o+3] = g.Bz;
+            segF[o+4] = g.Order; segF[o+5] = g.Area; segF[o+6] = g.BedA; segF[o+7] = g.BedB;
         }
 
         Rid ppar = SbBytes(hp.Pack());

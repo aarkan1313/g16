@@ -16,12 +16,12 @@ layout(set=0, binding=3, std430) restrict buffer Accum  { float accum[]; };
 layout(set=0, binding=4, std430) restrict buffer CMask  { float cmask[]; };
 layout(set=0, binding=5, std430) restrict buffer WLevel { float wlevel[]; };
 layout(set=0, binding=6, std430) restrict buffer Sed    { float sed[]; };
-// segments: flat array of 6 floats each [Ax,Az,Bx,Bz,Order,Area]; count in push constant.
+// segments: flat array of 8 floats each [Ax,Az,Bx,Bz,Order,Area,BedA,BedB]; count in push constant.
 layout(set=0, binding=7, std430) restrict buffer Segs   { float seg[]; };
 
 layout(push_constant, std430) uniform Push { int seg_count; float origin_x; float origin_z; float _pad; } pc;
 
-// distance from point p to segment (a,b), plus the parametric t (0..1) for along-channel queries.
+// distance from p to segment (a,b) + parametric t (0..1) for interpolating along-channel bed elevation.
 float seg_dist(vec2 p, vec2 a, vec2 b, out float t) {
     vec2 ab = b - a; float len2 = max(dot(ab, ab), 1e-6);
     t = clamp(dot(p - a, ab) / len2, 0.0, 1.0);
@@ -33,32 +33,53 @@ void main() {
     if (c.x >= P.res || c.y >= P.res) { return; }
     int i = c.y * P.res + c.x;
     vec2 wp = vec2(pc.origin_x + float(c.x) * P.cell_size, pc.origin_z + float(c.y) * P.cell_size);
+    float base = baseh[i];
 
-    // find the nearest channel segment; accumulate the SMOOTH valley influence of all nearby segments.
-    float carve = 0.0;            // total depth to subtract (max-blended, so valleys merge smoothly)
-    float nearOrder = 0.0, nearArea = 0.0, nearDist = 1e9;
+    // CARVE TOWARD A BED ELEVATION (Genevaux 2013: h = (1-w)*terrain + w*(u_z + cross_section)), NOT subtract a
+    // per-segment depth from the bumpy base (that made disconnected gouges). For each cell we find the river
+    // segment whose VALLEY most lowers us, taking the interpolated bed elevation u_z at the projection and a
+    // smooth cross-section rising from the channel out to the valley edge. The floor is the (monotonic-
+    // downstream) bed, so it's continuous along-channel; tributaries grade into trunks (shared bed field).
+    float target = base;          // carved valley surface (only ever <= base: carving lowers, never raises)
+    float wsum = 0.0;             // max smooth weight over contributing segments (compact support)
+    float nearOrder = 0.0, nearArea = 0.0, nearDist = 1e9, nearBed = base;
+
     for (int s = 0; s < pc.seg_count; s++) {
-        int o = s * 6;
+        int o = s * 8;
         vec2 a = vec2(seg[o+0], seg[o+1]), b = vec2(seg[o+2], seg[o+3]);
-        float order = seg[o+4], area = seg[o+5];
+        float order = seg[o+4], area = seg[o+5], bedA = seg[o+6], bedB = seg[o+7];
         float t; float d = seg_dist(wp, a, b, t);
-        float halfw = P.width_per_order * order;                  // valley half-width grows with order
-        if (d < halfw) {
-            // smoothstep falloff: full depth at the channel line, 0 at halfw. C1-smooth => NO terracing.
-            float fall = 1.0 - smoothstep(0.0, halfw, d);
-            float depth = P.depth_per_order * order * fall;
-            carve = max(carve, depth);                            // max => broad valley, no additive double-dip
-        }
-        if (d < nearDist) { nearDist = d; nearOrder = order; nearArea = area; }
-    }
-    outh[i] = baseh[i] - P.carve_strength * carve;                // carve_strength=0 => baseh untouched
+        float uz = mix(bedA, bedB, t);                          // bed elevation at the projection (descends A->B)
 
-    // substrate (own-cell writes): channel mask where close to a channel line; flow_accum from nearest area
-    // falling off with distance; sediment within the valley; water_level = carved floor where masked (river
-    // surface), else no-water sentinel (lake fill is a later phase).
+        // discharge-scaled valley half-width (continuous, NOT quantized order): phi = 0.42*A^0.69 (Genevaux/
+        // Peytavie). width_per_order acts as an overall valley-width gain; order gives a gentle extra widening.
+        float discharge = 0.42 * pow(max(area, 1.0), 0.69);
+        float halfw = P.width_per_order * (0.6 + 0.4 * order) * (0.5 + 0.5 * sqrt(discharge / 8.0));
+        halfw = max(halfw, P.cell_size * 2.0);
+
+        if (d < halfw) {
+            // cross-section: valley floor sits at uz at the channel line, rises smoothly to terrain at halfw.
+            // depth_per_order * order = how deep the channel thalweg is below the local bed shoulder.
+            float thalweg = P.depth_per_order * (0.5 + 0.5 * order);
+            float k = smoothstep(0.0, halfw, d);                // 0 at channel, 1 at valley edge
+            // floor sits at (bed - thalweg) at the channel line, rising smoothly to terrain at the valley edge.
+            float carvedZ = mix(uz - thalweg, base, k);         // C1 cross-section, no terracing
+            float w = (1.0 - k);                                // compact-support smooth weight
+            // keep the deepest (most-lowering) contribution; valleys merge instead of double-dipping
+            float cand = mix(base, carvedZ, P.carve_strength * w);
+            if (cand < target) { target = cand; }
+            wsum = max(wsum, w);
+        }
+        if (d < nearDist) { nearDist = d; nearOrder = order; nearArea = area; nearBed = uz; }
+    }
+    outh[i] = min(base, target);                                // never raise terrain
+
+    // substrate (own-cell writes). channel mask near the channel line; flow_accum from nearest area falling off;
+    // sediment within the valley; water_level = bed elevation where channel (river surface), else no-water.
     float chanW = max(P.cell_size * 1.5, P.width_per_order * 0.15);
     cmask[i]  = nearOrder >= 1.0 ? (1.0 - smoothstep(0.0, chanW, nearDist)) * clamp(nearOrder / 6.0, 0.1, 1.0) : 0.0;
-    accum[i]  = nearArea * (1.0 - smoothstep(0.0, P.width_per_order * max(nearOrder, 1.0), nearDist));
-    sed[i]    = (nearDist < P.width_per_order * max(nearOrder, 1.0)) ? P.bank_sediment : 0.0;
-    wlevel[i] = (cmask[i] > 0.5) ? outh[i] : -1e9;                 // river surface at carved floor where masked
+    float wfall = P.width_per_order * (0.6 + 0.4 * max(nearOrder, 1.0));
+    accum[i]  = nearArea * (1.0 - smoothstep(0.0, wfall, nearDist));
+    sed[i]    = (nearDist < wfall) ? P.bank_sediment : 0.0;
+    wlevel[i] = (cmask[i] > 0.5) ? nearBed : -1e9;
 }
