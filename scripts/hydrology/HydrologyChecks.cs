@@ -22,6 +22,7 @@ public static class HydrologyChecks
             if (a == "--carvecheck") { Carve(p, fc, res, cell); return true; }
             if (a == "--waterbudgetcheck") { WaterBudget(p, fc); return true; }
             if (a == "--watercoverage") { WaterCoverage(p, fc, res, cell); return true; }
+            if (a == "--watercarvecheck") { WaterCarveCheck(p, fc, res, cell); return true; }
         }
         return false;
     }
@@ -63,6 +64,31 @@ public static class HydrologyChecks
         }
         pipe.Dispose();
         GD.Print(sb.ToString());
+    }
+
+    // proves the water carve is actually changing terrain (how many cells, by how much) — so "looks the same"
+    // can be diagnosed: tiny delta = invisible at scale; large = it IS carving and the issue is elsewhere.
+    private static void WaterCarveCheck(FieldParams p, FieldCompute fc, int res, float cell)
+    {
+        var hp = new HydrologyParams { Res = res, CellSize = cell }; var wp = new WaterParams();
+        var pipe = new HydrologyPipeline(res, cell);
+        var carve = pipe.Build(p, fc, hp);
+        float[] before = (float[])carve.Height.Clone();
+        var wb = WaterBodies.Build(pipe.LastGraph, wp);
+        using var wc = new WaterCarve(res, cell);
+        float[] after = wc.Apply(before, wb.Lakes, wb.Rivers, wp);
+        int changed = 0; float maxDrop = 0f; double sumDrop = 0;
+        for (int i = 0; i < before.Length; i++)
+        { float d = before[i] - after[i]; if (d > 1e-3f) { changed++; maxDrop = System.MathF.Max(maxDrop, d); sumDrop += d; } }
+        float pct = 100f * changed / before.Length;
+        // print the biggest lake's center + surface so we can aim a close-up camera AT the water (the only way to
+        // judge water detail — a 4km overview can't show a 7m bowl against 700m of relief).
+        WaterBodies.Lake big = default; float bestSig = -1f;
+        foreach (var lk in wb.Lakes) { if (lk.Significance > bestSig) { bestSig = lk.Significance; big = lk; } }
+        float bcx = (big.MinX + big.MaxX) * 0.5f, bcz = (big.MinZ + big.MaxZ) * 0.5f;
+        pipe.Dispose();
+        GD.Print($"WATERCARVECHECK: lakes={wb.Lakes.Count} rivers={wb.Rivers.Count} cells_changed={changed} ({pct:F1}%) maxDrop={maxDrop:F1}m meanDrop={(changed>0?sumDrop/changed:0):F1}m");
+        GD.Print($"  biggest lake center=({bcx:F0},{bcz:F0}) surface={big.SurfaceLevel:F0} extent=({big.MaxX-big.MinX:F0}x{big.MaxZ-big.MinZ:F0}m)  → fly here for a close-up");
     }
 
     private static void Coarse(FieldParams p, FieldCompute fc)

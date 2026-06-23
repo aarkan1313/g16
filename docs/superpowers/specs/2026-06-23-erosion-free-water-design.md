@@ -1,5 +1,35 @@
 # Erosion-Free Infinite Water — Sea + Significant Lakes + Thin-Channel Rivers — Design
 
+## REVISION 2026-06-23 (during T1-T4 build): COARSE WORLD WATER MAP + sea-off-in-mountains
+
+Two course-corrections from live eye-gating, both user-approved:
+
+1. **The water PRODUCER is a COARSE WORLD WATER MAP, not a per-region/per-chunk graph.** Compute the drainage /
+   lakes / sea ONCE on a cheap low-resolution world-spanning grid (tileable with a halo), cache it; the lab AND
+   every CDLOD chunk just SAMPLE it for their water + carve. This dissolves the three things that kept biting us:
+   tile-coherence (one shared map → automatic), streaming hitch (no per-chunk graph build → just a texture
+   sample), and the misleading single-basin lab (the map spans many regions). Infinite = tile the coarse pass.
+   This supersedes the per-chunk `WaterBodies`/`DrainageGraph` framing below for the STREAMING path (those stay
+   as the algorithm that BUILDS the coarse map; they're just run at world-coarse scale + cached, not per chunk).
+
+2. **Sea is a coastal/lowland feature, OFF by default in a mountain region.** A global ocean level doesn't fit
+   high terrain (water read as a flood / a sea in the mountain lab). The lab defaults sea off; lakes (tarns) +
+   rivers carry mountain scenes; the sea is judged at world/coast scale. `WaterParams.SeaEnabled=false` default.
+
+3. **Water sits in CARVED basins/channels** (user's "carve/depth" instinct, pillars-correct): `WaterCarve` GPU
+   pass deepens a smooth BOWL under each lake (banks) + thin river GROOVES, on a COPY (base field untouched).
+   Lake bowls are gated by submergence so they follow the ORGANIC basin outline, not a bounding box. BUILT.
+
+**State at revision:** T1 WaterParams, T2 WaterBodies+budget gate (23 lakes/104km²), T3 sea+shader+lens,
+T4 lakes, + WaterCarve (lake bowls + river grooves, organic) all BUILT/committed. The water RENDERING is sound
+(verified close-up: depth/ripple/shoreline work). The open problem was JUDGING in a one-giant-basin 4km lab →
+the answer is the coarse world map + getting water into the infinite CDLOD world to fly across varied terrain.
+The CDLOD system (`scripts/lab/CdlodTerrain.cs`) is perf-tuned + owned by the terrain lane: water MUST be
+additive (sibling meshes on chunk birth/death via `_active` lifecycle; never touch terrain geometry or the base
+field; `--fieldcheck` 0m). NEXT: build the coarse world map + sample it (lab first), then CDLOD sea-first.
+
+---
+
 Date: 2026-06-23. Status: DESIGN (brainstormed, user-approved section-by-section). Lane: terrain shape + water.
 Supersedes the erosion-as-terrain-author approach (the pipe-model AND the structure-first drainage carve both
 hit the graveyard STOP — the eye-gate stayed "bad" after ~8 attempts). Reuses the refactored, tile-coherent
