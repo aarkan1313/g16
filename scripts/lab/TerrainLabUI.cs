@@ -80,6 +80,7 @@ public partial class TerrainLabUI : Control, ILabControls
         ParseCli();
         InitSkyPresets();      // Phase 3a: build the SkyPresets library (sun/celestial/fantasy/mood) before any load/apply
         InitPresetsManager();  // Phase 3b: user-preset save/load (uses the lazy _luminaryList getter)
+        InitRandomizer();      // Phase 3c: randomize/lock logic (cloud-random injected as a delegate)
         LoadLibrary();
         LoadGroundPalette();   // GM1: must run before LoadRegistry builds the material controls
         LoadMoods();
