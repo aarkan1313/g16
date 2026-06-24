@@ -45,7 +45,7 @@ public partial class TerrainLabUI : Control
     private bool _aerialHazeOn = true;  // aerial haze fix on by default
     private bool _lastFillAb;   // I A/Bs the analytic indirect fill (relight #1)
     private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)
-    private bool _hzOn;         // mirror of hz_on for the live toggle
+    private bool _hzOn = true;  // mirror of hz_on; MUST match the shader/JSON default (true) or the first P-press no-ops
     private bool _lodVizLive;   // V toggles the LOD-band tint live
     private bool _terrainCloudShadowOn = true;   // mirrors cloud_shadow_on (set true once the cloud RID is live); F5 flips it
     private bool _godraysOn = true;               // god rays default on; F6 flips it
