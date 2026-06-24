@@ -36,6 +36,14 @@ public partial class AerialPerspective : Node3D
     public void SetEnabled(bool on) { _on = on; _quad.Visible = on; _mat.SetShaderParameter("aerial_on", on); }
     public void SetAerialTexture(Texture3Drd? tex) { if (tex != null) { _mat.SetShaderParameter("aerial_tex", tex); } }
     public void SetStrength(float s) { _mat.SetShaderParameter("aerial_strength", Mathf.Clamp(s, 0f, 60f)); }
+    /// Haze path-radiance colour (LINEAR) distant terrain fades toward as transmittance drops — the fix for
+    /// the anti-sun fade-to-black. Push the time-of-day sky/horizon tint here to keep haze consistent.
+    public void SetHaze(Color c) { _mat.SetShaderParameter("aerial_haze", new Vector3(c.R, c.G, c.B)); }
+    /// Haze strength: 1 = energy-conserving fade-to-sky (fix), 0 = old fade-to-black (A/B).
+    public void SetHazeStrength(float s) { _mat.SetShaderParameter("aerial_haze_str", Mathf.Clamp(s, 0f, 2f)); }
+    /// ISOLATION DEBUG (--aerialdbg=N / key U): 0 normal · 1 extinction(red) · 2 inscatter(green) · 3 froxel-z ·
+    /// 4 distance. Replaces geometry pixels with one channel so the anti-sun line is attributed in one look.
+    public void SetDebug(int mode) { _mat.SetShaderParameter("debug_mode", Mathf.Clamp(mode, 0, 4)); }
     public bool On => _on;
 
     public override void _Process(double delta)

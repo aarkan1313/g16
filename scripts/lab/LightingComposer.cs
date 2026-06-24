@@ -219,6 +219,13 @@ public sealed class LightingComposer
             // SSAO was the harsh "second shadow system": intensity 2.0 raked across the faceted 4 m mesh and read
             // as jagged shadows. Dial to subtle valley AO (the look fix); revisit when the higher-res CDLOD mesh lands.
             if (env != null) { env.SsaoIntensity = 0.6f; }
+            // SSIL DISABLED (2026-06-23): measured ssil ON vs OFF auto-shot diff = 97% of pixels changed, mean
+            // shift 52/255 (vs the sun shadow's 0.22) — screen-space indirect light was CRUSHING the whole terrain
+            // into dark mud, and because it is screen-space the darkening shifted with view angle. That was the
+            // long-hunted "anti-sun darkness / shadow that grows when you look down": SSIL, not shadows/SSAO/aerial.
+            // Net-negative on large dune relief (steep depth gradients → false occlusion). Off until a tamed,
+            // terrain-aware pass is justified. Toggle live with key N to A/B.
+            if (env != null) { env.SsilEnabled = false; }
             _shadowTuned = true;
         }
         sun.DirectionalShadowBlendSplits = true;                        // cross-fade cascade seams
@@ -609,6 +616,12 @@ public sealed class LightingComposer
         float oc = _host.Overcast;
         env.AmbientLightEnergy = BaseAmbient * Mathf.Lerp(1f, 0.7f, oc);     // sky fill DOWN (grey gloom)
         env.AmbientLightSkyContribution = Time.AmbientSky;
+        // WIP 2026-06-23: the dark anti-sun "shadow" was the dim BLUE sky-ambient. De-blue + warm + lift the
+        // fill so shaded sand slopes stay sand-coloured instead of crashing to blue. Tasteful pass (tune to taste);
+        // keep ~40% sky so deep shade still has some natural cool. (Was BaseAmbient*lerp + full Time.AmbientSky.)
+        env.AmbientLightEnergy = 0.9f;
+        env.AmbientLightSkyContribution = 0.4f;   // 0 = flat AmbientLightColor, 1 = full blue sky
+        env.AmbientLightColor = new Color(1.0f, 0.96f, 0.90f);   // warm white fill
         sun.LightEnergy = BaseSunEnergy * (1f - oc * 0.8f);                  // direct sun DOWN under cloud
         var cloud = _host.Cloud;
         env.FogLightColor = (cloud != null) ? BaseFogColor.Lerp(cloud.SkyHorizonColor, 0.55f * oc) : BaseFogColor;

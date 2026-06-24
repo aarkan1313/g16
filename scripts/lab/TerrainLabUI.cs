@@ -207,6 +207,8 @@ public partial class TerrainLabUI : Control
         // AT-2 aerial perspective CLI: =0 turns it off (restores built-in fog via ComposeLighting); strength A/B.
         if (_aerialCli == 0) { _aerialOn = false; _aerial?.SetEnabled(false); ComposeLighting(); }
         if (_aerialStrCli >= 0f) { _aerial?.SetStrength(_aerialStrCli); }
+        if (_aerialDbgCli >= 0) { _aerialDbg = _aerialDbgCli; _aerial?.SetDebug(_aerialDbgCli); }   // isolation viz at startup; U-key continues from here
+        if (_aerialHazeCli >= 0f) { _aerialHazeOn = _aerialHazeCli > 0f; _aerial?.SetHazeStrength(_aerialHazeCli); }   // haze A/B at startup; Y-key continues
         // AT-3 physical cloud lighting CLI (default ON): =0 turns it off; =1 on. _Process pushes once ready.
         if (_cloudLightStrCli >= 0f) { _cloudLightStr = _cloudLightStrCli; }
         if (_cloudLightCli == 1) { _cloudLightOn = true; _atmosphere?.SetCloudLightWanted(true); _cloudLightActivated = false; }

@@ -17,6 +17,7 @@ public partial class TerrainLabUI : Control
     private string? _camArg;
     private float _texScale = -1f;
     private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
+    private int _probeSsil = -1;   // --ssil=0/1 isolation probe (screen-space indirect light)
     private int _probeSdfgi = -1;   // --sdfgi=0/1: isolate the real-time GI cost (perf pass)
     private float _probeRoughFloor = -1f, _probeMixStr = -1f;
 
@@ -52,6 +53,8 @@ public partial class TerrainLabUI : Control
     private bool _aerialCheckCli;        // --aerialcheck → one-shot AT-2 aerial froxel self-check (readback)
     private int _aerialCli = -1;         // --aerial[=1] → AT-2 aerial perspective on/off at startup (default ON; =0 restores built-in fog)
     private float _aerialStrCli = -1f;   // --aerialstr=N → AT-2 in-scatter strength override at startup (A/B)
+    private int _aerialDbgCli = -1;      // --aerialdbg=N → AT-2 isolation viz at startup (1 extinction,2 inscatter,3 froxel-z,4 distance)
+    private float _aerialHazeCli = -1f;  // --aerialhaze=N → AT-2 haze strength at startup (1 fade-to-sky fix, 0 old fade-to-black; A/B)
     private int _cloudLightCli = -1;     // --cloudlight[=1] → AT-3 physical cloud lighting on at startup (default off)
     private float _cloudLightStrCli = -1f; // --cloudlightstr=N → AT-3 cloud-light strength override
     private float _atmoExpCli = -1f;     // --atmoexp=N → AT-1 atmosphere exposure override
@@ -87,6 +90,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
             else if (a.StartsWith("--ssao=")) { _probeSsao = a.Substring("--ssao=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--ssil=")) { _probeSsil = a.Substring("--ssil=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--sdfgi=")) { _probeSdfgi = a.Substring("--sdfgi=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadow=")) { _probeShadow = a.Substring("--shadow=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--roughfloor=")) { if (float.TryParse(a.Substring("--roughfloor=".Length), out float rf)) _probeRoughFloor = rf; }
@@ -146,6 +150,8 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
             else if (a == "--atmoscheck") { _atmoCheckCli = true; }
             else if (a == "--aerialcheck") { _aerialCheckCli = true; }
+            else if (a.StartsWith("--aerialdbg=")) { int.TryParse(a.Substring("--aerialdbg=".Length), out _aerialDbgCli); }
+            else if (a.StartsWith("--aerialhaze=")) { float.TryParse(a.Substring("--aerialhaze=".Length), out _aerialHazeCli); }
             else if (a.StartsWith("--aerialstr=")) { float.TryParse(a.Substring("--aerialstr=".Length), out _aerialStrCli); }
             else if (a.StartsWith("--aerial")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _aerialCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--cloudlightstr=")) { float.TryParse(a.Substring("--cloudlightstr=".Length), out _cloudLightStrCli); }
@@ -176,6 +182,17 @@ public partial class TerrainLabUI : Control
     private WG16.Hydrology.WorldWaterRegion? _waterRegion;   // kept for Task 7 mesh spawn
     private WG16.Hydrology.WaterParams? _waterParams;        // kept for Task 7/8
     private Material? _waterMat;                             // kept for Task 7/8
+    private WG16.Hydrology.WaterRenderer? _waterRenderer;    // river ribbon + lake surface meshes
+
+    // Deferred from ApplyCliOverrides (--water=1): attach the water renderer + build region (0,0)'s meshes
+    // once the scene tree is no longer mid-setup.
+    private void SpawnWaterRenderer()
+    {
+        if (_waterRegion == null || _waterParams == null || _waterMat == null) return;
+        _waterRenderer = new WG16.Hydrology.WaterRenderer();
+        GetNode("/root/TerrainLabRoot").AddChild(_waterRenderer);
+        _waterRenderer.BuildForRegion(_waterRegion, _waterParams, _waterMat);
+    }
 
     private void ApplyCliOverrides()
     {
@@ -203,6 +220,11 @@ public partial class TerrainLabUI : Control
         {
             var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
             env.Environment.SsaoEnabled = _probeSsao == 1;
+        }
+        if (_probeSsil >= 0)
+        {
+            var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
+            env.Environment.SsilEnabled = _probeSsil == 1;
         }
         if (_probeShadow >= 0)
         {
@@ -232,11 +254,23 @@ public partial class TerrainLabUI : Control
         if (_waterCli == 1)
         {
             _waterParams = WG16.Hydrology.WaterParams.Load();
-            _waterRegion = new WG16.Hydrology.WorldWaterRegion(_params, _waterParams, 0, 0);
-            _terrain.BindWaterRegion(_waterRegion, _waterParams);   // Task 6: carve. Task 7 adds meshes.
-            _terrain.SetBool("water_debug", true);                  // start with the overlay ON (key H toggles)
+            // Pass the shared FieldCompute → water meshes drape on the EXACT field height the terrain uses.
+            _waterRegion = new WG16.Hydrology.WorldWaterRegion(_params, _waterParams, 0, 0, _fc);
+            _terrain.BindWaterRegion(_waterRegion, _waterParams);   // Task 6: carve
+            // Task 7: flowing water MESHES. Build the modular water-surface material + spawn the renderer.
+            var sh = GD.Load<Shader>("res://shaders/water_surface.gdshader");
+            var wmat = new ShaderMaterial { Shader = sh };
+            wmat.SetShaderParameter("shallow_color", _waterParams.WaterShallowColor);
+            wmat.SetShaderParameter("deep_color", _waterParams.WaterDeepColor);
+            wmat.SetShaderParameter("flow_speed", _waterParams.FlowSpeed);
+            wmat.SetShaderParameter("wave_scale", _waterParams.WaveScale);
+            wmat.SetShaderParameter("foam_width_m", _waterParams.FoamWidthM);
+            _waterMat = wmat;
+            // Defer the node attach + mesh build: ApplyCliOverrides runs during _Ready (parent busy setting up
+            // children → a direct AddChild fails, the known CDLOD deferred-add gotcha).
+            CallDeferred(nameof(SpawnWaterRenderer));
             GD.Print($"[water] region(0,0) rivers={_waterRegion.Rivers.Count} lakes={_waterRegion.Lakes.Count} " +
-                     $"— overlay ON (key H), carve ON. Fly near world origin (0..8192).");
+                     $"— MESHES on, carve ON, overlay OFF (key H toggles debug tint). Fly near world origin (0..8192).");
         }
         if (_popMeterCli) { BuildPopMeterHud(); }   // S3 live pop meter — HUD line; the meter inits lazily on first tick
         if (_pinOriginCli) { _terrain.SetPinOrigin(true); }   // DEBUG: pin renderOrigin=0

@@ -98,7 +98,14 @@ float detail_fade(float dist) { return 1.0 - smoothstep(detail_fade_near, detail
 // mean. Tunable; ~2..8 dissolves high-contrast speckle right as it stops being resolvable (kills the dot-grid).
 uniform float detail_fp_lo = 1.0;
 uniform float detail_fp_hi = 3.0;
-uniform float detail_fade_on = 1.0;   // live A/B (key G): 1 = anti-moiré detail-fade ON, 0 = OFF (raw speckle)
+// DEFAULT OFF (2026-06-23): this dissolve-to-mean fade was added to mask the CDLOD UV-ring bug now
+// fixed at the source (v_surf_xz = vtrue_fine, commit 38aab96). With the bug gone the fade only HURTS —
+// it washes wanted far-field detail toward flat mean colour (eye-confirmed: terrain looks better with it
+// off). Kept (not deleted) because real distance detail-management is genuine surfacing-arc work; the
+// dissolve-to-mean METHOD is the wrong lever for it (use mip/aniso — present — + detail/macro blending or
+// texture-array LOD later). Toksvig (below) is INDEPENDENT of this and stays on: it solves a different,
+// real problem (normal-map specular AA). Key G still A/Bs the fade live.
+uniform float detail_fade_on = 0.0;   // live A/B (key G): 1 = anti-moiré detail-fade ON, 0 = OFF (default, raw detail)
 
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)

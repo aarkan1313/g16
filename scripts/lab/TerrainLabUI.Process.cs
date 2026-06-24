@@ -36,9 +36,13 @@ public partial class TerrainLabUI : Control
     private bool _lastG;        // G toggles the anti-moiré detail-fade live
     private bool _lastWaterH;   // H toggles the water debug overlay live
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
-    private bool _detailFadeOn = true;   // anti-moiré detail-fade default state (matches shader default)
+    private bool _detailFadeOn = false;  // anti-moiré detail-fade default OFF (matches shader default; ring bug fixed at source, fade only washed far detail)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
+    private bool _lastU;        // U steps the aerial isolation viz (anti-sun line hunt)
+    private int _aerialDbg;     // 0 normal, 1 extinction(red), 2 inscatter(green), 3 froxel-z, 4 distance
+    private bool _lastY;        // Y A/Bs the aerial haze fix (fade-to-sky vs old fade-to-black)
+    private bool _aerialHazeOn = true;  // aerial haze fix on by default
     private bool _lodVizLive;   // V toggles the LOD-band tint live
     private bool _terrainCloudShadowOn = true;   // mirrors cloud_shadow_on (set true once the cloud RID is live); F5 flips it
     private bool _godraysOn = true;               // god rays default on; F6 flips it
@@ -178,6 +182,9 @@ public partial class TerrainLabUI : Control
                 Vector3 newOrigin = _terrain.CdlodRenderOrigin;   // may have snapped inside CdlodTick
                 camN.Position = camPos - newOrigin;               // co-locate the camera with the render frame
             }
+            // Water meshes are authored in TRUE world XZ; shift the node by −renderOrigin so they line up with
+            // the render-relative terrain (same floating-origin frame as the CDLOD chunks).
+            _waterRenderer?.SetRenderOrigin(_terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero);
             _cloud?.SetCameraWorld(camPos);
             TickPopMeter(camPos);   // S3 --popmeter: live per-frame pop/snap measurement (no-op unless armed)
 
@@ -231,6 +238,23 @@ public partial class TerrainLabUI : Control
                 bool kK = Input.IsKeyPressed(Key.K);
                 if (kK && !_lastF8) { _aerialOn = !_aerialOn; _aerial?.SetEnabled(_aerialOn); GD.Print($"[dbg] (K) Aerial AT-2 = {_aerialOn}"); }
                 _lastF8 = kK;
+                // U: AERIAL ISOLATION viz stepper (anti-sun line hunt). Cycles aerial debug_mode 0→1→2→3→4:
+                // 0 normal · 1 EXTINCTION darkening (red) · 2 INSCATTER (green) · 3 FROXEL-Z ramp (hard band =
+                // slice/LUT discontinuity = the line) · 4 DISTANCE ramp (constant grey at the line = world-locked).
+                bool kU = Input.IsKeyPressed(Key.U);
+                if (kU && !_lastU)
+                {
+                    _aerialDbg = (_aerialDbg + 1) % 5;
+                    _aerial?.SetDebug(_aerialDbg);
+                    string[] names = { "0 normal", "1 EXTINCTION (red)", "2 INSCATTER (green)", "3 FROXEL-Z", "4 DISTANCE" };
+                    GD.Print($"[dbg] (U) Aerial isolation = {names[_aerialDbg]}");
+                }
+                _lastU = kU;
+                // Y: A/B the aerial HAZE fix (the anti-sun fade-to-black fix). 1 = fade distant terrain to the
+                // sky haze tint (energy-conserving), 0 = old fade-to-black. Instant in-scene A/B for the eye-gate.
+                bool kY = Input.IsKeyPressed(Key.Y);
+                if (kY && !_lastY) { _aerialHazeOn = !_aerialHazeOn; _aerial?.SetHazeStrength(_aerialHazeOn ? 1f : 0f); GD.Print($"[dbg] (Y) Aerial haze fix = {_aerialHazeOn}"); }
+                _lastY = kY;
                 // V: live LOD-band tint toggle — flip on to see if the dot-rings line up with LOD boundaries.
                 bool kV = Input.IsKeyPressed(Key.V);
                 if (kV && !_lastF9) { _lodVizLive = !_lodVizLive; _terrain.SetCdlodViz(_lodVizLive); GD.Print($"[dbg] (V) LOD-band tint = {_lodVizLive}"); }
