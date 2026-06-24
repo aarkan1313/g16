@@ -150,7 +150,7 @@ public sealed class CdlodQuadtree
         return (xTouch && zOverlap) || (zTouch && xOverlap);
     }
 
-    public static void SelfCheck(float regionSize, int maxDepth, float splitFactor, Vector3 camPos)
+    public static bool SelfCheck(float regionSize, int maxDepth, float splitFactor, Vector3 camPos)
     {
         var qt = new CdlodQuadtree(-regionSize * 0.5f, -regionSize * 0.5f, regionSize, maxDepth, splitFactor);
         var leaves = qt.Select(camPos);
@@ -160,5 +160,6 @@ public sealed class CdlodQuadtree
         GD.Print($"CDLODCHECK: {(inv ? "PASS" : "FAIL")}  leaves={leaves.Count}  levels={minL}..{maxL}  invariant={msg}  cam=({camPos.X:F0},{camPos.Z:F0})");
         int stitched = 0; foreach (var c in leaves) { if (c.StitchMask != 0) { stitched++; } }   // S2d
         GD.Print($"CDLODCHECK: stitch — {stitched}/{leaves.Count} leaves have >=1 stitched edge");
+        return inv;
     }
 }

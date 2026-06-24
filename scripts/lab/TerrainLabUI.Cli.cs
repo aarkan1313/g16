@@ -72,8 +72,6 @@ public partial class TerrainLabUI : Control
     private int _cdlodCli = -1;      // --cdlod[=1] → S2a quadtree terrain instead of the single mesh
     private int _testPathCli = -1;   // --testpath=N → run S2b LOD-crossing test path N (0-based) headlessly, then quit
     private int _lodVizCli = -1;     // --lodviz[=1] → tint chunks by LOD level
-    private int _groundV2Cli = -1;   // --groundv2[=1] → swap to the new per-pixel ground skin at startup (A/B / auto-shots)
-    private int _gv2DebugCli = -1;   // --gv2debug=N → ground v2 debug view (1 = placement viz) at startup
 
     private void ParseCli()
     {
@@ -197,7 +195,7 @@ public partial class TerrainLabUI : Control
 
     private void ApplyCliOverrides()
     {
-        if (_waterCheck != null) { WG16.Hydrology.HydrologyChecks.Run(_waterCheck); GetTree().Quit(); return; }
+        if (_waterCheck != null) { bool ok = WG16.Hydrology.HydrologyChecks.Run(_waterCheck); GetTree().Quit(ok ? 0 : 1); return; }
         if (_overrideMask >= 0) { OverrideEnum("mask_mode", _overrideMask); }
         if (_overrideBlend >= 0) { OverrideEnum("blend_mode", _overrideBlend); }
         if (_overrideTile >= 0) { OverrideEnum("tile_mode", _overrideTile); }
@@ -298,6 +296,10 @@ public partial class TerrainLabUI : Control
         _cloud?.SetAtmosphereOn(false);      // AT-1 physical sky tint on the terrain
         GD.Print("[nofog] all haze OFF (env fog / volfog / aerial / atmosphere) — raw terrain review");
     }
+    // Combined exit-code state for the one-shot regression-gate self-checks (audit #1). Any gate check
+    // sets _checkRan + ANDs its pass into _checkPass; AttachClouds then Quit(_checkPass?0:1) so CI can gate.
+    private bool _checkRan;
+    private bool _checkPass = true;
     private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)
     private bool _shadowCheckCli;     // --shadowcheck → numeric correlation test, PASS/FAIL to console
     private bool _fieldCheckCli;      // --fieldcheck → one-shot field determinism/parity self-check (S1)

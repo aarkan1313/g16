@@ -16,17 +16,17 @@ namespace WG16.Lab;
 /// One job: prove/refute shadow accuracy and print PASS/FAIL + r. No scene, no visuals.
 public static class CloudShadowCheck
 {
-    public static void Run(CloudParams p, Vector3 sunDir, float regionM, float groundHeight, Vector2 windOffset, float[] layerData, int layerCount)
+    public static bool Run(CloudParams p, Vector3 sunDir, float regionM, float groundHeight, Vector2 windOffset, float[] layerData, int layerCount)
     {
         const int Grid = 96;   // 96² sample points — plenty for a correlation
         RenderingDevice rd = RenderingServer.CreateLocalRenderingDevice();
-        if (rd == null) { GD.PrintErr("[shadowcheck] no local RD (running headless?) — must run windowed"); return; }
+        if (rd == null) { GD.PrintErr("[shadowcheck] no local RD (running headless?) — must run windowed"); return false; }
 
         // compile the check shader
         string src = System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://shaders/cloud_shadow_check.glsl"))
             .Replace("#[compute]\r\n", string.Empty).Replace("#[compute]\n", string.Empty);
         var spirv = rd.ShaderCompileSpirVFromSource(new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceCompute = src });
-        if (!string.IsNullOrEmpty(spirv.CompileErrorCompute)) { GD.PrintErr("[shadowcheck] shader: " + spirv.CompileErrorCompute); return; }
+        if (!string.IsNullOrEmpty(spirv.CompileErrorCompute)) { GD.PrintErr("[shadowcheck] shader: " + spirv.CompileErrorCompute); return false; }
         Rid shader = rd.ShaderCreateFromSpirV(spirv, "cloud_shadow_check");
         Rid pipeline = rd.ComputePipelineCreate(shader);
 
@@ -105,6 +105,7 @@ public static class CloudShadowCheck
         rd.FreeRid(set); rd.FreeRid(outBuf); rd.FreeRid(paramBuf); rd.FreeRid(sampler);
         rd.FreeRid(shapeTex); rd.FreeRid(detailTex); rd.FreeRid(weatherTex);
         rd.FreeRid(pipeline); rd.FreeRid(shader); rd.Free();
+        return saturated || pass;   // saturated = too little variance to judge → not a FAIL
     }
 
     private static Rid Make3D(RenderingDevice rd, int res, byte[] rgbaf)

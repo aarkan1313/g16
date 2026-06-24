@@ -156,7 +156,12 @@ void main(){
         float dt = pathLen / float(steps);
         float t = ts;
         for (int i = 0; i < steps; i++){ vec3 p = ro + L * t; vd += density_all(p, windOff) * dt; t += dt; }
-        visHere = mix(1.0, exp(-vd * 0.02 * L.y), P.strength);
+        // MIRROR cloud_shadow.glsl's production visibility EXACTLY (audit #3): the production shader gates
+        // out the faint tail (smoothstep) before the mix, so a check without it validated math that doesn't
+        // ship. trans = Beer (slant-normalized); shadowed = ignore the faint tail; vis = strength·shadowed mix.
+        float trans = exp(-vd * 0.02 * L.y);
+        float shadowed = smoothstep(0.02, 0.5, 1.0 - trans);
+        visHere = mix(1.0, trans, P.strength * shadowed);
     }
 
     v[idx * 4u + 0u] = visHere;     // production shadow value

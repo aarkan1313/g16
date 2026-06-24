@@ -412,7 +412,8 @@ public partial class AtmosphereCompute : Node
             var cw = new Std430Writer();
             cw.Int(zx).Int(zy).Int(hx).Int(hy);   // ivec4 sky_coords
             cw.Int(tx).Int(ty).Int(0).Int(0);      // ivec4 trans_coords
-            _rd.BufferUpdate(_clCoordBuf, 0, (uint)cw.ToArray().Length, cw.ToArray());
+            byte[] cb = cw.ToArray();
+            _rd.BufferUpdate(_clCoordBuf, 0, (uint)cb.Length, cb);
             long l = _rd.ComputeListBegin();
             _rd.ComputeListBindComputePipeline(l, _clPipe);
             _rd.ComputeListBindUniformSet(l, _clSet, 0);

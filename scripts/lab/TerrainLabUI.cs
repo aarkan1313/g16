@@ -65,7 +65,7 @@ public partial class TerrainLabUI : Control
         {
             bool olOk = ObjectListCheck.Run(this, out string olMsg);
             GD.Print($"OBJECTLISTCHECK: {(olOk ? "PASS" : "FAIL")}  {olMsg}");
-            GetTree().Quit();
+            GetTree().Quit(olOk ? 0 : 1);
             return;
         }
         // U3 self-check (--lumpresetcheck): luminary preset round-trip through the Json save/load path.
@@ -74,7 +74,7 @@ public partial class TerrainLabUI : Control
         {
             bool lpOk = LuminaryPresetCheck.Run(DictFromLuminary, LuminaryFromDict, LumDictToStorable, LumDictFromStorable, out string lpMsg);
             GD.Print($"LUMPRESETCHECK: {(lpOk ? "PASS" : "FAIL")}  {lpMsg}");
-            GetTree().Quit();
+            GetTree().Quit(lpOk ? 0 : 1);
             return;
         }
 
@@ -243,13 +243,13 @@ public partial class TerrainLabUI : Control
             // feeds a downward sun and the shadow march bails everywhere (false FAIL).
             Vector3 toSun = sunNode.GlobalTransform.Basis.Z.Normalized();
             float[] checkLayers = _cloud.PackedLayers(out int checkCount);   // production layer stack (profile/shape/anti applied)
-            CloudShadowCheck.Run(_cloud.Params, toSun, _cloud.RegionSize, _terrain.MidHeight, Vector2.Zero, checkLayers, checkCount);
+            _checkRan = true; _checkPass &= CloudShadowCheck.Run(_cloud.Params, toSun, _cloud.RegionSize, _terrain.MidHeight, Vector2.Zero, checkLayers, checkCount);
         }
-        if (_fieldCheckCli) { FieldCheck.Run(_fc, _params); }   // S1: field determinism/parity self-check
+        if (_fieldCheckCli) { _checkRan = true; _checkPass &= FieldCheck.Run(_fc, _params); }   // S1: field determinism/parity self-check
         if (_cdlodCheckCli)   // S2a: quadtree neighbor-invariant + stats
         {
             var camCdlod = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
-            CdlodQuadtree.SelfCheck(_params.RegionSizeM, 6, 2.5f, camCdlod.GlobalPosition);
+            _checkRan = true; _checkPass &= CdlodQuadtree.SelfCheck(_params.RegionSizeM, 6, 2.5f, camCdlod.GlobalPosition);
         }
         if (_morphCheckCli)   // S2b: geomorph pop-free numeric backstop (mirrors ground.gdshader morph math)
         {
@@ -263,27 +263,32 @@ public partial class TerrainLabUI : Control
                 worstMsg = $"size={s:F0}m: {m}";   // keep the last (largest) PASS message for the report
             }
             GD.Print($"MORPHCHECK: {(allOk ? "PASS" : "FAIL")}  {worstMsg}");
+            _checkRan = true; _checkPass &= allOk;
         }
         if (_stitchCheckCli)   // S2d: edge-stitch seam-coincidence (welded fine edge on the coarse neighbor's lattice)
         {
             var camStitch = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
             bool ok = StitchCheck.Run(_params.RegionSizeM, 6, 2.5f, 65, camStitch.GlobalPosition, out string m);
             GD.Print($"STITCHCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
+            _checkRan = true; _checkPass &= ok;
         }
         if (_streamCheckCli)   // S3: streaming invariant-along-traverse + renderOrigin snap field-continuity
         {
             bool ok = StreamCheck.Run(_params.RegionSizeM, 6, 2.5f, out string m);
             GD.Print($"STREAMCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
+            _checkRan = true; _checkPass &= ok;
         }
         if (_popCheckCli)   // S3: GPU ground-truth pop detector — rendered height + normal at a fixed point across LOD swaps
         {
             bool ok = PopCheck.Run(_fc, _params, 6, 2.5f, 65, out string m);
             GD.Print($"POPCHECK: {(ok ? "PASS" : "FAIL")}  {m}");
+            _checkRan = true; _checkPass &= ok;
         }
         if (_snapDiffCli)   // S3: does a fixed world point get the SAME leaf across a renderOrigin snap? (the snap-pop)
         {
             bool ok = SnapDiff.Run(_params.RegionSizeM, 6, 2.5f, out string m);
             GD.Print($"SNAPDIFF: {(ok ? "PASS" : "FAIL")}  {m}");
+            _checkRan = true; _checkPass &= ok;
         }
         if (_aabbSpikeCli)   // S3.5 SPIKE: kick off one async height-range; _Process collects + compares to sync
         {
@@ -301,6 +306,14 @@ public partial class TerrainLabUI : Control
             var cumulus = CloudLayers.WithCumulusLighting(layers[0]);
             CloudLightCheck.Run(cumulus, layers[1], sunNode.LightColor, sunNode.LightEnergy,
                                 _cloud.Params.Brightness, _cloud.Params.HgAniso);
+        }
+        // Exit-code the one-shot regression-gate self-checks (audit #1): if any ran, quit NOW with a
+        // non-zero code on FAIL so CI/scripts can actually gate on them (was print-only → always exit 0).
+        if (_checkRan)
+        {
+            GD.Print($"SELFCHECKS: {(_checkPass ? "ALL PASS" : "FAIL")} — exit {(_checkPass ? 0 : 1)}");
+            GetTree().Quit(_checkPass ? 0 : 1);
+            return;
         }
         // H3 fix: mood + sun were applied in _Ready BEFORE this deferred attach, so the
         // cloud's sky/sun pushes no-opped (material/env null). Re-apply now that _cloud

@@ -8,7 +8,7 @@ namespace WG16.Field;
 /// SAME params and asserts byte-for-byte-close equality. PASS/FAIL to console.
 public static class FieldCheck
 {
-    public static void Run(FieldCompute fc, FieldParams p)
+    public static bool Run(FieldCompute fc, FieldParams p)
     {
         float ox = -p.RegionSizeM * 0.5f, oz = -p.RegionSizeM * 0.5f;
         float[] a = fc.ProducePage(p, ox, oz);
@@ -23,5 +23,6 @@ public static class FieldCheck
         const float eps = 1e-3f;   // GPU determinism: identical inputs should diff ~0
         bool pass = a.Length == b.Length && maxAbs <= eps;
         GD.Print($"FIELDCHECK: {(pass ? "PASS" : "FAIL")}  maxAbsDiff={maxAbs:G6}m  worstIdx={worst}  n={n}  eps={eps}");
+        return pass;
     }
 }
