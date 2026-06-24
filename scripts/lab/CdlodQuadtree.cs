@@ -58,21 +58,27 @@ public sealed class CdlodQuadtree
         }
     }
 
-    /// S3: select leaves over a (2·Ring+1)² block of root-size cells centered on the camera's root cell
-    /// (cell-aligned so a world point always falls in the same chunk → no shimmer). Root roams with the camera
-    /// → infinite. ARC B Task 1: Ring (default 1 here; CdlodTerrain pushes its LoadRing, default 2) sets the
-    /// block radius — bigger = the pop/stream boundary sits further out; the far cells stay coarsest → cheap.
-    /// Optionally biased forward by a velocity lookahead (ARC B Task 4): the center cell is chosen from
-    /// (camPos + bias), so loading leans into the direction of travel without breaking cell-alignment.
-    public List<CdlodChunk> SelectRoaming(Vector3 camPos) => SelectRoaming(camPos, Vector3.Zero);
-
-    public List<CdlodChunk> SelectRoaming(Vector3 camPos, Vector3 centerBias)
+    /// S3: select leaves over a (2·Ring+1)² block of root-size cells centered on a root cell (cell-aligned so a
+    /// world point always falls in the same chunk → no shimmer). Root roams with the camera → infinite. ARC B
+    /// Task 1: Ring (default 1 here; CdlodTerrain pushes its LoadRing, default 2) sets the block radius — bigger
+    /// = the pop/stream boundary sits further out; the far cells stay coarsest → cheap.
+    ///
+    /// This single-arg form centers on the camera's own cell (used by the mechanical checks). The runtime uses
+    /// the explicit-center overload below so CdlodTerrain can supply a HYSTERETIC (ARC B Task 2) and
+    /// VELOCITY-BIASED (Task 4) center cell — both just shift WHICH contiguous cell block is loaded, never the
+    /// LOD distance (still measured from the true camPos) or the renderOrigin snap math.
+    public List<CdlodChunk> SelectRoaming(Vector3 camPos)
     {
-        // The center CELL is chosen from the (optionally biased) center point; LOD distance still measures from
-        // the true camPos so detail stays correct. Bias is a contiguous-cell shift → neighbor invariant holds.
-        float ccx = camPos.X + centerBias.X, ccz = camPos.Z + centerBias.Z;
-        float cx = Mathf.Floor(ccx / _rootSize) * _rootSize;   // (biased) center root-cell origin
-        float cz = Mathf.Floor(ccz / _rootSize) * _rootSize;
+        float cx = Mathf.Floor(camPos.X / _rootSize) * _rootSize;
+        float cz = Mathf.Floor(camPos.Z / _rootSize) * _rootSize;
+        return SelectRoaming(camPos, new Vector2(cx, cz));
+    }
+
+    /// Explicit-center overload: centerCellOrigin MUST be a cell-aligned world origin (a multiple of _rootSize);
+    /// CdlodTerrain computes it from the hysteretic + velocity-biased center cell. camPos still drives LOD.
+    public List<CdlodChunk> SelectRoaming(Vector3 camPos, Vector2 centerCellOrigin)
+    {
+        float cx = centerCellOrigin.X, cz = centerCellOrigin.Y;
         int r = Mathf.Max(0, Ring);
         var leaves = new List<CdlodChunk>();
         for (int dz = -r; dz <= r; dz++)

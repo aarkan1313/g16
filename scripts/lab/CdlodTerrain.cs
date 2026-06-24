@@ -60,6 +60,10 @@ public sealed partial class CdlodTerrain : Node3D
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
     public int MaxChunkOps = 24;      // S3: max pooled-chunk births per frame (amortize streaming churn; tunable)
     public int LoadRing = 2;          // ARC B Task 1: load-ring radius (1=3×3, 2=5×5 default, …) pushed to _qt.Ring each Tick
+    public float CenterHysteresis = 0.15f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
+                                             // center-cell boundary before the loaded window re-centers (anti-thrash near a seam)
+    private Vector2I _centerCell;     // ARC B Task 2: current (hysteretic) window-center cell index
+    private bool _centerInit;         // false until _centerCell is seeded from the first Tick's camera cell
     public int RetireGrace = 2;       // S3.6: frames a chunk may be unseen before retiring (bridges the budget-deferred birth hole without leaking; >=2 retires)
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
@@ -154,7 +158,8 @@ public sealed partial class CdlodTerrain : Node3D
         _lastRenderOrigin = _renderOrigin;
 
         _qt.Ring = LoadRing;   // ARC B Task 1: live-tunable load-ring radius (slider/CLI → takes effect next select)
-        List<CdlodChunk> leaves = _qt.SelectRoaming(camPos);   // S3: roaming root → infinite streaming
+        Vector2 centerOrigin = ComputeCenterOrigin(camPos);   // ARC B Task 2: hysteretic window-center cell origin
+        List<CdlodChunk> leaves = _qt.SelectRoaming(camPos, centerOrigin);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
         // Live A/B toggles (lodviz / tighten) force a one-frame full re-apply of existing chunks.
         if (_aabbReset) { _tightened.Clear(); foreach (var kv in _active) { kv.Value.Tightened = false; } _aabbReset = false; }
@@ -208,6 +213,34 @@ public sealed partial class CdlodTerrain : Node3D
         }
 
         if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
+    }
+
+    /// ARC B Task 2: the cell-aligned world origin of the (hysteretic) window-center cell. The naive center is
+    /// floor(cam / root); a raw floor re-centers the instant the camera crosses a cell boundary, so oscillating
+    /// across a seam thrashes a strip load/unload. The dead-band keeps the current center cell until the camera
+    /// is more than CenterHysteresis·root PAST the cell's boundary (then it re-floors to the camera's true cell,
+    /// which also self-corrects on a teleport/fast move). This shifts only WHICH contiguous block is selected —
+    /// NOT the renderOrigin snap (still floor(cam/root) in Tick), so --snapdiff reconstruction still round-trips.
+    private Vector2 ComputeCenterOrigin(Vector3 camPos)
+    {
+        float root = _regionSize;
+        float band = root * Mathf.Max(0f, CenterHysteresis);
+        if (!_centerInit)
+        {
+            _centerCell = new Vector2I(Mathf.FloorToInt(camPos.X / root), Mathf.FloorToInt(camPos.Z / root));
+            _centerInit = true;
+        }
+        _centerCell.X = HysteresisCell(camPos.X, _centerCell.X, root, band);
+        _centerCell.Y = HysteresisCell(camPos.Z, _centerCell.Y, root, band);
+        return new Vector2(_centerCell.X * root, _centerCell.Y * root);
+    }
+
+    /// Keep center-cell index k until p leaves the band-expanded cell span, then re-floor to p's true cell.
+    private static int HysteresisCell(float p, int k, float root, float band)
+    {
+        float lo = (k * root) - band;
+        float hi = ((k + 1) * root) + band;
+        return (p < lo || p >= hi) ? Mathf.FloorToInt(p / root) : k;
     }
 
     /// Push to the instance ONLY the state that actually changed for this chunk — the heart of the S3.6
