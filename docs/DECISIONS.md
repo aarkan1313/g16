@@ -6,6 +6,24 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-24 — ARC B infinite-streaming pop-fix SHIPPED (all 4 tasks).** Built the spec'd+planned fix on
+`experiment/presentation` (commits `034c210`/`1d8a115`/`dd3bf40`/`8d21978`, after CDLOD default-on `eb444a8`):
+- **Task 1 — load ring R** (`CdlodQuadtree.Ring` → (2R+1)² block; `CdlodTerrain.LoadRing` default 2 = 5×5;
+  `--loadring=N` + Debug slider). Costs +0.4 ms avg / +0.8 ms worst at R=2 (far cells are coarsest → cheap).
+  StreamCheck now sweeps R∈{1,2,3} so the neighbor invariant is gated at the expanded outer ring.
+- **Task 2 — window-center hysteresis** (dead-band `CenterHysteresis`=0.15·root before the loaded window
+  re-centers; anti-thrash at a seam). Applied to SELECTION ONLY (new explicit-center `SelectRoaming` overload),
+  NOT the renderOrigin snap → `--snapdiff` stays SEAMLESS.
+- **Task 3 — fog COUPLED to the load radius.** `CdlodViewDistance = LoadRing·rootSize` drives a fog-density
+  floor that occludes the boundary (~94%, density·viewDist≈2.8) so terrain fades up out of haze. **max(mood,
+  coupled)** so it only ADDS the minimum fog the boundary needs — never makes an approved mood clearer (sky
+  pillar is signed off; default A/B near-identical = no look regression). `fog_view_scale` knob (0=off).
+- **Task 4 — velocity-predictive loading.** Bias the window center forward by smoothed cam velocity ×
+  `PredictLookahead` (3 s, clamped ~1.5 cells) so a fast fly can't outrun the loader. LOD + snap still use true
+  camPos. `--lookahead=` + slider. `--testpath=0` invariant=PASS under velocity.
+Re-profiled: **6.1 ms avg / 13.9 ms worst** default (orbit), 8.2/14.6 fast-fly. Eye-gates owed (user judges the
+boundary-fade / no-pop / no-thrash / loader-ahead look). Hands the expanded radius to the ARC A spike work.
+
 **2026-06-24 — CDLOD is now DEFAULT-ON (perf arc step 0; ARC B precondition).** Flipped `_cdlodCli` default
 `-1 → 1` in `TerrainLabUI.Cli.cs` so a bare launch shows the **infinite quadtree**, not the finite single mesh.
 Why: the shipping path is CDLOD (25 ms finite mesh → 6.5 ms avg streaming); the old off-default was why the user

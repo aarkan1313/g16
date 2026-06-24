@@ -1,7 +1,8 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-24 (look-lab god-class DECOMPOSED −40% + audit hardening + a whole-frame CDLOD-on
-profile that reframes the perf story; §6 refreshed). **Refresh §6 each session.**
+Last updated: 2026-06-24 (look-lab god-class DECOMPOSED −40% + audit hardening + CDLOD-on perf reframe +
+**ARC B infinite-streaming pop-fix SHIPPED** (CDLOD default-on, load ring R, hysteresis, fog↔radius coupling,
+velocity-predictive); §6 refreshed). **Refresh §6 each session.**
 
 Written so a fresh chat with zero context gets productive immediately.
 
@@ -128,38 +129,34 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 >   consumes the hydrology substrate's material/wetness output).
 >
 > **Known-open real problems:** (1) **terrain-mesh perf was MISFRAMED** — the "~27.5 ms floor" is the CDLOD-OFF
-> single mesh; CDLOD-on in motion is **~6.5 ms avg / 20 ms worst** and the worst-case spike is **shadow-map-
-> dominated** (full decomposition in `performance.md` 2026-06-24). (2) **CDLOD is OFF by default** in
-> `terrain_lab.tscn` (`_enabled=false`, no `SetCdlod` at launch) → a bare launch shows the slow finite mesh ("it
-> wasn't infinite"); use `--cdlod=1` or press **T**, or make it default-on. (3) short-range sun shadows on CDLOD
+> single mesh; CDLOD-on in motion is **~6.1 ms avg / ~14 ms worst** (expanded ARC B radius) and the worst-case
+> spike is **shadow-map-dominated** (full decomposition in `performance.md` 2026-06-24). (2) ~~CDLOD off by
+> default~~ **FIXED 2026-06-24: CDLOD is now DEFAULT-ON** (`_cdlodCli` default 1); a bare launch shows the
+> infinite quadtree. `--cdlod=0` forces the single mesh. (3) short-range sun shadows on CDLOD
 > terrain (distant hills cast ~nothing — relight spec #2, not started). (4) renderOrigin snap-pop: `--snapdiff`
 > PASSES (seamless) — trust it. (5) ⚠ **cross-chat build entanglement** — committed `Cli.cs` references the water
 > chat's UNCOMMITTED `WaterRenderer`/`WorldWaterRegion`, so origin doesn't build standalone (theirs to resolve).
 > Commits are PUSHED through `4a6736e`.
 >
-> **▶ NEXT (USER DIRECTIVE 2026-06-24): two queued, ready-to-execute terrain arcs before water — profile/optimize
-> + build-out infinite. The user wants a full perf deep-dive AND to build the infinite world out a bit.**
+> **▶ ARC B — INFINITE-STREAMING POP-IN FIX: SHIPPED 2026-06-24 (all 4 tasks + CDLOD default-on).** Commits
+> `eb444a8` (CDLOD default-on) → `034c210` (Task 1 load ring R) → `1d8a115` (Task 2 hysteresis) → `dd3bf40`
+> (Task 3 fog↔radius coupling) → `8d21978` (Task 4 velocity-predictive). Spec/plan:
+> `docs/superpowers/specs|plans/2026-06-24-infinite-streaming-popfix*`. Root cause was `SelectRoaming` loading a
+> cell-aligned 3×3 block of 8192 m cells → crossing a boundary popped an 8192 m strip. Now: **load ring R**
+> (default 2 = 5×5, `--loadring=N` + slider) + **window hysteresis** (snapdiff stays SEAMLESS — selection-only,
+> origin math untouched) + **fog COUPLED to LoadRing·rootSize** (`CdlodViewDistance`, max-floor so it never
+> clears an approved mood; `--fogviewscale=` + slider) + **velocity-predictive** center bias (`--lookahead=` +
+> slider). All `--*check` gates PASS at R=2 (StreamCheck now sweeps rings 1-3); `--testpath=0` invariant=PASS
+> under velocity. **Perf re-profiled: 6.1 ms avg / 13.9 ms worst (orbit), 8.2/14.6 fast-fly — +0.4/+1.1 ms over
+> R=1** (`performance.md` 2026-06-24-later). ⚠ EYE-GATES STILL OWED (user judges look): boundary fades up out of
+> haze on a hard fly; no strip-pop; no thrash oscillating a seam; loader stays ahead flying fast.
 >
-> **ARC A — PROFILE + OPTIMIZE SEVERELY.** Start-here: `docs/handoffs/2026-06-24-profile-optimize-start-here.md`.
-> (1) make CDLOD **default-on** (flips the default 25→6.5 ms; also fixes "it wasn't infinite"); (2) kill the 20 ms
-> in-motion worst-case SPIKE — **shadow-map first** (8192→4096/6144 atlas dial-down + amortize the cascade
-> re-raster / drop the finest LOD from far cascades), then clouds temporal stride, then the chunk-birth/async-AABB
-> base spike; (3) decompose for mid-range HW (~2.5–4×).
->
-> **ARC B — INFINITE-STREAMING POP-IN FIX (spec'd + planned, decisions RESOLVED).** Spec:
-> `docs/superpowers/specs/2026-06-24-infinite-streaming-popfix-design.md`; plan:
-> `docs/superpowers/plans/2026-06-24-infinite-streaming-popfix.md`. Root cause: `SelectRoaming` loads a
-> cell-aligned **3×3 block of 8192 m root cells**, so crossing a cell boundary (every 8192 m) shifts the block and
-> **pops an 8192 m strip**. Four modular + tunable tasks: (1) configurable **load ring R** (default 2 = 5×5);
-> (2) window-center **hysteresis** (origin math untouched → `--snapdiff` stays PASS); (3) **fog COUPLED to the
-> load radius** (one view-distance drives the ring + the fog far-plane, fades the boundary up out of haze; tunable
-> `fog_view_scale` on top — fogged-far = coarser = perf synergy); (4) **velocity-predictive** lookahead loading.
-> Each task: `--*check` gates PASS + an in-motion eye-gate + re-profile.
->
-> **⚠ ORDERING TENSION (decide at execution):** ARC B GROWS the (shadow-dominated) perf cost — more chunks +
-> bigger shadow coverage. Either profile-baseline first (ARC A) then build ARC B and re-optimize, OR build ARC B
-> then optimize the whole expanded thing (its fog-coarsening, Task 3, is itself a perf lever). Docs support both;
-> the user leaned "build infinite a bit first" — so likely ARC A step 0 (CDLOD default-on) → ARC B → ARC A spikes.
+> **▶ NEXT — ARC A: PROFILE + OPTIMIZE SEVERELY (the remaining terrain arc before water).** Start-here:
+> `docs/handoffs/2026-06-24-profile-optimize-start-here.md`. Step 0 (CDLOD default-on) is DONE. Remaining: kill
+> the in-motion worst-case SPIKE on the now-expanded radius — **shadow-map first** (8192→4096/6144 atlas
+> dial-down owed since 2026-06-22 + amortize the cascade re-raster / drop finest LOD from far cascades), then
+> clouds temporal stride, then the chunk-birth/async-AABB base spike; decompose for mid-range HW (~2.5–4×). **The
+> ARC B Task-3 fog coupling is a perf lever here** — fully-fogged far ring → coarser LOD (flagged, not built).
 >
 > **THEN** water (resolve the uncommitted ribbon-river WIP + brainstorm ONE approach before grinding — STOP
 > criterion in force) / **biomes** (terrain is biome-ready) / relight #2 long-range shadows.

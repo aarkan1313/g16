@@ -50,6 +50,24 @@ RTX 5090 laptop, uncapped, `--cdlod=1 --profmove --profile=4`, default-on (scale
   at launch) → a bare launch shows the slow 25 ms single mesh, and "it wasn't infinite." **The arc should FIRST
   make CDLOD default-on** (flips the default 25→6.5 ms), THEN attack the shadow spike. ~3-line change.
 
+## 2026-06-24 (later) — ARC B infinite-streaming pop-fix SHIPPED; re-profiled expanded radius
+
+> The pop-fix arc is built (CDLOD default-on + load ring R + hysteresis + fog↔radius coupling + velocity-
+> predictive loading). It intentionally GROWS the loaded set (3×3 → 5×5 cells), so the shadow-spike arc below
+> inherits these as the new baseline. Same rig/method (`--cdlod=1 --profmove --profile=4`, default-on).
+
+| Config (CDLOD on, moving) | avg ms | worst ms | reading |
+|---|---|---|---|
+| **ARC B default (R=2, hyst, fog-couple, predict)** | **6.1** | **13.9** | the new shipped infinite world |
+| R=1 (pre-ARC-B 3×3, `--loadring=1`) | 5.7 | 12.8 | old window — the expansion costs **+0.4 avg / ~+1.1 worst** |
+| fast flythrough (`--testpath=0`, sustained motion) | 8.2 | 14.6 | worst sustained-motion number (526–571 chunks) |
+
+**Takeaways:** the 5×5 ring + predictive loading is cheap — the added cells are the farthest/coarsest. CDLOD is
+now **default-on** so a bare launch is the 6.1 ms infinite world, not the 25 ms finite mesh. The shadow-spike
+work (next) now has to cover the larger radius; **the Task-3 fog coupling is the lever** — anything fully fogged
+at the far ring can drop to a coarser LOD (flagged in the plan, not yet built). Tunables for the dial-down:
+`--loadring=N`, `--fogviewscale=F`, `--lookahead=S` (+ Debug-tab sliders).
+
 ## 2026-06-22 — SKY/LIGHT lane subsystem perf state-of-record (consolidated, not a fresh run)
 
 > Consolidates the **sky/atmosphere/cloud/light** subsystem costs that ARE measured + scattered across
