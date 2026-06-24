@@ -89,6 +89,11 @@ public partial class TerrainLabUI : Control
     private bool _shadowEnabledOnce;
     public override void _Process(double delta)
     {
+        // The --objectlistcheck / --lumpresetcheck flags early-return from _Ready (before the extracted
+        // modules below are constructed) and call Quit(); Godot DEFERS the quit, so _Process still runs once
+        // on the quit frame. Bail before touching any not-yet-built module (_cliSeq is the first one built).
+        if (_cliSeq == null) { return; }
+
         _lumCheck.Tick(delta);   // U2 numeric gate (--luminarycheck): no-op unless armed
 
         _cliSeq.TickProfMove(delta);   // --profmove: orbit the camera during a profile (motion costs) — Phase 1c
