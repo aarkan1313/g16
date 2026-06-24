@@ -376,6 +376,33 @@ public partial class TerrainLabUI : Control
             }
         }
 
+        // --fillab=<path>: DRIFT-FREE indirect-fill A/B (relight #1). Freeze the day cycle so the sun can't
+        // move, capture fill ON, toggle FillEnabled OFF + recompose, capture, quit. The two frames differ
+        // ONLY by the fill term — no day-cycle confound (the SSIL-A/B lesson). Writes _fillon.png/_filloff.png.
+        if (_fillAbT >= 0.0 && _fillAbPath != null)
+        {
+            _fillAbT += delta;
+            if (_fillAbStage == 0 && _fillAbT > 1.5)
+            {
+                Engine.TimeScale = 0.0;                       // FREEZE: sun/day-cycle stop -> pure A/B
+                _lighting.FillEnabled = true; ComposeLighting();
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_fillAbPath)!);
+                GetViewport().GetTexture().GetImage().SavePng(_fillAbPath + "_fillon.png");
+                _lighting.FillEnabled = false; ComposeLighting();
+                _fillAbStage = 1; _fillAbFrames = 0;
+            }
+            else if (_fillAbStage == 1)
+            {
+                if (++_fillAbFrames >= 3)                     // let the recompose flush
+                {
+                    GetViewport().GetTexture().GetImage().SavePng(_fillAbPath + "_filloff.png");
+                    GD.Print($"TerrainLab: fillab -> {_fillAbPath}_fillon.png / _filloff.png (frozen)");
+                    _fillAbT = -1.0;
+                    GetTree().Quit();
+                }
+            }
+        }
+
         // --profile=<secs>: warm up 1s, then average frame time, print fps + worst, quit
         if (_profileT >= 0.0)
         {
@@ -395,6 +422,7 @@ public partial class TerrainLabUI : Control
         }
     }
     private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage = 0; private int _godrayAbFrames = 0;
+    private string? _fillAbPath; private double _fillAbT = -1.0; private int _fillAbStage = 0; private int _fillAbFrames = 0;   // relight #1 fill A/B
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum = 0, _profWorst = 0;
     private bool _profMove = false;   // --profmove: orbit camera during profile (motion cost)
     private int _profFrames = 0;

@@ -112,6 +112,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--godraydbg=")) { int.TryParse(a.Substring("--godraydbg=".Length), out _godrayDbgCli); }
             else if (a.StartsWith("--godrayhp=")) { float.TryParse(a.Substring("--godrayhp=".Length), out _godrayHpCli); }
             else if (a.StartsWith("--godrayab=")) { _godrayAbPath = a.Substring("--godrayab=".Length); _godrayAbT = 0.0; }
+            else if (a.StartsWith("--fillab=")) { _fillAbPath = a.Substring("--fillab=".Length); _fillAbT = 0.0; }   // relight #1 drift-free fill A/B
             else if (a.StartsWith("--glow=")) { _glowCli = a.Substring("--glow=".Length) == "1" ? 1 : 0; }
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a == "--lookatmoon") { _lookAtMoonCli = true; }
