@@ -435,16 +435,37 @@ public partial class TerrainLabUI : Control
         vb.AddChild(new HSeparator());
         vb.AddChild(new Label { Text = "HERO SHOTS (camera framing)" });
         var srow = new HBoxContainer();
-        _shotPick = new OptionButton { CustomMinimumSize = new Vector2(150, 0) };
-        srow.AddChild(_shotPick);
+        _heroShots = new LabShots(() => GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera"));
+        srow.AddChild(_heroShots.Picker);
         var goBtn = new Button { Text = "Go" };
-        goBtn.Pressed += GoToShot;
+        goBtn.Pressed += _heroShots.GoToSelected;
         srow.AddChild(goBtn);
         var saveShot = new Button { Text = "Save view" };
-        saveShot.Pressed += SaveShot;
+        saveShot.Pressed += _heroShots.Save;
         srow.AddChild(saveShot);
         vb.AddChild(srow);
-        SeedShots();
-        RefreshShotList();
+    }
+
+    // Hero-shot camera vantages live in their own class (only moves the camera — no render-path
+    // coupling); this partial just builds the UI row and holds the reference.
+    private LabShots _heroShots = null!;
+
+    private int ZoneDefaultMaterialIndex(int zone)
+    {
+        // GM1: data-driven palette (data/ground_palette.json, loaded into _groundPalette).
+        // Falls back to the prior hardcoded contrast set, then to a clamped index — with a
+        // warning on any miss so a bad name is VISIBLE, not silently arbitrary.
+        string[] fallback = { "m8_grass_calm", "dirt", "16_glacial_till",
+                              "02_coarse_talus", "rock_dark", "m14_tundra_moss", "01_fresh_powder" };
+        string want = (_groundPalette != null && zone >= 0 && zone < _groundPalette.Length)
+                      ? _groundPalette[zone]
+                      : (zone >= 0 && zone < fallback.Length ? fallback[zone] : "");
+        int idx = _materials.IndexOf(want);
+        if (idx < 0)
+        {
+            GD.PushWarning($"[ground_palette] role {zone} material '{want}' not in library → clamped fallback");
+            idx = Math.Min(Math.Max(zone, 0), _materials.Count - 1);
+        }
+        return Math.Max(idx, 0);
     }
 }

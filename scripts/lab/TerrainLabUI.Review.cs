@@ -340,14 +340,6 @@ public partial class TerrainLabUI : Control
         if (cam != null) { cam.Position = new Vector3(0, 140, 320); cam.RotationDegrees = new Vector3(-22, 0, 0); }
     }
 
-    private void GoToShot(int i)
-    {
-        var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
-        if (cam == null || _shots == null || i < 0 || i >= _shots.Count) return;
-        cam.Position = _shots[i].Item2;
-        cam.RotationDegrees = _shots[i].Item3;
-    }
-
     // Vantage for judging cloud vertical shape: a low-ish camera tilted UP at the cloud band,
     // so decks are seen from underneath (where slab-vs-volume reads clearest), not down from altitude.
     private void LookUpAtClouds()
