@@ -3,7 +3,7 @@ using Godot;
 namespace WG16.Workbench;
 
 /// Free-fly camera: RMB/LMB-look, WASD+QE move, Shift boost, wheel speed.
-/// Walk mode: Workbench flips Walk and feeds speeds from PresentationParams —
+/// Walk mode: the owning scene flips Walk and feeds ground-traversal speeds —
 /// ground traversal is data-tuned, fly stays wheel-tuned.
 public partial class FlyCamera : Camera3D
 {
