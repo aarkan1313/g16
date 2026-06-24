@@ -67,9 +67,10 @@ default 2) drives it.
 **Files:** Modify the aerial/fog config — `scripts/lab/AerialPerspective.cs` / the env fog setters in
 `LightingComposer.cs` or `TerrainLabUI.Apply.cs`; couple to `CdlodTerrain.LoadRing * _rootSize`.
 
-- [ ] **Step 1:** Define a single "view distance" = `LoadRing * _rootSize` (≈ the load radius). Drive the env
-  fog far-distance + AT-2 aerial strength from it so the far load boundary is fully occluded and fades up as the
-  camera approaches.
+- [ ] **Step 1:** Define a single coupled "view distance" = `LoadRing * _rootSize` (≈ the load radius). Drive
+  the env fog far-distance + AT-2 aerial strength from it so the far load boundary is fully occluded and fades
+  up as the camera approaches. **Keep it tunable without breaking the coupling:** a `fog_view_scale` (+ onset
+  bias) knob multiplies the coupled baseline (slider + CLI), so density/onset is dial-able but always tracks R.
 - [ ] **Step 2:** (optional perf synergy, flag for the perf arc) allow the fully-fogged far ring to select a
   coarser LOD — note it, don't necessarily build it here.
 - [ ] **Step 3 (eye-gate — THE key one):** fly hard toward the boundary. The far terrain must FADE UP out of

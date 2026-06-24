@@ -1,7 +1,8 @@
 # Infinite-streaming pop-in fix — Design
 
 **Date:** 2026-06-24
-**Status:** drafted (awaiting user review before writing-plans)
+**Status:** APPROVED 2026-06-24 — decisions resolved: COUPLE fog↔load-radius; build it modular + tunable;
+pillar-led on every choice (lead with the better option, expose the knobs).
 **Goal:** Eliminate the visible "regions load/pop in" as you fly the infinite CDLOD terrain — by loading a
 larger radius, adding boundary hysteresis, masking the far load boundary with fog that clears as you approach,
 and biasing loading toward the player's movement direction.
@@ -87,11 +88,22 @@ No unit tests (Godot lab). Per piece: build green; the mechanical gates stay PAS
 far terrain fades up out of haze). Capture a before/after `--profmove` shot/clip. Re-profile (`--profile=4
 --profmove`) so the perf arc inherits the true expanded-radius cost.
 
-## Open decisions for user review
+## Decisions (RESOLVED 2026-06-24 — "couple, modular, tunable, pillars")
 
-1. **Load ring `R`** default — proposed **2** (5×5). Bigger (3 = 7×7) loads further but costs more; the perf
-   arc can dial it. OK as a tunable defaulting to 2?
-2. **Fog coupling** — derive the fog far-distance from the load radius automatically (proposed), vs two
-   independent knobs?
-3. **Predictive** — velocity-lookahead shift (proposed, simplest) vs asymmetric ring (loads strictly less but
-   more complex)?
+**Build ethos (applies to all four mechanisms):** each piece is its own **modular** unit (the load ring lives
+in the quadtree, fog coupling in the lighting/aerial path, prediction in the tick) — swap or tune one without
+disturbing the others. Everything user-facing is **tunable** (a lab slider + a CLI flag). **Pillar-led:** lead
+with the more-correct option, not the cheap one; expose the knob rather than hard-code a guess.
+
+1. **Load ring `R`** — **tunable**, default **2** (5×5). Field on `CdlodTerrain` + `--loadring=N` + Debug-tab
+   slider. The perf arc dials it against the shadow cost; the default is just a starting point.
+2. **Fog ↔ radius — COUPLED.** One **"view distance" = `LoadRing * _rootSize`** drives BOTH the load ring and
+   the fog far-plane, so they can never desync when `R` changes. **Still tunable:** a `fog_view_scale` /
+   onset-bias knob sits on top (coupled baseline × user scale) so you can dial fog density/onset relative to
+   the radius without breaking the coupling. This is the pillar-correct choice — the masking is *defined by*
+   what's actually loaded, not a second guess that drifts.
+3. **Predictive — velocity-lookahead shift**, with a **tunable lookahead** knob. It achieves the asymmetry
+   (loads more ahead / less behind — the perf win the explicit asymmetric ring offered) by simply moving the
+   symmetric ring forward by `vel * lookahead`, with far less code/coupling. The pillar + YAGNI call: same
+   outcome, more modular. If a future need wants independent ahead/behind radii, the ring is already
+   parameterized (Task 1) so it's a small extension.
