@@ -34,31 +34,11 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
 #define LAYER_COUNT P.tail.w
 #define LF(i, f) P.layers[(i)*6 + ((f)>>2)][(f)&3]
 
-const float PLANET_R = 200000.0;
-const float WEATHER_SCALE = 1.0 / 80000.0;
-const float SHAPE_SCALE   = 1.0 / 6000.0;   // smaller individual clouds (was 1/9000 = ~giant)
-const float DETAIL_SCALE  = 1.0 / 1300.0;
-const float WARP_AMOUNT   = 600.0;
+// @@INCLUDE cloud_density
 
-float remap(float val, float a, float b, float c, float d){ return c + (val - a) * (d - c) / max(b - a, 1e-5); }
-float type_gradient(float h, float type){
-    float baseRound = smoothstep(0.0, 0.15, h);
-    float topFade = 1.0 - smoothstep(mix(0.5, 0.95, type), 1.0, h);
-    return baseRound * topFade;
-}
-// CO-1 vertical profile — byte-identical to the production shaders' height_profile.
-float height_profile(float h, float pBottom, float pTop, float anvil){
-    float bottom = smoothstep(0.0, max(pBottom, 1e-4), h);
-    float top    = 1.0 - smoothstep(pTop, 1.0, h);
-    float bump = anvil * smoothstep(pTop, mix(pTop, 1.0, 0.5), h) * (1.0 - smoothstep(0.85, 1.0, h));
-    return bottom * max(top, bump);
-}
-vec2 ray_sphere(vec3 ro, vec3 rd, float R){
-    float b = dot(ro, rd); float c = dot(ro, ro) - R * R; float disc = b * b - c;
-    if (disc < 0.0) return vec2(-1.0);
-    float s = sqrt(disc); return vec2(-b - s, -b + s);
-}
-// per-layer density — byte-identical to the production shaders' layer_density.
+// per-layer density — mirrors cloud_shadow.glsl's layer_density (the shadow-side CHEAP 1-octave
+// erosion variant), so this --shadowcheck validator reproduces the SHIPPED shadow density exactly.
+// SHARED shape comes from cloud_density.gdshaderinc; only the detail-erosion below is local.
 float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
                     float lsize, float lcell, float ldens, float ltype,
                     float ledge, float ldetail, float ldetsize, float covW,

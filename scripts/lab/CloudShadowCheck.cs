@@ -23,7 +23,10 @@ public static class CloudShadowCheck
         if (rd == null) { GD.PrintErr("[shadowcheck] no local RD (running headless?) — must run windowed"); return false; }
 
         // compile the check shader
+        string densitySrc = System.IO.File.ReadAllText(
+            ProjectSettings.GlobalizePath("res://shaders/cloud_density.gdshaderinc"));   // shared splice (see FieldCompute)
         string src = System.IO.File.ReadAllText(ProjectSettings.GlobalizePath("res://shaders/cloud_shadow_check.glsl"))
+            .Replace("// @@INCLUDE cloud_density", densitySrc)
             .Replace("#[compute]\r\n", string.Empty).Replace("#[compute]\n", string.Empty);
         var spirv = rd.ShaderCompileSpirVFromSource(new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceCompute = src });
         if (!string.IsNullOrEmpty(spirv.CompileErrorCompute)) { GD.PrintErr("[shadowcheck] shader: " + spirv.CompileErrorCompute); return false; }

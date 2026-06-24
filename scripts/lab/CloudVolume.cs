@@ -193,8 +193,15 @@ public partial class CloudVolume : Node
         _rd = RenderingServer.GetRenderingDevice();
         if (_rd == null) { return; }
 
+        // RD-GLSL has no #include (Godot proposal #9592): splice the shared cloud density math
+        // (height_profile/type_gradient/remap/ray_sphere + scale consts) into each compute. Same
+        // mechanism as FieldCompute's field_math splice. ONE source → no silent shadow-match drift.
+        string densitySrc = System.IO.File.ReadAllText(
+            ProjectSettings.GlobalizePath("res://shaders/cloud_density.gdshaderinc"));
+
         string path = ProjectSettings.GlobalizePath("res://shaders/cloud_raymarch.glsl");
         string src = System.IO.File.ReadAllText(path)
+            .Replace("// @@INCLUDE cloud_density", densitySrc)
             .Replace("#[compute]\r\n", string.Empty).Replace("#[compute]\n", string.Empty);
         var source = new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceCompute = src };
         RDShaderSpirV spirv = _rd.ShaderCompileSpirVFromSource(source, false);
@@ -225,6 +232,7 @@ public partial class CloudVolume : Node
         // --- cloud-shadow map compute (Stage 5) ---
         string spath = ProjectSettings.GlobalizePath("res://shaders/cloud_shadow.glsl");
         string ssrc = System.IO.File.ReadAllText(spath)
+            .Replace("// @@INCLUDE cloud_density", densitySrc)
             .Replace("#[compute]\r\n", string.Empty).Replace("#[compute]\n", string.Empty);
         var ssource = new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceCompute = ssrc };
         RDShaderSpirV sspirv = _rd.ShaderCompileSpirVFromSource(ssource, false);

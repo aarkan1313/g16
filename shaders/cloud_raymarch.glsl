@@ -63,53 +63,16 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
 // 16 tintR,17 tintG,18 tintB, 19 profileBottom,20 profileTop,21 anvil, 22-23 reserved.
 #define LF(i, f) P.layers[(i)*6 + ((f)>>2)][(f)&3]
 
-const float PLANET_R = 200000.0;
+// @@INCLUDE cloud_density
 const float PI = 3.14159265;
 
-float remap(float v, float a, float b, float c, float d){ return c + (v - a) * (d - c) / max(b - a, 1e-5); }
-
-float type_gradient(float h, float type){
-    float baseRound = smoothstep(0.0, 0.15, h);
-    float topFade = 1.0 - smoothstep(mix(0.5, 0.95, type), 1.0, h);
-    return baseRound * topFade;
-}
-
-// Vertical density profile WITHIN a deck (CO-1). Turns a flat slab into a 3D body:
-//   pBottom = height fraction over which density rounds up from the base (flat-ish bottom),
-//   pTop    = height fraction at which density begins fading to the top,
-//   anvil   = 0 cumulus (taper) .. 1 cumulonimbus (a spreading top lobe near the crown).
-// NEUTRAL (0,1,0) returns ~1.0 across the body so the approved look reproduces exactly.
-// MUST be byte-identical to cloud_shadow.glsl's height_profile (density-affecting → shadows).
-float height_profile(float h, float pBottom, float pTop, float anvil){
-    float bottom = smoothstep(0.0, max(pBottom, 1e-4), h);   // rounded base
-    float top    = 1.0 - smoothstep(pTop, 1.0, h);           // faded top
-    // anvil: a secondary density lobe just below the crown so tops spread instead of tapering.
-    float bump = anvil * smoothstep(pTop, mix(pTop, 1.0, 0.5), h) * (1.0 - smoothstep(0.85, 1.0, h));
-    return bottom * max(top, bump);
-}
-
-vec2 ray_sphere(vec3 ro, vec3 rd, float R){
-    float b = dot(ro, rd);
-    float c = dot(ro, ro) - R * R;
-    float disc = b * b - c;
-    if (disc < 0.0) return vec2(-1.0);
-    float s = sqrt(disc);
-    return vec2(-b - s, -b + s);
-}
-
-// Anti-repetition scale consts (world meters → texture UV). DELIBERATELY MISMATCHED,
-// non-integer-related periods so the combined tiling period is enormous (defense #1):
-//   weather ~80 km · shape ~9 km · detail ~1.3 km · warp ~ low-freq detail tap.
-const float WEATHER_SCALE = 1.0 / 80000.0;
-const float SHAPE_SCALE   = 1.0 / 6000.0;   // smaller individual clouds (was 1/9000 = ~giant)
-const float DETAIL_SCALE  = 1.0 / 1300.0;
-const float WARP_AMOUNT   = 600.0;          // domain-warp displacement in meters (defense #2)
-
-// ===== PER-LAYER DENSITY — MUST stay byte-identical to cloud_shadow.glsl's layer_density.
+// ===== PER-LAYER DENSITY. The SHARED shape (weather/coverage/cellularity/type_gradient/
+// height_profile + scale consts) comes from cloud_density.gdshaderinc and is identical across the
+// sky / shadow / check computes. The DETAIL-EROSION below is deliberately the CRISP variant (two
+// octaves, harder edge erosion) — the sky needs fine cauliflower silhouettes. cloud_shadow.glsl
+// uses a cheaper 1-octave variant; that divergence is intentional, NOT drift.
 // One cloud deck's density at world point p. baseR/topR = this deck's shell radii; all shape
-// params come from the LAYER args (so each deck differs in size/clump/type/etc). Same HZD
-// recipe + anti-repeat (mismatched scales, domain warp, weather field, height erosion) +
-// cellularity as before — just parameterized per layer instead of from P.* globals.
+// params come from the LAYER args (so each deck differs in size/clump/type/etc).
 float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
                     float lsize, float lcell, float ldens, float ltype,
                     float ledge, float ldetail, float ldetsize, float covW,
