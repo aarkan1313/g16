@@ -243,6 +243,8 @@ public partial class TerrainLab : MeshInstance3D
     public void SetFloat(string param, float v) => _mat.SetShaderParameter(param, v);
     public void SetInt(string param, int v) => _mat.SetShaderParameter(param, v);
     public void SetBool(string param, bool v) => _mat.SetShaderParameter(param, v);
+    public void SetColor(string param, Color v) => _mat.SetShaderParameter(param, v);
+    public void SetVector3(string param, Vector3 v) => _mat.SetShaderParameter(param, v);
     public void SetTexture(string param, Texture2D tex) => _mat.SetShaderParameter(param, tex);
     public void SetCameraWorld(Vector3 p) => _mat.SetShaderParameter("cam_world", p);
 

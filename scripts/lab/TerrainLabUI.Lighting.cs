@@ -132,6 +132,7 @@ public partial class TerrainLabUI : Control, ILightingHost
     public bool AtmosphereOn => _atmosphereOn;
     public bool AerialOn => _aerialOn;
     public AtmosphereCompute? Atmosphere => _atmosphere;
+    public TerrainLab? Terrain => _terrain;   // relight #1: indirect-fill uniform target
     // OrientSun + SyncLightControlsToScene are defined in TerrainLabUI.Apply.cs (now public to satisfy the
     // interface) — they stay there because they're shared with the sun-angle sliders + other callers.
 }

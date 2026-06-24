@@ -14,6 +14,7 @@ public interface ILightingHost
     bool AtmosphereOn { get; }         // AT-1 GPU sky on?
     bool AerialOn { get; }             // AT-2 aerial froxel on?
     AtmosphereCompute? Atmosphere { get; }   // C3 Unit 5: push extra suns to the sky-scatter LUTs
+    TerrainLab? Terrain { get; }       // terrain material target for the analytic indirect-fill uniforms (relight #1)
     void OrientSun(DirectionalLight3D sun);   // orient + push sun to cloud/atmosphere (shared with the sun-angle sliders)
     void SyncLightControlsToScene();          // reflect the composed state back into the Light-tab sliders (UI)
 }
@@ -38,6 +39,7 @@ public sealed class LightingComposer
     public MoonState Moon { get; } = new();
     public StarsState Stars { get; } = new();
     public Color SkyTint { get; set; } = Colors.White;   // ST4-2 fantasy sky tint (white = no tint)
+    public bool FillEnabled { get; set; } = true;        // master A/B for the analytic indirect fill (relight #1)
     // Overcast-scaled bases (captured by Compose, scaled by ApplyOvercastScaling — the live sliders set these).
     public float BaseAmbient { get; set; } = 0.4f;
     public float BaseSunEnergy { get; set; } = 1.3f;
@@ -616,14 +618,35 @@ public sealed class LightingComposer
         float oc = _host.Overcast;
         env.AmbientLightEnergy = BaseAmbient * Mathf.Lerp(1f, 0.7f, oc);     // sky fill DOWN (grey gloom)
         env.AmbientLightSkyContribution = Time.AmbientSky;
-        // WIP 2026-06-23: the dark anti-sun "shadow" was the dim BLUE sky-ambient. De-blue + warm + lift the
-        // fill so shaded sand slopes stay sand-coloured instead of crashing to blue. Tasteful pass (tune to taste);
-        // keep ~40% sky so deep shade still has some natural cool. (Was BaseAmbient*lerp + full Time.AmbientSky.)
-        env.AmbientLightEnergy = 0.9f;
-        env.AmbientLightSkyContribution = 0.4f;   // 0 = flat AmbientLightColor, 1 = full blue sky
-        env.AmbientLightColor = new Color(1.0f, 0.96f, 0.90f);   // warm white fill
+        // Relight #1 (2026-06-23): the terrain's shaded-slope FILL is now owned by ground.gdshader's
+        // analytic indirect term (cool sky hemisphere + warm ground bounce), pushed in PushTerrainFill().
+        // So the env ambient drops to a low NEUTRAL flat base — sky-contribution 0 so no blue sky is pulled
+        // back in to re-create the dead-blue slopes; other lit objects keep a small fill. (Was the warm-flat
+        // WIP: energy 0.9 / sky 0.4 / warm-white, which couldn't beat the blue because it was non-directional.)
+        env.AmbientLightEnergy = 0.12f;
+        env.AmbientLightSkyContribution = 0.0f;
+        env.AmbientLightColor = new Color(0.5f, 0.5f, 0.5f);
         sun.LightEnergy = BaseSunEnergy * (1f - oc * 0.8f);                  // direct sun DOWN under cloud
+        PushTerrainFill();
         var cloud = _host.Cloud;
         env.FogLightColor = (cloud != null) ? BaseFogColor.Lerp(cloud.SkyHorizonColor, 0.55f * oc) : BaseFogColor;
+    }
+
+    /// Push the analytic indirect-fill uniforms to the terrain (relight #1). Cool sky hemisphere from the
+    /// day-script sky colors + warm sun->ground bounce from the current sun. Called every Compose so the
+    /// fill tracks time-of-day/mood through the one-writer. Colors → linear (EMISSION is linear radiance).
+    private void PushTerrainFill()
+    {
+        var t = _host.Terrain;
+        if (t == null) { return; }
+        Vector3 toSun = SunNode.GlobalTransform.Basis.Z.Normalized();   // +Basis.Z points TOWARD the sun
+        Color sunRad = (Time.SunColor * Time.SunEnergy).SrgbToLinear();
+        t.SetBool("fill_on", FillEnabled);
+        t.SetColor("sky_zenith",  Time.SkyTop.SrgbToLinear());
+        t.SetColor("sky_horizon", Time.SkyHorizon.SrgbToLinear());
+        t.SetColor("sky_ground",  Time.SkyGround.SrgbToLinear());
+        t.SetColor("sun_radiance", new Color(sunRad.R, sunRad.G, sunRad.B));
+        t.SetVector3("sun_dir_to", toSun);
+        // ground_albedo + sky_strength/bounce_strength keep their shader defaults until the Task 3 sliders set them.
     }
 }
