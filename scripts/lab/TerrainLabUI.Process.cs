@@ -43,6 +43,7 @@ public partial class TerrainLabUI : Control
     private int _aerialDbg;     // 0 normal, 1 extinction(red), 2 inscatter(green), 3 froxel-z, 4 distance
     private bool _lastY;        // Y A/Bs the aerial haze fix (fade-to-sky vs old fade-to-black)
     private bool _aerialHazeOn = true;  // aerial haze fix on by default
+    private bool _lastFillAb;   // I A/Bs the analytic indirect fill (relight #1)
     private bool _lodVizLive;   // V toggles the LOD-band tint live
     private bool _terrainCloudShadowOn = true;   // mirrors cloud_shadow_on (set true once the cloud RID is live); F5 flips it
     private bool _godraysOn = true;               // god rays default on; F6 flips it
@@ -255,6 +256,11 @@ public partial class TerrainLabUI : Control
                 bool kY = Input.IsKeyPressed(Key.Y);
                 if (kY && !_lastY) { _aerialHazeOn = !_aerialHazeOn; _aerial?.SetHazeStrength(_aerialHazeOn ? 1f : 0f); GD.Print($"[dbg] (Y) Aerial haze fix = {_aerialHazeOn}"); }
                 _lastY = kY;
+                // I: A/B the analytic indirect FILL (relight #1). On = warm sky+bounce fill on shaded slopes;
+                // Off = the raw low-ambient look (dead blue) for comparison. Toggles the master FillEnabled.
+                bool kI = Input.IsKeyPressed(Key.I);
+                if (kI && !_lastFillAb) { _lighting.FillEnabled = !_lighting.FillEnabled; ComposeLighting(); GD.Print($"[dbg] (I) Indirect fill = {_lighting.FillEnabled}"); }
+                _lastFillAb = kI;
                 // V: live LOD-band tint toggle — flip on to see if the dot-rings line up with LOD boundaries.
                 bool kV = Input.IsKeyPressed(Key.V);
                 if (kV && !_lastF9) { _lodVizLive = !_lodVizLive; _terrain.SetCdlodViz(_lodVizLive); GD.Print($"[dbg] (V) LOD-band tint = {_lodVizLive}"); }
