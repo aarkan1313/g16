@@ -133,6 +133,10 @@ public partial class TerrainLabUI : Control, ILightingHost
     public bool AerialOn => _aerialOn;
     public AtmosphereCompute? Atmosphere => _atmosphere;
     public TerrainLab? Terrain => _terrain;   // relight #1: indirect-fill uniform target
+    // ARC B Task 3: the CDLOD load boundary (LoadRing·rootSize) the fog density couples to — 0 when CDLOD is
+    // off (finite single mesh) so the composer keeps the plain mood fog. FogViewScale dials the coupled baseline.
+    public float CdlodViewDistance => _terrain.CdlodActive ? _terrain.LoadRing * _params.RegionSizeM : 0f;
+    public float FogViewScale { get; set; } = 1.0f;
     // OrientSun + SyncLightControlsToScene are defined in TerrainLabUI.Apply.cs (now public to satisfy the
     // interface) — they stay there because they're shared with the sun-angle sliders + other callers.
 }

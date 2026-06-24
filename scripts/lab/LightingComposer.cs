@@ -13,6 +13,8 @@ public interface ILightingHost
     float Overcast { get; }            // current overcast amount (written by the cloud-coverage proxy)
     bool AtmosphereOn { get; }         // AT-1 GPU sky on?
     bool AerialOn { get; }             // AT-2 aerial froxel on?
+    float CdlodViewDistance { get; }   // ARC B Task 3: LoadRing·rootSize (load boundary), or 0 if CDLOD off → no fog coupling
+    float FogViewScale { get; }        // ARC B Task 3: user multiplier on the radius-coupled fog baseline (0 = coupling off)
     AtmosphereCompute? Atmosphere { get; }   // C3 Unit 5: push extra suns to the sky-scatter LUTs
     TerrainLab? Terrain { get; }       // terrain material target for the analytic indirect-fill uniforms (relight #1)
     void OrientSun(DirectionalLight3D sun);   // orient + push sun to cloud/atmosphere (shared with the sun-angle sliders)
@@ -307,7 +309,20 @@ public sealed class LightingComposer
         //    ApplyOvercastScaling (it tints toward cloud-grey under overcast). Capture the base here. ──
         env.FogEnabled = true;
         BaseFogColor = Weather.FogColor;
-        env.FogDensity = Weather.FogDensity * 0.25f;
+        // ARC B Task 3: COUPLE the distance-fog density to the CDLOD load radius. The far load boundary sits at
+        // CdlodViewDistance (= LoadRing·rootSize); pick a density that occludes it (~94% at the boundary,
+        // FOG_KNEE = −ln(0.06) ≈ 2.8 → density·viewDist ≈ 2.8) so terrain FADES UP out of haze instead of
+        // popping in at the seam. fog_view_scale dials it on top of the coupled baseline (0 = coupling off);
+        // the mood's own density still applies via max(), so overcast can be foggier but never CLEARER than the
+        // boundary needs. Only when CDLOD is live (viewDist>0); the finite single mesh keeps the mood density.
+        float moodFogDensity = Weather.FogDensity * 0.25f;
+        float viewDist = _host.CdlodViewDistance;
+        if (viewDist > 1f && _host.FogViewScale > 0f)
+        {
+            float coupled = _host.FogViewScale * (2.8f / viewDist);
+            env.FogDensity = Mathf.Max(moodFogDensity, coupled);
+        }
+        else { env.FogDensity = moodFogDensity; }
         env.FogAerialPerspective = Mathf.Min(Weather.FogAerial, 0.5f);
         // AT-2: when the physical aerial froxel owns distance haze, drop the built-in aerial perspective so
         // the two don't double-fog. Height fog / FogDensity stay (the froxel only replaces the distance/sky

@@ -144,6 +144,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--aabbres=")) { int.TryParse(a.Substring("--aabbres=".Length), out _aabbResCli); }   // S3.5: ProbeRes
             else if (a.StartsWith("--aabbreq=")) { int.TryParse(a.Substring("--aabbreq=".Length), out _aabbReqCli); }   // S3.5: MaxRequestsPerFrame
             else if (a.StartsWith("--loadring=")) { int.TryParse(a.Substring("--loadring=".Length), out _loadRingCli); }   // ARC B Task 1: load-ring radius (1=3×3, 2=5×5)
+            else if (a.StartsWith("--fogviewscale=")) { float.TryParse(a.Substring("--fogviewscale=".Length), System.Globalization.CultureInfo.InvariantCulture, out _fogViewScaleCli); _fogViewScaleSet = true; }   // ARC B Task 3
             else if (MatchFlag(a, "--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--lodviz")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _lodVizCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--testpath=")) { int.TryParse(a.Substring("--testpath=".Length), out _testPathCli); }   // S2b: run LOD-crossing test path N, print report, quit
@@ -248,6 +249,7 @@ public partial class TerrainLabUI : Control
         if (_cdlodTestCli) { _terrain.SetAnalytic(true); _terrain.CdlodTestOneChunk(_params); }   // S2a Task-1 sanity
         if (_cdlodCli >= 0) { _terrain.SetAnalytic(true); _terrain.SetCdlod(_cdlodCli == 1); }   // S2a quadtree terrain
         if (_loadRingCli >= 0) { _terrain.SetLoadRing(_loadRingCli); }   // ARC B Task 1: load-ring radius override
+        if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
         // S3.5: async AABB tighten tunables (--notighten / --aabbres= / --aabbreq=). Only meaningful with CDLOD on.
         if (_cdlodCli == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
@@ -322,6 +324,8 @@ public partial class TerrainLabUI : Control
     private int _aabbResCli;          // --aabbres=N → S3.5 ChunkAabbProvider.ProbeRes (0 = leave default)
     private int _aabbReqCli;          // --aabbreq=N → S3.5 ChunkAabbProvider.MaxRequestsPerFrame (0 = leave default)
     private int _loadRingCli = -1;    // --loadring=N → ARC B Task 1 CdlodTerrain.LoadRing (-1 = leave default 2)
+    private float _fogViewScaleCli;   // --fogviewscale=F → ARC B Task 3 FogViewScale (gated by _fogViewScaleSet)
+    private bool _fogViewScaleSet;
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;
