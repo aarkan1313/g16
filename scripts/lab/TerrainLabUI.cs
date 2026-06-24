@@ -78,6 +78,7 @@ public partial class TerrainLabUI : Control, ILabControls
         CallDeferred(nameof(AttachClouds));
 
         ParseCli();
+        InitSkyPresets();      // Phase 3a: build the SkyPresets library (sun/celestial/fantasy/mood) before any load/apply
         LoadLibrary();
         LoadGroundPalette();   // GM1: must run before LoadRegistry builds the material controls
         LoadMoods();
@@ -90,7 +91,7 @@ public partial class TerrainLabUI : Control, ILabControls
         // Without this, spawn used the raw .tscn env (no per-mood grade/fog/sun) and
         // looked worse than any preset — "presets good, spawn not good." Skipped when
         // a CLI --mood override is set (headless captures choose their own).
-        if (_probeMood < 0 && _moods.Count > 0) { ApplyDefaultMood(); }
+        if (_probeMood < 0 && _sky.MoodCount > 0) { ApplyDefaultMood(); }
         ApplyCliOverrides();
         _lumCheck = new LuminaryCheckRunner(this, ComposeLighting, ApplyLuminaryDicts);
         if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--luminarycheck") >= 0) { _lumCheck.Arm(); }   // U2 numeric gate arm
