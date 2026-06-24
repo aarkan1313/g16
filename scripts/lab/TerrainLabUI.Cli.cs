@@ -61,10 +61,6 @@ public partial class TerrainLabUI : Control
     private float _atmoExpCli = -1f;     // --atmoexp=N → AT-1 atmosphere exposure override
     private int _reviewCli = -1;         // --review=N → run ApplyReview(N) at startup (drive/verify a review preset headlessly)
     private bool _meteorDebugCli;        // --meteordebug → force a meteor streak (C2 headless capture)
-    private int _greviewCli = -1;        // --greview=N → run ApplyGroundReview(N) at startup (Shift+N ground bank; auto-shoot the ground gates)
-    private int _terrainArCli = -1;
-    private int _terrainDetailCli = -1;
-    private int _groundRulesCli = -1;
     private int _giProxyCli = -1;
     private int _proxyResCli = -1;
     private int _analyticCli = -1;   // --analytic[=0|1] → S1 ground source: live field vs baked (default: leave shader default ON)
@@ -73,6 +69,12 @@ public partial class TerrainLabUI : Control
     private int _cdlodCli = -1;      // --cdlod[=1] → S2a quadtree terrain instead of the single mesh
     private int _testPathCli = -1;   // --testpath=N → run S2b LOD-crossing test path N (0-based) headlessly, then quit
     private int _lodVizCli = -1;     // --lodviz[=1] → tint chunks by LOD level
+
+    // Order-independent flag match: matches exactly "--foo" or "--foo=value". Using this for bare-prefix
+    // flags prevents a StartsWith("--foo") from shadowing a longer flag that shares the prefix (e.g.
+    // --aerial vs --aerialdbg=, --water vs --watercheck=) regardless of the if-chain ORDER — the #13 parse
+    // hazard, where one reorder used to silently mis-parse. New prefix flags should use this too.
+    private static bool MatchFlag(string a, string name) => a == name || a.StartsWith(name + "=");
 
     private void ParseCli()
     {
@@ -122,9 +124,6 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--nightgate=")) { _nightGate = a.Substring("--nightgate=".Length) == "1"; }
             else if (a.StartsWith("--nightdark=")) { float.TryParse(a.Substring("--nightdark=".Length), out _nightDarkCli); }
             else if (a.StartsWith("--moonphase=")) { float.TryParse(a.Substring("--moonphase=".Length), out _moonPhaseCli); }
-            else if (a.StartsWith("--ar=")) { _terrainArCli = a.Substring("--ar=".Length) == "1" ? 1 : 0; }
-            else if (a.StartsWith("--detail=")) { _terrainDetailCli = a.Substring("--detail=".Length) == "1" ? 1 : 0; }
-            else if (a.StartsWith("--groundrules=")) { _groundRulesCli = a.Substring("--groundrules=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--giproxy=")) { _giProxyCli = a.Substring("--giproxy=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--proxyres=")) { if (int.TryParse(a.Substring("--proxyres=".Length), out int pr)) _proxyResCli = pr; }
             else if (a == "--cdlodtest") { _cdlodTestCli = true; }
@@ -142,23 +141,22 @@ public partial class TerrainLabUI : Control
             else if (a == "--notighten") { _noTightenCli = true; }   // S3.5: disable async AABB tighten → generous AABB fallback
             else if (a.StartsWith("--aabbres=")) { int.TryParse(a.Substring("--aabbres=".Length), out _aabbResCli); }   // S3.5: ProbeRes
             else if (a.StartsWith("--aabbreq=")) { int.TryParse(a.Substring("--aabbreq=".Length), out _aabbReqCli); }   // S3.5: MaxRequestsPerFrame
-            else if (a.StartsWith("--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
+            else if (MatchFlag(a, "--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--lodviz")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _lodVizCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--testpath=")) { int.TryParse(a.Substring("--testpath=".Length), out _testPathCli); }   // S2b: run LOD-crossing test path N, print report, quit
             else if (a.StartsWith("--analytic")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _analyticCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--textures")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _texturesCli = (s == "1") ? 1 : 0; }   // minimal surfacing slice on/off
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
-            else if (a.StartsWith("--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
+            else if (MatchFlag(a, "--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
             else if (a == "--atmoscheck") { _atmoCheckCli = true; }
             else if (a == "--aerialcheck") { _aerialCheckCli = true; }
             else if (a.StartsWith("--aerialdbg=")) { int.TryParse(a.Substring("--aerialdbg=".Length), out _aerialDbgCli); }
             else if (a.StartsWith("--aerialhaze=")) { float.TryParse(a.Substring("--aerialhaze=".Length), out _aerialHazeCli); }
             else if (a.StartsWith("--aerialstr=")) { float.TryParse(a.Substring("--aerialstr=".Length), out _aerialStrCli); }
-            else if (a.StartsWith("--aerial")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _aerialCli = (s == "1") ? 1 : 0; }
+            else if (MatchFlag(a, "--aerial")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _aerialCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--cloudlightstr=")) { float.TryParse(a.Substring("--cloudlightstr=".Length), out _cloudLightStrCli); }
-            else if (a.StartsWith("--cloudlight")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cloudLightCli = (s == "1") ? 1 : 0; }
+            else if (MatchFlag(a, "--cloudlight")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cloudLightCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--atmoexp=")) { float.TryParse(a.Substring("--atmoexp=".Length), out _atmoExpCli); }
-            else if (a.StartsWith("--greview=")) { int.TryParse(a.Substring("--greview=".Length), out _greviewCli); }
             else if (a.StartsWith("--review=")) { int.TryParse(a.Substring("--review=".Length), out _reviewCli); }
             else if (a == "--meteordebug") { _meteorDebugCli = true; }
             else if (a == "--profmove") { _profMove = true; }
@@ -173,7 +171,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cloudtex=")) { if (int.TryParse(a.Substring("--cloudtex=".Length), out int th) && th >= 64) { CloudVolume.TexH = th; CloudVolume.TexW = th * 4; } }
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
             else if (a.StartsWith("--watercheck=")) { _waterCheck = a.Substring("--watercheck=".Length); }
-            else if (a.StartsWith("--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
+            else if (MatchFlag(a, "--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
                 DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
         }
