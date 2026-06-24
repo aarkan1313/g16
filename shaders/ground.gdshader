@@ -106,13 +106,13 @@ uniform float bounce_strength : hint_range(0.0, 2.0) = 1.0;
 // Per-pixel macro-height march toward the sun: where the terrain rises above the sun ray, occlude the
 // DIRECT light via AO + AO_LIGHT_AFFECT=1 (no light()/BRDF rewrite). hz_on=false => byte-identical. Cheap:
 // marches field_macro_height (macro only), increasing stride, gated OFF at high sun (no long shadows there).
-uniform bool  hz_on = false;
+uniform bool  hz_on = true;                                    // shipped ON (eye-gate 2026-06-24); JSON control mirrors this
 uniform float hz_steps    : hint_range(4.0, 48.0)   = 16.0;    // march steps (int() in the loop)
 uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 6000.0; // horizontal reach (m)
 uniform float hz_stride0  : hint_range(4.0, 200.0)  = 30.0;    // first step length (m); stride grows from here
 uniform float hz_growth   : hint_range(1.0, 2.0)    = 1.35;    // stride multiplier per step (LOD march)
-uniform float hz_softness : hint_range(0.005, 0.30) = 0.06;    // penumbra width (angle units; higher = softer)
-uniform float hz_strength : hint_range(0.0, 1.0)    = 1.0;     // final occlusion gain (0 = off, 1 = full)
+uniform float hz_softness : hint_range(0.005, 0.30) = 0.10;    // penumbra width (angle units; higher = softer)
+uniform float hz_strength : hint_range(0.0, 1.0)    = 0.6;     // final occlusion gain — 0.6 keeps some sun in shadow (not pitch dark)
 uniform float hz_sun_gate : hint_range(0.05, 1.0)   = 0.5;     // skip march when sun_dir_to.y > this (sin elev; 0.5 = 30 deg)
 
 // S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
