@@ -95,10 +95,22 @@ at the far ring can drop to a coarser LOD (flagged in the plan, not yet built). 
 | **TOTAL (default, all on)** | **10.0** | 100% | — | **worst 12.8 ms. OVER the 8 ms budget on a 5090; ~25-40 ms mid-range.** |
 
 **The reframe (again):** the orbit's "frame is healthy 5.7 ms" was wrong — real forward flight is **10.0 ms, over
-budget.** Three screen-coverage passes (shadows 2.6 + SSAO 1.8 + clouds 1.7 = 6.1 ms) are 60% of it. Ranked
-actions: **(1) cut SSAO** (−1.8 ms, invisible now — the clear free win); **(2) shadows** need the caster-geometry
-approach (atlas/dist are dead); **(3) clouds** raymarch step/res tuning; **(4) base** via the geometry-review
-analytic-normal + adaptive-LOD work. New profiler knobs: `--profspeed=`, `PROFILE-STREAM:` snap/birth readout.
+budget.** Three screen-coverage passes (shadows 2.6 + SSAO 1.8 + clouds 1.7 = 6.1 ms) are 60% of it.
+
+### Optimization levers — MEASURED savings + approach (real path, from 10.0 ms)
+
+| Lever | saving | how | risk |
+|---|---|---|---|
+| **Cut SSAO** | **−1.8 ms** | `SsaoEnabled=false`. Invisible on smooth placeholder terrain (A/B identical at every vantage). Quality/half-res/blur/boot-setting all CONFIRMED no-op (cost is the fixed full-res blur+apply, not the AO compute) — it canNOT be made cheaper in place. | none now; revisit with surfacing, or replace with analytic horizon-openness AO (lighting review) for a visible+cheap version. |
+| **Clouds steps 128→32** | **−1.0 ms** | `--cloudsteps=32` / `raymarch_steps` (32≈16, so 32 is the knee). | EYE-GATE (sky pillar signed off) — fewer steps may soften/band clouds. |
+| Shadows caster reduction | est −0.5..1 ms | exclude finest CDLOD level from the FAR shadow cascades (atlas/dist are dead no-ops). Architectural. | eye-gate distant shadow detail. |
+| Base: analytic-gradient normal | est −0.5..1 ms | kill 4 of 5 per-vertex field evals (finite-diff normal → analytic gradient). Also a quality gain (exact normals). | shared `field_math.gdshaderinc`; gate `--fieldcheck`/`--popcheck`. |
+| Base: adaptive far-chunk grid | est −0.3..0.8 ms | far rings render coarser grid (65→33/17). Also the ARC-B "more rings" enabler. | graveyard-adjacent; gate stitch/morph. |
+| Load ring R | +0.5 ms/step | the north-star "more rings" tax — pay it down with the two base levers above. | — |
+
+**The two-dial quick win: cut SSAO (−1.8) + cloudsteps=32 (−1.0) = −2.8 ms → ~7.2 ms, UNDER the 8 ms budget**, one
+invisible + one cloud eye-gate. The architectural levers (shadows caster, base geometry) are the mid-range
+headroom (×2.5-4) and overlap the quality-review work. New profiler knobs: `--profspeed=`, `PROFILE-STREAM:`.
 
 ## 2026-06-24 (ARC A) — "optimize severely" deep-dive: cheap levers are EXHAUSTED (measured) [ORBIT — understated, see ARC A-2 above]
 
