@@ -114,6 +114,7 @@ public partial class TerrainLabUI : Control
             case "sun_disc":        _sunDisc.DiscAngular = v; sun.LightAngularDistance = v; break;   // PCSS penumbra width (+ disc size)
             case "shadow_bias":     _sunDisc.ShadowNormalBias = v; sun.ShadowNormalBias = v; break;   // acne<->peter-panning
             case "shadow_dist":     _sunDisc.ShadowMaxDist = v; sun.DirectionalShadowMaxDistance = v; break;   // shadow draw distance
+            case "load_ring":       _terrain.SetLoadRing(Mathf.RoundToInt(v)); break;   // ARC B Task 1: CDLOD load-ring radius (1=3×3, 2=5×5)
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
             case "sun_azimuth":     _sunAzimuth = v; OrientSun(sun); break;
             case "time_of_day":     DriveTime(v); break;   // decoupled Time axis: sun arc + day color script

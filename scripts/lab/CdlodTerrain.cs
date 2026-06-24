@@ -59,6 +59,7 @@ public sealed partial class CdlodTerrain : Node3D
     public int MaxDepth = 6;          // finest LOD depth; tunable
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
     public int MaxChunkOps = 24;      // S3: max pooled-chunk births per frame (amortize streaming churn; tunable)
+    public int LoadRing = 2;          // ARC B Task 1: load-ring radius (1=3×3, 2=5×5 default, …) pushed to _qt.Ring each Tick
     public int RetireGrace = 2;       // S3.6: frames a chunk may be unseen before retiring (bridges the budget-deferred birth hole without leaking; >=2 retires)
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
@@ -152,6 +153,7 @@ public sealed partial class CdlodTerrain : Node3D
         bool snapped = _renderOrigin.X != _lastRenderOrigin.X || _renderOrigin.Z != _lastRenderOrigin.Z;
         _lastRenderOrigin = _renderOrigin;
 
+        _qt.Ring = LoadRing;   // ARC B Task 1: live-tunable load-ring radius (slider/CLI → takes effect next select)
         List<CdlodChunk> leaves = _qt.SelectRoaming(camPos);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
         // Live A/B toggles (lodviz / tighten) force a one-frame full re-apply of existing chunks.

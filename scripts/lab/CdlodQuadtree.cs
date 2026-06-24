@@ -20,6 +20,11 @@ public sealed class CdlodQuadtree
     private readonly int _maxDepth;
     private readonly float _splitFactor;   // subdivide when camDist < size*splitFactor
 
+    /// ARC B Task 1: load-ring radius. SelectRoaming loads a (2R+1)² block of root cells centered on the
+    /// camera's cell. R=1 = the original 3×3; larger R pushes the streaming/pop boundary further out (the
+    /// added cells are the farthest → coarsest → cheap). Driven by CdlodTerrain.LoadRing each Tick.
+    public int Ring = 1;
+
     public CdlodQuadtree(float rootOriginX, float rootOriginZ, float rootSize, int maxDepth, float splitFactor)
     {
         _rootX = rootOriginX; _rootZ = rootOriginZ; _rootSize = rootSize;
@@ -53,15 +58,25 @@ public sealed class CdlodQuadtree
         }
     }
 
-    /// S3: select leaves over a 3x3 block of root-size cells centered on the camera's root cell (cell-aligned
-    /// so a world point always falls in the same chunk → no shimmer). Root roams with the camera → infinite.
-    public List<CdlodChunk> SelectRoaming(Vector3 camPos)
+    /// S3: select leaves over a (2·Ring+1)² block of root-size cells centered on the camera's root cell
+    /// (cell-aligned so a world point always falls in the same chunk → no shimmer). Root roams with the camera
+    /// → infinite. ARC B Task 1: Ring (default 1 here; CdlodTerrain pushes its LoadRing, default 2) sets the
+    /// block radius — bigger = the pop/stream boundary sits further out; the far cells stay coarsest → cheap.
+    /// Optionally biased forward by a velocity lookahead (ARC B Task 4): the center cell is chosen from
+    /// (camPos + bias), so loading leans into the direction of travel without breaking cell-alignment.
+    public List<CdlodChunk> SelectRoaming(Vector3 camPos) => SelectRoaming(camPos, Vector3.Zero);
+
+    public List<CdlodChunk> SelectRoaming(Vector3 camPos, Vector3 centerBias)
     {
-        float cx = Mathf.Floor(camPos.X / _rootSize) * _rootSize;   // camera's root-cell origin
-        float cz = Mathf.Floor(camPos.Z / _rootSize) * _rootSize;
+        // The center CELL is chosen from the (optionally biased) center point; LOD distance still measures from
+        // the true camPos so detail stays correct. Bias is a contiguous-cell shift → neighbor invariant holds.
+        float ccx = camPos.X + centerBias.X, ccz = camPos.Z + centerBias.Z;
+        float cx = Mathf.Floor(ccx / _rootSize) * _rootSize;   // (biased) center root-cell origin
+        float cz = Mathf.Floor(ccz / _rootSize) * _rootSize;
+        int r = Mathf.Max(0, Ring);
         var leaves = new List<CdlodChunk>();
-        for (int dz = -1; dz <= 1; dz++)
-        for (int dx = -1; dx <= 1; dx++)   // 3x3 cells → camera never near a window edge
+        for (int dz = -r; dz <= r; dz++)
+        for (int dx = -r; dx <= r; dx++)   // (2r+1)² cells → camera never near a window edge
         {
             Recurse(cx + dx * _rootSize, cz + dz * _rootSize, _rootSize, 0, camPos, leaves);
         }

@@ -178,6 +178,8 @@ public partial class TerrainLab : MeshInstance3D
         GD.Print($"TerrainLab: CDLOD {(on ? "ON (quadtree)" : "off (single mesh)")}");
     }
     public void SetCdlodViz(bool on) { _cdlod?.SetLodViz(on); }
+    public void SetLoadRing(int r) { if (_cdlod != null) { _cdlod.LoadRing = Mathf.Clamp(r, 0, 6); } }   // ARC B Task 1
+    public int LoadRing => _cdlod?.LoadRing ?? 2;
     public void CdlodTick(Vector3 camPos) { _cdlod?.Tick(camPos); }
     public void ConfigureCdlodAabb(bool tighten, int probeRes, int maxReq) { _cdlod?.ConfigureAabb(tighten, probeRes, maxReq); }
     public CdlodTerrain? Cdlod => _cdlod;   // S3 --popmeter: live meter reads RenderOrigin

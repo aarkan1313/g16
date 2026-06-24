@@ -18,11 +18,17 @@ public static class StreamCheck
         int steps = 200;
         float step = regionSize / 8f;
         bool invOk = true; string worstInv = "ok";
-        for (int s = 0; s < steps; s++)
+        // ARC B Task 1: the load-ring radius is now tunable (default 2 = 5×5). The neighbor invariant must hold
+        // at the EXPANDED outer ring too, so sweep R∈{1,2,3} along the whole traverse (1 = legacy 3×3).
+        for (int ring = 1; ring <= 3 && invOk; ring++)
         {
-            var cam = new Vector3(s * step, 400f, s * step * 0.5f);
-            List<CdlodChunk> leaves = qt.SelectRoaming(cam);
-            if (!qt.NeighborInvariantHolds(leaves, out string m)) { invOk = false; worstInv = $"step {s} cam=({cam.X:F0},{cam.Z:F0}): {m}"; break; }
+            qt.Ring = ring;
+            for (int s = 0; s < steps; s++)
+            {
+                var cam = new Vector3(s * step, 400f, s * step * 0.5f);
+                List<CdlodChunk> leaves = qt.SelectRoaming(cam);
+                if (!qt.NeighborInvariantHolds(leaves, out string m)) { invOk = false; worstInv = $"ring {ring} step {s} cam=({cam.X:F0},{cam.Z:F0}): {m}"; break; }
+            }
         }
 
         float snap = regionSize;   // matches CdlodTerrain._coarseSnap = _regionSize
@@ -39,7 +45,7 @@ public static class StreamCheck
 
         bool ok = invOk && contOk;
         msg = ok
-            ? $"{steps} traverse steps invariant=ok; snap field-continuity maxDelta={maxDelta:E2} (<1e-3) — no shimmer"
+            ? $"{steps} traverse steps × rings 1-3 invariant=ok; snap field-continuity maxDelta={maxDelta:E2} (<1e-3) — no shimmer"
             : (!invOk ? $"invariant FAIL: {worstInv}" : $"snap field-continuity FAIL: maxDelta={maxDelta:E2}");
         return ok;
     }
