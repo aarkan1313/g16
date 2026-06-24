@@ -288,16 +288,25 @@ public sealed partial class CdlodTerrain : Node3D
         }
     }
 
-    /// Stable per-chunk key from its WORLD address (level + integer XZ origin). Quantize the origin to whole
-    /// metres (chunk origins are exact powers-of-two grid points, so this is lossless) and pack into 64 bits.
+    /// Stable per-chunk key from its WORLD address (level + integer XZ origin), quantized to whole metres
+    /// (chunk origins are exact powers-of-two grid points, so this is lossless). HASHED into 64 bits rather
+    /// than bit-packed: the old `level<<56 | x(28) | z(28)` pack masked x/z to 28 bits, which silently
+    /// COLLIDED past ±2^27 m (~±134,000 km) — a hard cap on the "infinite" world. A mix has no distance cap;
+    /// for the few thousand live chunks the 64-bit collision chance is ~1e-13 (far below the noise floor). The
+    /// key is opaque (only ever a Dictionary key / passed to the AABB provider — never decoded), so this is a
+    /// drop-in. Deterministic, so it preserves the identity-keyed pool (same chunk → same key every frame).
     private static long ChunkKey(CdlodChunk c)
     {
         long xi = (long)Mathf.Round(c.OriginXZ.X);
         long zi = (long)Mathf.Round(c.OriginXZ.Y);
-        // pack: level (8 bits) | x (28 bits) | z (28 bits), biased to keep negatives positive.
-        long x = (xi + (1L << 27)) & 0xFFFFFFF;
-        long z = (zi + (1L << 27)) & 0xFFFFFFF;
-        return ((long)(c.Level & 0xFF) << 56) | (x << 28) | z;
+        // boost-style hash_combine seeded by level, then a splitmix64 avalanche finalizer.
+        ulong h = (ulong)c.Level * 0x9E3779B97F4A7C15UL;
+        h ^= (ulong)xi + 0x9E3779B97F4A7C15UL + (h << 6) + (h >> 2);
+        h ^= (ulong)zi + 0x9E3779B97F4A7C15UL + (h << 6) + (h >> 2);
+        h ^= h >> 30; h *= 0xBF58476D1CE4E5B9UL;
+        h ^= h >> 27; h *= 0x94D049BB133111EBUL;
+        h ^= h >> 31;
+        return (long)h;
     }
 
     public override void _ExitTree()

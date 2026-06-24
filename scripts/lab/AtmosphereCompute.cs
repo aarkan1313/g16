@@ -280,8 +280,10 @@ public partial class AtmosphereCompute : Node
             ComputeCloudLightColors();
             _lastCloudColorSun = _sunDir;
         }
-        if (_checkRequested) { _checkRequested = false; DumpCheck(); }
-        if (_aerialCheckRequested) { _aerialCheckRequested = false; DumpAerialCheck(); }
+        // CLI gates (--atmoscheck / --aerialcheck): print PASS/FAIL then quit with the exit code so they're
+        // scriptable in CI (audit #11). RequestCheck/RequestAerialCheck are CLI-only, so quitting here is safe.
+        if (_checkRequested) { _checkRequested = false; GetTree().Quit(DumpCheck() ? 0 : 1); }
+        if (_aerialCheckRequested) { _aerialCheckRequested = false; GetTree().Quit(DumpAerialCheck() ? 0 : 1); }
     }
 
     // Camera-only recompute: re-upload params (camera moved) + the aerial froxel only (cheap, per-frame).
@@ -292,7 +294,7 @@ public partial class AtmosphereCompute : Node
         _rd.BufferUpdate(_paramBuf, 0, (uint)pb.Length, pb);
         EnsureSets();
         DispatchAerial();
-        if (_aerialCheckRequested) { _aerialCheckRequested = false; DumpAerialCheck(); }
+        if (_aerialCheckRequested) { _aerialCheckRequested = false; GetTree().Quit(DumpAerialCheck() ? 0 : 1); }   // audit #11: scriptable exit
     }
 
     private void DispatchAerial()
@@ -318,7 +320,7 @@ public partial class AtmosphereCompute : Node
 
     // Numeric proof (analog of --shadowcheck): readback the LUTs, assert finite/non-negative,
     // and print transmittance range + skyview zenith-vs-horizon luma. Run via --atmoscheck.
-    private void DumpCheck()
+    private bool DumpCheck()
     {
         byte[] t = _rd.TextureGetData(_transTex, 0);   // rgba16f
         float tmin = 1e9f, tmax = -1e9f; bool tfin = true;
@@ -334,6 +336,7 @@ public partial class AtmosphereCompute : Node
         bool tpass = tfin && tmin >= -1e-3f && tmax <= 1.001f;
         GD.Print($"[atmocheck] transmittance: min={tmin:F3} max={tmax:F3} finite={tfin} -> {(tpass ? "PASS" : "FAIL")}");
 
+        bool overall = tpass;
         if (_skyShader.IsValid)
         {
             byte[] s = _rd.TextureGetData(_skyTex, 0);
@@ -353,9 +356,11 @@ public partial class AtmosphereCompute : Node
             }
             bool spass = sfin && smin >= -1e-3f;
             GD.Print($"[atmocheck] skyview: horizonLuma={hor / Math.Max(1, hc):F4} zenithLuma={zen / Math.Max(1, zc):F4} min={smin:F4} max={smax:F4} finite={sfin} -> {(spass ? "PASS" : "FAIL")}");
+            overall = overall && spass;
         }
 
         CompareCloudLightPaths();   // #7: prove the new 3-texel GPU extractor matches the old full-LUT CPU read
+        return overall;
     }
 
     // #7 AT-3 gate: the GPU 3-texel extractor must return the SAME 3 colors as the old full-LUT CPU read at
@@ -439,7 +444,7 @@ public partial class AtmosphereCompute : Node
 
     // AT-2 aerial froxel self-check (analog of --atmoscheck): readback the 32³ LUT, assert finite,
     // non-negative in-scatter, and transmittance in [0,1]. Run via --aerialcheck.
-    private void DumpAerialCheck()
+    private bool DumpAerialCheck()
     {
         byte[] d = _rd.TextureGetData(_aerialTex, 0);   // 32×32×32 rgba16f
         int n = AerialW * AerialH * AerialD; bool fin = true; float tmin = 1e9f, tmax = -1e9f, imin = 1e9f, imax = -1e9f;
@@ -456,6 +461,7 @@ public partial class AtmosphereCompute : Node
         // (legitimately ~0 at night / sun below horizon).
         bool pass = fin && imin >= -1e-3f && tmin >= -1e-3f && tmax <= 1.001f;
         GD.Print($"[aerialcheck] inscatter[{imin:F4}..{imax:F4}] transmittance[{tmin:F3}..{tmax:F3}] finite={fin} -> {(pass ? "PASS" : "FAIL")}");
+        return pass;
     }
 
     public override void _ExitTree()
