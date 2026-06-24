@@ -64,6 +64,8 @@ public sealed partial class CdlodTerrain : Node3D
                                              // center-cell boundary before the loaded window re-centers (anti-thrash near a seam)
     private Vector2I _centerCell;     // ARC B Task 2: current (hysteretic) window-center cell index
     private bool _centerInit;         // false until _centerCell is seeded from the first Tick's camera cell
+    public float PredictLookahead = 3.0f;   // ARC B Task 4: seconds of camera velocity to bias the window-center
+                                            // forward by (loads INTO the direction of travel so you can't outrun it; 0 = off)
     public int RetireGrace = 2;       // S3.6: frames a chunk may be unseen before retiring (bridges the budget-deferred birth hole without leaking; >=2 retires)
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
@@ -143,7 +145,7 @@ public sealed partial class CdlodTerrain : Node3D
     public bool LodVizEnabled => _lodViz;
     public bool Enabled => _enabled;   // S3 floating-origin: Process only co-locates the camera when CDLOD is live
 
-    public void Tick(Vector3 camPos)
+    public void Tick(Vector3 camPos, Vector3 velXZ = default)
     {
         if (!_enabled) { return; }
         if (!IsInsideTree()) { return; }   // the AddChild is deferred (see TerrainLab.Build); skip until in-tree
@@ -158,7 +160,12 @@ public sealed partial class CdlodTerrain : Node3D
         _lastRenderOrigin = _renderOrigin;
 
         _qt.Ring = LoadRing;   // ARC B Task 1: live-tunable load-ring radius (slider/CLI → takes effect next select)
-        Vector2 centerOrigin = ComputeCenterOrigin(camPos);   // ARC B Task 2: hysteretic window-center cell origin
+        // ARC B Task 4: bias the window center forward by the camera velocity (clamped to ~1.5 cells so a wild
+        // speed can't load beyond the ring). LOD distance + the renderOrigin snap still use the TRUE camPos.
+        Vector3 bias = velXZ * Mathf.Max(0f, PredictLookahead);
+        float maxBias = _regionSize * 1.5f;
+        if (bias.Length() > maxBias) { bias = bias.Normalized() * maxBias; }
+        Vector2 centerOrigin = ComputeCenterOrigin(camPos + bias);   // Task 2 hysteresis on the (Task 4) predicted point
         List<CdlodChunk> leaves = _qt.SelectRoaming(camPos, centerOrigin);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
         // Live A/B toggles (lodviz / tighten) force a one-frame full re-apply of existing chunks.
@@ -221,17 +228,17 @@ public sealed partial class CdlodTerrain : Node3D
     /// is more than CenterHysteresis·root PAST the cell's boundary (then it re-floors to the camera's true cell,
     /// which also self-corrects on a teleport/fast move). This shifts only WHICH contiguous block is selected —
     /// NOT the renderOrigin snap (still floor(cam/root) in Tick), so --snapdiff reconstruction still round-trips.
-    private Vector2 ComputeCenterOrigin(Vector3 camPos)
+    private Vector2 ComputeCenterOrigin(Vector3 centerPoint)
     {
         float root = _regionSize;
         float band = root * Mathf.Max(0f, CenterHysteresis);
         if (!_centerInit)
         {
-            _centerCell = new Vector2I(Mathf.FloorToInt(camPos.X / root), Mathf.FloorToInt(camPos.Z / root));
+            _centerCell = new Vector2I(Mathf.FloorToInt(centerPoint.X / root), Mathf.FloorToInt(centerPoint.Z / root));
             _centerInit = true;
         }
-        _centerCell.X = HysteresisCell(camPos.X, _centerCell.X, root, band);
-        _centerCell.Y = HysteresisCell(camPos.Z, _centerCell.Y, root, band);
+        _centerCell.X = HysteresisCell(centerPoint.X, _centerCell.X, root, band);
+        _centerCell.Y = HysteresisCell(centerPoint.Z, _centerCell.Y, root, band);
         return new Vector2(_centerCell.X * root, _centerCell.Y * root);
     }
 

@@ -12,6 +12,10 @@ public partial class TerrainLabUI : Control
     private Label? _fpsLabel;
     private double _fpsAccum;
     private int _fpsFrames;
+    // ARC B Task 4: smoothed camera XZ velocity for predictive CDLOD loading (true-world, snap-continuous).
+    private Vector3 _camVelSmoothed;
+    private Vector3 _lastCamVelPos;
+    private bool _camVelInit;
     // overcast → GI/sun dimming + aerial-perspective tint (driven by cloud coverage)
     // _baseAmbient / _baseSunEnergy / _baseFogColor moved to LightingComposer (C3 Unit 1); accessed here
     // via the forwarding properties in TerrainLabUI.Lighting.cs (same names), so this code is unchanged.
@@ -170,7 +174,15 @@ public partial class TerrainLabUI : Control
             Vector3 renderOrigin = _terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero;
             Vector3 camPos = camN.Position + renderOrigin;   // TRUE world camera position
             _terrain.SetCameraWorld(camPos);
-            _terrain.CdlodTick(camPos);   // S2a: rebuild the visible chunk set; S3: snaps the new renderOrigin
+            // ARC B Task 4: smoothed TRUE-world XZ velocity (m/s) → predictive loading bias. camPos is continuous
+            // across renderOrigin snaps, so a frame delta is clean. Frozen scene (TimeScale=0 → delta≈0) → vel 0.
+            if (_camVelInit && delta > 1e-5)
+            {
+                Vector3 inst = (camPos - _lastCamVelPos) / (float)delta; inst.Y = 0f;
+                _camVelSmoothed = _camVelSmoothed.Lerp(inst, 0.12f);   // ~0.1 s time constant @ 60 fps
+            }
+            _lastCamVelPos = camPos; _camVelInit = true;
+            _terrain.CdlodTick(camPos, _camVelSmoothed);   // S2a: rebuild the visible chunk set; S3: snaps the new renderOrigin
             if (_terrain.CdlodActive)
             {
                 Vector3 newOrigin = _terrain.CdlodRenderOrigin;   // may have snapped inside CdlodTick

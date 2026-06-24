@@ -180,7 +180,8 @@ public partial class TerrainLab : MeshInstance3D
     public void SetCdlodViz(bool on) { _cdlod?.SetLodViz(on); }
     public void SetLoadRing(int r) { if (_cdlod != null) { _cdlod.LoadRing = Mathf.Clamp(r, 0, 6); } }   // ARC B Task 1
     public int LoadRing => _cdlod?.LoadRing ?? 2;
-    public void CdlodTick(Vector3 camPos) { _cdlod?.Tick(camPos); }
+    public void CdlodTick(Vector3 camPos, Vector3 velXZ = default) { _cdlod?.Tick(camPos, velXZ); }   // ARC B Task 4: vel for predictive loading
+    public void SetCdlodLookahead(float seconds) { if (_cdlod != null) { _cdlod.PredictLookahead = Mathf.Max(0f, seconds); } }
     public void ConfigureCdlodAabb(bool tighten, int probeRes, int maxReq) { _cdlod?.ConfigureAabb(tighten, probeRes, maxReq); }
     public CdlodTerrain? Cdlod => _cdlod;   // S3 --popmeter: live meter reads RenderOrigin
     public void SetPinOrigin(bool on) { if (_cdlod != null) { _cdlod.PinOrigin = on; } }   // DEBUG --pinorigin
