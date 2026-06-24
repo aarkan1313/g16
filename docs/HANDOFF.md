@@ -1,7 +1,7 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-20 (doc-set reset — archived the spec/plan sprawl; `ROADMAP.md` rewritten
-thin; both active lanes PAUSED at a combined eye-gate). **Refresh §6 each session.**
+Last updated: 2026-06-24 (terrain relight shipped + independent state-of-project audit run; §6 fully
+refreshed). **Refresh §6 each session.**
 
 Written so a fresh chat with zero context gets productive immediately.
 
@@ -81,51 +81,55 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> **2026-06-21 — FULL AUDIT + GROUND REVIEW DONE; docs reconciled.** A 7-subsystem project audit
-> (`docs/AUDIT-2026-06-21.md`) + a ground/texture iterate-vs-rebuild review ran (both multi-agent, verified).
-> Outcomes: **(1)** the day's sky lane + 6 backup tags were **pushed to origin** (were 179 commits local-only);
-> **(2) ROADMAP now carries a 🛠 Debt & Remediation backlog** (every audit fix) + a **rewritten Ground / Texture
-> lane** — verdict **ITERATE, not rebuild** (execute the existing ground master design surgically; a **G-0
-> "wrong-defaults" gate** is NEXT for ground — NEEDS_REVIEW 1e); **(3)** the sky lane is NOT paused — it built a
-> burst to AT-2, and **AT-1 + AT-2 are DEFAULT-ON but un-eye-gated** (NEEDS_REVIEW 11; AT-2's cost never measured).
-> **The "both lanes PAUSED" block below is the prior (2026-06-20) state, kept for history.** Live state: run the
-> combined eye-gate (now incl. AT-1/AT-2 + the ground G-0 gate), then iterate ground G-0 → G-1 → G-2 per ROADMAP.
-
-> **⮕ TAKING OVER AS IMPLEMENTOR?** Start with
-> `docs/superpowers/handoffs/2026-06-20-lanes-implementor-handoff.md` — it covers BOTH lanes
-> (Ground/Texture + Sun/Light), their built-but-ungated state, the gated build order, and your
-> first job: driving the eye-gate session via `scenes/review.tscn`.
-
-> **2026-06-20 — DOC-SET RESET + FULL-SCOPE RE-ROADMAP; both lanes PAUSED at a combined eye-gate.**
+> **2026-06-24 — STATE OF THE PROJECT (post terrain-relight; independent state-of-project audit run).**
 >
-> Two lanes (GROUND material, SUN & LIGHT) each ran three phases past their last eye-gate while the
-> user couldn't be at a screen. We **paused both**, set everything to default-off / approved-look so
-> it's all opt-in, archived the doc sprawl (20 specs + 23 plans → `docs/archive/`), and rewrote
-> `ROADMAP.md` thin. Then set the **forward shape (3 phases): (A) finish both lanes FULLY** — Sun &
-> Light = full sky system, Ground = full material stack **incl. erosion + water hydrology + surface
-> height** (water flow co-designs with erosion; fresh spec→plan→review owed) — **(B) make it a WORLD**
-> (scale infra CDLOD→chunks→streaming + biomes + procedural + erosion-at-scale + flora/world-editing),
-> **(C) climate & elements** (water render, precip, snow). See `ROADMAP.md` for the authoritative path.
-> **Review scene: `scenes/review.tscn`** — keys 1–9 jump to each eye-gate item (see `NEEDS_REVIEW.md`).
+> **SHIPPED & signed off:**
+> - **Sky / Atmosphere / Celestial — DONE/AAA (pillar effectively closed).** Volumetric clouds (CO-1..4:
+>   vertical realism, types incl. cirrus, anti-repeat, presets); Sun & Light (Time×Weather×Grade decouple +
+>   time-of-day driver, sun disc/surface + presets); Night (moon + phases, stars, moonlight); Celestial **C2**
+>   (meteors, planets, named stars) + **C3** (N-suns / N-moons via a priority budgeter — "3 suns ≈ today's cost")
+>   + **data-driven luminaries** (`data/luminaries.json` + Sky-bodies editor); GPU atmosphere **AT-1** (Hillaire
+>   sky LUTs) / **AT-2** (froxel aerial perspective) / **AT-3** (physical cloud lighting) all default-on + eye-gated.
+>   Galaxy/nebula KILLED (read fake). Only minor luminary look-tuning owed.
+> - **Terrain CDLOD / infinite streaming — SHIPPED.** S1 perf gate → S2 quadtree + pop-free per-vertex geomorph
+>   (`--morphcheck`; the pop bug was a morphK sign-inversion) + crack-free edge-stitch (16 welded variants, skirt
+>   deleted) → **S3 infinite roaming root + folded floating-origin + async GPU AABB tighten**. All 7 mechanical
+>   guards PASS (`--morphcheck/--stitchcheck/--streamcheck/--popcheck/--snapdiff/--cdlodcheck/--fieldcheck`).
+>   **The WG1–15 terrain-LOD "graveyard" gate is PASSED.**
+> - **Terrain RELIGHT — SHIPPED this session (eye-gate PASSED "good enough").** Analytic indirect fill (cool
+>   sky hemisphere + warm sun→ground bounce) injected via `EMISSION` in `ground.gdshader`, pushed each Compose by
+>   `LightingComposer`; env ambient dropped to low-neutral so the shader fill owns terrain fill. Defaults warmed
+>   (`fill: sky` 0.40 / `fill: ground bounce` 2.40); `I` A/Bs it, `--fillab` is a drift-free frozen-time harness.
+>   Also fixed: **aerial fade-to-black** (`(1-aer.a)*aerial_haze` path-radiance term, key `Y`/`--aerialhaze`) and
+>   **SSIL@1.0 crushing the terrain** (disabled). The long "anti-sun shadows that appear when I turn" hunt
+>   **resolved as CORRECT directional lighting, not a bug** — see `docs/handoffs/2026-06-23-terrain-anti-sun-darkness-line.md`.
 >
-> **⮕ NEXT: the combined eye-gate session** — run the gates in `ROADMAP.md` ▶ NOW order (light first,
-> then base shading, then ground under settled light, then sky, then whole-scene AA). Per-item how/
-> judge/unblocks in `NEEDS_REVIEW.md`. **Do NOT start new lane depth** (no GM4+, no GPU atmosphere,
-> no GM3 B/C) until the batch is judged — then re-roadmap from the results.
+> **DERAILED / open:**
+> - **Water / rivers — the project GRAVEYARD.** 5 approaches rejected at the user's eye-gate (pipe-model erosion;
+>   structure-first MFD carve; erosion-free sea+lakes). Restart **#6 = flow-mapped RIBBON-MESH rivers on
+>   UNMODIFIED terrain** (reuse the good drainage *routing*; no carve, no sea) — **STARTED but UNCOMMITTED in the
+>   working tree** (`scripts/hydrology/{RiverRibbonMesh,LakeMesh,WaterRenderer,RegionHeightGrid}.cs` + modified
+>   `WorldWaterRegion.cs` + `shaders/water_surface.gdshader`). **Decide its fate (commit-as-WIP or stash) before
+>   touching the tree, then BRAINSTORM the approach with the user before grinding** — STOP criterion in force.
+>   Handoff: `docs/handoffs/2026-06-23-WATER-TRASHED-rivers-restart.md`.
+> - **Erosion — ABANDONED** (folded into the water trash; the pipe-model sim was built + race-fixed but never
+>   passed eye-gate). If ribbon rivers on unmodified terrain win, erosion-as-geometry likely stays shelved.
+> - **Ground surfacing — STRIPPED to a minimal 5-material height/slope placeholder** (2026-06-21, afef3b1). The
+>   full per-pixel / texture-array / placement system is DESIGNED, not built — correctly sequenced LAST (it
+>   consumes the hydrology substrate's material/wetness output).
 >
-> **Built & awaiting that gate:** GROUND — GM1 palette, GM2 real height maps, GM3-A within-area
-> variation (all default-off). SUN & LIGHT — Stage 1 sun disc, Stage 2 decouple + time-of-day driver.
-> **Also owed:** clouds feature review, god-rays final pass, H1 BRDF check, AA-in-motion, GI/SDFGI
-> default decision, GI-proxy fidelity, Unit 2 distance-detail (shelved).
+> **Known-open real problems:** short-range sun shadows on CDLOD terrain (distant hills cast ~nothing — relight
+> spec sub-project #2, not started); terrain-mesh perf floor (~27.5 ms, mesh-bound; CDLOD bounded but didn't
+> eliminate worst-case spikes); renderOrigin **snap-pop** every 8192 m (memory ambiguous — verify before trusting
+> "fixed"); **60+ commits unpushed to origin**.
 >
-> **Approved/settled (don't redo):** base field; lighting base + 6 moods ("really good"); 108
-> materials; anti-repetition; compositing-core Phase A blend + AO; G1 placement; GI/shadow proxy.
+> **▶ NEXT (ranked, from the 2026-06-24 audit):** (1) resolve the uncommitted ribbon-river WIP, then brainstorm
+> rivers with the user (ONE agreed approach, minimum to eye-gate); (2) relight **sub-project #2 = long-range cast
+> shadows**; (3) push to origin; then pick the next PILLAR deliberately — with water blocked, **biomes** is the
+> cleaner next lane (the terrain is already biome-ready: a manifest = a biome), full surfacing after hydrology.
 >
-> **Parallel chats (no project access; return libraries to integrate, not review):** procedural
-> FLORA; WORLD-EDITING brush. On return: wire providers; edits invalidate splat/breakup/scatter → re-bake.
->
-> **Perf:** in-motion ≈9.6 ms (clouds on) vs the 8 ms target; levers (CDLOD #1, SDFGI config #2, cloud
-> cost #3) all eye-gated/parked. Always profile `--profmove`. See `performance.md`.
+> Prior 2026-06-20/21 state (both-lanes-paused; AT-2 gate; ground G-0) is SUPERSEDED — see `docs/AUDIT-2026-06-21.md`
+> + git log for history.
 
 ## 7. The material library (gitignored — 2.5 GB)
 

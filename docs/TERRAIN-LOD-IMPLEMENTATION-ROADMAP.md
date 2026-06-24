@@ -1,7 +1,11 @@
 # WG16 Terrain LOD — Implementation Roadmap (T1, T2, T3)
 
-**Date:** 2026-06-21  
-**Status:** T1 in-progress (S2b stage). T2/T3 scoped but not yet started.  
+**Date:** 2026-06-21 (status updated 2026-06-24)  
+**Status:** ✅ **SHIPPED.** The build superseded the T1/T2/T3 framing for the S1→S4 staging in
+`docs/superpowers/specs/2026-06-21-infinite-terrain-cdlod-design.md`. S2 (quadtree + geomorph + edge-stitch)
+AND S3 (infinite roaming root + folded floating-origin + async AABB tighten) are DONE; all 7 mechanical guards
+PASS (`--morphcheck/--stitchcheck/--streamcheck/--popcheck/--snapdiff/--cdlodcheck/--fieldcheck`). The WG1–15
+graveyard gate is PASSED. Open: renderOrigin snap-pop (verify), short-range CDLOD shadows. See `docs/HANDOFF.md` §6.  
 **Scope:** This roadmap maps the three-stage terrain LOD build (T1–T3) from the post-mortem-first design spec
 (`docs/superpowers/specs/2026-06-18-terrain-lod-roadmap-design.md`), the T1 geomorph design
 (`docs/superpowers/specs/2026-06-21-s2b-geomorph-design.md`), and sequenced implementation.
