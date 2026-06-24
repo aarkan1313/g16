@@ -236,7 +236,13 @@ void vertex() {
         NORMAL = v_normal;
         v_h = h0;
         v_wxz = wxz;   // DEBUG: the true-world XZ this vertex sampled the field at
-        v_surf_xz = wxz;
+        // RING FIX (2026-06-23): texture at the vertex's ACTUAL world XZ, NOT the morphed field-sample
+        // position `wxz`. The geomorph slides `wxz` toward the coarse grid by morphK (a function of camera
+        // DISTANCE), but the vertex itself stays at vtrue_fine (only VERTEX.y is morphed). Mapping textures
+        // at `wxz` warped the UV by a distance-dependent amount → texture "swims"/shifts within each LOD
+        // morph band = concentric rings locked to camera distance that survive every mip/aniso/fade (it's a
+        // UV distortion, not aliasing). Texturing at vtrue_fine pins the surface to the real ground.
+        v_surf_xz = vtrue_fine;
     } else if (use_analytic) {
         vec2 wxz = VERTEX.xz;                              // object==world at identity (matches field)
         float e = analytic_spacing;
