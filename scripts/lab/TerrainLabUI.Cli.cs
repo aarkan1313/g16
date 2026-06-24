@@ -18,6 +18,7 @@ public partial class TerrainLabUI : Control
     private float _texScale = -1f;
     private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
     private int _probeSsil = -1;   // --ssil=0/1 isolation probe (screen-space indirect light)
+    private float _shadowDistCli = -1f;   // --shadowdist=N → directional shadow max distance (m) A/B (far coverage vs near texel density)
     private int _probeSdfgi = -1;   // --sdfgi=0/1: isolate the real-time GI cost (perf pass)
     private float _probeRoughFloor = -1f, _probeMixStr = -1f;
 
@@ -91,6 +92,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--ssil=")) { _probeSsil = a.Substring("--ssil=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--sdfgi=")) { _probeSdfgi = a.Substring("--sdfgi=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadow=")) { _probeShadow = a.Substring("--shadow=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--shadowdist=")) { float.TryParse(a.Substring("--shadowdist=".Length), out _shadowDistCli); }   // directional shadow max distance (m) A/B
             else if (a.StartsWith("--roughfloor=")) { if (float.TryParse(a.Substring("--roughfloor=".Length), out float rf)) _probeRoughFloor = rf; }
             else if (a.StartsWith("--mixstr=")) { if (float.TryParse(a.Substring("--mixstr=".Length), out float ms)) _probeMixStr = ms; }
             else if (a.StartsWith("--hb=")) { _probeHb = a.Substring("--hb=".Length) == "1" ? 1 : 0; }
@@ -230,6 +232,7 @@ public partial class TerrainLabUI : Control
             var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
             sun.ShadowEnabled = _probeShadow == 1;
         }
+        if (_shadowDistCli > 0f) { _sunDisc.ShadowMaxDist = _shadowDistCli; ComposeLighting(); }   // shadow-range A/B (re-asserted by Compose)
         if (_probeSdfgi >= 0)
         {
             var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
