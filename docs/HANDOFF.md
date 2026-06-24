@@ -137,13 +137,32 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 > chat's UNCOMMITTED `WaterRenderer`/`WorldWaterRegion`, so origin doesn't build standalone (theirs to resolve).
 > Commits are PUSHED through `4a6736e`.
 >
-> **▶ NEXT (USER DIRECTIVE 2026-06-24): PROFILE + OPTIMIZE SEVERELY before going back to water.** The arc:
-> (1) make CDLOD default-on (flips the default 25→6.5 ms); (2) kill the 20 ms in-motion worst-case SPIKE —
-> **shadow-map first** (8192→4096/6144 atlas dial-down + amortize the cascade re-raster across frames / drop the
-> finest LOD from far cascades), then clouds temporal stride, then the chunk-birth/async-AABB base spike;
-> (3) decompose for mid-range HW (scale ~2.5–4×). **Start-here: `docs/handoffs/2026-06-24-profile-optimize-start-here.md`.**
-> THEN water (resolve the uncommitted ribbon-river WIP + brainstorm ONE approach before grinding — STOP criterion
-> in force) / **biomes** (terrain is biome-ready) / relight #2 long-range shadows.
+> **▶ NEXT (USER DIRECTIVE 2026-06-24): two queued, ready-to-execute terrain arcs before water — profile/optimize
+> + build-out infinite. The user wants a full perf deep-dive AND to build the infinite world out a bit.**
+>
+> **ARC A — PROFILE + OPTIMIZE SEVERELY.** Start-here: `docs/handoffs/2026-06-24-profile-optimize-start-here.md`.
+> (1) make CDLOD **default-on** (flips the default 25→6.5 ms; also fixes "it wasn't infinite"); (2) kill the 20 ms
+> in-motion worst-case SPIKE — **shadow-map first** (8192→4096/6144 atlas dial-down + amortize the cascade
+> re-raster / drop the finest LOD from far cascades), then clouds temporal stride, then the chunk-birth/async-AABB
+> base spike; (3) decompose for mid-range HW (~2.5–4×).
+>
+> **ARC B — INFINITE-STREAMING POP-IN FIX (spec'd + planned, decisions RESOLVED).** Spec:
+> `docs/superpowers/specs/2026-06-24-infinite-streaming-popfix-design.md`; plan:
+> `docs/superpowers/plans/2026-06-24-infinite-streaming-popfix.md`. Root cause: `SelectRoaming` loads a
+> cell-aligned **3×3 block of 8192 m root cells**, so crossing a cell boundary (every 8192 m) shifts the block and
+> **pops an 8192 m strip**. Four modular + tunable tasks: (1) configurable **load ring R** (default 2 = 5×5);
+> (2) window-center **hysteresis** (origin math untouched → `--snapdiff` stays PASS); (3) **fog COUPLED to the
+> load radius** (one view-distance drives the ring + the fog far-plane, fades the boundary up out of haze; tunable
+> `fog_view_scale` on top — fogged-far = coarser = perf synergy); (4) **velocity-predictive** lookahead loading.
+> Each task: `--*check` gates PASS + an in-motion eye-gate + re-profile.
+>
+> **⚠ ORDERING TENSION (decide at execution):** ARC B GROWS the (shadow-dominated) perf cost — more chunks +
+> bigger shadow coverage. Either profile-baseline first (ARC A) then build ARC B and re-optimize, OR build ARC B
+> then optimize the whole expanded thing (its fog-coarsening, Task 3, is itself a perf lever). Docs support both;
+> the user leaned "build infinite a bit first" — so likely ARC A step 0 (CDLOD default-on) → ARC B → ARC A spikes.
+>
+> **THEN** water (resolve the uncommitted ribbon-river WIP + brainstorm ONE approach before grinding — STOP
+> criterion in force) / **biomes** (terrain is biome-ready) / relight #2 long-range shadows.
 >
 > Prior 2026-06-20/21 state (both-lanes-paused; AT-2 gate; ground G-0) is SUPERSEDED — see `docs/AUDIT-2026-06-21.md`
 > + git log for history.

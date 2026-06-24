@@ -6,6 +6,14 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-24 — Infinite-streaming pop-in fix: spec'd + planned (queued, not yet built).** The "regions visibly
+load/pop in" = `SelectRoaming` loads a cell-aligned 3×3 block of 8192 m root cells, so crossing a cell boundary
+(every 8192 m) shifts the block and pops an 8192 m strip. Four modular+tunable fixes: bigger load ring (R,
+default 2), window hysteresis, **fog COUPLED to the load radius** (one view-distance drives ring + fog far-plane,
+tunable scale on top — fogged-far = coarser = perf synergy), velocity-predictive lookahead. Decisions per user
+"couple, modular, tunable, pillars". Spec `docs/superpowers/specs/2026-06-24-infinite-streaming-popfix-design.md`
++ plan. NOTE it grows the (shadow-dominated) perf cost → coordinate with the profile/optimize arc.
+
 **2026-06-24 — Look-lab god-class decomposed (−40%) + audit hardening + perf reframe.** A big cleanup arc on
 `experiment/presentation` (all pushed, regression-validated):
 - **`TerrainLabUI` 3,214 → 1,943 LOC (−40%)** into **12 standalone classes** behind a narrow `ILabControls`
