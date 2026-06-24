@@ -13,16 +13,24 @@ public record RiverReach(Vector2[] Points, float[] Width, int Order);
 /// Width scales with sqrt(flow) (the page's width = sqrt(accum) * scale).
 public static class RiverTracer
 {
+    private const int MinReachCells = 8;   // drop reaches shorter than this (tiny orphan blips)
+
     public static List<RiverReach> Trace(CoarseDrainage d, WaterParams wp)
     {
         var reaches = new List<RiverReach>();
         int res = d.Res;
         var visited = new bool[res * res];
+
+        // Collect all SOURCE cells (above threshold, no above-threshold higher neighbor), then trace them
+        // in DESCENDING flow-accumulation order — trunks before tributaries. That ordering makes the
+        // confluence rule (stop when the next cell is already a river) merge tributaries cleanly INTO the
+        // established trunk, instead of fragmenting the trunk at the first tributary it meets.
+        var sources = new List<int>();
         for (int z = 1; z < res - 1; z++)
             for (int x = 1; x < res - 1; x++)
             {
                 int i = d.Idx(x, z);
-                if (d.Accum[i] < wp.RiverAccumThreshold || visited[i]) continue;
+                if (d.Accum[i] < wp.RiverAccumThreshold) continue;
                 bool isSource = true;
                 for (int dz = -1; dz <= 1 && isSource; dz++)
                     for (int dx = -1; dx <= 1; dx++)
@@ -31,7 +39,14 @@ public static class RiverTracer
                         int j = d.Idx(x + dx, z + dz);
                         if (d.Height[j] > d.Height[i] && d.Accum[j] >= wp.RiverAccumThreshold) { isSource = false; break; }
                     }
-                if (!isSource) continue;
+                if (isSource) sources.Add(i);
+            }
+        sources.Sort((a, b) => d.Accum[b].CompareTo(d.Accum[a]));   // biggest flow first
+
+        foreach (int src in sources)
+            {
+                if (visited[src]) continue;
+                int x = src % res, z = src / res;
                 var pts = new List<Vector2>();
                 var wid = new List<float>();
                 int cx = x, cz = z, guard = 0;
@@ -51,12 +66,23 @@ public static class RiverTracer
                             if (h < bh) { bh = h; bx = nx; bz = nz; }
                         }
                     if (bx == cx && bz == cz) break;          // local minimum
+                    // CONFLUENCE: if the next cell is already part of another river, stop HERE — append the
+                    // confluence point so the lines join, then terminate. This is what kills the "parallel
+                    // duplicate lines down a shared channel" artifact (each tributary used to re-trace the
+                    // whole trunk alongside the first reach instead of merging into it).
+                    if (visited[d.Idx(bx, bz)])
+                    {
+                        pts.Add(new Vector2(d.OriginWorld.X + bx * d.CellSizeM, d.OriginWorld.Y + bz * d.CellSizeM));
+                        wid.Add(Mathf.Clamp(MathF.Sqrt(d.Accum[d.Idx(bx, bz)]) * wp.ChannelWidthScale, 2f, 120f));
+                        break;
+                    }
                     cx = bx; cz = bz;
                     if (cx <= 0 || cz <= 0 || cx >= res - 1 || cz >= res - 1) break; // left grid
                 }
-                if (pts.Count >= 2)
+                // Drop tiny orphan blips: only keep reaches long enough to read as a real channel.
+                if (pts.Count >= MinReachCells)
                 {
-                    var sm = Chaikin(pts.ToArray(), 2);
+                    var sm = Chaikin(pts.ToArray(), 3);   // 3 iters: smoother spline → smoother SDF band (was 2; killed grid stair-step)
                     var sw = ResampleWidth(wid.ToArray(), sm.Length);
                     reaches.Add(new RiverReach(sm, sw, 1));
                 }
