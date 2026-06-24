@@ -57,7 +57,7 @@ public partial class TerrainLabUI : Control, ILabControls
         // Pure logic — runs before FieldCompute (RenderingDevice-free), then quits.
         if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--lumpresetcheck") >= 0)
         {
-            bool lpOk = LuminaryPresetCheck.Run(DictFromLuminary, LuminaryFromDict, LumDictToStorable, LumDictFromStorable, out string lpMsg);
+            bool lpOk = LuminaryPresetCheck.Run(DictFromLuminary, LuminaryFromDict, PresetsManager.LumDictToStorable, PresetsManager.LumDictFromStorable, out string lpMsg);
             GD.Print($"LUMPRESETCHECK: {(lpOk ? "PASS" : "FAIL")}  {lpMsg}");
             GetTree().Quit(lpOk ? 0 : 1);
             return;
@@ -79,6 +79,7 @@ public partial class TerrainLabUI : Control, ILabControls
 
         ParseCli();
         InitSkyPresets();      // Phase 3a: build the SkyPresets library (sun/celestial/fantasy/mood) before any load/apply
+        InitPresetsManager();  // Phase 3b: user-preset save/load (uses the lazy _luminaryList getter)
         LoadLibrary();
         LoadGroundPalette();   // GM1: must run before LoadRegistry builds the material controls
         LoadMoods();

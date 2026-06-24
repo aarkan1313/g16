@@ -254,6 +254,7 @@ public partial class TerrainLabUI : Control
     // Thin wrappers over the existing registry fields/methods — no behavior change.
     bool ILabControls.IsReady { get => _ready; set => _ready = value; }
     IReadOnlyList<LabControl> ILabControls.Controls => _controls;
+    IReadOnlyDictionary<string, LabControl> ILabControls.ById => _byId;
     bool ILabControls.TryGet(string id, out LabControl c) => _byId.TryGetValue(id, out c!);
     void ILabControls.SetValue(LabControl c, Variant v) => SetWidgetValue(c, v);
     void ILabControls.SetValueSilent(LabControl c, float v) => SetWidgetValueSilent(c, v);

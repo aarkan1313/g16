@@ -16,6 +16,10 @@ public interface ILabControls
     /// All controls, zone/companion-expanded, in registry order.
     IReadOnlyList<LabControl> Controls { get; }
 
+    /// The keyed registry (id, or "id#z" for zone-expanded entries) → control. Presets save/restore
+    /// by these exact keys, so they need the map, not just the value list.
+    IReadOnlyDictionary<string, LabControl> ById { get; }
+
     /// Look a control up by id (or "id#z" for zone-expanded entries).
     bool TryGet(string id, out LabControl c);
 
