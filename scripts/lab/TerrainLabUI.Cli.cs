@@ -93,6 +93,9 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
             else if (a.StartsWith("--ssao=")) { _probeSsao = a.Substring("--ssao=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--ssaoq=")) { int.TryParse(a.Substring("--ssaoq=".Length), out _ssaoQCli); _ssaoQSet = true; }   // ARC A.1: SSAO quality 0=VeryLow..4=Ultra
+            else if (a.StartsWith("--ssaohalf=")) { _ssaoHalfCli = a.Substring("--ssaohalf=".Length) == "1"; _ssaoHalfSet = true; }   // ARC A.1: SSAO half-res
+            else if (a.StartsWith("--ssaoblur=")) { int.TryParse(a.Substring("--ssaoblur=".Length), out _ssaoBlurCli); _ssaoBlurSet = true; }   // ARC A.1: SSAO blur passes
             else if (a.StartsWith("--ssil=")) { _probeSsil = a.Substring("--ssil=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--sdfgi=")) { _probeSdfgi = a.Substring("--sdfgi=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadow=")) { _probeShadow = a.Substring("--shadow=".Length) == "1" ? 1 : 0; }
@@ -146,6 +149,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--loadring=")) { int.TryParse(a.Substring("--loadring=".Length), out _loadRingCli); }   // ARC B Task 1: load-ring radius (1=3×3, 2=5×5)
             else if (a.StartsWith("--fogviewscale=")) { float.TryParse(a.Substring("--fogviewscale=".Length), System.Globalization.CultureInfo.InvariantCulture, out _fogViewScaleCli); _fogViewScaleSet = true; }   // ARC B Task 3
             else if (a.StartsWith("--lookahead=")) { float.TryParse(a.Substring("--lookahead=".Length), System.Globalization.CultureInfo.InvariantCulture, out _lookaheadCli); _lookaheadSet = true; }   // ARC B Task 4
+            else if (a.StartsWith("--shadowatlas=")) { int.TryParse(a.Substring("--shadowatlas=".Length), out _shadowAtlasCli); }   // ARC A.1 shadow atlas px
             else if (MatchFlag(a, "--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--lodviz")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _lodVizCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--testpath=")) { int.TryParse(a.Substring("--testpath=".Length), out _testPathCli); }   // S2b: run LOD-crossing test path N, print report, quit
@@ -252,6 +256,13 @@ public partial class TerrainLabUI : Control
         if (_loadRingCli >= 0) { _terrain.SetLoadRing(_loadRingCli); }   // ARC B Task 1: load-ring radius override
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
+        if (_shadowAtlasCli > 0) { ShadowAtlasSize = _shadowAtlasCli; RenderingServer.DirectionalShadowAtlasSetSize(_shadowAtlasCli, true); }   // ARC A.1: apply now (composer once-guard may have run)
+        if (_ssaoQSet || _ssaoHalfSet || _ssaoBlurSet)   // ARC A.1: SSAO quality/half-res/blur perf probe (global RenderingServer)
+        {
+            var q = (RenderingServer.EnvironmentSsaoQuality)Mathf.Clamp(_ssaoQSet ? _ssaoQCli : 2, 0, 4);
+            int blur = _ssaoBlurSet ? _ssaoBlurCli : 2;   // ARC A.1: blur passes (the suspected fixed cost)
+            RenderingServer.EnvironmentSetSsaoQuality(q, _ssaoHalfSet ? _ssaoHalfCli : false, 0.5f, blur, 50f, 300f);
+        }
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
         // S3.5: async AABB tighten tunables (--notighten / --aabbres= / --aabbreq=). Only meaningful with CDLOD on.
         if (_cdlodCli == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
@@ -330,6 +341,10 @@ public partial class TerrainLabUI : Control
     private bool _fogViewScaleSet;
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)
     private bool _lookaheadSet;
+    private int _shadowAtlasCli;      // --shadowatlas=N → ARC A.1 directional shadow atlas px (0 = leave default 8192)
+    private int _ssaoQCli = 2; private bool _ssaoQSet;       // --ssaoq=N → ARC A.1 SSAO quality (0..4)
+    private bool _ssaoHalfCli; private bool _ssaoHalfSet;    // --ssaohalf=0/1 → ARC A.1 SSAO half-res
+    private int _ssaoBlurCli = 2; private bool _ssaoBlurSet; // --ssaoblur=N → ARC A.1 SSAO blur passes
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;

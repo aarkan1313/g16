@@ -15,6 +15,7 @@ public interface ILightingHost
     bool AerialOn { get; }             // AT-2 aerial froxel on?
     float CdlodViewDistance { get; }   // ARC B Task 3: LoadRing·rootSize (load boundary), or 0 if CDLOD off → no fog coupling
     float FogViewScale { get; }        // ARC B Task 3: user multiplier on the radius-coupled fog baseline (0 = coupling off)
+    int ShadowAtlasSize { get; }       // ARC A.1: directional shadow atlas px (8192 default; 6144/4096 = perf dial-down)
     AtmosphereCompute? Atmosphere { get; }   // C3 Unit 5: push extra suns to the sky-scatter LUTs
     TerrainLab? Terrain { get; }       // terrain material target for the analytic indirect-fill uniforms (relight #1)
     void OrientSun(DirectionalLight3D sun);   // orient + push sun to cloud/atmosphere (shared with the sun-angle sliders)
@@ -218,7 +219,7 @@ public sealed class LightingComposer
         // + cross-fade cascades so far texel density isn't starved.
         if (!_shadowTuned)
         {
-            RenderingServer.DirectionalShadowAtlasSetSize(8192, true);   // 4096→8192 = halve m/texel everywhere (perf lever — dial down once edges hold)
+            RenderingServer.DirectionalShadowAtlasSetSize(_host.ShadowAtlasSize, true);   // ARC A.1: tunable (8192 default; 6144/4096 dial-down — the in-motion shadow-spike lever)
             RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftHigh);   // PCF blur → dissolves texel "squares" cheaply
             // SSAO was the harsh "second shadow system": intensity 2.0 raked across the faceted 4 m mesh and read
             // as jagged shadows. Dial to subtle valley AO (the look fix); revisit when the higher-res CDLOD mesh lands.

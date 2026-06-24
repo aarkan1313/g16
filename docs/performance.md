@@ -68,6 +68,27 @@ work (next) now has to cover the larger radius; **the Task-3 fog coupling is the
 at the far ring can drop to a coarser LOD (flagged in the plan, not yet built). Tunables for the dial-down:
 `--loadring=N`, `--fogviewscale=F`, `--lookahead=S` (+ Debug-tab sliders).
 
+## 2026-06-24 (ARC A) — "optimize severely" deep-dive: cheap levers are EXHAUSTED (measured)
+
+> Ran the full in-motion decomposition + lever sweep on the current ARC-B build (R=2 default). HEADLINE: the
+> frame is already healthy on high-end (5.7 ms avg, under budget) and **every cheap config lever the prior
+> handoff named is a measured no-op.** Don't re-chase them. RTX 5090, `--cdlod=1 --profmove --profile=4`.
+
+| Lever tested | result | verdict |
+|---|---|---|
+| Shadow atlas 8192→6144→4096→2048 | 5.7 ms flat (2048 got *worse*) | **NO-OP** — shadow cost is caster-GEOMETRY re-raster, not atlas fill. Atlas stays 8192 (quality); `--shadowatlas=N` knob kept for mid-range VRAM. |
+| Shadow distance 6000→3000→1500 | 5.7 ms flat | **NO-OP** — cost is the NEAR cascades, not far casters. |
+| Clouds temporal 2→4→8 | ~0.1 ms | not worth the motion ghosting. |
+| Atmosphere / aerial / god-rays off | ~0.1 ms each | basically free. |
+| **SSAO on→off** | **0.8 ms avg / ~2 ms worst** | the ONE cheap lever — but quality dial-down (half-res / VeryLow / 0-blur / boot project-setting) is ALSO a no-op (fixed pass cost), and SSAO is currently INVISIBLE (smooth placeholder terrain, no crevices; on/off A/B identical at every vantage). Recommend CUT now, revisit with surfacing. |
+| Worst-case spike | noise-dominated | saw a one-off 149 ms hitch at temporal=4; the "worst frame" is not a reliable signal at this scale. |
+
+**Decomposition (clouds+shadow off = base 4.4 ms):** SSAO is ~0.8 of it; atmosphere/aerial/godrays ~0.1 each;
+irreducible floor ≈ **3.3 ms = mesh raster + ground fragment**. Real further wins are ARCHITECTURAL, not config:
+adaptive far-chunk grid resolution (every chunk is full GridN=65 today) + the 5×-redundant per-vertex field
+eval (4-tap FD normal → analytic gradient) — both in `docs/REVIEW-2026-06-24-improvement-vectors.md` (Area 3).
+New diagnostic tunables this pass: `--shadowatlas=N`, `--ssaoq/--ssaohalf/--ssaoblur` (inert at default).
+
 ## 2026-06-22 — SKY/LIGHT lane subsystem perf state-of-record (consolidated, not a fresh run)
 
 > Consolidates the **sky/atmosphere/cloud/light** subsystem costs that ARE measured + scattered across

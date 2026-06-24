@@ -137,6 +137,8 @@ public partial class TerrainLabUI : Control, ILightingHost
     // off (finite single mesh) so the composer keeps the plain mood fog. FogViewScale dials the coupled baseline.
     public float CdlodViewDistance => _terrain.CdlodActive ? _terrain.LoadRing * _params.RegionSizeM : 0f;
     public float FogViewScale { get; set; } = 1.0f;
+    // ARC A.1: directional shadow atlas size (px). 8192 default; 6144/4096 = the in-motion shadow-spike dial-down.
+    public int ShadowAtlasSize { get; set; } = 8192;
     // OrientSun + SyncLightControlsToScene are defined in TerrainLabUI.Apply.cs (now public to satisfy the
     // interface) — they stay there because they're shared with the sun-angle sliders + other callers.
 }
