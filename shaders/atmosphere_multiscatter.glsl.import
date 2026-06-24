@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dpr74vrc8dxr3"
+path="res://.godot/imported/atmosphere_multiscatter.glsl-27219d00b92a0063233d356464dfbaff.res"
+
+[deps]
+
+source_file="res://shaders/atmosphere_multiscatter.glsl"
+dest_files=["res://.godot/imported/atmosphere_multiscatter.glsl-27219d00b92a0063233d356464dfbaff.res"]
+
+[params]
+
