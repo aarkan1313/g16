@@ -44,6 +44,8 @@ public partial class TerrainLabUI : Control
     private bool _lastY;        // Y A/Bs the aerial haze fix (fade-to-sky vs old fade-to-black)
     private bool _aerialHazeOn = true;  // aerial haze fix on by default
     private bool _lastFillAb;   // I A/Bs the analytic indirect fill (relight #1)
+    private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)
+    private bool _hzOn;         // mirror of hz_on for the live toggle
     private bool _lodVizLive;   // V toggles the LOD-band tint live
     private bool _terrainCloudShadowOn = true;   // mirrors cloud_shadow_on (set true once the cloud RID is live); F5 flips it
     private bool _godraysOn = true;               // god rays default on; F6 flips it
@@ -261,6 +263,10 @@ public partial class TerrainLabUI : Control
                 bool kI = Input.IsKeyPressed(Key.I);
                 if (kI && !_lastFillAb) { _lighting.FillEnabled = !_lighting.FillEnabled; ComposeLighting(); GD.Print($"[dbg] (I) Indirect fill = {_lighting.FillEnabled}"); }
                 _lastFillAb = kI;
+                // P: A/B horizon shadows (long-range terrain self-shadow). Best seen at a LOW sun.
+                bool kP = Input.IsKeyPressed(Key.P);
+                if (kP && !_lastHzKey) { _hzOn = !_hzOn; _terrain.SetBool("hz_on", _hzOn); GD.Print($"[dbg] (P) Horizon shadows = {_hzOn}"); }
+                _lastHzKey = kP;
                 // V: live LOD-band tint toggle — flip on to see if the dot-rings line up with LOD boundaries.
                 bool kV = Input.IsKeyPressed(Key.V);
                 if (kV && !_lastF9) { _lodVizLive = !_lodVizLive; _terrain.SetCdlodViz(_lodVizLive); GD.Print($"[dbg] (V) LOD-band tint = {_lodVizLive}"); }
