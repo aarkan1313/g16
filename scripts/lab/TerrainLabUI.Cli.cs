@@ -10,8 +10,7 @@ namespace WG16.Lab;
 public partial class TerrainLabUI : Control
 {
     // Headless A/B capture + overrides (CLI verification), unchanged contract.
-    private string? _autoShotPath;
-    private double _autoShotT = -1.0;
+    private LabCliSequences _cliSeq = null!;   // Phase 1c: CLI capture/profile sequences (auto-shot/godrayab/fillab/profile/profmove)
     private int _overrideBlend = -1, _overrideMask = -1, _overrideTile = -1, _overrideMacro = -1, _overrideContact = -1;
     private int _overrideSplat = -1, _overrideSplatDebug = -1;
     private string? _camArg;
@@ -80,7 +79,7 @@ public partial class TerrainLabUI : Control
     {
         foreach (string a in OS.GetCmdlineUserArgs())
         {
-            if (a.StartsWith("--auto-shot=")) { _autoShotPath = a.Substring("--auto-shot=".Length); _autoShotT = 0.0; }
+            if (a.StartsWith("--auto-shot=")) { _cliSeq.ArmAutoShot(a.Substring("--auto-shot=".Length)); }
             else if (a.StartsWith("--blend=")) { int.TryParse(a.Substring("--blend=".Length), out _overrideBlend); }
             else if (a.StartsWith("--mask=")) { int.TryParse(a.Substring("--mask=".Length), out _overrideMask); }
             else if (a.StartsWith("--tile=")) { int.TryParse(a.Substring("--tile=".Length), out _overrideTile); }
@@ -113,8 +112,8 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--godrays=")) { _godraysOnCli = a.Substring("--godrays=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--godraydbg=")) { int.TryParse(a.Substring("--godraydbg=".Length), out _godrayDbgCli); }
             else if (a.StartsWith("--godrayhp=")) { float.TryParse(a.Substring("--godrayhp=".Length), out _godrayHpCli); }
-            else if (a.StartsWith("--godrayab=")) { _godrayAbPath = a.Substring("--godrayab=".Length); _godrayAbT = 0.0; }
-            else if (a.StartsWith("--fillab=")) { _fillAbPath = a.Substring("--fillab=".Length); _fillAbT = 0.0; }   // relight #1 drift-free fill A/B
+            else if (a.StartsWith("--godrayab=")) { _cliSeq.ArmGodrayAb(a.Substring("--godrayab=".Length)); }
+            else if (a.StartsWith("--fillab=")) { _cliSeq.ArmFillAb(a.Substring("--fillab=".Length)); }   // relight #1 drift-free fill A/B
             else if (a.StartsWith("--glow=")) { _glowCli = a.Substring("--glow=".Length) == "1" ? 1 : 0; }
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a == "--lookatmoon") { _lookAtMoonCli = true; }
@@ -159,7 +158,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--atmoexp=")) { float.TryParse(a.Substring("--atmoexp=".Length), out _atmoExpCli); }
             else if (a.StartsWith("--review=")) { int.TryParse(a.Substring("--review=".Length), out _reviewCli); }
             else if (a == "--meteordebug") { _meteorDebugCli = true; }
-            else if (a == "--profmove") { _profMove = true; }
+            else if (a == "--profmove") { _cliSeq.EnableProfMove(); }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--fieldcheck") { _fieldCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }
@@ -172,8 +171,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
             else if (a.StartsWith("--watercheck=")) { _waterCheck = a.Substring("--watercheck=".Length); }
             else if (MatchFlag(a, "--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
-            else if (a.StartsWith("--profile")) { _profileT = 0.0; if (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=')+1), out double d)) _profileDur = d;
-                DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled); Engine.MaxFps = 0; }
+            else if (MatchFlag(a, "--profile")) { double? dur = (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=') + 1), out double d)) ? d : (double?)null; _cliSeq.ArmProfile(dur); }
         }
     }
     private string? _waterCheck;   // --watercheck=<name> → run a HydrologyChecks self-check then quit

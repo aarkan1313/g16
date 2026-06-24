@@ -91,21 +91,7 @@ public partial class TerrainLabUI : Control
     {
         _lumCheck.Tick(delta);   // U2 numeric gate (--luminarycheck): no-op unless armed
 
-        // --profmove: orbit the camera during a profile so the MOTION costs (SDFGI cascade
-        // re-rasterization, shadow-frustum updates, cloud temporal reprojection, AR distance)
-        // are paid every frame — a static --profile lets them converge and understates flying.
-        if (_profMove && _profileT >= 0.0)
-        {
-            var pcam = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
-            float t = (float)_profileT;
-            float ang = t * 0.6f;                                   // ~0.6 rad/s orbit
-            var center = new Vector3(0f, 120f, 0f);
-            var pos = center + new Vector3(Mathf.Cos(ang) * 700f,
-                                           140f + 60f * Mathf.Sin(t * 0.3f),
-                                           Mathf.Sin(ang) * 700f);
-            pcam.GlobalPosition = pos;
-            pcam.LookAt(center, Vector3.Up);
-        }
+        _cliSeq.TickProfMove(delta);   // --profmove: orbit the camera during a profile (motion costs) — Phase 1c
 
         // S3.5 SPIKE driver (--aabbspike): pump the async provider; once the result lands, compare to a sync
         // FieldCompute.ProducePage min/max of the SAME footprint and print AABBSPIKE match=YES/NO, then quit.
@@ -343,93 +329,6 @@ public partial class TerrainLabUI : Control
             }
         }
 
-        if (_autoShotT >= 0.0 && _autoShotPath != null)
-        {
-            _autoShotT += delta;
-            if (_autoShotT > 1.5)
-            {
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_autoShotPath)!);
-                GetViewport().GetTexture().GetImage().SavePng(_autoShotPath);
-                // print steady-state frame-time for the perf gate (averaged over warm-up)
-                GD.Print($"TerrainLab: auto-shot -> {_autoShotPath}  (frame ~{Engine.GetFramesPerSecond():0} fps)");
-                _autoShotT = -1.0;
-                GetTree().Quit();
-            }
-        }
-
-        // --godrayab=<path>: drift-free A/B — capture <path>_on.png (god rays on), toggle them OFF, a few
-        // frames later capture <path>_off.png, quit. Same near-identical frame, so the diff is PURELY the
-        // god-ray pass (no cloud-shadow drift between separate launches confounding it).
-        if (_godrayAbT >= 0.0 && _godrayAbPath != null)
-        {
-            _godrayAbT += delta;
-            if (_godrayAbStage == 0 && _godrayAbT > 1.5)
-            {
-                Engine.TimeScale = 0.0;   // FREEZE the scene (clouds stop evolving) so OFF == ON except the god rays
-                GetViewport().GetTexture().GetImage().SavePng(_godrayAbPath + "_on.png");
-                _godraysScreen?.SetEnabled(false);
-                _godrayAbStage = 1; _godrayAbFrames = 0;
-            }
-            else if (_godrayAbStage == 1)
-            {
-                if (++_godrayAbFrames >= 2)
-                {
-                    GetViewport().GetTexture().GetImage().SavePng(_godrayAbPath + "_off.png");
-                    GD.Print($"TerrainLab: godray A/B -> {_godrayAbPath}_on.png / _off.png (2-frame gap)");
-                    _godrayAbT = -1.0;
-                    GetTree().Quit();
-                }
-            }
-        }
-
-        // --fillab=<path>: DRIFT-FREE indirect-fill A/B (relight #1). Freeze the day cycle so the sun can't
-        // move, capture fill ON, toggle FillEnabled OFF + recompose, capture, quit. The two frames differ
-        // ONLY by the fill term — no day-cycle confound (the SSIL-A/B lesson). Writes _fillon.png/_filloff.png.
-        if (_fillAbT >= 0.0 && _fillAbPath != null)
-        {
-            _fillAbT += delta;
-            if (_fillAbStage == 0 && _fillAbT > 1.5)
-            {
-                Engine.TimeScale = 0.0;                       // FREEZE: sun/day-cycle stop -> pure A/B
-                _lighting.FillEnabled = true; ComposeLighting();
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_fillAbPath)!);
-                GetViewport().GetTexture().GetImage().SavePng(_fillAbPath + "_fillon.png");
-                _lighting.FillEnabled = false; ComposeLighting();
-                _fillAbStage = 1; _fillAbFrames = 0;
-            }
-            else if (_fillAbStage == 1)
-            {
-                if (++_fillAbFrames >= 3)                     // let the recompose flush
-                {
-                    GetViewport().GetTexture().GetImage().SavePng(_fillAbPath + "_filloff.png");
-                    GD.Print($"TerrainLab: fillab -> {_fillAbPath}_fillon.png / _filloff.png (frozen)");
-                    _fillAbT = -1.0;
-                    GetTree().Quit();
-                }
-            }
-        }
-
-        // --profile=<secs>: warm up 1s, then average frame time, print fps + worst, quit
-        if (_profileT >= 0.0)
-        {
-            _profileT += delta;
-            if (_profileT > 1.0)
-            {
-                _profAccum += delta; _profFrames++;
-                _profWorst = Math.Max(_profWorst, delta);
-                if (_profileT > 1.0 + _profileDur)
-                {
-                    double avg = _profAccum / Math.Max(_profFrames, 1);
-                    GD.Print($"PROFILE: avg {1.0/avg:0} fps ({avg*1000:0.0} ms)  worst {1.0/_profWorst:0} fps ({_profWorst*1000:0.0} ms)  over {_profFrames} frames");
-                    _profileT = -1.0;
-                    GetTree().Quit();
-                }
-            }
-        }
+        _cliSeq.Tick(delta);   // Phase 1c: --auto-shot / --godrayab / --fillab / --profile capture+measure sequences
     }
-    private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage = 0; private int _godrayAbFrames = 0;
-    private string? _fillAbPath; private double _fillAbT = -1.0; private int _fillAbStage = 0; private int _fillAbFrames = 0;   // relight #1 fill A/B
-    private double _profileT = -1.0, _profileDur = 3.0, _profAccum = 0, _profWorst = 0;
-    private bool _profMove = false;   // --profmove: orbit camera during profile (motion cost)
-    private int _profFrames = 0;
 }

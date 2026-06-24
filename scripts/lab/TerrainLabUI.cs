@@ -77,6 +77,7 @@ public partial class TerrainLabUI : Control, ILabControls
         _aerial = new AerialPerspective { Name = "AerialPerspective" };       // AT-2 screen-space aerial perspective (deferred-add)
         CallDeferred(nameof(AttachClouds));
 
+        _cliSeq = new LabCliSequences(this, _godraysScreen, _lighting);   // Phase 1c: armed by ParseCli below
         ParseCli();
         InitSkyPresets();      // Phase 3a: build the SkyPresets library (sun/celestial/fantasy/mood) before any load/apply
         InitPresetsManager();  // Phase 3b: user-preset save/load (uses the lazy _luminaryList getter)
