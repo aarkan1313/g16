@@ -83,11 +83,11 @@ public partial class TerrainLabUI : Control, ILabControls
         InitPresetsManager();  // Phase 3b: user-preset save/load (uses the lazy _luminaryList getter)
         InitRandomizer();      // Phase 3c: randomize/lock logic (cloud-random injected as a delegate)
         InitReview();          // Phase 3d: eye-gate review controller (needs _sky/_lighting/_terrain + _nightGate)
-        LoadLibrary();
-        LoadGroundPalette();   // GM1: must run before LoadRegistry builds the material controls
+        LabRegistryLoader.LoadLibrary(_materials);
+        _groundPalette = LabRegistryLoader.LoadGroundPalette();   // GM1: before LoadRegistry builds material controls
         LoadMoods();
         LightingPresets.Load();   // Time/Weather/Grade presets + the day color script (decoupled lighting)
-        LoadRegistry();
+        LabRegistryLoader.LoadRegistry(RegistryPath, _controls, _byId, out _zoneNames);
         LoadLuminariesFromDisk();   // U2: data-driven bodies become the composer's source of truth (before compose)
         BuildPanel();
         ApplyAll();              // push all defaults to the shader (also fixes the .Value-doesn't-fire issue)
