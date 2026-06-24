@@ -6,6 +6,27 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-24 — Look-lab god-class decomposed (−40%) + audit hardening + perf reframe.** A big cleanup arc on
+`experiment/presentation` (all pushed, regression-validated):
+- **`TerrainLabUI` 3,214 → 1,943 LOC (−40%)** into **12 standalone classes** behind a narrow `ILabControls`
+  façade (the linchpin), via the **migration-shim pattern** (logic → real class, thin partial keeps the old
+  names so CLI/Registry/Review/`_Ready` compile unchanged — same pattern `LightingComposer` used). Why: it was
+  the audit's "central maintainability risk." What stays (coordinator core, extracting moves coupling without
+  reducing it): the panel-builder wiring hub, the `_Process` frame loop, the CLI appliers, the apply dispatch.
+- **Audit hardening — validated each, fixed only the real ones.** #7 infinite-world chunk-key cap (28-bit pack
+  COLLIDED past ±134,000 km → opaque 64-bit hash, no cap, ~1e-13 collision; key is never decoded so it's a
+  drop-in). #11 `--atmoscheck`/`--aerialcheck` now exit-code (were print-only → unscriptable). #13 CLI
+  parse-order hazard (`MatchFlag` order-independent matcher). #15 double-alloc. **#8 (unfenced AABB readback)
+  was a FALSE POSITIVE** — it's fenced + render-thread + throttled, i.e. the async path the audit said to use;
+  validating first saved wasted/risky work. One NRE regression (deferred-quit on an early-`_Ready` return)
+  caught by independent code review + fixed with a `_cliSeq == null` guard.
+- **Perf REFRAME (the big one).** The "~27.5 ms terrain-mesh floor" that drove the perf narrative was the
+  **CDLOD-OFF single mesh** — not the shipping path. Coordinated whole-frame `--profmove` run: **CDLOD-on in
+  motion = 6.5 ms avg / 20 ms worst**, and the worst-case spike is **shadow-map-dominated** (shadows-off drops
+  worst 20→10 ms). avg is already under the 8 ms budget. **Next arc = profile+optimize: CDLOD default-on (it's
+  off by default → bare launch is the slow finite mesh), then the shadow spike (8192 atlas dial-down).** Full
+  data: `docs/performance.md` 2026-06-24; plan: `docs/handoffs/2026-06-24-profile-optimize-start-here.md`.
+
 **2026-06-21 — #5 Shadow pass: findings + fixes (code-side; terrain-mesh part deferred to CDLOD).** Reviewed the
 shadow system in motion. Two defects + a process bug:
 - **Defect A — shadow quality jumps as the camera moves (CSM cascades).** Cause: default 4096 directional atlas

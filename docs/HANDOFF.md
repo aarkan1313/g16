@@ -1,7 +1,7 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-24 (terrain relight shipped + independent state-of-project audit run; §6 fully
-refreshed). **Refresh §6 each session.**
+Last updated: 2026-06-24 (look-lab god-class DECOMPOSED −40% + audit hardening + a whole-frame CDLOD-on
+profile that reframes the perf story; §6 refreshed). **Refresh §6 each session.**
 
 Written so a fresh chat with zero context gets productive immediately.
 
@@ -103,6 +103,15 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 >   Also fixed: **aerial fade-to-black** (`(1-aer.a)*aerial_haze` path-radiance term, key `Y`/`--aerialhaze`) and
 >   **SSIL@1.0 crushing the terrain** (disabled). The long "anti-sun shadows that appear when I turn" hunt
 >   **resolved as CORRECT directional lighting, not a bug** — see `docs/handoffs/2026-06-23-terrain-anti-sun-darkness-line.md`.
+> - **Look-lab god-class DECOMPOSED + audit hardening — this session (2026-06-24).** `TerrainLabUI` cut
+>   **3,214 → 1,943 LOC (−40%)** into **12 standalone classes behind an `ILabControls` façade** (SkyPresets,
+>   PresetsManager, LabRandomizer, LabReviewController, LuminaryCheckRunner, LabCliSequences, LabRegistryLoader,
+>   LabWidgetFactory, CloudPresets, LabShots + the lifted LabControl) via the migration-shim pattern — all
+>   behaviour-preserving, build-green, **regression-validated** (every `--*check` gate PASS + the 1-9 review
+>   presets eye-checked clean). Audit MEDIUM hardening: **#7** infinite-world chunk-key cap (28-bit pack → opaque
+>   hash; it was a ±134,000 km cap), **#11** atmos/aerial checks now exit-code, **#13** CLI parse-order hazard,
+>   **#15** double-alloc; **#8** (unfenced readback) validated a FALSE POSITIVE. One NRE regression (deferred-quit
+>   on an early-`_Ready` return) was caught by independent code review + fixed. All PUSHED (through `4a6736e`).
 >
 > **DERAILED / open:**
 > - **Water / rivers — the project GRAVEYARD.** 5 approaches rejected at the user's eye-gate (pipe-model erosion;
@@ -118,15 +127,23 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 >   full per-pixel / texture-array / placement system is DESIGNED, not built — correctly sequenced LAST (it
 >   consumes the hydrology substrate's material/wetness output).
 >
-> **Known-open real problems:** short-range sun shadows on CDLOD terrain (distant hills cast ~nothing — relight
-> spec sub-project #2, not started); terrain-mesh perf floor (~27.5 ms, mesh-bound; CDLOD bounded but didn't
-> eliminate worst-case spikes); renderOrigin **snap-pop** every 8192 m (memory ambiguous — verify before trusting
-> "fixed"); **60+ commits unpushed to origin**.
+> **Known-open real problems:** (1) **terrain-mesh perf was MISFRAMED** — the "~27.5 ms floor" is the CDLOD-OFF
+> single mesh; CDLOD-on in motion is **~6.5 ms avg / 20 ms worst** and the worst-case spike is **shadow-map-
+> dominated** (full decomposition in `performance.md` 2026-06-24). (2) **CDLOD is OFF by default** in
+> `terrain_lab.tscn` (`_enabled=false`, no `SetCdlod` at launch) → a bare launch shows the slow finite mesh ("it
+> wasn't infinite"); use `--cdlod=1` or press **T**, or make it default-on. (3) short-range sun shadows on CDLOD
+> terrain (distant hills cast ~nothing — relight spec #2, not started). (4) renderOrigin snap-pop: `--snapdiff`
+> PASSES (seamless) — trust it. (5) ⚠ **cross-chat build entanglement** — committed `Cli.cs` references the water
+> chat's UNCOMMITTED `WaterRenderer`/`WorldWaterRegion`, so origin doesn't build standalone (theirs to resolve).
+> Commits are PUSHED through `4a6736e`.
 >
-> **▶ NEXT (ranked, from the 2026-06-24 audit):** (1) resolve the uncommitted ribbon-river WIP, then brainstorm
-> rivers with the user (ONE agreed approach, minimum to eye-gate); (2) relight **sub-project #2 = long-range cast
-> shadows**; (3) push to origin; then pick the next PILLAR deliberately — with water blocked, **biomes** is the
-> cleaner next lane (the terrain is already biome-ready: a manifest = a biome), full surfacing after hydrology.
+> **▶ NEXT (USER DIRECTIVE 2026-06-24): PROFILE + OPTIMIZE SEVERELY before going back to water.** The arc:
+> (1) make CDLOD default-on (flips the default 25→6.5 ms); (2) kill the 20 ms in-motion worst-case SPIKE —
+> **shadow-map first** (8192→4096/6144 atlas dial-down + amortize the cascade re-raster across frames / drop the
+> finest LOD from far cascades), then clouds temporal stride, then the chunk-birth/async-AABB base spike;
+> (3) decompose for mid-range HW (scale ~2.5–4×). **Start-here: `docs/handoffs/2026-06-24-profile-optimize-start-here.md`.**
+> THEN water (resolve the uncommitted ribbon-river WIP + brainstorm ONE approach before grinding — STOP criterion
+> in force) / **biomes** (terrain is biome-ready) / relight #2 long-range shadows.
 >
 > Prior 2026-06-20/21 state (both-lanes-paused; AT-2 gate; ground G-0) is SUPERSEDED — see `docs/AUDIT-2026-06-21.md`
 > + git log for history.

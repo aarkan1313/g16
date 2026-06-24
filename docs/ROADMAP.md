@@ -4,9 +4,12 @@ The single source of truth for what's done, what's being judged, and what's next
 design. Pairs with `NEEDS_REVIEW.md` (the eye-gate queue), `DECISIONS.md` (the why, per
 decision), and `HANDOFF.md` (orientation). Superseded designs are frozen in `docs/archive/`.
 
-Last updated: 2026-06-21 (full project audit + ground/texture iterate-vs-rebuild review reconciled in:
-see `docs/AUDIT-2026-06-21.md`, the new **🛠 Debt & Remediation backlog** below, and the rewritten
-**Ground / Texture** lane). Prior: 2026-06-20 full-scope re-roadmap.
+Last updated: 2026-06-24. **Current state + next live in `HANDOFF.md` §6** (canonical) — the lanes below are
+the standing backlog. Since 2026-06-21: terrain RELIGHT + HORIZON SHADOWS shipped; the look-lab god-class was
+DECOMPOSED (`TerrainLabUI` −40%, 12 classes behind `ILabControls`) + audit hardening done (`AUDIT-2026-06-24.md`
+Part 5); a whole-frame profile REFRAMED perf — the "~27.5 ms floor" was the CDLOD-OFF single mesh; CDLOD-on in
+motion is ~6.5 ms avg, the worst-case spikes are shadow-dominated. **▶ NEXT = PROFILE + OPTIMIZE SEVERELY**
+before water (`docs/handoffs/2026-06-24-profile-optimize-start-here.md`). Prior: `docs/AUDIT-2026-06-21.md`.
 
 **Pillars:** quality = performance = AAA-ish = best-long-term — regardless of time cost. Lead
 with the better option, not the cheap shortcut.

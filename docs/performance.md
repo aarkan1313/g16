@@ -20,6 +20,36 @@ Profiling probes: `--clouds=0/1`, `--godrays=0/1`, `--temporal=N`, `--cloudtex=H
 Caveat: the laptop GPU thermally throttles after many back-to-back runs — space runs out / trust
 reproduced numbers, and treat single wild outliers as hitches.
 
+## 2026-06-24 — WHOLE-FRAME in-motion decomposition, CDLOD ON (resolves the long-"owed #1" coordinated run)
+
+> The terrain chat is idle (CDLOD shipped; the look-lab god-class was decomposed this session), so the
+> owed coordinated `--profmove` whole-frame run is finally takeable. **HEADLINE: the long-standing "frame is
+> TERRAIN-MESH-BOUND at ~27.5 ms" conclusion was the SINGLE 4.19M-vert MESH (CDLOD OFF) — which is NOT the
+> shipping streaming path.** With CDLOD on (the real game), the in-motion frame is **~6.5 ms avg**. The perf
+> problem is no longer a mesh floor — it's the **worst-case SPIKES in motion**, and they're SHADOW-dominated.
+
+RTX 5090 laptop, uncapped, `--cdlod=1 --profmove --profile=4`, default-on (scale ~2.5–4× for mid-range):
+
+| Config (CDLOD on, moving) | avg ms (fps) | worst ms (fps) | reading |
+|---|---|---|---|
+| **default (all on)** | **6.5 (153)** | **20.0 (50)** | the real shipped game |
+| clouds off | 6.1 (165) | 18.1 (55) | clouds ≈ 0.4 avg / ~2 ms of the spike |
+| shadows off | 5.2 (194) | **10.2 (98)** | **shadows ≈ 1.3 avg / ~10 ms of the WORST-CASE SPIKE** |
+| clouds + shadows off | 4.5 (221) | 8.5 (117) | base = mesh raster + fragment + CDLOD/async-AABB |
+| — CDLOD **OFF** (single mesh, the launch DEFAULT) | **25.1 (40)** | 28.8 (35) | the old "27.5 ms floor" — NOT the ship path |
+
+**Takeaways (the optimization arc's targets):**
+- **avg (6.5 ms) is already under the 8 ms world budget on the 5090.** The story is now spikes, not floor.
+- **The 20 ms worst-case SPIKE is SHADOW-MAP-dominated (~10 ms of it):** the 8192² directional atlas re-rasters
+  the CDLOD chunks as they're born/morph in motion. This is exactly the **"8192→4096/6144 atlas dial-down"**
+  lever owed since 2026-06-22 — now with a measured spike to justify it. Also consider amortizing the cascade
+  re-raster across frames, or excluding the finest CDLOD level from the far cascades.
+- Clouds add ~2 ms to the spike (temporal-stride lever). The residual ~8.5 ms base spike is chunk-birth /
+  async-AABB tighten / floating-origin snap (the CDLOD lane's own hot path).
+- **⚠ CDLOD is OFF by default in `terrain_lab.tscn`** (`CdlodTerrain._enabled=false`, nothing calls `SetCdlod`
+  at launch) → a bare launch shows the slow 25 ms single mesh, and "it wasn't infinite." **The arc should FIRST
+  make CDLOD default-on** (flips the default 25→6.5 ms), THEN attack the shadow spike. ~3-line change.
+
 ## 2026-06-22 — SKY/LIGHT lane subsystem perf state-of-record (consolidated, not a fresh run)
 
 > Consolidates the **sky/atmosphere/cloud/light** subsystem costs that ARE measured + scattered across
