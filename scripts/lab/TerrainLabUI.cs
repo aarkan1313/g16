@@ -11,7 +11,7 @@ namespace WG16.Lab;
 /// defined in data/lab_controls.json and built from a registry. Tabs + per-tab
 /// scroll keep it on-screen; each control has a lock; a Randomizer rolls all
 /// unlocked controls. Drives TerrainLab live. Presets persist values + locks.
-public partial class TerrainLabUI : Control
+public partial class TerrainLabUI : Control, ILabControls
 {
     private const string PresetsPath = "user://terrain_presets.json";
     private const string RegistryPath = "res://data/lab_controls.json";
@@ -38,25 +38,9 @@ public partial class TerrainLabUI : Control
     private LivePopMeter _popMeter;
     private Label _popMeterLabel;
 
-    /// One control: parsed registry fields + runtime state.
-    private sealed class LabControl
-    {
-        public string Id = "", Label = "", Tab = "", Type = "";
-        public string? Param, Setter, Field, Scene, Cloud;  // shader uniform / mode-setter / TerrainLab field / scene-node target / CloudVolume knob
-        public float Min, Max, Default;
-        public bool DefBool;
-        public Color DefColor = new(1f, 1f, 1f);   // for type "scenecolor"
-        public string[] Options = Array.Empty<string>();
-        public bool Rand = true, Rebake;
-        public int Zone = -1;                     // for material/companion (0..6), else -1
-        public string? ItemSchema, DataPath;      // for type "objectlist" (U2): schema name + data array file
-        public int MinItems = 1, MaxItems = 7;    // for type "objectlist": list bounds
-        public Variant Value;                     // current value
-        public bool Locked;
-        public CheckBox? LockBox;
-        public Control? Widget;                   // the editing control (slider/checkbox/dropdown)
-        public Label? ValLabel;
-    }
+    // LabControl lifted to its own top-level file (LabControl.cs) in decomposition Phase 2.
+    // ILabControls implementation (the narrow registry façade for extracted modules) is in
+    // TerrainLabUI.Apply.cs next to SetWidgetValue, the method it forwards to.
 
     public override void _Ready()
     {

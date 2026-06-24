@@ -249,4 +249,12 @@ public partial class TerrainLabUI : Control
         _ready = wasReady;
         ApplyControl(c, false);
     }
+
+    // ---- ILabControls (decomposition Phase 2): the narrow registry façade extracted modules use.
+    // Thin wrappers over the existing registry fields/methods — no behavior change.
+    bool ILabControls.IsReady { get => _ready; set => _ready = value; }
+    IReadOnlyList<LabControl> ILabControls.Controls => _controls;
+    bool ILabControls.TryGet(string id, out LabControl c) => _byId.TryGetValue(id, out c!);
+    void ILabControls.SetValue(LabControl c, Variant v) => SetWidgetValue(c, v);
+    void ILabControls.SetValueSilent(LabControl c, float v) => SetWidgetValueSilent(c, v);
 }
