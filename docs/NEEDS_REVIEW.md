@@ -43,6 +43,30 @@ Last updated: 2026-06-21 (added 1e ground "wrong-defaults" gate + 11 AT-1/AT-2 a
 
 ## 🟥 P1 — blocks the active arc
 
+### ⚑ 0c. ARC B — infinite-streaming pop-fix — ✅ CURSORY PASS 2026-06-24 (live, "looked alright"); deep tune deferred post-perf
+Built: CDLOD default-on + load ring R(=2, 5×5) + window hysteresis + fog↔load-radius coupling + velocity-
+predictive loading (commits `eb444a8`→`8d21978`; spec/plan `2026-06-24-infinite-streaming-popfix*`). All
+`--*check` gates PASS at R=2 (StreamCheck sweeps R∈{1,2,3}); `--testpath=0` invariant=PASS under velocity.
+Re-profiled **6.1 ms avg / 13.9 ms worst** (orbit), 8.2/14.6 fast-fly (+0.4/+1.1 ms over the old 3×3).
+**VERDICT (live, R=3 + fog×1.5 window):** "i think it looked alright … we are doing well." Cursory glance only.
+**TUNING DEFERRED to AFTER the perf arc (ARC A)** — the user's north-star: **as LITTLE fog as possible while
+seeing as FAR as possible, with NO perceptible detail loss.** That = more full-detail rings = more cost, so it
+needs the shadow/perf optimization first, THEN push the load ring to the limit against a fast baseline. Default
+stays **R=2 / fog_view_scale 1.0** (the profiled baseline the perf arc inherits); R=3+ is the post-perf push.
+- **How to see it:** `terrain_lab.tscn` (CDLOD now on by default — no flag). Fly high + fast toward the
+  horizon. Debug tab has live sliders: **CDLOD load ring** (1=3×3 … 4), **fog vs load-radius** (0=off…3),
+  **predictive load (s)**.
+- **What to judge (3 things, in motion):**
+  1. **No strip-pop / fade-up:** far terrain resolves UP out of haze as you approach — never a hard 8 km
+     strip snapping in at the leading edge. A/B by setting `fog vs load-radius` → 0 (coupling off) to see
+     the boundary it's masking.
+  2. **No thrash:** hover/oscillate the camera back and forth across a region seam — no strip should flicker
+     load/unload (the hysteresis dead-band).
+  3. **Loader stays ahead:** fly FAST in one straight direction — the world stays loaded ahead of you, you
+     can't outrun it into empty space (predictive bias). Set `predictive load` → 0 to compare.
+- **Unblocks:** the look sign-off on the infinite world → then **ARC A** (shadow-spike optimization on this
+  expanded radius). Record the verdict here + a `DECISIONS.md` line.
+
 ### 0. Compositing core — eye-gated 2026-06-19 (plan `plans/2026-06-19-terrain-compositing-core.md`)
 - **Phase A (Blend quality) ✅ APPROVED + SHIPPED (default).** User flying it: "weightmap is good! it
   actually looks good." Bake emits 7 smooth role weights → two linear Rgba8 weightmaps; fragment picks

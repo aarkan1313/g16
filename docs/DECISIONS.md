@@ -6,6 +6,12 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-24 — ARC B cursory eye-gate PASS; deep tuning deferred to post-perf.** User flew the R=3+fog×1.5
+window: "i think it looked alright … we are doing well." Cursory glance, not a hard gate. **North-star for the
+eventual tuning: minimum fog while seeing maximum distance with NO perceptible detail loss** — which means more
+full-detail rings = more cost, so it's correctly sequenced AFTER ARC A (perf). Default stays **R=2 /
+fog_view_scale 1.0** (the profiled baseline); pushing the load ring to its limit is a post-perf pass.
+
 **2026-06-24 — ARC B infinite-streaming pop-fix SHIPPED (all 4 tasks).** Built the spec'd+planned fix on
 `experiment/presentation` (commits `034c210`/`1d8a115`/`dd3bf40`/`8d21978`, after CDLOD default-on `eb444a8`):
 - **Task 1 — load ring R** (`CdlodQuadtree.Ring` → (2R+1)² block; `CdlodTerrain.LoadRing` default 2 = 5×5;
