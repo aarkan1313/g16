@@ -169,6 +169,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--review=")) { int.TryParse(a.Substring("--review=".Length), out _reviewCli); }
             else if (a == "--meteordebug") { _meteorDebugCli = true; }
             else if (a == "--profmove") { _cliSeq.EnableProfMove(); }
+            else if (a.StartsWith("--profspeed=")) { if (float.TryParse(a.Substring("--profspeed=".Length), System.Globalization.CultureInfo.InvariantCulture, out float ps)) _cliSeq.SetProfSpeed(ps); }
             else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--fieldcheck") { _fieldCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }

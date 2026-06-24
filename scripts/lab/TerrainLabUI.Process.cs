@@ -172,7 +172,10 @@ public partial class TerrainLabUI : Control
             //     sky-lane's world-anchored cloud/shadow/aerial math is unchanged.
             // When CDLOD is off (single full mesh at true origin), renderOrigin stays 0 → this is a no-op.
             Vector3 renderOrigin = _terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero;
-            Vector3 camPos = camN.Position + renderOrigin;   // TRUE world camera position
+            // --profmove drives a TRUE-world traverse: take its position directly (NOT camN.Position+renderOrigin,
+            // which would re-add renderOrigin to an already-true value → per-frame snap runaway once it leaves
+            // cell 0). The co-location below puts camN back into the render frame so the render is correct.
+            Vector3 camPos = _cliSeq.ProfMoveActive ? _cliSeq.ProfTruePos : camN.Position + renderOrigin;   // TRUE world camera position
             _terrain.SetCameraWorld(camPos);
             // ARC B Task 4: smoothed TRUE-world XZ velocity (m/s) → predictive loading bias. camPos is continuous
             // across renderOrigin snaps, so a frame delta is clean. Frozen scene (TimeScale=0 → delta≈0) → vel 0.
@@ -183,10 +186,16 @@ public partial class TerrainLabUI : Control
             }
             _lastCamVelPos = camPos; _camVelInit = true;
             _terrain.CdlodTick(camPos, _camVelSmoothed);   // S2a: rebuild the visible chunk set; S3: snaps the new renderOrigin
+            Vector3 newOrigin2 = _terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero;   // may have snapped inside CdlodTick
             if (_terrain.CdlodActive)
             {
-                Vector3 newOrigin = _terrain.CdlodRenderOrigin;   // may have snapped inside CdlodTick
-                camN.Position = camPos - newOrigin;               // co-locate the camera with the render frame
+                camN.Position = camPos - newOrigin2;              // co-locate the camera with the render frame
+            }
+            // --profmove: aim the camera along the traverse, in the RENDER frame (look target − origin).
+            if (_cliSeq.ProfMoveActive)
+            {
+                Vector3 look = _cliSeq.ProfLookTarget - newOrigin2;
+                if ((look - camN.Position).LengthSquared() > 0.001f) { camN.LookAt(look, Vector3.Up); }
             }
             // Water meshes are authored in TRUE world XZ; shift the node by −renderOrigin so they line up with
             // the render-relative terrain (same floating-origin frame as the CDLOD chunks).

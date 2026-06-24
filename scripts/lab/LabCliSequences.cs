@@ -21,6 +21,7 @@ public sealed class LabCliSequences
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum, _profWorst;
     private int _profFrames;
     private bool _profMove;
+    private float _profSpeed = 1200f;   // --profspeed= forward m/s for the border-crossing traverse
 
     public LabCliSequences(Node host, GodRaysScreen? godrays, LightingComposer lighting)
     {
@@ -34,6 +35,7 @@ public sealed class LabCliSequences
     public void ArmGodrayAb(string path) { _godrayAbPath = path; _godrayAbT = 0.0; }
     public void ArmFillAb(string path) { _fillAbPath = path; _fillAbT = 0.0; }
     public void EnableProfMove() => _profMove = true;
+    public void SetProfSpeed(float mps) { if (mps > 0f) { _profSpeed = mps; } }
     public void ArmProfile(double? dur)
     {
         _profileT = 0.0;
@@ -42,23 +44,36 @@ public sealed class LabCliSequences
         Engine.MaxFps = 0;
     }
 
-    /// --profmove: orbit the camera during a profile so MOTION costs (SDFGI cascade re-raster, shadow-frustum
-    /// updates, cloud temporal reprojection) are paid every frame — a static --profile understates flying.
-    /// Called at the TOP of _Process (before the floating-origin frame), as in the original.
+    /// --profmove: fly the camera along a BORDER-CROSSING TRAVERSE during a profile so the REAL streaming costs
+    /// are paid every frame — renderOrigin snaps (every 8192 m of travel), leading-edge chunk births, window
+    /// shifts in both axes, and LOD churn — NOT just steady-state. The old 700 m orbit never left its home cell
+    /// (zero snaps, zero window shifts) and badly understated flying. This path:
+    ///   • forward translation (X = spd·t) → a renderOrigin SNAP every 8192 m + continuous leading-edge births;
+    ///   • lateral serpentine (Z, amplitude > one region) → crosses Z region/chunk borders, shifts the window in Z;
+    ///   • altitude oscillation → varies LOD selection / chunk count / shadow coverage;
+    ///   • camera faces the direction of travel (samples the path slightly ahead) → the real player view, with
+    ///     terrain resolving toward the camera (where pop/stream artifacts actually show).
+    /// Use a longer window (e.g. --profile=8) so several borders are crossed inside the measured interval.
+    /// Tunable via --profspeed= (forward m/s; default 1200). Called at the TOP of _Process (before the
+    /// floating-origin frame), as in the original.
+    public bool ProfMoveActive => _profMove && _profileT >= 0.0;
+    public Vector3 ProfTruePos { get; private set; }       // desired TRUE-world camera position this frame
+    public Vector3 ProfLookTarget { get; private set; }    // TRUE-world look target (direction of travel)
+
+    /// Compute the traverse pose in TRUE world space and STORE it (does NOT touch the camera node — the
+    /// floating-origin block in _Process consumes ProfTruePos directly so renderOrigin isn't double-counted;
+    /// the prior version set GlobalPosition to the true pos, which the `camPos = camN.Position + renderOrigin`
+    /// reconstruction then re-added renderOrigin to → a per-frame snap runaway once the path left cell 0).
     public void TickProfMove(double delta)
     {
-        if (_profMove && _profileT >= 0.0)
-        {
-            var pcam = _host.GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
-            float t = (float)_profileT;
-            float ang = t * 0.6f;                                   // ~0.6 rad/s orbit
-            var center = new Vector3(0f, 120f, 0f);
-            var pos = center + new Vector3(Mathf.Cos(ang) * 700f,
-                                           140f + 60f * Mathf.Sin(t * 0.3f),
-                                           Mathf.Sin(ang) * 700f);
-            pcam.GlobalPosition = pos;
-            pcam.LookAt(center, Vector3.Up);
-        }
+        if (!ProfMoveActive) { return; }
+        float t = (float)_profileT;
+        Vector3 PathAt(float tt) => new Vector3(
+            _profSpeed * tt,                       // forward → region snaps every 8192 m + leading-edge births
+            900f + 180f * Mathf.Sin(tt * 0.27f),   // altitude 720..1080 m (clears the 639 m peaks) → LOD/chunk/shadow churn
+            8500f * Mathf.Sin(tt * 0.35f));        // lateral serpentine (>1 region) → Z border crossings + window shifts
+        ProfTruePos = PathAt(t);
+        ProfLookTarget = PathAt(t + 0.15f);        // look in the direction of travel (terrain rushes toward view)
     }
 
     /// The capture + profile sequences. Called at the BOTTOM of _Process (after the frame's work), as in the
@@ -140,6 +155,9 @@ public sealed class LabCliSequences
                 {
                     double avg = _profAccum / Math.Max(_profFrames, 1);
                     GD.Print($"PROFILE: avg {1.0 / avg:0} fps ({avg * 1000:0.0} ms)  worst {1.0 / _profWorst:0} fps ({_profWorst * 1000:0.0} ms)  over {_profFrames} frames");
+                    // Streaming churn over the measured window (validates the traverse crossed borders + quantifies it).
+                    var cd = _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
+                    if (cd != null && cd.Enabled) { GD.Print($"PROFILE-STREAM: snaps={cd.TotalSnaps} births={cd.TotalBirths} activeChunks={cd.ActiveCount} (cumulative since enable)"); }
                     _profileT = -1.0;
                     _host.GetTree().Quit();
                 }

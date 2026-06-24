@@ -68,7 +68,39 @@ work (next) now has to cover the larger radius; **the Task-3 fog coupling is the
 at the far ring can drop to a coarser LOD (flagged in the plan, not yet built). Tunables for the dial-down:
 `--loadring=N`, `--fogviewscale=F`, `--lookahead=S` (+ Debug-tab sliders).
 
-## 2026-06-24 (ARC A) — "optimize severely" deep-dive: cheap levers are EXHAUSTED (measured)
+## 2026-06-24 (ARC A-2) — REAL flying cost: the FULL per-feature cost list on a border-crossing traverse
+
+> ⚠ **This SUPERSEDES the orbit numbers below for the real frame cost.** The old `--profmove` was a 700 m
+> circle that never left its home region cell — zero renderOrigin snaps, look-DOWN at a small patch → it
+> understated the frame by ~2×. Rebuilt `--profmove` as a **border-crossing forward-facing traverse** (forward
+> translation + lateral serpentine >1 region + altitude 720-1080 m clearing the 639 m peaks, facing direction of
+> travel) + snap/birth instrumentation (`PROFILE-STREAM:`). Found+fixed a profmove×floating-origin **runaway**
+> (it set true-world GlobalPosition which the `camN.Position+renderOrigin` reconstruction re-added → a per-frame
+> snap escalation once it left cell 0; the apparent "holes at speed" was the same artifact, not a real loader
+> limit). RTX 5090, `--cdlod=1 --profmove --profile=8 --profspeed=800` (fully loaded, ~570 chunks, 4 snaps,
+> ~6 births/frame). Mid-range ≈ ×2.5-4.
+
+| Contributor | avg ms | of frame | how measured (toggle) | notes |
+|---|---|---|---|---|
+| **Shadows (CSM)** | **2.6** | 26% | `--shadow=0` | biggest single feature. Atlas 8192→4096 + dist 6000→1500 BOTH no-ops (caster-geometry / near-cascade bound). Real lever = drop finest LOD from far cascades (architectural). |
+| **Base floor** | **3.7** | 37% | `--shadow=0 --clouds=0 --ssao=0` | mesh raster + ground fragment + streaming. Levers: analytic-gradient normal (5×→1.4× field eval), adaptive far-chunk grid. |
+| **SSAO** | **1.8** | 18% | `--ssao=0` | screen-space → scales with terrain screen-coverage (forward view = full screen, hence 1.8 not the orbit's 0.8). **Currently INVISIBLE** (smooth placeholder terrain). Quality dial-down is a no-op (fixed pass cost). **Cut = free 1.8 ms (×3 mid = 5.4 ms).** |
+| **Clouds (volumetric)** | **1.7** | 17% | `--clouds=0` | temporal stride ~free in avg; the cost is the screen raymarch. |
+| Atmosphere AT-1 | ~0 | — | `--atmosphere=0` | free |
+| Aerial AT-2 | ~0 | — | `--aerial=0` | free |
+| God rays | ~0 | — | `--godrays=0` | free |
+| — Load ring (per step) | ~0.5 | — | `--loadring=1/2/3` | R1=9.5 / R2=10.0 / R3=10.5 ms (486/572/620 chunks). The north-star "more rings" = +0.5 ms/ring until per-chunk cost drops. |
+| — Async AABB tighten | ~0 (net +) | — | `--notighten` | ~free; net slightly positive (tightens shadow-cascade AABBs). |
+| — Predictive / snaps / births | ~0 | — | `--lookahead=0` | cheap in steady flight (4 snaps + ~6 births/frame). |
+| **TOTAL (default, all on)** | **10.0** | 100% | — | **worst 12.8 ms. OVER the 8 ms budget on a 5090; ~25-40 ms mid-range.** |
+
+**The reframe (again):** the orbit's "frame is healthy 5.7 ms" was wrong — real forward flight is **10.0 ms, over
+budget.** Three screen-coverage passes (shadows 2.6 + SSAO 1.8 + clouds 1.7 = 6.1 ms) are 60% of it. Ranked
+actions: **(1) cut SSAO** (−1.8 ms, invisible now — the clear free win); **(2) shadows** need the caster-geometry
+approach (atlas/dist are dead); **(3) clouds** raymarch step/res tuning; **(4) base** via the geometry-review
+analytic-normal + adaptive-LOD work. New profiler knobs: `--profspeed=`, `PROFILE-STREAM:` snap/birth readout.
+
+## 2026-06-24 (ARC A) — "optimize severely" deep-dive: cheap levers are EXHAUSTED (measured) [ORBIT — understated, see ARC A-2 above]
 
 > Ran the full in-motion decomposition + lever sweep on the current ARC-B build (R=2 default). HEADLINE: the
 > frame is already healthy on high-end (5.7 ms avg, under budget) and **every cheap config lever the prior

@@ -67,6 +67,8 @@ public sealed partial class CdlodTerrain : Node3D
     public float PredictLookahead = 3.0f;   // ARC B Task 4: seconds of camera velocity to bias the window-center
                                             // forward by (loads INTO the direction of travel so you can't outrun it; 0 = off)
     public int RetireGrace = 2;       // S3.6: frames a chunk may be unseen before retiring (bridges the budget-deferred birth hole without leaking; >=2 retires)
+    public int TotalSnaps, TotalBirths;   // perf instrumentation (cumulative since enable); active chunk count = ActiveCount
+    public int ActiveCount => _active.Count;
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
     // DOWN to _coarseSnap so render-relative coords stay bounded (no float drift) AND the field samples
@@ -158,6 +160,7 @@ public sealed partial class CdlodTerrain : Node3D
         // frame. Snaps are rare (every 8192 m of travel), so this is a once-per-snap cost, not per-frame.
         bool snapped = _renderOrigin.X != _lastRenderOrigin.X || _renderOrigin.Z != _lastRenderOrigin.Z;
         _lastRenderOrigin = _renderOrigin;
+        if (snapped) { TotalSnaps++; }   // perf instrumentation: real renderOrigin snaps (8192 m crossings, pre-force)
 
         _qt.Ring = LoadRing;   // ARC B Task 1: live-tunable load-ring radius (slider/CLI → takes effect next select)
         // ARC B Task 4: bias the window center forward by the camera velocity (clamped to ~1.5 cells so a wild
@@ -199,6 +202,7 @@ public sealed partial class CdlodTerrain : Node3D
                 ApplyChunk(ns, c, key, snapped: true);   // new slot → apply everything (treat as snapped)
             }
         }
+        TotalBirths += births;   // perf instrumentation: cumulative chunk births (streaming churn)
 
         // Retire slots not seen this frame → hide + return to the free-list (NOT freed; reused next birth).
         // VANISHING-CHUNK FIX (grace period): a chunk gets RetireGrace frames of being unseen before it's
