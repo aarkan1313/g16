@@ -6,6 +6,15 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-24 — CDLOD is now DEFAULT-ON (perf arc step 0; ARC B precondition).** Flipped `_cdlodCli` default
+`-1 → 1` in `TerrainLabUI.Cli.cs` so a bare launch shows the **infinite quadtree**, not the finite single mesh.
+Why: the shipping path is CDLOD (25 ms finite mesh → 6.5 ms avg streaming); the old off-default was why the user
+found "it wasn't infinite." `--cdlod=0` still forces the single mesh for A/B. NOTE: `TerrainLabUI` backs BOTH
+`terrain_lab.tscn` and `review.tscn`, so the review scene now streams too — more representative (CDLOD is
+shipped) and it doesn't touch the look levers the 1-9 gates judge; re-verify the review presets in the sweep.
+Confirmed at launch (log: "CDLOD ON (quadtree)", terrain renders, infinite horizon). This unblocks ARC B, whose
+plan assumes "CDLOD is ON".
+
 **2026-06-24 — Infinite-streaming pop-in fix: spec'd + planned (queued, not yet built).** The "regions visibly
 load/pop in" = `SelectRoaming` loads a cell-aligned 3×3 block of 8192 m root cells, so crossing a cell boundary
 (every 8192 m) shifts the block and pops an 8192 m strip. Four modular+tunable fixes: bigger load ring (R,

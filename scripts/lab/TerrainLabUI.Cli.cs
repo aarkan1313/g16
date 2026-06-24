@@ -65,7 +65,10 @@ public partial class TerrainLabUI : Control
     private int _analyticCli = -1;   // --analytic[=0|1] → S1 ground source: live field vs baked (default: leave shader default ON)
     private int _texturesCli = -1;   // --textures[=0|1] → minimal surfacing slice on/off at startup
     private bool _cdlodTestCli;      // --cdlodtest → S2a Task-1 sanity: one full-region chunk instance
-    private int _cdlodCli = -1;      // --cdlod[=1] → S2a quadtree terrain instead of the single mesh
+    // CDLOD is DEFAULT-ON (perf arc step 0, 2026-06-24): the shipping path is the infinite quadtree, not the
+    // finite single mesh (a bare launch used to show the slow 25 ms finite mesh → "it wasn't infinite"). Default
+    // 1 = on; --cdlod=0 still forces the single mesh. Apply at TerrainLabUI.Cli.cs:~245 fires when >= 0.
+    private int _cdlodCli = 1;       // --cdlod[=0|1] → infinite quadtree terrain (default) vs the single mesh
     private int _testPathCli = -1;   // --testpath=N → run S2b LOD-crossing test path N (0-based) headlessly, then quit
     private int _lodVizCli = -1;     // --lodviz[=1] → tint chunks by LOD level
 
