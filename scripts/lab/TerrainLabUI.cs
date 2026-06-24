@@ -82,6 +82,7 @@ public partial class TerrainLabUI : Control, ILabControls
         InitSkyPresets();      // Phase 3a: build the SkyPresets library (sun/celestial/fantasy/mood) before any load/apply
         InitPresetsManager();  // Phase 3b: user-preset save/load (uses the lazy _luminaryList getter)
         InitRandomizer();      // Phase 3c: randomize/lock logic (cloud-random injected as a delegate)
+        InitCloudPresets();    // cloud preset library (logic in CloudPresets.cs; picker built in BuildPanel)
         InitReview();          // Phase 3d: eye-gate review controller (needs _sky/_lighting/_terrain + _nightGate)
         LabRegistryLoader.LoadLibrary(_materials);
         _groundPalette = LabRegistryLoader.LoadGroundPalette();   // GM1: before LoadRegistry builds material controls

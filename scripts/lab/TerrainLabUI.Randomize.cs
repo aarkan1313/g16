@@ -16,9 +16,9 @@ public partial class TerrainLabUI : Control
     /// so the result is ALWAYS a believable sky — vs rolling every cloud knob independently into garbage.
     private void RandomizeClouds()
     {
-        if (_cloudPresets.Count == 0) { return; }
-        int idx = _rng.Next(_cloudPresets.Count);
-        ApplyCloudPreset(idx, 0.18f);
+        if (_cloudPresetsObj.Count == 0) { return; }
+        int idx = _rng.Next(_cloudPresetsObj.Count);
+        _cloudPresetsObj.Apply(idx, 0.18f);
     }
 
     // ── forwarders (old names the Registry buttons wire to) ──
