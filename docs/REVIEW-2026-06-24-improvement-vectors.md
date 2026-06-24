@@ -110,6 +110,45 @@ Headline: #1+#2+#4 are ONE build — generalize the shipped sun-march into a mul
 
 ---
 
+## AREA 5 — GPU-COMPUTE / code-level perf (no quality loss) — added 2026-06-24 (user: "all-out performance, gpu compute")
+
+**The base floor (3.7 ms) is VERTEX-BOUND.** The chunk vertex shader evaluates the full multi-octave field
+**5× per vertex per frame** (`ground.gdshader:248-269`: h0 + 4 finite-difference normal taps), each a
+`field_height` (continent 5-oct + uplift 3× + slope_damped 6-oct + ridges 6-oct). GridN=65 × ~570 chunks × 5 =
+**~12M field evals/frame** — pure recompute of a STATIC field. This is the single biggest code-level lever.
+
+1. **★ Per-chunk field CACHE via compute (THE all-out win) — L effort, ~3 ms+ (removes most of the floor),
+   quality-IDENTICAL.** Bake each chunk's height(+normal) to a `Texture2DArray` slice ON BIRTH via GPU compute
+   (amortized by the MaxChunkOps budget), sample it every frame instead of re-evaluating. **Decisive de-risk:
+   `ChunkAabbProvider` ALREADY IS 90% of this** — async render-thread per-chunk `field_height.glsl` dispatch,
+   throttled (MaxRequestsPerFrame=8), chunk-keyed, born-generous→refined-async — it currently THROWS AWAY the
+   height grid it computes (only keeps min/max). Extend its 7×7 probe → a 66×66 height+normal bake, keep the
+   buffer, upload to an array slice. Geomorph-compatible via the standard 2-sample blend
+   `mix(texel(u_fine), texel(u_coarse), morphK)` (both static, both in the baked fine texture). ~20 MB VRAM at
+   570 chunks. Quality-identical (same field math, byte-identical param packing → `--fieldcheck` safe).
+   **The ONE real decision:** softly reverses the documented "no bake — generate live" stance — BUT this is a
+   per-chunk ASYNC TRANSIENT cache (not the WG15 global-offline-bake pain), and the AABB provider already
+   crossed that line. Dual-path (live-eval until the bake lands, like the AABB tighten) + a `cache_ready` flag.
+   Gates: `--fieldcheck`/`--popcheck`/`--morphcheck`/`--stitchcheck`. Reversible behind a flag (like TightenAabb).
+2. **Analytic-gradient normal (the contained hedge) — M, ~1.5-2 ms.** Drop the 4 FD normal taps → derivatives
+   from one eval (`value_noise_d`/`slope_damped_fbm` already track `dsum`). 5→~2 evals. Quality neutral-positive
+   (analytic = smoother than FD). NOTE: becomes moot in the *vertex* path if #1 ships (but the bake-side normal +
+   the fragment `horizon_shadow` still use it). A cheap 2-tap forward-diff (5→3, ~1.5 ms) has precedent in the
+   `use_analytic` branch (`ground.gdshader:285-287`) but shifts the normal slightly (eye-gate).
+3. **Cache the per-pixel `horizon_shadow` macro-march → world-XZ texture — M, ~1.5 ms (low-sun only).** It's a
+   function of (world-XZ, sun) only, recomputed per-pixel (up to 16 `field_macro_height` steps); bake to a coarse
+   region texture, refresh only on sun movement. Reuse the AABB-provider RD pattern. (Lighting review #2 synergy.)
+4. **MSAA 2× → TAA A/B — S, ~0.3-0.8 ms.** `project.godot` msaa_3d=1; TAA may AA better (+ the speckle) cheaper.
+   Look-trade → eye-gate (ghosting).
+5. **Batch ChunkAabbProvider GPU round-trips (8 syncs→1) — M, ~0.2-0.5 ms birth-burst.** Per-birth
+   StorageBuffer create+`BufferGetData` blocking readback+free ×8/frame → one batched dispatch + persistent ring.
+6. **Ground fragment weight-gate — M, ~0.3-0.6 ms.** Always samples all 5 materials + rock triplanar even where
+   weight≈0; `if (w>eps)` skip (near = pure-neutral).
+7. Cloud sun-march T-threshold early-out (~0.2 ms, look-gated); cache camera node ref (<0.1 ms).
+
+**Already-optimal (don't touch):** cloud temporal stride (=2, pixel-identical); CDLOD pool (identity-keyed,
+incremental); cloud/shadow uniform-sets (reused). Cheap config dials (atlas/distance/temporal) confirmed no-ops.
+
 ## RECOMMENDED SEQUENCING (pillar-led: quality = perf = AAA = long-term-best)
 
 The compounding, lowest-risk, highest-quality path:
