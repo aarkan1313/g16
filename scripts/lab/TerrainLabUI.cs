@@ -27,6 +27,7 @@ public partial class TerrainLabUI : Control
     private Dictionary<string, Variant> _presets = new();
     private System.Random _rng = new();
     private bool _ready;   // suppress callbacks while building/applying
+    private LuminaryCheckRunner _lumCheck = null!;   // U2 --luminarycheck gate (extracted; armed only when flagged)
 
     // S3.5 spike state (--aabbspike): drive one async height-range request over a few frames, compare to sync.
     private ChunkAabbProvider _spikeProvider;
@@ -107,7 +108,8 @@ public partial class TerrainLabUI : Control
         // a CLI --mood override is set (headless captures choose their own).
         if (_probeMood < 0 && _moods.Count > 0) { ApplyDefaultMood(); }
         ApplyCliOverrides();
-        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--luminarycheck") >= 0) { _lumCheckT = 0.0; }   // U2 numeric gate arm
+        _lumCheck = new LuminaryCheckRunner(this, ComposeLighting, ApplyLuminaryDicts);
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--luminarycheck") >= 0) { _lumCheck.Arm(); }   // U2 numeric gate arm
         _ready = true;
     }
 
