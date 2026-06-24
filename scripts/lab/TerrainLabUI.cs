@@ -81,6 +81,7 @@ public partial class TerrainLabUI : Control, ILabControls
         InitSkyPresets();      // Phase 3a: build the SkyPresets library (sun/celestial/fantasy/mood) before any load/apply
         InitPresetsManager();  // Phase 3b: user-preset save/load (uses the lazy _luminaryList getter)
         InitRandomizer();      // Phase 3c: randomize/lock logic (cloud-random injected as a delegate)
+        InitReview();          // Phase 3d: eye-gate review controller (needs _sky/_lighting/_terrain + _nightGate)
         LoadLibrary();
         LoadGroundPalette();   // GM1: must run before LoadRegistry builds the material controls
         LoadMoods();
@@ -343,7 +344,7 @@ public partial class TerrainLabUI : Control, ILabControls
         }
         if (_meteorDebugCli) { _cloud?.SetMeteorDebug(true); }   // C2: force a meteor streak for headless capture
         // --review=N: drive a review preset at startup (verify/screenshot the keypress path headlessly). LAST so it wins.
-        if (_reviewCli > 0) { ApplyReview(_reviewCli); }
+        if (_reviewCli > 0) { _review.ApplyReview(_reviewCli); }
     }
 
     public override void _ExitTree() => _fc?.Dispose();
