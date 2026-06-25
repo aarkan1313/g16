@@ -68,6 +68,30 @@ work (next) now has to cover the larger radius; **the Task-3 fog coupling is the
 at the far ring can drop to a coarser LOD (flagged in the plan, not yet built). Tunables for the dial-down:
 `--loadring=N`, `--fogviewscale=F`, `--lookahead=S` (+ Debug-tab sliders).
 
+## 2026-06-24 (ARC A-3) — ★ PER-CHUNK FIELD CACHE SHIPPED: 10.7 → 7.2 ms flying (GPU compute, zero quality loss)
+
+> The headline base-floor lever from the GPU-compute review (Area 5 of `REVIEW-2026-06-24`) is BUILT and
+> DEFAULT-ON. Each CDLOD chunk's height+normal is baked once on birth via compute (imageStore-direct into a
+> `Texture2DArray`, no readback) and SAMPLED in the vertex dual-path instead of evaluating the field 5×/vertex/
+> frame (~12M evals/frame). Spec/plan `2026-06-24-per-chunk-field-cache*`. Reversible `--fieldcache=0`.
+
+| Config (real forward-flight, 5090, `--profmove --profile=8 --profspeed=800`) | avg ms | worst ms |
+|---|---|---|
+| **field cache ON (default)** | **7.2** | **9.1** |
+| field cache OFF (`--fieldcache=0`, live 5-eval) | 10.7 | 14.7 |
+| **win** | **−3.5 (−33%)** | **−5.6 (−38%)** |
+
+**This single GPU-compute change beats every config dial combined** (shadow atlas / distance / cloud temporal were
+all measured no-ops). The base floor WAS vertex-bound (5× multi-octave field eval), confirmed: static cache
+on/off = 7.3 / 11.0 ms. **Quality-identical** (same field math + same fixed-step normal, baked; cache-on vs -off
+A/B pixel-identical; `--popcheck`/`--morphcheck`/`--fieldcheck`/`--stitchcheck`/`--streamcheck`/`--snapdiff` all
+PASS). KEY build lessons: (1) the per-chunk `BufferGetData` readback was a render-thread sync that made FLYING
+*slower* (+0.8 ms) despite the −3.7 ms static win → `imageStore`-direct (no readback) fixed it; (2) the **bake
+throttle** (`--bakereq`, default 16) is decisive — a high fill rate clears the birth backlog so flying reaches
+the full steady-state win (sweep 4/8/12/16 → 9.7/8.0/7.4/7.2 ms). The cheap 7×7 `ChunkAabbProvider` still owns
+the shadow AABB (the cache no longer subsumes it). **Frame is now UNDER the 8 ms budget while flying.** Owed:
+user in-motion eye-gate (`--fieldcache=1` vs `=0`); a clean-exit `Dispose` (1 RID leaks at quit, harmless).
+
 ## 2026-06-24 (ARC A-2) — REAL flying cost: the FULL per-feature cost list on a border-crossing traverse
 
 > ⚠ **This SUPERSEDES the orbit numbers below for the real frame cost.** The old `--profmove` was a 700 m

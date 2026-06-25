@@ -6,6 +6,19 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-24 — ★ Per-chunk field cache SHIPPED (GPU compute): flying 10.7→7.2 ms, zero quality loss.** Built the
+APPROVED spec/plan (`2026-06-24-per-chunk-field-cache*`). Each CDLOD chunk's height+normal is baked once on birth
+via compute (`field_bake.glsl`, imageStore-direct into a `Texture2DArray`, no readback) and sampled at `u_morph`
+in the vertex dual-path (`ground.gdshader`) instead of evaluating the field 5×/vertex/frame. `ChunkFieldCache.cs`
+extends the `ChunkAabbProvider` async render-thread pattern. **−33% avg / −38% worst while flying, UNDER the 8 ms
+budget; quality-identical** (cache on/off pixel-identical, all `--*check` gates PASS). This single change beats
+every config dial (all no-ops). Why it's the right call: the base floor was vertex-bound (the 5× multi-octave
+field eval), and the cache moves it to an amortized GPU bake — exactly "code-level, GPU compute, no quality loss"
+(user directive). Decisions in the build: imageStore-direct (the `BufferGetData` readback made FLYING slower
+despite the static win); bake throttle `--bakereq` default 16 (clears the birth backlog → full flying win); the
+cheap 7×7 AABB probe stays (cache doesn't subsume it). Reversible `--fieldcache=0`. The "no bake — generate live"
+stance is softened to a per-chunk async transient cache (user-approved). Owed: user in-motion eye-gate.
+
 **2026-06-24 — ARC B cursory eye-gate PASS; deep tuning deferred to post-perf.** User flew the R=3+fog×1.5
 window: "i think it looked alright … we are doing well." Cursory glance, not a hard gate. **North-star for the
 eventual tuning: minimum fog while seeing maximum distance with NO perceptible detail loss** — which means more

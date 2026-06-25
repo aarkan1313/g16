@@ -1,9 +1,13 @@
 # Per-chunk field cache (GPU-compute) — Design
 
 **Date:** 2026-06-24
-**Status:** APPROVED 2026-06-24 — decisions resolved: BAKE the normal (AAA, quality-identical), build ALL-AT-ONCE,
-no cache invalidation (field params are static at launch). User directive: "all-out performance, GPU compute, not
-lowering quality."
+**Status:** ✅ BUILT + SHIPPED 2026-06-24 (default-on). Result: flying 10.7→7.2 ms (−33% avg / −38% worst),
+quality-identical, all gates PASS. See `performance.md` ARC A-3 + `DECISIONS.md`. One deviation from this design:
+the bake writes via **imageStore-direct (no readback)** — the planned buffer+readback made FLYING slower (the
+GPU sync churned during streaming) — and the cache does NOT subsume the AABB (the cheap 7×7 probe stays). Owed:
+user in-motion eye-gate. APPROVED 2026-06-24 — decisions resolved: BAKE the normal (AAA, quality-identical),
+build ALL-AT-ONCE, no cache invalidation (field params are static at launch). User directive: "all-out
+performance, GPU compute, not lowering quality."
 **Goal:** Eliminate the dominant per-frame terrain cost — the CDLOD chunk vertex shader evaluating the full
 multi-octave procedural field **5× per vertex every frame** (~12M field evals/frame) — by **baking each chunk's
 height+normal once on birth via GPU compute** into a texture array and **sampling** it every frame. Quality-

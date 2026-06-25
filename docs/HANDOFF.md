@@ -128,9 +128,12 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 >   full per-pixel / texture-array / placement system is DESIGNED, not built — correctly sequenced LAST (it
 >   consumes the hydrology substrate's material/wetness output).
 >
-> **Known-open real problems:** (1) **terrain-mesh perf was MISFRAMED** — the "~27.5 ms floor" is the CDLOD-OFF
-> single mesh; CDLOD-on in motion is **~6.1 ms avg / ~14 ms worst** (expanded ARC B radius) and the worst-case
-> spike is **shadow-map-dominated** (full decomposition in `performance.md` 2026-06-24). (2) ~~CDLOD off by
+> **Known-open real problems:** (1) **PERF: per-chunk field cache SHIPPED 2026-06-24** — the REAL flying cost (a
+> border-crossing forward-flight profile, not the old understating orbit) was **10.7 ms (over budget)**; the
+> base floor was vertex-bound (5× field eval/vertex/frame), now cached via GPU compute (bake on birth, sample
+> instead) → **7.2 ms flying, UNDER the 8 ms budget, −33%, quality-identical** (`performance.md` ARC A-3;
+> `--fieldcache=0` to A/B; **user in-motion eye-gate owed**). The remaining cheap-but-quality-lowering dials
+> (SSAO cut −1.8, cloud steps −1.0) are documented + un-taken (`REVIEW-2026-06-24`). (2) ~~CDLOD off by
 > default~~ **FIXED 2026-06-24: CDLOD is now DEFAULT-ON** (`_cdlodCli` default 1); a bare launch shows the
 > infinite quadtree. `--cdlod=0` forces the single mesh. (3) short-range sun shadows on CDLOD
 > terrain (distant hills cast ~nothing — relight spec #2, not started). (4) renderOrigin snap-pop: `--snapdiff`
