@@ -33,6 +33,8 @@ public sealed partial class CdlodTerrain : Node3D
         public float Size;
         public int Level;
         public int SeenFrame = -1;     // last Tick frame this slot was in the visible set (vs _frame → retire)
+        public int CacheSlot = -1;     // field-cache texture-array layer for this chunk (-1 = none → live-eval path)
+        public bool CacheReady;        // the chunk's bake has landed → vertex shader samples the cache, not the field
     }
     private int _frame;   // monotonic Tick counter for the seen-this-frame test (no per-slot Variant churn)
     private bool _forceReapply;   // one-shot: re-push lod_viz + AABB to ALL live slots next Tick (live toggle A/B)
@@ -52,6 +54,13 @@ public sealed partial class CdlodTerrain : Node3D
     private FieldParams _fieldParams = null!;
     private ChunkAabbProvider _aabbProvider;
     public bool TightenAabb = true;                 // S3.5: disable → keep the generous AABB (fallback)
+    // Per-chunk field CACHE (GPU-compute): bake height+normal on birth, sample instead of evaluating the field
+    // 5×/vertex/frame. Subsumes the AABB probe (its baked grid yields the min/max). Reversible (--fieldcache=0).
+    public bool FieldCache = true;
+    private ChunkFieldCache _fieldCache;
+    private bool _cacheBound;                        // material bound to the cache texture once its RID is live
+    private const int CacheSlots = 1024;             // texture-array layers (cap ≥ steady-state active chunks ~570)
+    private readonly Stack<int> _freeLayers = new(); // free texture-array layer indices
     public bool PinOrigin = false;                  // DEBUG (--pinorigin): pin renderOrigin=0 (no snap) to isolate the snap-pop
     private readonly Dictionary<long, (float lo, float hi)> _tightened = new();   // key → landed tight range
 
@@ -92,6 +101,10 @@ public sealed partial class CdlodTerrain : Node3D
         _fieldParams = p;
         _aabbProvider = new ChunkAabbProvider(p);   // S3.5: async height-range provider (render-thread RD)
         _aabbProvider.Prewarm();   // S3.6: compile the field shader during load, not on the first birth (no cold-start stall)
+        _fieldCache = new ChunkFieldCache(p, GridN, CacheSlots);   // per-chunk height+normal cache (subsumes the AABB probe)
+        _fieldCache.Prewarm();
+        _freeLayers.Clear();
+        for (int i = CacheSlots - 1; i >= 0; i--) { _freeLayers.Push(i); }   // 0..N-1 available
         _grid = CdlodMesh.BuildGrid(GridN);
         _variants = CdlodMesh.BuildStitchedVariants(GridN);   // S2d: 16 welded edge-stitch variants (by mask)
         _qt = new CdlodQuadtree(-_regionSize * 0.5f, -_regionSize * 0.5f, _regionSize, MaxDepth, SplitFactor);
@@ -198,7 +211,12 @@ public sealed partial class CdlodTerrain : Node3D
                 ChunkSlot ns = AcquireSlot();
                 ns.SeenFrame = _frame;
                 _active[key] = ns;
-                if (TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }   // queue a tighten for the new chunk
+                if (FieldCache && _fieldCache != null && _freeLayers.Count > 0)
+                {
+                    ns.CacheSlot = _freeLayers.Pop(); ns.CacheReady = false;
+                    _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);   // bake height+normal (also yields the AABB min/max)
+                }
+                else if (TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }   // fallback: AABB-only probe (live-eval render)
                 ApplyChunk(ns, c, key, snapped: true);   // new slot → apply everything (treat as snapped)
             }
         }
@@ -220,10 +238,12 @@ public sealed partial class CdlodTerrain : Node3D
             ChunkSlot dead = _active[_scratchDead[i]];
             dead.Mi.Visible = false;
             _free.Push(dead.Mi);
+            if (dead.CacheSlot >= 0) { _freeLayers.Push(dead.CacheSlot); dead.CacheSlot = -1; }   // return the cache layer
             _active.Remove(_scratchDead[i]);
         }
 
         if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
+        if (FieldCache && _fieldCache != null) { _fieldCache.Pump(); }
     }
 
     /// ARC B Task 2: the cell-aligned world origin of the (hysteretic) window-center cell. The naive center is
@@ -270,6 +290,8 @@ public sealed partial class CdlodTerrain : Node3D
             mi.Scale = new Vector3(c.Size, 1f, c.Size);    // X/Z = chunk size; Y = 1 (world-unit height)
             slot.OriginXZ = c.OriginXZ; slot.Size = c.Size; slot.Level = c.Level;
             mi.SetInstanceShaderParameter("lod_viz", _lodViz ? (float)c.Level : -1.0f);
+            mi.SetInstanceShaderParameter("chunk_slot", (float)slot.CacheSlot);     // field-cache texture-array layer
+            mi.SetInstanceShaderParameter("cache_ready", slot.CacheReady ? 1.0f : 0.0f);
             mi.Visible = true;
         }
         // AABB: born GENEROUS (no pop-in); tightened in place once the async height-range lands. Re-set only
@@ -325,6 +347,26 @@ public sealed partial class CdlodTerrain : Node3D
         while (_aabbProvider.TryTake(out long key, out float lo, out float hi))
         {
             _tightened[key] = (lo, hi);
+        }
+        // Field-cache landings: bind the texture once its render-thread RID is live, then mark each landed chunk
+        // ready (vertex shader flips to sampling) + route its exact min/max into the AABB-tighten path.
+        if (FieldCache && _fieldCache != null)
+        {
+            if (!_cacheBound && _fieldCache.Ready)
+            {
+                _mat?.SetShaderParameter("chunk_cache", _fieldCache.Tex);
+                _mat?.SetShaderParameter("cache_side", (float)_fieldCache.Side);
+                _cacheBound = true;
+            }
+            while (_fieldCache.TryTake(out long ckey, out int cslot, out float clo, out float chi))
+            {
+                _tightened[ckey] = (clo, chi);   // exact range → reuse the tighten-apply path in ApplyChunk
+                if (_active.TryGetValue(ckey, out ChunkSlot s) && s.CacheSlot == cslot)
+                {
+                    s.CacheReady = true;
+                    s.Mi.SetInstanceShaderParameter("cache_ready", 1.0f);
+                }
+            }
         }
         if (_tightened.Count > 8192)
         {

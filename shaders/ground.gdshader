@@ -19,6 +19,11 @@ uniform int   analytic_seed = 0;
 uniform float analytic_spacing = 4.0;
 uniform float use_chunk = 0.0;             // S2a: 1.0 = CDLOD chunk-mode (set once on the shared material)
 instance uniform float lod_viz = -1.0;     // S2a debug: >=0 tints this chunk by LOD level; <0 = normal
+// Per-chunk field CACHE (GPU-compute): height in .r, fixed-step normal in .gba, baked once per chunk on birth.
+uniform sampler2DArray chunk_cache;
+uniform float cache_side = 67.0;           // baked grid side = grid_n + 2 (1-texel border each side)
+instance uniform float chunk_slot = -1.0;  // this chunk's cache texture-array layer
+instance uniform float cache_ready = 0.0;  // 1 = bake landed → sample the cache; 0 = live-eval (dual path)
 // S2b geomorph inputs (chunk branch only). cam_world is re-declared post-strip (TerrainLab.SetCameraWorld
 // already pushes it every frame; the stripped shader had dropped the uniform so the push was a no-op).
 uniform vec3  cam_world = vec3(0.0);    // camera world pos (chunk geomorph per-vertex distance)
@@ -72,6 +77,12 @@ FieldP ground_fieldp() {
 }
 float analytic_h(vec2 world_xz) {
     return field_height(world_xz, uint(analytic_seed), analytic_spacing, ground_fieldp());
+}
+
+// Field-cache UV: a unit chunk coord u01∈[0,1] → the baked (grid_n+2) grid texel (vertex g=u01·(grid_n-1) sits
+// at texel index g+1 for the 1-texel border; +0.5 → texel center). slot = the chunk's texture-array layer.
+vec3 cuv(vec2 u01, float slot) {
+    return vec3((u01 * (grid_n - 1.0) + 1.5) / cache_side, slot);
 }
 
 // height-color ramp (meters -> color) + slope->rock. Placeholder palette; tune freely.
@@ -245,28 +256,27 @@ void vertex() {
         vec2 u_morph = mix(u_fine, u_coarse, morphK);
         vec2 wxz = (MODEL_MATRIX * vec4(u_morph.x - 0.5, 0.0, u_morph.y - 0.5, 1.0)).xz + render_origin.xz;  // S3: TRUE morphed world XZ
 
-        float h0 = analytic_h(wxz) - carve_offset(wxz);
-
-        // S2d: NO SKIRT. Edge-stitched mesh variants (CdlodMesh.BuildStitchedVariants) collapse a chunk's
-        // odd boundary verts onto the coarse neighbor's spacing where edges meet a coarser LOD, so seams
-        // coincide vertex-for-vertex — cracks are prevented structurally, not by a dropped skirt ring (and
-        // its grazing-angle squares are gone). Proven by --stitchcheck (boundary verts coincident to ~0 m).
+        // HEIGHT + NORMAL — dual path. CACHE (cache_ready=1): one sample of the per-chunk field cache at the
+        // SAME morphed u_morph the live path evaluates analytic_h(wxz) at — so the geomorph (odd verts sliding
+        // to the coarse grid) is reproduced EXACTLY and the look is identical; the baked normal is the SAME
+        // fixed-step central difference, so LOD-independent shading is preserved (--popcheck). LIVE (un-baked,
+        // the few frames after birth): the original 5-eval analytic field — the dual path bridges the async
+        // bake landing with no pop (same values). NO SKIRT either way (edge-stitched variants weld seams).
+        float h0;
+        if (cache_ready > 0.5) {
+            vec4 hn = textureLod(chunk_cache, cuv(u_morph, chunk_slot), 0.0);
+            h0 = hn.r - carve_offset(wxz);
+            v_normal = normalize(hn.gba);
+        } else {
+            h0 = analytic_h(wxz) - carve_offset(wxz);
+            float ns = max(analytic_spacing, 1.0);             // fixed FD step (m), LOD-independent
+            float hxp = analytic_h(wxz + vec2(ns, 0.0)) - carve_offset(wxz + vec2(ns, 0.0));
+            float hxm = analytic_h(wxz - vec2(ns, 0.0)) - carve_offset(wxz - vec2(ns, 0.0));
+            float hzp = analytic_h(wxz + vec2(0.0, ns)) - carve_offset(wxz + vec2(0.0, ns));
+            float hzm = analytic_h(wxz - vec2(0.0, ns)) - carve_offset(wxz - vec2(0.0, ns));
+            v_normal = normalize(vec3(hxm - hxp, 2.0 * ns, hzm - hzp));
+        }
         VERTEX.y = h0;
-
-        // Normal = the field's TRUE surface gradient, via a CENTRAL difference at a fixed, LOD-INDEPENDENT
-        // step. The prior code stepped by the chunk vertex spacing (chunk_size/(grid_n-1)), which HALVES at
-        // every LOD swap → the shaded normal jumped ~11° per swap (the "lighting flicker"/LOD-band terracing
-        // the user saw; geometry was already pop-free per --morphcheck, proven by --popcheck height=0 m).
-        // A fixed step makes the normal a function of position only → continuous across every swap (--popcheck
-        // normal≈0°). Central diff (4 taps) is 2nd-order accurate ≈ the analytic gradient; the step is the
-        // field's own analytic_spacing so shading detail tracks the field, not the triangulation (correct:
-        // shading detail is decoupled from geometry LOD, the AAA approach). h0 stays the morphed height.
-        float ns = max(analytic_spacing, 1.0);             // fixed FD step (m), LOD-independent
-        float hxp = analytic_h(wxz + vec2(ns, 0.0)) - carve_offset(wxz + vec2(ns, 0.0));
-        float hxm = analytic_h(wxz - vec2(ns, 0.0)) - carve_offset(wxz - vec2(ns, 0.0));
-        float hzp = analytic_h(wxz + vec2(0.0, ns)) - carve_offset(wxz + vec2(0.0, ns));
-        float hzm = analytic_h(wxz - vec2(0.0, ns)) - carve_offset(wxz - vec2(0.0, ns));
-        v_normal = normalize(vec3(hxm - hxp, 2.0 * ns, hzm - hzp));
         NORMAL = v_normal;
         v_h = h0;
         v_wxz = wxz;   // DEBUG: the true-world XZ this vertex sampled the field at

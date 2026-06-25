@@ -179,6 +179,7 @@ public partial class TerrainLab : MeshInstance3D
     }
     public void SetCdlodViz(bool on) { _cdlod?.SetLodViz(on); }
     public void SetLoadRing(int r) { if (_cdlod != null) { _cdlod.LoadRing = Mathf.Clamp(r, 0, 6); } }   // ARC B Task 1
+    public void SetFieldCache(bool on) { if (_cdlod != null) { _cdlod.FieldCache = on; } }   // per-chunk field cache A/B
     public int LoadRing => _cdlod?.LoadRing ?? 2;
     public void CdlodTick(Vector3 camPos, Vector3 velXZ = default) { _cdlod?.Tick(camPos, velXZ); }   // ARC B Task 4: vel for predictive loading
     public void SetCdlodLookahead(float seconds) { if (_cdlod != null) { _cdlod.PredictLookahead = Mathf.Max(0f, seconds); } }

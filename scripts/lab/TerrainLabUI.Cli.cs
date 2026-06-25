@@ -147,6 +147,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--aabbres=")) { int.TryParse(a.Substring("--aabbres=".Length), out _aabbResCli); }   // S3.5: ProbeRes
             else if (a.StartsWith("--aabbreq=")) { int.TryParse(a.Substring("--aabbreq=".Length), out _aabbReqCli); }   // S3.5: MaxRequestsPerFrame
             else if (a.StartsWith("--loadring=")) { int.TryParse(a.Substring("--loadring=".Length), out _loadRingCli); }   // ARC B Task 1: load-ring radius (1=3×3, 2=5×5)
+            else if (a.StartsWith("--fieldcache=")) { _fieldCacheCli = a.Substring("--fieldcache=".Length) == "1" ? 1 : 0; }   // per-chunk field cache on/off A/B
             else if (a.StartsWith("--fogviewscale=")) { float.TryParse(a.Substring("--fogviewscale=".Length), System.Globalization.CultureInfo.InvariantCulture, out _fogViewScaleCli); _fogViewScaleSet = true; }   // ARC B Task 3
             else if (a.StartsWith("--lookahead=")) { float.TryParse(a.Substring("--lookahead=".Length), System.Globalization.CultureInfo.InvariantCulture, out _lookaheadCli); _lookaheadSet = true; }   // ARC B Task 4
             else if (a.StartsWith("--shadowatlas=")) { int.TryParse(a.Substring("--shadowatlas=".Length), out _shadowAtlasCli); }   // ARC A.1 shadow atlas px
@@ -255,6 +256,7 @@ public partial class TerrainLabUI : Control
         if (_cdlodTestCli) { _terrain.SetAnalytic(true); _terrain.CdlodTestOneChunk(_params); }   // S2a Task-1 sanity
         if (_cdlodCli >= 0) { _terrain.SetAnalytic(true); _terrain.SetCdlod(_cdlodCli == 1); }   // S2a quadtree terrain
         if (_loadRingCli >= 0) { _terrain.SetLoadRing(_loadRingCli); }   // ARC B Task 1: load-ring radius override
+        if (_fieldCacheCli >= 0) { _terrain.SetFieldCache(_fieldCacheCli == 1); }   // per-chunk field cache A/B (before first Tick)
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
         if (_shadowAtlasCli > 0) { ShadowAtlasSize = _shadowAtlasCli; RenderingServer.DirectionalShadowAtlasSetSize(_shadowAtlasCli, true); }   // ARC A.1: apply now (composer once-guard may have run)
@@ -338,6 +340,7 @@ public partial class TerrainLabUI : Control
     private int _aabbResCli;          // --aabbres=N → S3.5 ChunkAabbProvider.ProbeRes (0 = leave default)
     private int _aabbReqCli;          // --aabbreq=N → S3.5 ChunkAabbProvider.MaxRequestsPerFrame (0 = leave default)
     private int _loadRingCli = -1;    // --loadring=N → ARC B Task 1 CdlodTerrain.LoadRing (-1 = leave default 2)
+    private int _fieldCacheCli = -1;  // --fieldcache=0|1 → per-chunk field cache (-1 = leave default on)
     private float _fogViewScaleCli;   // --fogviewscale=F → ARC B Task 3 FogViewScale (gated by _fogViewScaleSet)
     private bool _fogViewScaleSet;
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)
