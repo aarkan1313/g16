@@ -214,9 +214,9 @@ public sealed partial class CdlodTerrain : Node3D
                 if (FieldCache && _fieldCache != null && _freeLayers.Count > 0)
                 {
                     ns.CacheSlot = _freeLayers.Pop(); ns.CacheReady = false;
-                    _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);   // bake height+normal (also yields the AABB min/max)
+                    _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);   // bake height+normal into the cache slice
                 }
-                else if (TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }   // fallback: AABB-only probe (live-eval render)
+                if (TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }   // cheap 7×7 AABB probe (independent of the cache)
                 ApplyChunk(ns, c, key, snapped: true);   // new slot → apply everything (treat as snapped)
             }
         }
@@ -358,9 +358,9 @@ public sealed partial class CdlodTerrain : Node3D
                 _mat?.SetShaderParameter("cache_side", (float)_fieldCache.Side);
                 _cacheBound = true;
             }
-            while (_fieldCache.TryTake(out long ckey, out int cslot, out float clo, out float chi))
+            while (_fieldCache.TryTake(out long ckey, out int cslot))
             {
-                _tightened[ckey] = (clo, chi);   // exact range → reuse the tighten-apply path in ApplyChunk
+                // The bake dispatched last frame (write complete behind its barrier) → flip this chunk to sampling.
                 if (_active.TryGetValue(ckey, out ChunkSlot s) && s.CacheSlot == cslot)
                 {
                     s.CacheReady = true;

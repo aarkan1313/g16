@@ -14,10 +14,9 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-// out: vec4 per texel = (height, normal.x, normal.y, normal.z), row-major res×res.
-layout(set = 0, binding = 0, std430) restrict writeonly buffer OutBuf {
-    vec4 o[];
-};
+// out: write DIRECTLY into the chunk's texture-array layer (no buffer/readback → no render-thread GPU sync;
+// the per-chunk BufferGetData was the streaming-churn cost). R=height, GBA=normal.
+layout(set = 0, binding = 0, rgba32f) restrict writeonly uniform image2DArray out_img;
 
 layout(set = 0, binding = 1, std430) restrict readonly buffer ParamsBuf {
     float origin_x; float origin_z; float spacing; uint seed; uint res; uint octaves;
@@ -29,9 +28,10 @@ layout(set = 0, binding = 1, std430) restrict readonly buffer ParamsBuf {
     float massif_floor; float foothill_w; float foothill_h;
 } P;
 
-// Positioning-only: the chunk's vertex spacing (NOT the field octave-gate spacing P.spacing).
+// Positioning-only: the chunk's vertex spacing (NOT the field octave-gate spacing P.spacing) + the layer.
 layout(set = 0, binding = 2, std430) restrict readonly buffer GridBuf {
     float grid_spacing;
+    int layer;
 } G;
 
 // @@INCLUDE field_math
@@ -66,5 +66,5 @@ void main() {
     float hzp = field_height(w + vec2(0.0, ns), P.seed, P.spacing, fp);
     float hzm = field_height(w - vec2(0.0, ns), P.seed, P.spacing, fp);
     vec3 n = normalize(vec3(hxm - hxp, 2.0 * ns, hzm - hzp));
-    o[cell.y * P.res + cell.x] = vec4(h0, n.x, n.y, n.z);
+    imageStore(out_img, ivec3(int(cell.x), int(cell.y), G.layer), vec4(h0, n.x, n.y, n.z));
 }

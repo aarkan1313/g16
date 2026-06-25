@@ -23,7 +23,7 @@ public sealed class ChunkFieldCache
     public int MaxRequestsPerFrame = 4;   // bake is ~86× the 7×7 probe → lower throttle than the AABB provider
 
     private struct Req { public long Key; public int Slot; public Vector2 OriginXZ; public float Size; }
-    private struct Done { public long Key; public int Slot; public float Lo; public float Hi; }
+    private struct Done { public long Key; public int Slot; }
 
     private readonly FieldParams _p;
     public int GridN { get; }
@@ -60,14 +60,14 @@ public sealed class ChunkFieldCache
         _pending.Enqueue(new Req { Key = key, Slot = slot, OriginXZ = originXZ, Size = size });
     }
 
-    public bool TryTake(out long key, out int slot, out float lo, out float hi)
+    public bool TryTake(out long key, out int slot)
     {
         lock (_doneLock)
         {
-            if (_done.Count == 0) { key = 0; slot = -1; lo = hi = 0f; return false; }
+            if (_done.Count == 0) { key = 0; slot = -1; return false; }
             Done d = _done[_done.Count - 1];
             _done.RemoveAt(_done.Count - 1);
-            key = d.Key; slot = d.Slot; lo = d.Lo; hi = d.Hi;
+            key = d.Key; slot = d.Slot;
         }
         _queued.Remove(key);
         return true;
@@ -110,7 +110,7 @@ public sealed class ChunkFieldCache
             Width = (uint)Side, Height = (uint)Side, Depth = 1, ArrayLayers = (uint)Slots,
             Mipmaps = 1, Format = RenderingDevice.DataFormat.R32G32B32A32Sfloat,
             TextureType = RenderingDevice.TextureType.Type2DArray,
-            UsageBits = RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanUpdateBit,
+            UsageBits = RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.StorageBit,
         };
         _arrayRid = _rd.TextureCreate(f, new RDTextureView());
         _tex.TextureRdRid = _arrayRid;   // assign ONCE (Texture2Drd race, Godot #118292)
@@ -123,30 +123,33 @@ public sealed class ChunkFieldCache
         if (!_rtReady) { return; }
         foreach (Req r in batch)
         {
-            (float lo, float hi) = BakeChunk(r.Slot, r.OriginXZ, r.Size);
-            lock (_doneLock) { _done.Add(new Done { Key = r.Key, Slot = r.Slot, Lo = lo, Hi = hi }); }
+            BakeChunk(r.Slot, r.OriginXZ, r.Size);
+            // No readback/fence: the compute (with its ComputeListEnd barrier) writes the layer this frame; the
+            // game thread sets cache_ready NEXT frame (TryTake), so sampling never races the write. The AABB is
+            // handled separately by the cheap ChunkAabbProvider (this cache no longer reads back for min/max).
+            lock (_doneLock) { _done.Add(new Done { Key = r.Key, Slot = r.Slot }); }
         }
     }
 
-    /// Dispatch field_bake over Side×Side, read back the vec4 grid, upload it into layer `slot`, and reduce the
-    /// height channel to the chunk's min/max (subsuming the AABB probe). Runs inside the render-thread callback.
-    private (float lo, float hi) BakeChunk(int slot, Vector2 originXZ, float size)
+    /// Dispatch field_bake over Side×Side, writing height+normal DIRECTLY into texture-array layer `slot` via
+    /// imageStore — NO BufferGetData/readback (that GPU sync was the streaming-churn cost). Fire-and-forget.
+    private void BakeChunk(int slot, Vector2 originXZ, float size)
     {
         int res = Side;
         float vtxSpacing = size / (GridN - 1);             // chunk VERTEX spacing (positioning)
         Vector2 gridOrigin = originXZ - new Vector2(vtxSpacing, vtxSpacing);   // start 1 border texel before the chunk min
-        int texels = res * res;
 
-        Rid outBuf = _rd.StorageBufferCreate((uint)(texels * 4 * sizeof(float)));   // vec4 per texel
-        var uOut = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 0 }; uOut.AddId(outBuf);
+        var uImg = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; uImg.AddId(_arrayRid);
         // Field math uses p.Spacing (analytic_spacing, octave gate) — NOT the vertex spacing.
         byte[] pbytes = FieldCompute.PackParamsBytes(_p, gridOrigin.X, gridOrigin.Y, _p.Spacing, (uint)res, 0);
         Rid pBuf = _rd.StorageBufferCreate((uint)pbytes.Length, pbytes);
         var uP = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 1 }; uP.AddId(pBuf);
-        byte[] gbytes = BitConverter.GetBytes(vtxSpacing);
+        byte[] gbytes = new byte[8];   // std430: float grid_spacing @0, int layer @4
+        BitConverter.GetBytes(vtxSpacing).CopyTo(gbytes, 0);
+        BitConverter.GetBytes(slot).CopyTo(gbytes, 4);
         Rid gBuf = _rd.StorageBufferCreate((uint)gbytes.Length, gbytes);
         var uG = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 2 }; uG.AddId(gBuf);
-        Rid set = _rd.UniformSetCreate(new Godot.Collections.Array<RDUniform> { uOut, uP, uG }, _shader, 0);
+        Rid set = _rd.UniformSetCreate(new Godot.Collections.Array<RDUniform> { uImg, uP, uG }, _shader, 0);
 
         long list = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(list, _pipeline);
@@ -155,21 +158,7 @@ public sealed class ChunkFieldCache
         _rd.ComputeListDispatch(list, groups, groups, 1);
         _rd.ComputeListEnd();
 
-        byte[] bytes = _rd.BufferGetData(outBuf);
-        _rd.TextureUpdate(_arrayRid, (uint)slot, bytes);   // RGBA32F slice == the vec4 buffer layout
-
-        float lo = float.MaxValue, hi = float.MinValue;
-        int stride = 4 * sizeof(float);
-        int got = Mathf.Min(texels, bytes.Length / stride);
-        for (int i = 0; i < got; i++)
-        {
-            float h = BitConverter.ToSingle(bytes, i * stride);   // height = .r channel
-            if (h < lo) { lo = h; }
-            if (h > hi) { hi = h; }
-        }
-        _rd.FreeRid(set); _rd.FreeRid(outBuf); _rd.FreeRid(pBuf); _rd.FreeRid(gBuf);
-        if (lo > hi) { lo = 0f; hi = 0f; }
-        return (lo, hi);
+        _rd.FreeRid(set); _rd.FreeRid(pBuf); _rd.FreeRid(gBuf);
     }
 
     public void Dispose()
