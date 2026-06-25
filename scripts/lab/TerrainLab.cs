@@ -101,6 +101,16 @@ public partial class TerrainLab : MeshInstance3D
 
         _minBase = float.MaxValue; _maxBase = float.MinValue;
         for (int i = 0; i < heights.Length; i++) { _minBase = Mathf.Min(_minBase, heights[i]); _maxBase = Mathf.Max(_maxBase, heights[i]); }
+        // GLOBAL fallback envelope for streamed CDLOD chunks (NOT the single-mesh AABB / MidHeight, which stay
+        // the central region). The per-chunk shadow AABB is born GENEROUS (this range ± margin) and tightened a
+        // few frames later when the field-cache min/max lands. The continent/uplift field varies REGIONALLY, so
+        // the central region (0,0) min/max is NOT a safe bound far from origin — a far chunk in a high-uplift belt
+        // can exceed it and gets frustum/shadow-CULLED until its tighten lands (the "chunks vanish far out" bug).
+        // Union a WIDE, coarse field sample (±~100 km) so the fallback brackets the macro envelope everywhere it
+        // matters during that brief birth→tighten window. One extra page at load.
+        float cdlodMinH = _minBase, cdlodMaxH = _maxBase;
+        float[] wide = fc.ProducePage(p, -100000f, -100000f, 800f, 256, 0);   // 256 × 800 m ≈ ±100 km, macro-resolving
+        for (int i = 0; i < wide.Length; i++) { cdlodMinH = Mathf.Min(cdlodMinH, wide[i]); cdlodMaxH = Mathf.Max(cdlodMaxH, wide[i]); }
         CustomAabb = new Aabb(
             new Vector3(-_regionSize * 0.5f, _minBase - AabbMarginM, -_regionSize * 0.5f),
             new Vector3(_regionSize, (_maxBase - _minBase) + 2f * AabbMarginM, _regionSize));
@@ -119,7 +129,7 @@ public partial class TerrainLab : MeshInstance3D
             // to the next idle frame — same pattern the cloud/atmosphere sibling nodes use in
             // TerrainLabUI._Ready. Setup() needs no in-tree state, so it can run immediately.
             (GetParent() ?? (Node)this).CallDeferred(Node.MethodName.AddChild, _cdlod);
-            _cdlod.Setup(_mat, p, _minBase, _maxBase, heights);
+            _cdlod.Setup(_mat, p, cdlodMinH, cdlodMaxH, heights);   // wide global envelope for the streamed-chunk fallback AABB
         }
 
         // S2b: the LOD-crossing test-path player (sibling, deferred — same reason as _cdlod). Setup needs

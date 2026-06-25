@@ -143,6 +143,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--nofog") { _noFogCli = true; }   // REVIEW: kill all atmospheric haze (env fog + aerial + atmosphere + volfog)
             else if (a == "--popmeter") { _popMeterCli = true; }   // S3: LIVE pop meter — measure height/normal/origin-snap each frame as you fly
             else if (a == "--aabbspike") { _aabbSpikeCli = true; }   // S3.5: one async GPU height-range vs sync, prints AABBSPIKE
+            else if (a == "--cachecheck") { _cacheCheckCli = true; }   // field-cache min/max vs CPU truth (AABB-fix proof), prints CACHECHECK
             else if (a == "--notighten") { _noTightenCli = true; }   // S3.5: disable async AABB tighten → generous AABB fallback
             else if (a.StartsWith("--aabbres=")) { int.TryParse(a.Substring("--aabbres=".Length), out _aabbResCli); }   // S3.5: ProbeRes
             else if (a.StartsWith("--aabbreq=")) { int.TryParse(a.Substring("--aabbreq=".Length), out _aabbReqCli); }   // S3.5: MaxRequestsPerFrame
@@ -341,6 +342,7 @@ public partial class TerrainLabUI : Control
     private bool _noFogCli;           // --nofog → REVIEW kill all haze (fog+aerial+atmosphere)
     private bool _popMeterCli;        // --popmeter → S3 live per-frame pop meter (HUD + log) while you fly
     private bool _aabbSpikeCli;       // --aabbspike → S3.5 async GPU height-range feasibility spike (vs sync ref)
+    private bool _cacheCheckCli;      // --cachecheck → field-cache min/max vs CPU truth (the AABB-fix proof)
     private bool _noTightenCli;       // --notighten → S3.5 disable the async AABB tighten (generous-AABB fallback)
     private int _aabbResCli;          // --aabbres=N → S3.5 ChunkAabbProvider.ProbeRes (0 = leave default)
     private int _aabbReqCli;          // --aabbreq=N → S3.5 ChunkAabbProvider.MaxRequestsPerFrame (0 = leave default)

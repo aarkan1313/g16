@@ -27,7 +27,11 @@ public sealed class ChunkFieldCache
     public int MaxRequestsPerFrame = 16;
 
     private struct Req { public long Key; public int Slot; public Vector2 OriginXZ; public float Size; }
-    private struct Done { public long Key; public int Slot; }
+    private struct Done { public long Key; public int Slot; public float Lo; public float Hi; }
+
+    // Scaled-uint encode for the per-slot min/max atomics (MUST match field_bake.glsl). Heights → centimetres
+    // + a positive offset so atomicMin/atomicMax order correctly; decode is the inverse. 1 cm precision.
+    private static float DecodeHeight(uint scaled) => ((float)scaled - 1000000f) / 100f;
 
     private readonly FieldParams _p;
     public int GridN { get; }
@@ -41,7 +45,7 @@ public sealed class ChunkFieldCache
 
     // Render-thread RD state.
     private RenderingDevice _rd;
-    private Rid _shader, _pipeline, _arrayRid;
+    private Rid _shader, _pipeline, _arrayRid, _minmaxBuf;
     private bool _rtReady, _rtFailed;
     private readonly Texture2DArrayRD _tex = new();   // bound to the material; RID assigned once on the render thread
 
@@ -64,14 +68,16 @@ public sealed class ChunkFieldCache
         _pending.Enqueue(new Req { Key = key, Slot = slot, OriginXZ = originXZ, Size = size });
     }
 
-    public bool TryTake(out long key, out int slot)
+    /// Drain one landed bake, carrying the chunk's EXACT height min/max (for the shadow AABB). lo/hi are the
+    /// reduction of the same baked grid the shader samples — so the AABB bounds exactly what renders.
+    public bool TryTake(out long key, out int slot, out float lo, out float hi)
     {
         lock (_doneLock)
         {
-            if (_done.Count == 0) { key = 0; slot = -1; return false; }
+            if (_done.Count == 0) { key = 0; slot = -1; lo = hi = 0f; return false; }
             Done d = _done[_done.Count - 1];
             _done.RemoveAt(_done.Count - 1);
-            key = d.Key; slot = d.Slot;
+            key = d.Key; slot = d.Slot; lo = d.Lo; hi = d.Hi;
         }
         _queued.Remove(key);
         return true;
@@ -118,6 +124,7 @@ public sealed class ChunkFieldCache
         };
         _arrayRid = _rd.TextureCreate(f, new RDTextureView());
         _tex.TextureRdRid = _arrayRid;   // assign ONCE (Texture2Drd race, Godot #118292)
+        _minmaxBuf = _rd.StorageBufferCreate((uint)(Slots * 2 * sizeof(uint)));   // per-slot [min,max] for the AABB
         _rtReady = true;
     }
 
@@ -125,23 +132,37 @@ public sealed class ChunkFieldCache
     {
         EnsureRt();
         if (!_rtReady) { return; }
-        foreach (Req r in batch)
+        foreach (Req r in batch) { BakeChunk(r.Slot, r.OriginXZ, r.Size); }   // each clears + dispatches its slot
+        // ONE min/max readback for the whole batch (the height grid stays imageStore-only — never read back).
+        // BufferGetData syncs the render thread; this replaces the separate ChunkAabbProvider probe+readback for
+        // cached chunks (CdlodTerrain skips that probe when a cache slot was assigned), so it's sync-neutral.
+        byte[] mm = _rd.BufferGetData(_minmaxBuf);
+        lock (_doneLock)
         {
-            BakeChunk(r.Slot, r.OriginXZ, r.Size);
-            // No readback/fence: the compute (with its ComputeListEnd barrier) writes the layer this frame; the
-            // game thread sets cache_ready NEXT frame (TryTake), so sampling never races the write. The AABB is
-            // handled separately by the cheap ChunkAabbProvider (this cache no longer reads back for min/max).
-            lock (_doneLock) { _done.Add(new Done { Key = r.Key, Slot = r.Slot }); }
+            foreach (Req r in batch)
+            {
+                int o = r.Slot * 2 * sizeof(uint);
+                float lo = DecodeHeight(BitConverter.ToUInt32(mm, o));
+                float hi = DecodeHeight(BitConverter.ToUInt32(mm, o + sizeof(uint)));
+                _done.Add(new Done { Key = r.Key, Slot = r.Slot, Lo = lo, Hi = hi });
+            }
         }
     }
 
     /// Dispatch field_bake over Side×Side, writing height+normal DIRECTLY into texture-array layer `slot` via
-    /// imageStore — NO BufferGetData/readback (that GPU sync was the streaming-churn cost). Fire-and-forget.
+    /// imageStore. Also clears + accumulates this slot's height min/max (binding 3) for the EXACT shadow AABB.
     private void BakeChunk(int slot, Vector2 originXZ, float size)
     {
         int res = Side;
         float vtxSpacing = size / (GridN - 1);             // chunk VERTEX spacing (positioning)
         Vector2 gridOrigin = originXZ - new Vector2(vtxSpacing, vtxSpacing);   // start 1 border texel before the chunk min
+
+        // Reset this slot's [min,max] before the dispatch accumulates into it: min = max-uint, max = 0, so the
+        // first atomicMin/atomicMax with a real scaled height overwrites them. (Outside any compute list.)
+        byte[] clr = new byte[2 * sizeof(uint)];
+        BitConverter.GetBytes(uint.MaxValue).CopyTo(clr, 0);
+        BitConverter.GetBytes(0u).CopyTo(clr, sizeof(uint));
+        _rd.BufferUpdate(_minmaxBuf, (uint)(slot * 2 * sizeof(uint)), (uint)clr.Length, clr);
 
         var uImg = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; uImg.AddId(_arrayRid);
         // Field math uses p.Spacing (analytic_spacing, octave gate) — NOT the vertex spacing.
@@ -153,7 +174,8 @@ public sealed class ChunkFieldCache
         BitConverter.GetBytes(slot).CopyTo(gbytes, 4);
         Rid gBuf = _rd.StorageBufferCreate((uint)gbytes.Length, gbytes);
         var uG = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 2 }; uG.AddId(gBuf);
-        Rid set = _rd.UniformSetCreate(new Godot.Collections.Array<RDUniform> { uImg, uP, uG }, _shader, 0);
+        var uM = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 3 }; uM.AddId(_minmaxBuf);
+        Rid set = _rd.UniformSetCreate(new Godot.Collections.Array<RDUniform> { uImg, uP, uG, uM }, _shader, 0);
 
         long list = _rd.ComputeListBegin();
         _rd.ComputeListBindComputePipeline(list, _pipeline);
@@ -162,7 +184,7 @@ public sealed class ChunkFieldCache
         _rd.ComputeListDispatch(list, groups, groups, 1);
         _rd.ComputeListEnd();
 
-        _rd.FreeRid(set); _rd.FreeRid(pBuf); _rd.FreeRid(gBuf);
+        _rd.FreeRid(set); _rd.FreeRid(pBuf); _rd.FreeRid(gBuf);   // _minmaxBuf is persistent — not freed here
     }
 
     public void Dispose()
@@ -173,6 +195,7 @@ public sealed class ChunkFieldCache
             if (_pipeline.IsValid) { _rd.FreeRid(_pipeline); }
             if (_shader.IsValid) { _rd.FreeRid(_shader); }
             if (_arrayRid.IsValid) { _rd.FreeRid(_arrayRid); }
+            if (_minmaxBuf.IsValid) { _rd.FreeRid(_minmaxBuf); }
         }));
     }
 }

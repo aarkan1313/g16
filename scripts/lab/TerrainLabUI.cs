@@ -288,6 +288,7 @@ public partial class TerrainLabUI : Control, ILabControls
             _spikeProvider.Request(1L, new Vector2(0f, 0f), 2048f);   // one known chunk footprint at the origin
             _spikeFrame = 0;
         }
+        if (_cacheCheckCli) { ArmCacheCheck(); }   // AABB-fix proof: field-cache min/max vs CPU truth; _Process drives it
         if (_lightCheckCli)   // numeric proof: quantify per-deck lighting difference (cumulus vs cirrus)
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
