@@ -67,10 +67,7 @@ public sealed partial class CdlodTerrain : Node3D
     private const int CacheReadyDelay = 3;
     private readonly List<(long key, int slot, int landFrame)> _cachePending = new();
     public bool PinOrigin = false;                  // DEBUG (--pinorigin): pin renderOrigin=0 (no snap) to isolate the snap-pop
-    // key → landed tight height range. `exact` distinguishes the field-cache min/max (the chunk's TRUE rendered
-    // range, from field_bake's reduction — needs only the tiny geomorph margin) from the coarse ChunkAabbProvider
-    // 7×7 probe (used only for cache-miss chunks — needs the extra half-probe-spacing pad so it can't under-cull).
-    private readonly Dictionary<long, (float lo, float hi, bool exact)> _tightened = new();
+    private readonly Dictionary<long, (float lo, float hi)> _tightened = new();   // key → landed tight range (7×7 probe)
 
     public int GridN = 65;            // verts/side per chunk (64 quads)
     public int MaxDepth = 6;          // finest LOD depth; tunable
@@ -226,11 +223,11 @@ public sealed partial class CdlodTerrain : Node3D
                 if (FieldCache && _fieldCache != null && _freeLayers.Count > 0)
                 {
                     ns.CacheSlot = _freeLayers.Pop(); ns.CacheReady = false;
-                    // The bake produces height+normal AND the chunk's EXACT min/max → it feeds the AABB too, so a
-                    // cached chunk does NOT also run the coarse 7×7 probe (else-if). Both syncs become one.
-                    _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);
+                    _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);   // fire-and-forget height+normal bake
                 }
-                else if (TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }   // cache-miss fallback: coarse 7×7 probe
+                // Shadow AABB: the cheap 7×7 probe (independent of the cache). Reading min/max off the 67² bake
+                // instead forced it synchronous (~11 ms render-thread stall/batch) — reverted to this proven probe.
+                if (TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }
                 ApplyChunk(ns, c, key, snapped: true);   // new slot → apply everything (treat as snapped)
             }
         }
@@ -259,7 +256,22 @@ public sealed partial class CdlodTerrain : Node3D
 
         if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
         if (FieldCache && _fieldCache != null) { _fieldCache.Pump(); }
+
+        // Streaming diagnostic (DebugStream): which stage lags? births capped → throttle-bound; bakePend high →
+        // bake backlog; leaves≫active → can't fill; leaves small → load-ring too small. Off by default.
+        if (DebugStream)
+        {
+            _dbgBirthsAcc += births; if (births >= MaxChunkOps) { _dbgCapped++; }
+            if (_frame % 30 == 0)
+            {
+                int bakePend = (FieldCache && _fieldCache != null) ? _fieldCache.PendingCount : 0;
+                GD.Print($"[streamdiag] f={_frame} leaves={leaves.Count} active={_active.Count} births/30={_dbgBirthsAcc} capped={_dbgCapped}/30 bakePend={bakePend} cachePend={_cachePending.Count} tights={_tightened.Count} snaps={TotalSnaps}");
+                _dbgBirthsAcc = 0; _dbgCapped = 0;
+            }
+        }
     }
+    public bool DebugStream = false;   // --streamdbg: per-30-frame streaming-state log
+    private int _dbgBirthsAcc, _dbgCapped;
 
     /// ARC B Task 2: the cell-aligned world origin of the (hysteretic) window-center cell. The naive center is
     /// floor(cam / root); a raw floor re-centers the instant the camera crosses a cell boundary, so oscillating
@@ -315,8 +327,9 @@ public sealed partial class CdlodTerrain : Node3D
         bool tightAvail = TightenAabb && hasTight;
         if (isNew || snapped || (tightAvail && !slot.Tightened))
         {
-            float lo, hi; bool exact = false;
-            if (tightAvail) { lo = tr.lo; hi = tr.hi; exact = tr.exact; slot.Tightened = true; }
+            float lo, hi;
+            bool fromProbe = tightAvail;
+            if (tightAvail) { lo = tr.lo; hi = tr.hi; slot.Tightened = true; }
             else { (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size); }
             // Margin scaled to the chunk's vertex spacing (the geomorph displacement bound) with an 8 m floor:
             // too tight → CSM cascade misses displaced verts → grid-aligned shadow acne; too loose → inflated
@@ -331,10 +344,7 @@ public sealed partial class CdlodTerrain : Node3D
             // probe spacing so the tightened AABB can never be shorter than the mesh between probe samples. This
             // scales with chunk size, so far/big chunks (coarsest probe, least shadow-precision need) get a
             // looser-but-safe box while near/small chunks (fine probe) stay tight.
-            // Coarse-probe source ONLY: pad by half the probe spacing so a missed peak between samples can't
-            // under-cull. The EXACT field-cache range already bounds the true rendered geometry → geomorph
-            // margin alone (a tighter AABB → sharper shadow cascade, no inflation).
-            if (tightAvail && !exact) { m = Mathf.Max(m, c.Size / Mathf.Max(1, _aabbProvider.ProbeRes - 1) * 0.5f); }
+            if (fromProbe) { m = Mathf.Max(m, c.Size / Mathf.Max(1, _aabbProvider.ProbeRes - 1) * 0.5f); }
             mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f), new Vector3(1f, (hi - lo) + 2f * m, 1f));
         }
         // S2d: edge-stitch variant — reassign the mesh ONLY when this chunk's mask changed (avoids per-frame
@@ -364,7 +374,7 @@ public sealed partial class CdlodTerrain : Node3D
     {
         while (_aabbProvider.TryTake(out long key, out float lo, out float hi))
         {
-            _tightened[key] = (lo, hi, false);   // coarse 7×7 probe → keep the half-probe-spacing pad in ApplyChunk
+            _tightened[key] = (lo, hi);
         }
         // Field-cache landings: bind the texture once its render-thread RID is live, then mark each landed chunk
         // ready (vertex shader flips to sampling) + route its exact min/max into the AABB-tighten path.
@@ -376,13 +386,12 @@ public sealed partial class CdlodTerrain : Node3D
                 _mat?.SetShaderParameter("cache_side", (float)_fieldCache.Side);
                 _cacheBound = true;
             }
-            while (_fieldCache.TryTake(out long ckey, out int cslot, out float clo, out float chi))
+            while (_fieldCache.TryTake(out long ckey, out int cslot))
             {
                 // STALE-BAKE GUARD: only honor a landed bake if the chunk is still live AND still owns this slot
                 // (a fast retire→rebirth can reassign the layer before the bake lands). Stale landings are dropped
-                // — the slot's current owner has its own bake queued. This guards BOTH the AABB and the ready flip.
+                // — the slot's current owner has its own bake queued. (The shadow AABB is the separate 7×7 probe.)
                 if (!_active.TryGetValue(ckey, out ChunkSlot owner) || owner.CacheSlot != cslot) { continue; }
-                if (TightenAabb) { _tightened[ckey] = (clo, chi, true); }   // EXACT min/max → tight, correct AABB
                 _cachePending.Add((ckey, cslot, _frame));   // landed → flip to sampling after CacheReadyDelay Ticks
             }
             for (int i = _cachePending.Count - 1; i >= 0; i--)

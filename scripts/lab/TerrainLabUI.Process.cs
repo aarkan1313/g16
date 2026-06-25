@@ -120,8 +120,6 @@ public partial class TerrainLabUI : Control
             else if (++_spikeFrame > 120) { GD.Print("AABBSPIKE: NO RESULT in 120 frames — async collect FAILED"); _spikeDone = true; GetTree().Quit(); }
         }
 
-        TickCacheCheck();   // --cachecheck: field-cache min/max vs CPU truth, then quit (no-op unless armed)
-
         if (_ready) { UpdateOvercast(); }
         // AT-1 default-on: flip the sky material to the physical LUT only once it's computed (RID bound).
         // Until then the approved keyframed sky shows — no sampling of an unbound Texture2Drd on frame 1.

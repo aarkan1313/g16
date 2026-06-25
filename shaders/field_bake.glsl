@@ -34,16 +34,6 @@ layout(set = 0, binding = 2, std430) restrict readonly buffer GridBuf {
     int layer;
 } G;
 
-// Per-slot height MIN/MAX for the shadow AABB (one [min,max] uint pair per cache layer). Computed here so
-// the AABB is EXACT (the chunk's true rendered range) instead of a coarse separate probe — fixing the
-// far-from-origin cull-vanish AND the birth-time over-tall AABB that inflated the shadow cascade. Encoding:
-// heights are scaled to centimetres + offset into a positive uint (uint(clamp(h,-9000,9000)*100 + 1e6)),
-// which preserves ordering so atomicMin/atomicMax work directly — no IEEE bit-flip needed (1 cm precision,
-// far finer than the metres-scale AABB margin). The host clears [min=0xFFFFFFFF, max=0] before the dispatch.
-layout(set = 0, binding = 3, std430) restrict buffer MinMaxBuf {
-    uint mm[];   // mm[layer*2+0] = scaled min, mm[layer*2+1] = scaled max
-} MM;
-
 // @@INCLUDE field_math
 
 FieldP make_fieldp() {
@@ -77,9 +67,4 @@ void main() {
     float hzm = field_height(w - vec2(0.0, ns), P.seed, P.spacing, fp);
     vec3 n = normalize(vec3(hxm - hxp, 2.0 * ns, hzm - hzp));
     imageStore(out_img, ivec3(int(cell.x), int(cell.y), G.layer), vec4(h0, n.x, n.y, n.z));
-    // Accumulate the chunk's height min/max for the shadow AABB. Order-preserving scaled-uint encode (see
-    // MinMaxBuf): every in-bounds texel (incl. the 1-texel border → a safe slight over-bound) contributes.
-    uint hu = uint(clamp(h0, -9000.0, 9000.0) * 100.0 + 1000000.0);
-    atomicMin(MM.mm[G.layer * 2 + 0], hu);
-    atomicMax(MM.mm[G.layer * 2 + 1], hu);
 }
