@@ -82,7 +82,9 @@ public sealed partial class CdlodTerrain : Node3D
                                             // forward by (loads INTO the direction of travel so you can't outrun it; 0 = off)
     public int RetireGrace = 2;       // S3.6: frames a chunk may be unseen before retiring (bridges the budget-deferred birth hole without leaking; >=2 retires)
     public int TotalSnaps, TotalBirths;   // perf instrumentation (cumulative since enable); active chunk count = ActiveCount
+    public int TotalRebirths;             // CHURN diagnostic: births of a key retired within the last 30 frames (= thrash, not clean streaming)
     public int ActiveCount => _active.Count;
+    private readonly Dictionary<long, int> _recentRetire = new();   // key → frame retired (for rebirth detection)
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
     // DOWN to _coarseSnap so render-relative coords stay bounded (no float drift) AND the field samples
@@ -214,6 +216,7 @@ public sealed partial class CdlodTerrain : Node3D
             {
                 if (births >= MaxChunkOps) { continue; }   // S3: churn budget — rest appear next frame(s); RetireGrace bridges the deferred-birth hole
                 births++;
+                if (_recentRetire.TryGetValue(key, out int rf) && _frame - rf < 30) { TotalRebirths++; }   // CHURN: reborn shortly after retiring = thrash
                 ChunkSlot ns = AcquireSlot();
                 ns.SeenFrame = _frame;
                 _active[key] = ns;
@@ -245,6 +248,7 @@ public sealed partial class CdlodTerrain : Node3D
             dead.Mi.Visible = false;
             _free.Push(dead.Mi);
             if (dead.CacheSlot >= 0) { _freeLayers.Push(dead.CacheSlot); dead.CacheSlot = -1; }   // return the cache layer
+            _recentRetire[_scratchDead[i]] = _frame;   // CHURN diagnostic: stamp retire frame for rebirth detection
             _active.Remove(_scratchDead[i]);
         }
 
@@ -385,6 +389,12 @@ public sealed partial class CdlodTerrain : Node3D
             _scratchDead.Clear();
             foreach (var k in _tightened.Keys) { if (!_active.ContainsKey(k)) { _scratchDead.Add(k); } }
             for (int i = 0; i < _scratchDead.Count; i++) { _tightened.Remove(_scratchDead[i]); }
+        }
+        if (_recentRetire.Count > 8192)   // CHURN diagnostic dict: drop entries older than the 30-frame rebirth window
+        {
+            _scratchDead.Clear();
+            foreach (var kv in _recentRetire) { if (_frame - kv.Value >= 30) { _scratchDead.Add(kv.Key); } }
+            for (int i = 0; i < _scratchDead.Count; i++) { _recentRetire.Remove(_scratchDead[i]); }
         }
     }
 

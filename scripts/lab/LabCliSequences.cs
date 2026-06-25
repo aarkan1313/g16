@@ -157,7 +157,7 @@ public sealed class LabCliSequences
                     GD.Print($"PROFILE: avg {1.0 / avg:0} fps ({avg * 1000:0.0} ms)  worst {1.0 / _profWorst:0} fps ({_profWorst * 1000:0.0} ms)  over {_profFrames} frames");
                     // Streaming churn over the measured window (validates the traverse crossed borders + quantifies it).
                     var cd = _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
-                    if (cd != null && cd.Enabled) { GD.Print($"PROFILE-STREAM: snaps={cd.TotalSnaps} births={cd.TotalBirths} activeChunks={cd.ActiveCount} (cumulative since enable)"); }
+                    if (cd != null && cd.Enabled) { GD.Print($"PROFILE-STREAM: snaps={cd.TotalSnaps} births={cd.TotalBirths} rebirths={cd.TotalRebirths} activeChunks={cd.ActiveCount} (cumulative since enable; rebirths=thrash)"); }
                     _profileT = -1.0;
                     _host.GetTree().Quit();
                 }
