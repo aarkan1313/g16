@@ -133,7 +133,11 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 > base floor was vertex-bound (5× field eval/vertex/frame), now cached via GPU compute (bake on birth, sample
 > instead) → **7.2 ms flying, UNDER the 8 ms budget, −33%, quality-identical** (`performance.md` ARC A-3;
 > `--fieldcache=0` to A/B; **user in-motion eye-gate owed**). The remaining cheap-but-quality-lowering dials
-> (SSAO cut −1.8, cloud steps −1.0) are documented + un-taken (`REVIEW-2026-06-24`). (2) ~~CDLOD off by
+> (SSAO cut −1.8, cloud steps −1.0) are documented + un-taken (`REVIEW-2026-06-24`). ⚠ **CDLOD-default-on
+> EXPOSED 3 motion-only quality issues for the OUTSIDE AUDIT** (shadow stipple [pre-existing], chunks-wrong-far-
+> out [ARC-B regression suspect], fast-move churn/blink-out [pre-existing CDLOD]) — full triage + A/B knobs +
+> regression flags in `docs/handoffs/2026-06-24-cdlod-streaming-shadow-known-issues.md`. NOT the field cache
+> (ruled out). `review.tscn` is now the STABLE single mesh (CDLOD off in ReviewMode) so the 1-9 look-gates work. (2) ~~CDLOD off by
 > default~~ **FIXED 2026-06-24: CDLOD is now DEFAULT-ON** (`_cdlodCli` default 1); a bare launch shows the
 > infinite quadtree. `--cdlod=0` forces the single mesh. (3) short-range sun shadows on CDLOD
 > terrain (distant hills cast ~nothing — relight spec #2, not started). (4) renderOrigin snap-pop: `--snapdiff`
