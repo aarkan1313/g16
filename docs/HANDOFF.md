@@ -1,8 +1,8 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-24 (look-lab god-class DECOMPOSED −40% + audit hardening + CDLOD-on perf reframe +
-**ARC B infinite-streaming pop-fix SHIPPED** (CDLOD default-on, load ring R, hysteresis, fog↔radius coupling,
-velocity-predictive); §6 refreshed). **Refresh §6 each session.**
+Last updated: 2026-06-25 (**VIEW-DISTANCE DEEP-TUNE SHIPPED** — ~65 km clear / near-clear+far-heavy DEPTH fog /
+streaming pop+thrash fixed; the ARC B north-star, run ahead of perf at user direction; §6 refreshed). Prior
+2026-06-24: look-lab god-class DECOMPOSED −40% + audit hardening + ARC B pop-fix + field cache. **Refresh §6 each session.**
 
 Written so a fresh chat with zero context gets productive immediately.
 
@@ -82,6 +82,25 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
+> **2026-06-25 — VIEW-DISTANCE DEEP-TUNE SHIPPED (the ARC B north-star, run ahead of the perf arc at the user's
+> explicit "see much much farther" direction).** Start-here:
+> `docs/handoffs/2026-06-25-viewdistance-streaming-start-here.md`. Commit `e00b380`, tag
+> `viewdist-checkpoint-2026-06-25` (NOT pushed); fs backup `C:\Wg16\backups\wg-16-project_viewdist_2026-06-25`.
+> - **See far + minimal NEAR fog:** fog DECOUPLED from the load radius + switched to **DEPTH mode** (clear to
+>   `FogDepthBegin` 22 km, curve 3.0 → full `FogDepthEnd` 62 km) so near/mid is clear and haze deepens only far;
+>   far-clip 30→**64 km** + AT-2 aerial 32→**64 km** (3 must-match sites) so the load seam is hidden by **CLIPPING,
+>   not fog**; load ring 2→**8** (~65 km, cheap — far cells coarse beyond the ~20 km split disc, leaves ~570→~900);
+>   cache slots →1280. **This resolves the old fog-coupling that capped clear view at ~16 km.**
+> - **Streaming pop/thrash fixed (closes Issues 2 & 3 of the 2026-06-24 known-issues handoff):** trailing-edge
+>   in/out toggle = the velocity-predictive bias swinging on tap transients → **PredictLookahead 3→0** +
+>   **CenterHysteresis 0.15→0.35**; **RetireGrace kept 2** (a 10-frame bump caused merge-overlap despawn pop);
+>   **velocity-scaled birth budget** (24 base → 256 by speed) for hole-free fast flight, free when idle.
+> - **OPEN:** far chunks still lag at sustained ~25 km/s (raise budget slope/ceiling, or scale field-cache bakes
+>   with speed — far chunks fall back to live-eval at 25 km/s = fps cost, not holes). **Eye-gates owed:** fog feel,
+>   the 64 km far-clip edge, snap-pop at the bigger radius. `FlyCamera.InitialSpeed=5000` (review aid) → revert to 120.
+> - **For ARC A (perf):** it now inherits **R=8 + 64 km far-clip**; the Task-3 fog-coarsen synergy is moot (depth
+>   fog, no coupling). Re-profile `--profmove` at R=8 before the shadow-atlas dial-down.
+>
 > **2026-06-24 — STATE OF THE PROJECT (post terrain-relight; independent state-of-project audit run).**
 >
 > **SHIPPED & signed off:**

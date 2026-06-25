@@ -6,6 +6,22 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
+**2026-06-25 — ★ View-distance deep-tune: ~65 km clear, near-clear/far-heavy fog, streaming pop+thrash fixed.**
+Executed the ARC B north-star (min fog / max view) **ahead of the perf arc** at the user's explicit "see much much
+farther" direction — this overrides the earlier "keep R=2 until post-perf" sequencing, so **ARC A now optimizes at
+R=8 + 64 km far-clip**. Fog **DECOUPLED from the load radius** and switched to **DEPTH mode** (clear out to
+`FogDepthBegin` 22 km, curve 3.0 ramp → full `FogDepthEnd` 62 km) — a flat exponential fog can't do "clear near,
+heavy far," and the old radius-coupling occluded ~94% at the boundary (capped clear view at ~16 km). Far-clip
+30→64 km + AT-2 aerial 32→64 km (3 must-match sites) so the seam is hidden by **clipping, not fog**; load ring
+2→8 (~65 km, cheap — far cells are coarse beyond the split disc); cache slots →1280. **Streaming:** the trailing
+in/out toggle was the velocity-predictive bias swinging on tap transients → **PredictLookahead 3→0** +
+**CenterHysteresis 0.15→0.35**; **RetireGrace kept at 2** (a 10-frame bump caused merge-overlap despawn pop — grace
+is a birth-hole bridge, not a thrash fix); **velocity-scaled birth budget** (24 base → 256 by speed) for hole-free
+fast flight, free when idle. Resolves Issues 2 & 3 of `2026-06-24-cdlod-streaming-shadow-known-issues.md`. Commit
+`e00b380`, tag `viewdist-checkpoint-2026-06-25`, fs backup. **OPEN:** far chunks still lag at sustained ~25 km/s
+(budget slope/ceiling, or scale field-cache bakes with speed); eye-gates owed; `FlyCamera.InitialSpeed=5000` (review
+aid) to revert. Handoff: `docs/handoffs/2026-06-25-viewdistance-streaming-start-here.md`.
+
 **2026-06-24 — ★ Per-chunk field cache SHIPPED (GPU compute): flying 10.7→7.2 ms, zero quality loss.** Built the
 APPROVED spec/plan (`2026-06-24-per-chunk-field-cache*`). Each CDLOD chunk's height+normal is baked once on birth
 via compute (`field_bake.glsl`, imageStore-direct into a `Texture2DArray`, no readback) and sampled at `u_morph`

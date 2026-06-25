@@ -1,3 +1,11 @@
+> **UPDATE 2026-06-25 — Issues 2 & 3 RESOLVED.** The audit ran and the view-distance deep-tune fixed both:
+> Issue 2 (far-out / fog) was the radius-coupled fog occluding ~94% at the boundary → **fog decoupled + DEPTH
+> mode + far-clip/ring pushed to ~65 km**; Issue 3 (fast-move churn / blink-out) was the **velocity-predictive
+> bias swinging on tap transients** (→ `PredictLookahead 0` + wider hysteresis) plus the `MaxChunkOps` birth
+> budget at speed (→ velocity-scaled budget). Issue 1 (shadow stipple) stands — still gated on ground surfacing.
+> See `docs/handoffs/2026-06-25-viewdistance-streaming-start-here.md`. (Remaining: far chunks still lag at
+> sustained ~25 km/s; the renderOrigin snap-pop was deliberately left untouched — radius-independent.)
+
 # CDLOD streaming + shadow — KNOWN ISSUES for the outside audit (2026-06-24)
 
 Surfaced when CDLOD was made **default-on** this session (ARC A step 0) and the user actually FLEW the infinite

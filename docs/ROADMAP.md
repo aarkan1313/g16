@@ -4,7 +4,8 @@ The single source of truth for what's done, what's being judged, and what's next
 design. Pairs with `NEEDS_REVIEW.md` (the eye-gate queue), `DECISIONS.md` (the why, per
 decision), and `HANDOFF.md` (orientation). Superseded designs are frozen in `docs/archive/`.
 
-Last updated: 2026-06-24. **Current state + next live in `HANDOFF.md` §6** (canonical) — the lanes below are
+Last updated: 2026-06-25 (view-distance deep-tune shipped — ~65 km clear / depth fog / streaming pop+thrash
+fixed; ARC A perf now inherits R=8). **Current state + next live in `HANDOFF.md` §6** (canonical) — the lanes below are
 the standing backlog. Since 2026-06-21: terrain RELIGHT + HORIZON SHADOWS shipped; the look-lab god-class was
 DECOMPOSED (`TerrainLabUI` −40%, 12 classes behind `ILabControls`) + audit hardening done (`AUDIT-2026-06-24.md`
 Part 5); a whole-frame profile REFRAMED perf — the "~27.5 ms floor" was the CDLOD-OFF single mesh; CDLOD-on in
