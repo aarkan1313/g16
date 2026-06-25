@@ -6,7 +6,18 @@ was big enough to warrant one. Date · what · why.
 
 ---
 
-**2026-06-25 — ★ View-distance deep-tune: ~65 km clear, near-clear/far-heavy fog, streaming pop+thrash fixed.**
+**2026-06-25 (later) — ⛔ View-distance deep-tune FAILED the live eye-gate → rework pending; decision deferred to a
+new chat.** On the real CDLOD path it was 54 ms/28 fps + a flat "brown-rectangle" chunk artifact + shadows popping at
+distance + "a lot of regression." Diagnosis (high confidence): artifact = the **velocity birth-budget** racing
+field-cache slot reuse; perf = **ring 8** (+7 ms) atop an in-motion floor that is **CPU streaming-churn-bound** (barely
+moves across R=2/4/8, clouds-off, atlas-4096, or `--fieldcache=0` — NOT GPU/shadow/cloud; the recorded 6 ms was a
+**5090**); churn = **lookahead 3→0** (rebirths 7.7% vs <1%); shadows = pre-existing 6 km CSM cutoff, just exposed.
+Pending choice (with the user, next chat): targeted revert (kill velocity budget + ring→4 + restore predictive —
+recommended) vs full revert vs straight into the optimize arc. **Revert SURGICALLY from `e00b380`** — `git checkout
+7fd7344` breaks the build (predates uncommitted cross-chat `SetChunkOps`). Code left as-is; see the handoff. The
+entry below was written mid-session and is OUTDATED (read it as the changelog, not the verdict).
+
+**2026-06-25 — ~~★ View-distance deep-tune: ~65 km clear, near-clear/far-heavy fog, streaming pop+thrash fixed.~~ [SUPERSEDED — see above; it regressed.]**
 Executed the ARC B north-star (min fog / max view) **ahead of the perf arc** at the user's explicit "see much much
 farther" direction — this overrides the earlier "keep R=2 until post-perf" sequencing, so **ARC A now optimizes at
 R=8 + 64 km far-clip**. Fog **DECOUPLED from the load radius** and switched to **DEPTH mode** (clear out to

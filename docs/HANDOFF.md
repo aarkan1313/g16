@@ -1,8 +1,8 @@
 # WG16 — Handoff (read this first, every new chat)
 
-Last updated: 2026-06-25 (**VIEW-DISTANCE DEEP-TUNE SHIPPED** — ~65 km clear / near-clear+far-heavy DEPTH fog /
-streaming pop+thrash fixed; the ARC B north-star, run ahead of perf at user direction; §6 refreshed). Prior
-2026-06-24: look-lab god-class DECOMPOSED −40% + audit hardening + ARC B pop-fix + field cache. **Refresh §6 each session.**
+Last updated: 2026-06-25 (**VIEW-DISTANCE DEEP-TUNE BUILT but FAILED LIVE EYE-GATE → rework pending**: 54 ms/28 fps
+on the real CDLOD path + a chunk artifact + shadows exposed; decision deferred to a new chat reviewing shadows;
+§6 refreshed). Prior 2026-06-24: god-class DECOMPOSED −40% + audit hardening + ARC B pop-fix + field cache. **Refresh §6 each session.**
 
 Written so a fresh chat with zero context gets productive immediately.
 
@@ -82,24 +82,26 @@ Run a scene (always `--rendering-driver vulkan`, absolute `--path`):
 
 ## 6. Current State — REFRESH EVERY SESSION
 
-> **2026-06-25 — VIEW-DISTANCE DEEP-TUNE SHIPPED (the ARC B north-star, run ahead of the perf arc at the user's
-> explicit "see much much farther" direction).** Start-here:
-> `docs/handoffs/2026-06-25-viewdistance-streaming-start-here.md`. Commit `e00b380`, tag
-> `viewdist-checkpoint-2026-06-25` (NOT pushed); fs backup `C:\Wg16\backups\wg-16-project_viewdist_2026-06-25`.
-> - **See far + minimal NEAR fog:** fog DECOUPLED from the load radius + switched to **DEPTH mode** (clear to
->   `FogDepthBegin` 22 km, curve 3.0 → full `FogDepthEnd` 62 km) so near/mid is clear and haze deepens only far;
->   far-clip 30→**64 km** + AT-2 aerial 32→**64 km** (3 must-match sites) so the load seam is hidden by **CLIPPING,
->   not fog**; load ring 2→**8** (~65 km, cheap — far cells coarse beyond the ~20 km split disc, leaves ~570→~900);
->   cache slots →1280. **This resolves the old fog-coupling that capped clear view at ~16 km.**
-> - **Streaming pop/thrash fixed (closes Issues 2 & 3 of the 2026-06-24 known-issues handoff):** trailing-edge
->   in/out toggle = the velocity-predictive bias swinging on tap transients → **PredictLookahead 3→0** +
->   **CenterHysteresis 0.15→0.35**; **RetireGrace kept 2** (a 10-frame bump caused merge-overlap despawn pop);
->   **velocity-scaled birth budget** (24 base → 256 by speed) for hole-free fast flight, free when idle.
-> - **OPEN:** far chunks still lag at sustained ~25 km/s (raise budget slope/ceiling, or scale field-cache bakes
->   with speed — far chunks fall back to live-eval at 25 km/s = fps cost, not holes). **Eye-gates owed:** fog feel,
->   the 64 km far-clip edge, snap-pop at the bigger radius. `FlyCamera.InitialSpeed=5000` (review aid) → revert to 120.
-> - **For ARC A (perf):** it now inherits **R=8 + 64 km far-clip**; the Task-3 fog-coarsen synergy is moot (depth
->   fog, no coupling). Re-profile `--profmove` at R=8 before the shadow-atlas dial-down.
+> **2026-06-25 — VIEW-DISTANCE DEEP-TUNE: BUILT, then FAILED LIVE EYE-GATE → REWORK PENDING (decision deferred to
+> a new chat).** Start-here (full diagnosis + decision options): `docs/handoffs/2026-06-25-viewdistance-streaming-start-here.md`.
+> Changes committed as `e00b380` (+docs `255def7`); tag `viewdist-checkpoint-2026-06-25`; fs backup
+> `C:\Wg16\backups\wg-16-project_viewdist_2026-06-25`. **The code is left AS-IS for the next chat to review.**
+> - **What was changed:** fog DECOUPLED + DEPTH-mode (clear near / haze far, begin 22 km / end 62 km); far-clip
+>   30→64 km + AT-2 aerial 32→64 km; load ring 2→**8** (~65 km); velocity-scaled birth budget; PredictLookahead 3→0
+>   + CenterHysteresis 0.15→0.35; cache slots →1280.
+> - **❌ REGRESSED on the real CDLOD path** (user flew `review.tscn --cdlod=1`): **54 ms / 28 fps**, a flat
+>   "brown-rectangle" chunk artifact, shadows popping at distance, "a lot of regression." Diagnosis (high
+>   confidence): artifact = the **velocity birth-budget** racing the field-cache slot reuse; perf = **ring 8** (+7 ms)
+>   on top of an in-motion floor that is **CPU streaming-churn-bound** (barely moves across R=2/4/8, clouds-off,
+>   atlas-4096, or `--fieldcache=0` — proving it is NOT GPU/shadow/cloud; the recorded 6 ms was a **5090**, this
+>   machine isn't); churn = **lookahead 3→0** (rebirths 7.7% vs <1%); shadows = **pre-existing 6 km CSM cutoff** now
+>   glaring because you can see far past it (not changed this session).
+> - **DECISION PENDING:** targeted revert (kill velocity budget + ring→4 + restore predictive — recommended) vs full
+>   revert to pre-today vs push into the optimize arc. **Revert SURGICALLY** (reverse my edits from `e00b380`) — NOT
+>   `git checkout 7fd7344`, which breaks the build (it predates uncommitted cross-chat `SetChunkOps`). Also revert
+>   `FlyCamera.InitialSpeed 5000→120`.
+> - **The real ceiling is the ARC A optimize arc** (perf = CPU streaming churn; shadows = the 6 km cutoff). The
+>   view-distance request just exposed both at scale. This is the NEXT arc the user wants to do — **review shadows first.**
 >
 > **2026-06-24 — STATE OF THE PROJECT (post terrain-relight; independent state-of-project audit run).**
 >

@@ -1,5 +1,47 @@
 # View distance + streaming deep-tune — START HERE (2026-06-25)
 
+> ## ⛔ REVIEW OUTCOME (later 2026-06-25): FAILED LIVE EYE-GATE — REGRESSED, REWORK PENDING
+> The user flew the real CDLOD path (`review.tscn --cdlod=1`) and it was **bad**: **54 ms / 28 fps focused**, a
+> **flat "brown rectangle" chunk artifact**, shadows **popping in / blocky at distance**, and "a lot of regression
+> in general." **The decision to revert was DEFERRED to a NEW CHAT** ("we will review shadows and these things you
+> did"). The code is left AS-IS (builds, `e00b380` view-distance changes committed) so the next chat can review the
+> actual state. **Do NOT trust the "SHIPPED" tone of the rest of this doc — treat it as the changelog of what was
+> changed, then read the diagnosis + decision below.**
+>
+> ### Symptom → cause (diagnosed, high confidence)
+> | Symptom | Cause | Fix |
+> |---|---|---|
+> | Flat "brown rectangle" chunk | **Velocity-scaled birth budget** (births burst to 256/fr ≫ 16/fr bake rate → field-cache slot churn hits the stale-slot race → a chunk shows wrong/flat baked data) | Remove the velocity budget (back to flat `MaxChunkOps=24`) |
+> | 54 ms / 28 fps | **Ring 8** (~+7 ms over R=4) ON TOP OF an already-high in-motion floor. **KEY:** the motion cost barely moves across R=2/4/8, clouds-off, atlas-4096, or **even `--fieldcache=0` (867 live-eval chunks ≈ 578 cached)** → it is **CPU streaming-churn-bound, NOT GPU/shadow/cloud**. The recorded 6 ms baseline was a **5090**; this machine is not. | Dial ring to ~4; the floor needs the ARC A optimize arc |
+> | Extra churn / pop | **PredictLookahead 3→0** (killed your tap-thrash but made sustained fast-flight rebirths 7.7% vs <1%) | Restore predictive loading (ideally speed-gated so taps don't thrash) |
+> | Shadows pop in / blocky far | **NOT changed this session** — pre-existing 6 km CSM cutoff, just made glaring by seeing far past it (ring 8 + 64 km far-clip) | The shadow-first ARC A work (or accept + lean on the horizon march) |
+> | "Looks off" | Depth fog + far-clip changed the LOOK (a choice, not a bug) | Keep or drop per taste |
+>
+> ### ⚠️ Revert is ENTANGLED — do it SURGICALLY, not `git checkout 7fd7344`
+> The pre-session baseline commit `7fd7344` **lacks uncommitted cross-chat methods** (`TerrainLab.SetChunkOps`, field-
+> cache era) that the working-tree `Cli.cs` references → `git checkout 7fd7344 -- TerrainLab.cs` **breaks the build**
+> (tried it; reverted). My commit `e00b380` folded that pre-session uncommitted work into itself. **So: reverse MY
+> specific edits from the current `e00b380` files** (preserves cross-chat work), do not wholesale-checkout the parent.
+>
+> ### DECISION PENDING (for the new chat, with the user)
+> Three options were on the table; **user has not chosen**:
+> 1. **Targeted revert (recommended):** kill the velocity budget (fixes artifact), dial ring 8→4, restore predictive
+>    loading (fixes churn). Keeps the see-far depth-fog look; perf still floor-limited; shadows still need work.
+> 2. **Full revert to pre-today:** reverse ALL my edits → R=2, original coupled fog (16 km wall), original streaming.
+>    Clean known-good; re-approach view distance in small eye-gated steps later.
+> 3. Keep + push straight into the ARC A optimize arc (perf + shadows) on top of the current state.
+>
+> ### Two real work items for the new chat
+> 1. **Decide + execute the revert** (surgical, per above).
+> 2. **Shadows** (the user explicitly wants to review these): the 6 km CSM cutoff on wide vistas — redistribute
+>    cascades / tune `--shadowdist` / lean on the shipped horizon self-shadow march, as part of the shadow-first
+>    ARC A pass. Note `--shadowatlas=4096` did NOTHING to perf here (shadows are not the perf cost — the churn is).
+>
+> **Safety nets:** tag `viewdist-checkpoint-2026-06-25` + fs backup `C:\Wg16\backups\wg-16-project_viewdist_2026-06-25`.
+> Also revert `FlyCamera.InitialSpeed 5000→120` (review aid in `e00b380`). Current ring default in code = **8**.
+
+---
+
 This session executed the **ARC B north-star deep pass** (memory `arcb-infinite-streaming-tuning-northstar`):
 *minimum fog, maximum view distance, no perceptible detail loss* — done **AHEAD of the perf arc at the user's
 explicit "see much much farther" direction** (overrides the earlier "keep R=2 until post-perf" sequencing; ARC A
