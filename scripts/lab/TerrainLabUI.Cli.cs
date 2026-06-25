@@ -65,10 +65,10 @@ public partial class TerrainLabUI : Control
     private int _analyticCli = -1;   // --analytic[=0|1] → S1 ground source: live field vs baked (default: leave shader default ON)
     private int _texturesCli = -1;   // --textures[=0|1] → minimal surfacing slice on/off at startup
     private bool _cdlodTestCli;      // --cdlodtest → S2a Task-1 sanity: one full-region chunk instance
-    // CDLOD is DEFAULT-ON (perf arc step 0, 2026-06-24): the shipping path is the infinite quadtree, not the
-    // finite single mesh (a bare launch used to show the slow 25 ms finite mesh → "it wasn't infinite"). Default
-    // 1 = on; --cdlod=0 still forces the single mesh. Apply at TerrainLabUI.Cli.cs:~245 fires when >= 0.
-    private int _cdlodCli = 1;       // --cdlod[=0|1] → infinite quadtree terrain (default) vs the single mesh
+    // CDLOD default (perf arc step 0, 2026-06-24): ON for the lab/game (infinite quadtree), OFF in ReviewMode
+    // (the look-review scene judges on the stable single mesh). -1 = unset → the ReviewMode-aware default at the
+    // apply decides; --cdlod=0/1 overrides explicitly.
+    private int _cdlodCli = -1;      // --cdlod[=0|1] → infinite quadtree terrain vs the single mesh
     private int _testPathCli = -1;   // --testpath=N → run S2b LOD-crossing test path N (0-based) headlessly, then quit
     private int _lodVizCli = -1;     // --lodviz[=1] → tint chunks by LOD level
 
@@ -255,7 +255,10 @@ public partial class TerrainLabUI : Control
         if (_analyticCli >= 0) { _analyticOn = _analyticCli == 1; _terrain.SetAnalytic(_analyticOn); }   // keep key-1 toggle in sync with the CLI default
         if (_texturesCli >= 0) { _terrain.SetTexturesOn(_texturesCli == 1); }   // minimal surfacing slice
         if (_cdlodTestCli) { _terrain.SetAnalytic(true); _terrain.CdlodTestOneChunk(_params); }   // S2a Task-1 sanity
-        if (_cdlodCli >= 0) { _terrain.SetAnalytic(true); _terrain.SetCdlod(_cdlodCli == 1); }   // S2a quadtree terrain
+        // CDLOD default: ON for the lab/game (infinite), but OFF in ReviewMode (review.tscn judges LOOK on the
+        // stable single mesh — streaming churn distracts from eye-gating palette/clouds/shadows). --cdlod= overrides.
+        int cdlodWant = _cdlodCli >= 0 ? _cdlodCli : (ReviewMode ? 0 : 1);
+        _terrain.SetAnalytic(true); _terrain.SetCdlod(cdlodWant == 1);
         if (_loadRingCli >= 0) { _terrain.SetLoadRing(_loadRingCli); }   // ARC B Task 1: load-ring radius override
         if (_fieldCacheCli >= 0) { _terrain.SetFieldCache(_fieldCacheCli == 1); }   // per-chunk field cache A/B (before first Tick)
         if (_bakeReqCli > 0) { _terrain.SetBakeReq(_bakeReqCli); }   // field-cache bake throttle
@@ -270,7 +273,7 @@ public partial class TerrainLabUI : Control
         }
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
         // S3.5: async AABB tighten tunables (--notighten / --aabbres= / --aabbreq=). Only meaningful with CDLOD on.
-        if (_cdlodCli == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
+        if (cdlodWant == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
         {
             _terrain.ConfigureCdlodAabb(!_noTightenCli, _aabbResCli, _aabbReqCli);
         }

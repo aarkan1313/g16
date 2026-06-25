@@ -61,6 +61,11 @@ public sealed partial class CdlodTerrain : Node3D
     private bool _cacheBound;                        // material bound to the cache texture once its RID is live
     private const int CacheSlots = 1024;             // texture-array layers (cap ≥ steady-state active chunks ~570)
     private readonly Stack<int> _freeLayers = new(); // free texture-array layer indices
+    // Defer flipping cache_ready until the GPU bake has DEFINITELY completed (the dispatch is fire-and-forget on
+    // the render thread; flipping the same frame it lands can race the imageStore → a reused layer shows the
+    // PREVIOUS chunk's data for a frame = a per-chunk flicker during motion). Hold landed bakes this many Ticks.
+    private const int CacheReadyDelay = 3;
+    private readonly List<(long key, int slot, int landFrame)> _cachePending = new();
     public bool PinOrigin = false;                  // DEBUG (--pinorigin): pin renderOrigin=0 (no snap) to isolate the snap-pop
     private readonly Dictionary<long, (float lo, float hi)> _tightened = new();   // key → landed tight range
 
@@ -361,12 +366,18 @@ public sealed partial class CdlodTerrain : Node3D
             }
             while (_fieldCache.TryTake(out long ckey, out int cslot))
             {
-                // The bake dispatched last frame (write complete behind its barrier) → flip this chunk to sampling.
-                if (_active.TryGetValue(ckey, out ChunkSlot s) && s.CacheSlot == cslot)
+                _cachePending.Add((ckey, cslot, _frame));   // landed → flip to sampling after CacheReadyDelay Ticks
+            }
+            for (int i = _cachePending.Count - 1; i >= 0; i--)
+            {
+                var (pk, ps, lf) = _cachePending[i];
+                if (_frame - lf < CacheReadyDelay) { continue; }   // give the GPU imageStore time to finish
+                if (_active.TryGetValue(pk, out ChunkSlot s) && s.CacheSlot == ps && !s.CacheReady)
                 {
                     s.CacheReady = true;
                     s.Mi.SetInstanceShaderParameter("cache_ready", 1.0f);
                 }
+                _cachePending.RemoveAt(i);   // resolved (flipped, or the chunk retired / reused its slot)
             }
         }
         if (_tightened.Count > 8192)
