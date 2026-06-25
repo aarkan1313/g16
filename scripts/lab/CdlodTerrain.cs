@@ -136,6 +136,7 @@ public sealed partial class CdlodTerrain : Node3D
     }
 
     public void SetLodViz(bool on) { _lodViz = on; _forceReapply = true; }   // re-push lod_viz to existing chunks
+    public void SetBakeReq(int n) { if (_fieldCache != null) { _fieldCache.MaxRequestsPerFrame = Mathf.Max(1, n); } }   // field-cache bake throttle
 
     /// S3.5: configure the async AABB tightener (CLI/lab tunables). probeRes/maxReq <= 0 leave the default.
     public void ConfigureAabb(bool tighten, int probeRes = 0, int maxReq = 0)

@@ -20,7 +20,11 @@ namespace WG16.Lab;
 /// thread drains via TryTake. Windowed only (render RD NullRefs headless).
 public sealed class ChunkFieldCache
 {
-    public int MaxRequestsPerFrame = 4;   // bake is ~86× the 7×7 probe → lower throttle than the AABB provider
+    // Bake throttle. Higher clears the birth backlog faster → more chunks sampling sooner → closer to the full
+    // steady-state win while flying (measured knee ≈16: flying 9.7→7.2 ms @ bakereq 4→16 on a 5090). The bake
+    // only runs when chunks are being born, so a high value costs nothing once caught up; tune down (--bakereq)
+    // on slower HW where a birth-burst's per-frame dispatch cost spikes. imageStore-direct (no readback sync).
+    public int MaxRequestsPerFrame = 16;
 
     private struct Req { public long Key; public int Slot; public Vector2 OriginXZ; public float Size; }
     private struct Done { public long Key; public int Slot; }
