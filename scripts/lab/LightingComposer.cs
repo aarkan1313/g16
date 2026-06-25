@@ -47,6 +47,13 @@ public sealed class LightingComposer
     public float BaseAmbient { get; set; } = 0.4f;
     public float BaseSunEnergy { get; set; } = 1.3f;
     public Color BaseFogColor { get; set; } = new(0.71f, 0.78f, 0.86f);
+    // VIEW-DISTANCE: DEPTH-mode distance fog so near is crystal-clear and haze concentrates FAR away
+    // ("less up-close fog, deeper farther-away fog"). Decoupled from the load radius. Fog is ZERO until
+    // FogDepthBegin, then eases in (FogDepthCurve > 1 → slow start, density piled toward the end) to FULL at
+    // FogDepthEnd (~just inside the camera far-clip → hides the streaming/clip seam). All live-tunable, HW-free.
+    public float FogDepthBegin { get; set; } = 22000f;   // m: terrain is fully clear out to here
+    public float FogDepthEnd   { get; set; } = 62000f;   // m: full fog by here (keep ≤ camera far-clip 64 km)
+    public float FogDepthCurve { get; set; } = 3.0f;     // >1 → fog stays thin most of the way, ramps up only far out
     // Sun orientation (degrees) — written by Compose from the arc, also by the sun-angle/azimuth sliders.
     public float SunAngle { get; set; } = 35f;
     public float SunAzimuth { get; set; } = 40f;
@@ -310,20 +317,16 @@ public sealed class LightingComposer
         //    ApplyOvercastScaling (it tints toward cloud-grey under overcast). Capture the base here. ──
         env.FogEnabled = true;
         BaseFogColor = Weather.FogColor;
-        // ARC B Task 3: COUPLE the distance-fog density to the CDLOD load radius. The far load boundary sits at
-        // CdlodViewDistance (= LoadRing·rootSize); pick a density that occludes it (~94% at the boundary,
-        // FOG_KNEE = −ln(0.06) ≈ 2.8 → density·viewDist ≈ 2.8) so terrain FADES UP out of haze instead of
-        // popping in at the seam. fog_view_scale dials it on top of the coupled baseline (0 = coupling off);
-        // the mood's own density still applies via max(), so overcast can be foggier but never CLEARER than the
-        // boundary needs. Only when CDLOD is live (viewDist>0); the finite single mesh keeps the mood density.
-        float moodFogDensity = Weather.FogDensity * 0.25f;
-        float viewDist = _host.CdlodViewDistance;
-        if (viewDist > 1f && _host.FogViewScale > 0f)
-        {
-            float coupled = _host.FogViewScale * (2.8f / viewDist);
-            env.FogDensity = Mathf.Max(moodFogDensity, coupled);
-        }
-        else { env.FogDensity = moodFogDensity; }
+        // VIEW-DISTANCE REWORK (2026-06-25): distance fog is DEPTH-mode + DECOUPLED from the CDLOD load radius.
+        // The old coupling forced density = 2.8/(LoadRing·rootSize), occluding ~94% at the load boundary — it
+        // hid the streaming seam with haze and capped the clear view at ~16 km. Now the seam is hidden by
+        // CLIPPING (camera far-clip ≤ loaded edge), and the fog is DEPTH-mode: zero until FogDepthBegin, then
+        // a curved ramp to full at FogDepthEnd — so near/mid are clear and the haze deepens only far out
+        // ("less up-close fog, deeper farther-away"). AT-2 aerial perspective adds the color-correct tint.
+        env.FogMode = Godot.Environment.FogModeEnum.Depth;
+        env.FogDepthBegin = FogDepthBegin;
+        env.FogDepthEnd = Mathf.Max(FogDepthBegin + 1f, FogDepthEnd);
+        env.FogDepthCurve = FogDepthCurve;
         env.FogAerialPerspective = Mathf.Min(Weather.FogAerial, 0.5f);
         // AT-2: when the physical aerial froxel owns distance haze, drop the built-in aerial perspective so
         // the two don't double-fog. Height fog / FogDensity stay (the froxel only replaces the distance/sky

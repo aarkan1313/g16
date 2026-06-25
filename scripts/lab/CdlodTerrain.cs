@@ -59,7 +59,7 @@ public sealed partial class CdlodTerrain : Node3D
     public bool FieldCache = true;
     private ChunkFieldCache _fieldCache;
     private bool _cacheBound;                        // material bound to the cache texture once its RID is live
-    private const int CacheSlots = 1024;             // texture-array layers (cap ≥ steady-state active chunks ~570)
+    private const int CacheSlots = 1280;             // texture-array layers (cap ≥ steady-state active chunks; ~900 at Ring 8). 1280×67²×16B ≈ 90 MB
     private readonly Stack<int> _freeLayers = new(); // free texture-array layer indices
     // Defer flipping cache_ready until the GPU bake has DEFINITELY completed (the dispatch is fire-and-forget on
     // the render thread; flipping the same frame it lands can race the imageStore → a reused layer shows the
@@ -72,15 +72,28 @@ public sealed partial class CdlodTerrain : Node3D
     public int GridN = 65;            // verts/side per chunk (64 quads)
     public int MaxDepth = 6;          // finest LOD depth; tunable
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
-    public int MaxChunkOps = 24;      // S3: max pooled-chunk births per frame (amortize streaming churn; tunable)
-    public int LoadRing = 2;          // ARC B Task 1: load-ring radius (1=3×3, 2=5×5 default, …) pushed to _qt.Ring each Tick
-    public float CenterHysteresis = 0.15f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
-                                             // center-cell boundary before the loaded window re-centers (anti-thrash near a seam)
+    public int MaxChunkOps = 24;      // S3: BASE pooled-chunk births/frame at rest (velocity-scaled up while moving; tunable via --chunkops)
+    public int MaxChunkOpsCeil = 256; // ceiling on the velocity-scaled birth budget — caps the fast-flight frontier-fill burst
+    public float ChunkOpsPerSpeed = 0.01f;   // births/frame added per m/s of camera speed (25 km/s → +250, clamped to ceil)
+    public int LoadRing = 8;          // ARC B Task 1: load-ring radius (1=3×3, 8=17×17 → ~65 km worst-case loaded edge)
+                                      // pushed to _qt.Ring each Tick. Far cells are beyond the split disc (~20 km) so they
+                                      // stay single coarse 8192 m chunks → growing this is cheap (leaves grow ~570→~900).
+                                      // Live-tunable down for weak HW via the Debug cdlod_loadring slider / --loadring=N.
+    public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
+                                             // center-cell boundary before the loaded window re-centers (anti-thrash near a seam).
+                                             // Widened 0.15→0.35: light taps near a cell seam were re-centering the window and
+                                             // visibly toggling trailing-edge chunks load/unload.
     private Vector2I _centerCell;     // ARC B Task 2: current (hysteretic) window-center cell index
     private bool _centerInit;         // false until _centerCell is seeded from the first Tick's camera cell
-    public float PredictLookahead = 3.0f;   // ARC B Task 4: seconds of camera velocity to bias the window-center
-                                            // forward by (loads INTO the direction of travel so you can't outrun it; 0 = off)
-    public int RetireGrace = 2;       // S3.6: frames a chunk may be unseen before retiring (bridges the budget-deferred birth hole without leaking; >=2 retires)
+    public float PredictLookahead = 0.0f;   // ARC B Task 4: seconds of camera velocity to bias the window-center
+                                            // forward by (loads INTO the direction of travel so you can't outrun it; 0 = off).
+                                            // DEFAULT OFF: a tap's velocity transient (spike → decay to 0) swung the biased
+                                            // center out-and-back, toggling trailing-edge chunks. With the big radius (Ring 8 ≈
+                                            // 65 km) you can't outrun the frontier at normal speeds, so prediction isn't needed.
+    public int RetireGrace = 2;       // S3.6: frames a chunk may be unseen before retiring (bridges the budget-deferred birth hole without leaking; >=2 retires).
+                                      // KEEP LOW: a merged chunk lingers Visible over its coarser replacement for these many frames
+                                      // (LOD overlap → shimmer/despawn pop). 2 ≈ 33 ms (imperceptible); a 10-frame bump read as visible
+                                      // spawn/despawn pop. The tap-thrash is fixed by PredictLookahead=0 + CenterHysteresis, not by grace.
     public int TotalSnaps, TotalBirths;   // perf instrumentation (cumulative since enable); active chunk count = ActiveCount
     public int TotalRebirths;             // CHURN diagnostic: births of a key retired within the last 30 frames (= thrash, not clean streaming)
     public int ActiveCount => _active.Count;
@@ -202,6 +215,10 @@ public sealed partial class CdlodTerrain : Node3D
         // _frame counter is the "seen" test — no per-slot Variant/Meta churn.
         snapped |= force;   // a forced re-apply re-pushes position+lod_viz+AABB to every live slot this frame
         _frame++;
+        // Velocity-scaled birth budget: idle/slow flight stays at the cheap base (you only birth what you need,
+        // so a high ceiling costs NOTHING when slow — weak HW unaffected); fast flight ramps the budget up so the
+        // frontier fills before you reach it (no holes at boost speed). Speed = smoothed true-world XZ velocity.
+        int effOps = Mathf.Min(MaxChunkOpsCeil, MaxChunkOps + (int)(velXZ.Length() * ChunkOpsPerSpeed));
         int births = 0;
         for (int i = 0; i < leaves.Count; i++)
         {
@@ -214,7 +231,7 @@ public sealed partial class CdlodTerrain : Node3D
             }
             else
             {
-                if (births >= MaxChunkOps) { continue; }   // S3: churn budget — rest appear next frame(s); RetireGrace bridges the deferred-birth hole
+                if (births >= effOps) { continue; }   // S3: velocity-scaled churn budget — rest appear next frame(s); RetireGrace bridges the deferred-birth hole
                 births++;
                 if (_recentRetire.TryGetValue(key, out int rf) && _frame - rf < 30) { TotalRebirths++; }   // CHURN: reborn shortly after retiring = thrash
                 ChunkSlot ns = AcquireSlot();
@@ -261,7 +278,7 @@ public sealed partial class CdlodTerrain : Node3D
         // bake backlog; leaves≫active → can't fill; leaves small → load-ring too small. Off by default.
         if (DebugStream)
         {
-            _dbgBirthsAcc += births; if (births >= MaxChunkOps) { _dbgCapped++; }
+            _dbgBirthsAcc += births; if (births >= effOps) { _dbgCapped++; }
             if (_frame % 30 == 0)
             {
                 int bakePend = (FieldCache && _fieldCache != null) ? _fieldCache.PendingCount : 0;

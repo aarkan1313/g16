@@ -212,7 +212,7 @@ public partial class TerrainLabUI : Control
             {
                 var proj = camN.GetCameraProjection();
                 var vp = proj * new Godot.Projection(camN.GlobalTransform.AffineInverse());
-                _atmosphere.SetCamera(camPos, 32000f, vp.Inverse());
+                _atmosphere.SetCamera(camPos, 64000f, vp.Inverse());   // MUST match AerialPerspective.aerial_far + camera far-clip
             }
 
             // Inspection light (L): toggle a fixed-angle studio directional to check surfaces.
@@ -350,7 +350,8 @@ public partial class TerrainLabUI : Control
             if (_fpsAccum >= 0.25)
             {
                 double avg = _fpsAccum / _fpsFrames;
-                _fpsLabel.Text = $"{1.0 / avg,5:0} fps   {avg * 1000.0,5:0.0} ms";
+                float spd = _camVelSmoothed.Length();   // smoothed TRUE-world XZ speed (m/s)
+                _fpsLabel.Text = $"{1.0 / avg,5:0} fps   {avg * 1000.0,5:0.0} ms\n{spd,7:0} m/s   {spd * 3.6f,8:0} km/h";
                 _fpsAccum = 0; _fpsFrames = 0;
             }
         }

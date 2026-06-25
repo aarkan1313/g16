@@ -47,7 +47,7 @@ public partial class AtmosphereCompute : Node
     private Texture3Drd? _aerialRd;   // 3D LUT → Texture3Drd (sampled as sampler3D in aerial_screen.gdshader)
     private bool _camDirty = true, _aerialCheckRequested;
     private Vector3 _camPos = Vector3.Zero;
-    private float _aerialFar = 32000f;                       // metres
+    private float _aerialFar = 64000f;                       // metres (matches camera far-clip + aerial_far; SetCamera overrides per-frame)
     private Godot.Projection _invViewProj = Godot.Projection.Identity;
 
     public Texture2Drd? SkyViewTexture => _skyViewRd;
