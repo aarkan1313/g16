@@ -33,6 +33,7 @@ public sealed partial class CdlodTerrain : Node3D
         public bool Tightened;         // has this slot's AABB been set from a landed async tighten?
         public Vector2 OriginXZ;       // chunk world origin (for re-applying the render-relative position on a snap)
         public float Size;
+        public bool CacheRequested;
         public int Level;
         public int SeenFrame = -1;     // last Tick frame this slot was in the visible set (vs _frame → retire)
         public int CacheSlot = -1;     // field-cache texture-array layer for this chunk (-1 = none → live-eval path)
@@ -92,6 +93,8 @@ public sealed partial class CdlodTerrain : Node3D
     public int SpeedChunkOpsCeil = 64;                // cap for optional speed-scaled near births
     public float SpeedChunkOpsPerMps = 0.0f;          // optional extra births per m/s; default 0 keeps normal perf stable
     public bool PrioritizeNearBirths = true;          // spend capped births on nearest missing chunks first
+    public int MaxCachePending = 768;                 // cap queued cache bakes so fast-flight stale work cannot bury current chunks
+    public float CacheRequestRadius = 32768f;         // only queue cache bakes inside this camera radius; live path remains quality-identical outside it
     public int SpeedRetireGraceCeil = 12;             // speed-scaled visual fallback cap; lets detail refine instead of exposing holes
     public float SpeedRetireGracePerMps = 0.0004f;    // +frames per m/s; 25 km/s => ~12-frame grace, normal flight stays modest
     public bool RetainedChunksCastShadows = false;    // grace fallback is visual coverage, not extra stale CSM casters
@@ -128,6 +131,7 @@ public sealed partial class CdlodTerrain : Node3D
     public int LastCachePending { get; private set; }
     public int LastEffectiveNearBudget { get; private set; }
     public int LastEffectiveRetireGrace { get; private set; }
+    public int LastCacheRequests { get; private set; }
     public int LastTightenedCount { get; private set; }
     public float LastSpeedXZ { get; private set; }
     private Vector3 _priorityCam;
@@ -202,6 +206,8 @@ public sealed partial class CdlodTerrain : Node3D
     public void SetSpeedChunkOpsCeil(int n) { SpeedChunkOpsCeil = Mathf.Max(1, n); }
     public void SetSpeedChunkOpsPerMps(float opsPerMps) { SpeedChunkOpsPerMps = Mathf.Max(0f, opsPerMps); }
     public void SetPrioritizeNearBirths(bool on) { PrioritizeNearBirths = on; }
+    public void SetMaxCachePending(int n) { MaxCachePending = Mathf.Max(0, n); }
+    public void SetCacheRequestRadius(float meters) { CacheRequestRadius = Mathf.Max(0f, meters); }
     public void SetSpeedRetireGraceCeil(int frames) { SpeedRetireGraceCeil = Mathf.Max(RetireGrace, frames); }
     public void SetSpeedRetireGracePerMps(float framesPerMps) { SpeedRetireGracePerMps = Mathf.Max(0f, framesPerMps); }
     public void SetRetainedChunksCastShadows(bool on) { RetainedChunksCastShadows = on; }
@@ -293,7 +299,7 @@ public sealed partial class CdlodTerrain : Node3D
         // Root-size chunks = far horizon shell; sub-root = near CDLOD.
         int nearBudget = EffectiveNearBudget(speedXZ);
         int retireGrace = EffectiveRetireGrace(speedXZ);
-        int nearBirths = 0, farBirths = 0;
+        int nearBirths = 0, farBirths = 0, cacheRequests = 0;
         for (int i = 0; i < leaves.Count; i++)
         {
             CdlodChunk c = leaves[i];
@@ -302,6 +308,7 @@ public sealed partial class CdlodTerrain : Node3D
             {
                 slot.SeenFrame = _frame;            // still visible → keep
                 ApplyChunk(slot, c, key, snapped);  // re-pushes ONLY what changed (mask / landed tighten / snap)
+                cacheRequests += QueueCacheBakeIfAllowed(key, c, slot, camPos);
                 QueueAabbTightenIfAllowed(allowAabbTighten, key, c, slot);
             }
             else
@@ -321,7 +328,7 @@ public sealed partial class CdlodTerrain : Node3D
                 if (!isFar && FieldCache && _fieldCache != null && _freeLayers.Count > 0)
                 {
                     ns.CacheSlot = _freeLayers.Pop(); ns.CacheReady = false;
-                    _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);
+                    cacheRequests += QueueCacheBakeIfAllowed(key, c, ns, camPos);
                 }
                 ApplyChunk(ns, c, key, snapped: true);
                 QueueAabbTightenIfAllowed(allowAabbTighten, key, c, ns);
@@ -356,6 +363,7 @@ public sealed partial class CdlodTerrain : Node3D
             ChunkSlot dead = _active[_scratchDead[i]];
             dead.Mi.Visible = false;
             _free.Push(dead.Mi);
+            CancelCacheBake(_scratchDead[i], dead);
             if (dead.CacheSlot >= 0) { _cacheLayersPendingFree.Add((dead.CacheSlot, _frame + CacheLayerFreeDelay)); dead.CacheSlot = -1; }
             _recentRetire[_scratchDead[i]] = _frame;   // CHURN diagnostic: stamp retire frame for rebirth detection
             _active.Remove(_scratchDead[i]);
@@ -375,6 +383,7 @@ public sealed partial class CdlodTerrain : Node3D
         LastCachePending = _cachePending.Count;
         LastEffectiveNearBudget = nearBudget;
         LastEffectiveRetireGrace = retireGrace;
+        LastCacheRequests = cacheRequests;
         LastTightenedCount = _tightened.Count;
         LastSpeedXZ = speedXZ;
 
@@ -400,6 +409,35 @@ public sealed partial class CdlodTerrain : Node3D
     {
         if (!allowAabbTighten || slot.IsFar || slot.Tightened || _tightened.ContainsKey(key)) { return; }
         _aabbProvider.Request(key, c.OriginXZ, c.Size);
+    }
+
+    private int QueueCacheBakeIfAllowed(long key, CdlodChunk c, ChunkSlot slot, Vector3 camPos)
+    {
+        if (!FieldCache || _fieldCache == null || slot.IsFar || slot.CacheReady || slot.CacheRequested) { return 0; }
+        if (slot.CacheSlot < 0)
+        {
+            if (_freeLayers.Count == 0) { return 0; }
+            slot.CacheSlot = _freeLayers.Pop();
+            slot.Mi.SetInstanceShaderParameter("chunk_slot", (float)slot.CacheSlot);
+            slot.Mi.SetInstanceShaderParameter("cache_ready", 0.0f);
+        }
+        if (MaxCachePending > 0 && _fieldCache.PendingCount >= MaxCachePending) { return 0; }
+        if (CacheRequestRadius > 0f && ChunkDistanceSq(c, camPos) > CacheRequestRadius * CacheRequestRadius) { return 0; }
+
+        _fieldCache.Request(key, slot.CacheSlot, c.OriginXZ, c.Size);
+        slot.CacheRequested = true;
+        return 1;
+    }
+
+    private void CancelCacheBake(long key, ChunkSlot slot)
+    {
+        if (!slot.CacheRequested || _fieldCache == null) { return; }
+        _fieldCache.Cancel(key);
+        slot.CacheRequested = false;
+        for (int i = _cachePending.Count - 1; i >= 0; i--)
+        {
+            if (_cachePending[i].key == key) { _cachePending.RemoveAt(i); }
+        }
     }
 
     private void UpdateCoverageUnderlay(Vector3 camPos)

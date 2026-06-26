@@ -45,6 +45,7 @@ public sealed class LabCliSequences
         public int CachePending;
         public int NearBudget;
         public int RetireGrace;
+        public int CacheRequests;
         public int Tightened;
         public float Speed;
         public int TotalSnaps;
@@ -221,6 +222,7 @@ public sealed class LabCliSequences
             CachePending = cd?.LastCachePending ?? -1,
             NearBudget = cd?.LastEffectiveNearBudget ?? -1,
             RetireGrace = cd?.LastEffectiveRetireGrace ?? -1,
+            CacheRequests = cd?.LastCacheRequests ?? -1,
             Tightened = cd?.LastTightenedCount ?? -1,
             Speed = cd?.LastSpeedXZ ?? 0f,
             TotalSnaps = cd?.TotalSnaps ?? -1,
@@ -257,7 +259,7 @@ public sealed class LabCliSequences
         {
             ProfileFrame s = _profTop[i];
             int missing = (s.Leaves >= 0 && s.Active >= 0) ? Math.Max(0, s.Leaves - s.Active) : -1;
-            GD.Print($"PROFILE-SPIKE {i + 1}: {s.Delta * 1000:0.0} ms sample={s.Sample} cdlodFrame={s.CdlodFrame} snap={(s.Snapped ? 1 : 0)} leaves={s.Leaves} active={s.Active} missing={missing} births={s.NearBirths}+{s.FarBirths} retires={s.Retires} bakePend={s.BakePending} cachePend={s.CachePending} budget={s.NearBudget} grace={s.RetireGrace} speed={s.Speed:0} visDraw={s.VisibleDraws} shDraw={s.ShadowDraws} shObj={s.ShadowObjects}");
+            GD.Print($"PROFILE-SPIKE {i + 1}: {s.Delta * 1000:0.0} ms sample={s.Sample} cdlodFrame={s.CdlodFrame} snap={(s.Snapped ? 1 : 0)} leaves={s.Leaves} active={s.Active} missing={missing} births={s.NearBirths}+{s.FarBirths} retires={s.Retires} cacheReq={s.CacheRequests} bakePend={s.BakePending} cachePend={s.CachePending} budget={s.NearBudget} grace={s.RetireGrace} speed={s.Speed:0} visDraw={s.VisibleDraws} shDraw={s.ShadowDraws} shObj={s.ShadowObjects}");
         }
     }
 
@@ -268,7 +270,7 @@ public sealed class LabCliSequences
         if (!string.IsNullOrWhiteSpace(dir)) { Directory.CreateDirectory(dir); }
 
         using StreamWriter w = new(_profileLogPath);
-        w.WriteLine("sample,ms,cdlod_frame,snap,leaves,active,missing,near_births,far_births,retires,bake_pending,cache_pending,near_budget,retire_grace,tightened,speed_mps,total_snaps,total_births,total_rebirths,visible_draws,shadow_draws,visible_objects,shadow_objects,visible_primitives,shadow_primitives");
+        w.WriteLine("sample,ms,cdlod_frame,snap,leaves,active,missing,near_births,far_births,retires,cache_requests,bake_pending,cache_pending,near_budget,retire_grace,tightened,speed_mps,total_snaps,total_births,total_rebirths,visible_draws,shadow_draws,visible_objects,shadow_objects,visible_primitives,shadow_primitives");
         foreach (ProfileFrame s in _profSamples)
         {
             int missing = (s.Leaves >= 0 && s.Active >= 0) ? Math.Max(0, s.Leaves - s.Active) : -1;
@@ -283,6 +285,7 @@ public sealed class LabCliSequences
                 s.NearBirths.ToString(CultureInfo.InvariantCulture),
                 s.FarBirths.ToString(CultureInfo.InvariantCulture),
                 s.Retires.ToString(CultureInfo.InvariantCulture),
+                s.CacheRequests.ToString(CultureInfo.InvariantCulture),
                 s.BakePending.ToString(CultureInfo.InvariantCulture),
                 s.CachePending.ToString(CultureInfo.InvariantCulture),
                 s.NearBudget.ToString(CultureInfo.InvariantCulture),

@@ -36,6 +36,7 @@ public sealed class ChunkFieldCache
 
     private readonly Queue<Req> _pending = new();
     private readonly HashSet<long> _queued = new();
+    private readonly HashSet<long> _canceled = new();
     private readonly List<Done> _done = new();
     private readonly object _doneLock = new();
 
@@ -65,17 +66,26 @@ public sealed class ChunkFieldCache
         _pending.Enqueue(new Req { Key = key, Slot = slot, OriginXZ = originXZ, Size = size });
     }
 
+    public void Cancel(long key)
+    {
+        if (_queued.Contains(key)) { _canceled.Add(key); }
+    }
+
     public bool TryTake(out long key, out int slot)
     {
         lock (_doneLock)
         {
-            if (_done.Count == 0) { key = 0; slot = -1; return false; }
-            Done d = _done[_done.Count - 1];
-            _done.RemoveAt(_done.Count - 1);
-            key = d.Key; slot = d.Slot;
+            while (_done.Count > 0)
+            {
+                Done d = _done[_done.Count - 1];
+                _done.RemoveAt(_done.Count - 1);
+                _queued.Remove(d.Key);
+                if (_canceled.Remove(d.Key)) { continue; }
+                key = d.Key; slot = d.Slot;
+                return true;
+            }
         }
-        _queued.Remove(key);
-        return true;
+        key = 0; slot = -1; return false;
     }
 
     public void Pump()
@@ -83,7 +93,13 @@ public sealed class ChunkFieldCache
         if (_pending.Count == 0 || _rtFailed) { return; }
         int n = Mathf.Min(MaxRequestsPerFrame, _pending.Count);
         var batch = new List<Req>(n);
-        for (int i = 0; i < n; i++) { batch.Add(_pending.Dequeue()); }
+        while (batch.Count < n && _pending.Count > 0)
+        {
+            Req req = _pending.Dequeue();
+            if (_canceled.Remove(req.Key)) { _queued.Remove(req.Key); continue; }
+            batch.Add(req);
+        }
+        if (batch.Count == 0) { return; }
         RenderingServer.CallOnRenderThread(Callable.From(() => ProcessBatch(batch)));
     }
 

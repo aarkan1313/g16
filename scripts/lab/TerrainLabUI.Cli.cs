@@ -139,6 +139,8 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--loadring=")) { int.TryParse(a.Substring("--loadring=".Length), out _loadRingCli); }   // ARC B Task 1: load-ring radius (1=3×3, 2=5×5)
             else if (a.StartsWith("--fieldcache=")) { _fieldCacheCli = a.Substring("--fieldcache=".Length) == "1" ? 1 : 0; }   // per-chunk field cache on/off A/B
             else if (a.StartsWith("--bakereq=")) { int.TryParse(a.Substring("--bakereq=".Length), out _bakeReqCli); }   // field-cache bake throttle
+            else if (a.StartsWith("--cachepend=")) { int.TryParse(a.Substring("--cachepend=".Length), out _cachePendingCli); }   // cap queued field-cache bakes
+            else if (a.StartsWith("--cacheradius=")) { float.TryParse(a.Substring("--cacheradius=".Length), System.Globalization.CultureInfo.InvariantCulture, out _cacheRadiusCli); _cacheRadiusSet = true; }   // cache-request radius in metres
             else if (a.StartsWith("--chunkops=")) { int.TryParse(a.Substring("--chunkops=".Length), out _chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle = high)
             else if (a.StartsWith("--farops=")) { int.TryParse(a.Substring("--farops=".Length), out _farChunkOpsCli); }   // far/horizon root birth cap
             else if (a.StartsWith("--retiregrace=")) { int.TryParse(a.Substring("--retiregrace=".Length), out _retireGraceCli); }   // unseen frames before retire
@@ -255,6 +257,8 @@ public partial class TerrainLabUI : Control
         if (_loadRingCli >= 0) { _terrain.SetLoadRing(_loadRingCli); }   // ARC B Task 1: load-ring radius override
         if (_fieldCacheCli >= 0) { _terrain.SetFieldCache(_fieldCacheCli == 1); }   // per-chunk field cache A/B (before first Tick)
         if (_bakeReqCli > 0) { _terrain.SetBakeReq(_bakeReqCli); }   // field-cache bake throttle
+        if (_cachePendingCli >= 0) { _terrain.SetMaxCachePending(_cachePendingCli); }
+        if (_cacheRadiusSet) { _terrain.SetCacheRequestRadius(_cacheRadiusCli); }
         if (_chunkOpsCli > 0) { _terrain.SetChunkOps(_chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle)
         if (_farChunkOpsCli >= 0) { _terrain.SetFarChunkOps(_farChunkOpsCli); }
         if (_retireGraceCli > 0) { _terrain.SetRetireGrace(_retireGraceCli); }
@@ -372,6 +376,9 @@ public partial class TerrainLabUI : Control
     private float _aabbSpeedCli;      // --aabbspeed=N -> max camera m/s that may run AABB readback probes
     private bool _aabbSpeedSet;
     private float _shadowRingCli = -1f; // --shadowring=N -> CSM caster ring radius; 0 = all near CDLOD chunks
+    private int _cachePendingCli = -1; // --cachepend=N -> max queued field-cache bakes (-1 = leave default)
+    private float _cacheRadiusCli;     // --cacheradius=N -> cache-request radius in metres
+    private bool _cacheRadiusSet;
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;

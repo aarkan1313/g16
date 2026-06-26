@@ -35,6 +35,19 @@ Measured on 2026-06-26 with CDLOD default-on:
 
 Early conclusion: snap fan-out still needs review, but the first measured stress spike points harder at scheduler/backlog/retire burst behavior than origin snaps.
 
+## Baseline After Cache Scheduler Slice
+
+Task 3a added a bounded cache scheduler: queued bakes are capped, retired chunks cancel pending bakes, active uncached chunks can backfill later, and `--cachepend=N` / `--cacheradius=N` plus Debug sliders expose the knobs.
+
+| Command | avg | p50 | p95 | p99 | worst | Read |
+|---|---:|---:|---:|---:|---:|---|
+| `--profile=5 --profmove --profspeed=5000` | 5.7 ms | 5.6 ms | 6.7 ms | 6.9 ms | 7.8 ms | normal-speed worsts improved materially; bake backlog stayed 0 |
+| `--profile=5 --profmove --profspeed=25000` | 5.8 ms | 5.6 ms | 6.7 ms | 8.2 ms | 15.2 ms | stress backlog capped near 450; final max improved after queue-dedup cancellation fix; top spike still had capped births, missing detail, and retire work |
+| `--profile=5 --profmove --profspeed=25000 --cachepend=256` | 5.6 ms | 5.6 ms | 6.3 ms | 7.4 ms | 34.8 ms | stricter cap helped p95/p99 but worsened the single max; keep 768 default |
+| `--profile=5 --profmove --profspeed=25000 --chunkopsgain=0.001 --chunkopsceil=64` | 9.0 ms | 8.9 ms | 11.1 ms | 15.2 ms | 32.7 ms | brute-force speed births removed missing chunks but ballooned active chunks and made perf worse; keep gain 0 default |
+
+Next read: the remaining 25 km/s max looks more like a retire/birth/missing-detail burst than cache backlog or snap fan-out.
+
 ## Milestones
 
 ### M1 - Profiler Truth
@@ -67,6 +80,11 @@ Acceptance:
 - Bake backlog does not grow unbounded during 25 km/s stress.
 - Active detail converges after speed settles.
 - No flat/stale chunk data appears from cache slot races.
+
+Status:
+
+- Task 3a complete: stale cache work is bounded and cancellable.
+- Remaining: retire/birth burst smoothing and long-lived chunk prediction without reintroducing tap-thrash.
 
 ### M4 - Shadow Caster LOD Policy
 

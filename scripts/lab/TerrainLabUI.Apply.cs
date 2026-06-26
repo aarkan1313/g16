@@ -120,6 +120,8 @@ public partial class TerrainLabUI : Control
             case "chunk_ops":       _terrain.SetChunkOps(Mathf.RoundToInt(v)); break;
             case "far_chunk_ops":   _terrain.SetFarChunkOps(Mathf.RoundToInt(v)); break;
             case "bake_req":        _terrain.SetBakeReq(Mathf.RoundToInt(v)); break;
+            case "cache_pending":   _terrain.SetMaxCachePending(Mathf.RoundToInt(v)); break;
+            case "cache_radius":    _terrain.SetCacheRequestRadius(v); break;
             case "retire_grace":    _terrain.SetRetireGrace(Mathf.RoundToInt(v)); break;
             case "chunk_ops_ceil":  _terrain.SetSpeedChunkOpsCeil(Mathf.RoundToInt(v)); break;
             case "chunk_ops_gain":  _terrain.SetSpeedChunkOpsPerMps(v); break;

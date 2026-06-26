@@ -197,6 +197,8 @@ public partial class TerrainLab : MeshInstance3D
     public void SetSpeedChunkOpsCeil(int n) { _cdlod?.SetSpeedChunkOpsCeil(n); }
     public void SetSpeedChunkOpsPerMps(float opsPerMps) { _cdlod?.SetSpeedChunkOpsPerMps(opsPerMps); }
     public void SetPrioritizeNearBirths(bool on) { _cdlod?.SetPrioritizeNearBirths(on); }
+    public void SetMaxCachePending(int n) { _cdlod?.SetMaxCachePending(n); }
+    public void SetCacheRequestRadius(float meters) { _cdlod?.SetCacheRequestRadius(meters); }
     public void SetSpeedRetireGraceCeil(int frames) { _cdlod?.SetSpeedRetireGraceCeil(frames); }
     public void SetSpeedRetireGracePerMps(float framesPerMps) { _cdlod?.SetSpeedRetireGracePerMps(framesPerMps); }
     public void SetRetainedChunksCastShadows(bool on) { _cdlod?.SetRetainedChunksCastShadows(on); }

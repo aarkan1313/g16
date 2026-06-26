@@ -86,10 +86,10 @@ Godot_v4.6.2-stable_mono_win64_console.exe --path C:/Wg16/wg-16-project --render
 
 **Steps:**
 
-- [ ] Use spike/backlog telemetry to separate birth cap, bake cap, and retire churn failures.
-- [ ] Prioritize near and long-lived chunks.
-- [ ] Avoid spending cache work on chunks that are likely to retire before the bake lands.
-- [ ] Keep `--bakereq`, `--chunkops`, `--farops`, speed gain, and priority knobs available.
+- [x] Use spike/backlog telemetry to separate birth cap, bake cap, and retire churn failures.
+- [~] Prioritize near and long-lived chunks. Nearest-first already exists; long-lived prediction remains open.
+- [x] Avoid spending cache work on chunks that are likely to retire before the bake lands.
+- [x] Keep `--bakereq`, `--chunkops`, `--farops`, speed gain, and priority knobs available; add `--cachepend` and `--cacheradius`.
 
 **Gates:**
 
@@ -103,6 +103,8 @@ Godot_v4.6.2-stable_mono_win64_console.exe --path C:/Wg16/wg-16-project --render
 - Bake backlog stays bounded or drains after stress movement.
 - Detail fills closest first and does not expose void.
 - No stale/flat cache-slot visual artifacts.
+
+**Result 2026-06-26 Task 3a:** cache scheduler slice complete. Final 25 km/s run: avg `5.8 ms`, p95 `6.7 ms`, p99 `8.2 ms`, worst `15.2 ms`; backlog capped near `450` instead of `4531`. Normal-speed worst improved from `13.5 ms` to `7.8 ms`. Remaining 25 km/s max aligns with capped births, missing detail, and retire work, not snap or cache backlog. A stricter `--cachepend=256` improved p99 but worsened max; `--chunkopsgain=0.001` ballooned active chunks and should stay off by default.
 
 ## Task 4 - Shadow Caster LOD Rings
 
