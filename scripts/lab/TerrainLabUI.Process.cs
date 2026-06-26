@@ -40,7 +40,7 @@ public partial class TerrainLabUI : Control
     private bool _lastG;        // G toggles the anti-moiré detail-fade live
     private bool _lastWaterH;   // H toggles the water debug overlay live
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
-    private bool _detailFadeOn = false;  // anti-moiré detail-fade default OFF (matches shader default; ring bug fixed at source, fade only washed far detail)
+    private bool _detailFadeOn = true;   // anti-moiré detail-fade default ON; G toggles raw texture detail for diagnosis
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
     private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)

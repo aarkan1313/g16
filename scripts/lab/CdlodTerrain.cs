@@ -214,8 +214,11 @@ public sealed partial class CdlodTerrain : Node3D
     public void SetCoverageUnderlay(bool on)
     {
         CoverageUnderlay = on;
-        if (_coverageUnderlay != null) { _coverageUnderlay.Visible = _enabled && on; }
-        if (_coverageUnderlayFar != null) { _coverageUnderlayFar.Visible = _enabled && on; }
+        if (!on)
+        {
+            if (_coverageUnderlay != null) { _coverageUnderlay.Visible = false; }
+            if (_coverageUnderlayFar != null) { _coverageUnderlayFar.Visible = false; }
+        }
     }
     public void SetCoverageUnderlaySize(float meters) { CoverageUnderlaySize = Mathf.Max(_regionSize, meters); }
     public void SetCoverageUnderlayDrop(float meters) { CoverageUnderlayDrop = Mathf.Clamp(meters, 0f, 20f); }
@@ -264,7 +267,6 @@ public sealed partial class CdlodTerrain : Node3D
         bool originSnapped = snapped;
         _lastRenderOrigin = _renderOrigin;
         if (snapped) { TotalSnaps++; }   // perf instrumentation: real renderOrigin snaps (8192 m crossings, pre-force)
-        UpdateCoverageUnderlay(camPos);
         _shadowCenterXZ = new Vector2(camPos.X, camPos.Z);
         float speedXZ = new Vector2(velXZ.X, velXZ.Z).Length();
         bool allowAabbTighten = TightenAabb && speedXZ <= AabbTightenMaxSpeed;
@@ -299,7 +301,7 @@ public sealed partial class CdlodTerrain : Node3D
         // Root-size chunks = far horizon shell; sub-root = near CDLOD.
         int nearBudget = EffectiveNearBudget(speedXZ);
         int retireGrace = EffectiveRetireGrace(speedXZ);
-        int nearBirths = 0, farBirths = 0, cacheRequests = 0;
+        int nearBirths = 0, farBirths = 0, cacheRequests = 0, missingAfterBudget = 0;
         for (int i = 0; i < leaves.Count; i++)
         {
             CdlodChunk c = leaves[i];
@@ -315,8 +317,8 @@ public sealed partial class CdlodTerrain : Node3D
             {
                 // Root-size chunks are far horizon shell — separate lazy budget, no cache, no AABB.
                 bool isFar = c.Size >= _regionSize;
-                if (isFar)  { if (farBirths  >= FarChunkOps)  { continue; } farBirths++;  }
-                else        { if (nearBirths >= nearBudget)    { continue; } nearBirths++; }
+                if (isFar)  { if (farBirths  >= FarChunkOps)  { missingAfterBudget++; continue; } farBirths++;  }
+                else        { if (nearBirths >= nearBudget)    { missingAfterBudget++; continue; } nearBirths++; }
 
                 if (_recentRetire.TryGetValue(key, out int rf) && _frame - rf < 30) { TotalRebirths++; }
                 ChunkSlot ns = AcquireSlot();
@@ -335,6 +337,7 @@ public sealed partial class CdlodTerrain : Node3D
             }
         }
         TotalBirths += nearBirths + farBirths;
+        UpdateCoverageUnderlay(camPos, missingAfterBudget > 0 || speedXZ > 2500f);
 
         // Retire slots not seen this frame → hide + return to the free-list (NOT freed; reused next birth).
         // VANISHING-CHUNK FIX (grace period): a chunk gets RetireGrace frames of being unseen before it's
@@ -440,9 +443,9 @@ public sealed partial class CdlodTerrain : Node3D
         }
     }
 
-    private void UpdateCoverageUnderlay(Vector3 camPos)
+    private void UpdateCoverageUnderlay(Vector3 camPos, bool needFallback)
     {
-        bool show = CoverageUnderlay && _enabled;
+        bool show = CoverageUnderlay && _enabled && needFallback;
         if (_coverageUnderlay != null) { _coverageUnderlay.Visible = show; }
         if (_coverageUnderlayFar != null) { _coverageUnderlayFar.Visible = show; }
         if (!show) { return; }
