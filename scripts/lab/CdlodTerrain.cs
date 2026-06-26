@@ -14,6 +14,8 @@ public sealed partial class CdlodTerrain : Node3D
     private PlaneMesh _grid = null!;
     private ArrayMesh[] _variants = System.Array.Empty<ArrayMesh>();   // S2d: [stitchMask] -> welded edge-stitch mesh
     private CdlodQuadtree _qt = null!;
+    private MeshInstance3D? _coverageUnderlay;          // near coarse visual-only fallback so deferred births never reveal sky/void
+    private MeshInstance3D? _coverageUnderlayFar;       // larger, lower fallback sheet for the horizon side of high-speed traversal
     private float _minH, _maxH, _regionSize;
     private float[] _heights = System.Array.Empty<float>();   // baked heightmap (row-major, res²), for per-chunk AABB
     private int _hRes;
@@ -90,6 +92,12 @@ public sealed partial class CdlodTerrain : Node3D
     public int SpeedChunkOpsCeil = 64;                // cap for optional speed-scaled near births
     public float SpeedChunkOpsPerMps = 0.0f;          // optional extra births per m/s; default 0 keeps normal perf stable
     public bool PrioritizeNearBirths = true;          // spend capped births on nearest missing chunks first
+    public int SpeedRetireGraceCeil = 12;             // speed-scaled visual fallback cap; lets detail refine instead of exposing holes
+    public float SpeedRetireGracePerMps = 0.0004f;    // +frames per m/s; 25 km/s => ~12-frame grace, normal flight stays modest
+    public bool RetainedChunksCastShadows = false;    // grace fallback is visual coverage, not extra stale CSM casters
+    public bool CoverageUnderlay = true;              // cheap coarse terrain sheets below CDLOD; holes refine instead of appearing
+    public float CoverageUnderlaySize = 98304f;        // far sheet size; inner sheet derives from this for a cheap two-ring fallback
+    public float CoverageUnderlayDrop = 2.0f;          // metres below detailed chunks; avoids z-fighting while hiding voids
     private Vector2 _shadowCenterXZ;                 // current camera XZ for ring tests; set once per Tick()
     public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
                                              // center-cell boundary before the loaded window re-centers (anti-thrash near a seam).
@@ -140,6 +148,10 @@ public sealed partial class CdlodTerrain : Node3D
         for (int i = CacheSlots - 1; i >= 0; i--) { _freeLayers.Push(i); }   // 0..N-1 available
         _grid = CdlodMesh.BuildGrid(GridN);
         _variants = CdlodMesh.BuildStitchedVariants(GridN);   // S2d: 16 welded edge-stitch variants (by mask)
+        _coverageUnderlay = CreateCoverageUnderlay();
+        _coverageUnderlayFar = CreateCoverageUnderlay();
+        AddChild(_coverageUnderlay);
+        AddChild(_coverageUnderlayFar);
         _qt = new CdlodQuadtree(-_regionSize * 0.5f, -_regionSize * 0.5f, _regionSize, MaxDepth, SplitFactor);
         _coarseSnap = _regionSize;   // S3: snap renderOrigin to the coarsest chunk grid (root size)
         GD.Print($"CdlodTerrain: setup gridN={GridN} maxDepth={MaxDepth} split={SplitFactor} region={_regionSize:F0}");
@@ -162,6 +174,8 @@ public sealed partial class CdlodTerrain : Node3D
         _enabled = on;
         if (!on)   // hide every live + free instance (S3.6 keyed pool)
         {
+            if (_coverageUnderlay != null) { _coverageUnderlay.Visible = false; }
+            if (_coverageUnderlayFar != null) { _coverageUnderlayFar.Visible = false; }
             foreach (var kv in _active) { kv.Value.Mi.Visible = false; }
             foreach (var mi in _free) { mi.Visible = false; }
         }
@@ -175,6 +189,17 @@ public sealed partial class CdlodTerrain : Node3D
     public void SetSpeedChunkOpsCeil(int n) { SpeedChunkOpsCeil = Mathf.Max(1, n); }
     public void SetSpeedChunkOpsPerMps(float opsPerMps) { SpeedChunkOpsPerMps = Mathf.Max(0f, opsPerMps); }
     public void SetPrioritizeNearBirths(bool on) { PrioritizeNearBirths = on; }
+    public void SetSpeedRetireGraceCeil(int frames) { SpeedRetireGraceCeil = Mathf.Max(RetireGrace, frames); }
+    public void SetSpeedRetireGracePerMps(float framesPerMps) { SpeedRetireGracePerMps = Mathf.Max(0f, framesPerMps); }
+    public void SetRetainedChunksCastShadows(bool on) { RetainedChunksCastShadows = on; }
+    public void SetCoverageUnderlay(bool on)
+    {
+        CoverageUnderlay = on;
+        if (_coverageUnderlay != null) { _coverageUnderlay.Visible = _enabled && on; }
+        if (_coverageUnderlayFar != null) { _coverageUnderlayFar.Visible = _enabled && on; }
+    }
+    public void SetCoverageUnderlaySize(float meters) { CoverageUnderlaySize = Mathf.Max(_regionSize, meters); }
+    public void SetCoverageUnderlayDrop(float meters) { CoverageUnderlayDrop = Mathf.Clamp(meters, 0f, 20f); }
 
     /// S3.5: configure the async AABB tightener (CLI/lab tunables). probeRes/maxReq <= 0 leave the default.
     public void ConfigureAabb(bool tighten, int probeRes = 0, int maxReq = 0)
@@ -219,6 +244,7 @@ public sealed partial class CdlodTerrain : Node3D
         bool snapped = _renderOrigin.X != _lastRenderOrigin.X || _renderOrigin.Z != _lastRenderOrigin.Z;
         _lastRenderOrigin = _renderOrigin;
         if (snapped) { TotalSnaps++; }   // perf instrumentation: real renderOrigin snaps (8192 m crossings, pre-force)
+        UpdateCoverageUnderlay(camPos);
         _shadowCenterXZ = new Vector2(camPos.X, camPos.Z);
         float speedXZ = new Vector2(velXZ.X, velXZ.Z).Length();
         bool allowAabbTighten = TightenAabb && speedXZ <= AabbTightenMaxSpeed;
@@ -252,6 +278,7 @@ public sealed partial class CdlodTerrain : Node3D
         // Near vs far birth budgets (independent so far shell can't starve near detail).
         // Root-size chunks = far horizon shell; sub-root = near CDLOD.
         int nearBudget = EffectiveNearBudget(speedXZ);
+        int retireGrace = EffectiveRetireGrace(speedXZ);
         int nearBirths = 0, farBirths = 0;
         for (int i = 0; i < leaves.Count; i++)
         {
@@ -298,7 +325,17 @@ public sealed partial class CdlodTerrain : Node3D
         // orbit churn let `active` balloon to ~8× the leaf count — a leak). A chunk unseen for >= RetireGrace
         // frames ALWAYS retires, so steady-state active stays ~leafCount and sustained saturation can't pile up.
         _scratchDead.Clear();
-        foreach (var kv in _active) { if (_frame - kv.Value.SeenFrame >= RetireGrace) { _scratchDead.Add(kv.Key); } }
+        foreach (var kv in _active)
+        {
+            ChunkSlot slot = kv.Value;
+            int unseen = _frame - slot.SeenFrame;
+            if (unseen > 0 && !RetainedChunksCastShadows && slot.CastsShadow)
+            {
+                slot.Mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                slot.CastsShadow = false;
+            }
+            if (unseen >= retireGrace) { _scratchDead.Add(kv.Key); }
+        }
         for (int i = 0; i < _scratchDead.Count; i++)
         {
             ChunkSlot dead = _active[_scratchDead[i]];
@@ -322,7 +359,7 @@ public sealed partial class CdlodTerrain : Node3D
             if (_frame % 30 == 0)
             {
                 int bakePend = (FieldCache && _fieldCache != null) ? _fieldCache.PendingCount : 0;
-                GD.Print($"[streamdiag] f={_frame} leaves={leaves.Count} active={_active.Count} near={nearBirths}/far={farBirths} births/30={_dbgBirthsAcc} capped={_dbgCapped}/30 bakePend={bakePend} cachePend={_cachePending.Count} tights={_tightened.Count} snaps={TotalSnaps}");
+                GD.Print($"[streamdiag] f={_frame} leaves={leaves.Count} active={_active.Count} near={nearBirths}/far={farBirths} births/30={_dbgBirthsAcc} capped={_dbgCapped}/30 bakePend={bakePend} cachePend={_cachePending.Count} grace={retireGrace} tights={_tightened.Count} snaps={TotalSnaps}");
                 _dbgBirthsAcc = 0; _dbgCapped = 0;
             }
         }
@@ -336,11 +373,61 @@ public sealed partial class CdlodTerrain : Node3D
         _aabbProvider.Request(key, c.OriginXZ, c.Size);
     }
 
+    private void UpdateCoverageUnderlay(Vector3 camPos)
+    {
+        bool show = CoverageUnderlay && _enabled;
+        if (_coverageUnderlay != null) { _coverageUnderlay.Visible = show; }
+        if (_coverageUnderlayFar != null) { _coverageUnderlayFar.Visible = show; }
+        if (!show) { return; }
+
+        float root = Mathf.Max(1f, _regionSize);
+        float farSize = Mathf.Max(root, CoverageUnderlaySize);
+        float nearSize = Mathf.Clamp(farSize * 0.5f, root, 32768f);
+        float centerX = Mathf.Floor(camPos.X / root) * root + root * 0.5f;
+        float centerZ = Mathf.Floor(camPos.Z / root) * root + root * 0.5f;
+        ApplyCoverageUnderlay(_coverageUnderlayFar, centerX, centerZ, farSize, CoverageUnderlayDrop + 6f);
+        ApplyCoverageUnderlay(_coverageUnderlay, centerX, centerZ, nearSize, CoverageUnderlayDrop);
+    }
+
+    private MeshInstance3D CreateCoverageUnderlay()
+    {
+        var mi = new MeshInstance3D
+        {
+            Mesh = _grid,
+            MaterialOverride = _mat,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            GIMode = GeometryInstance3D.GIModeEnum.Disabled,
+            Visible = false,
+        };
+        mi.SetInstanceShaderParameter("lod_viz", -1.0f);
+        mi.SetInstanceShaderParameter("chunk_slot", -1.0f);
+        mi.SetInstanceShaderParameter("cache_ready", 0.0f);
+        return mi;
+    }
+
+    private void ApplyCoverageUnderlay(MeshInstance3D? mi, float centerX, float centerZ, float size, float drop)
+    {
+        if (mi == null) { return; }
+        mi.Position = new Vector3(centerX - _renderOrigin.X, -drop, centerZ - _renderOrigin.Z);
+        mi.Scale = new Vector3(size, 1f, size);
+        float margin = Mathf.Max(32f, size / Mathf.Max(1, GridN - 1));
+        mi.CustomAabb = new Aabb(
+            new Vector3(-0.5f, _minH - margin, -0.5f),
+            new Vector3(1f, (_maxH - _minH) + 2f * margin, 1f));
+    }
+
     private int EffectiveNearBudget(float speedXZ)
     {
         int extra = Mathf.FloorToInt(speedXZ * SpeedChunkOpsPerMps);
         int cap = Mathf.Max(MaxChunkOps, SpeedChunkOpsCeil);
         return Mathf.Clamp(MaxChunkOps + extra, 1, cap);
+    }
+
+    private int EffectiveRetireGrace(float speedXZ)
+    {
+        int extra = Mathf.FloorToInt(speedXZ * SpeedRetireGracePerMps);
+        int cap = Mathf.Max(RetireGrace, SpeedRetireGraceCeil);
+        return Mathf.Clamp(RetireGrace + extra, RetireGrace, cap);
     }
 
     private int CompareChunkPriority(CdlodChunk a, CdlodChunk b)

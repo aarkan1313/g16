@@ -197,6 +197,12 @@ public partial class TerrainLab : MeshInstance3D
     public void SetSpeedChunkOpsCeil(int n) { _cdlod?.SetSpeedChunkOpsCeil(n); }
     public void SetSpeedChunkOpsPerMps(float opsPerMps) { _cdlod?.SetSpeedChunkOpsPerMps(opsPerMps); }
     public void SetPrioritizeNearBirths(bool on) { _cdlod?.SetPrioritizeNearBirths(on); }
+    public void SetSpeedRetireGraceCeil(int frames) { _cdlod?.SetSpeedRetireGraceCeil(frames); }
+    public void SetSpeedRetireGracePerMps(float framesPerMps) { _cdlod?.SetSpeedRetireGracePerMps(framesPerMps); }
+    public void SetRetainedChunksCastShadows(bool on) { _cdlod?.SetRetainedChunksCastShadows(on); }
+    public void SetCoverageUnderlay(bool on) { _cdlod?.SetCoverageUnderlay(on); }
+    public void SetCoverageUnderlaySize(float meters) { _cdlod?.SetCoverageUnderlaySize(meters); }
+    public void SetCoverageUnderlayDrop(float meters) { _cdlod?.SetCoverageUnderlayDrop(meters); }
     public void SetShadowRing(float meters) { if (_cdlod != null) { _cdlod.ShadowCasterRadius = Mathf.Max(0f, meters); } }   // CSM caster radius around camera
     public float ShadowRing => _cdlod?.ShadowCasterRadius ?? 0f;
     public int LoadRing => _cdlod?.LoadRing ?? 5;

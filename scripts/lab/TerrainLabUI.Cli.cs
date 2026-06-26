@@ -145,6 +145,12 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--chunkopsceil=")) { int.TryParse(a.Substring("--chunkopsceil=".Length), out _chunkOpsCeilCli); }   // speed-scaled chunk birth cap
             else if (a.StartsWith("--chunkopsgain=")) { float.TryParse(a.Substring("--chunkopsgain=".Length), System.Globalization.CultureInfo.InvariantCulture, out _chunkOpsGainCli); _chunkOpsGainSet = true; }   // extra births per m/s
             else if (a.StartsWith("--priority=")) { _streamPriorityCli = a.Substring("--priority=".Length) == "1" ? 1 : 0; }   // nearest-first birth priority
+            else if (a.StartsWith("--retireceil=")) { int.TryParse(a.Substring("--retireceil=".Length), out _retireGraceCeilCli); }   // speed-scaled retire-grace cap
+            else if (a.StartsWith("--retiregain=")) { float.TryParse(a.Substring("--retiregain=".Length), System.Globalization.CultureInfo.InvariantCulture, out _retireGraceGainCli); _retireGraceGainSet = true; }   // extra grace frames per m/s
+            else if (a.StartsWith("--retainedshadows=")) { _retainedShadowsCli = a.Substring("--retainedshadows=".Length) == "1" ? 1 : 0; }   // stale fallback chunks cast CSM shadows
+            else if (a.StartsWith("--underlay=")) { _underlayCli = a.Substring("--underlay=".Length) == "1" ? 1 : 0; }   // coarse visual coverage underlay on/off
+            else if (a.StartsWith("--underlaysize=")) { float.TryParse(a.Substring("--underlaysize=".Length), System.Globalization.CultureInfo.InvariantCulture, out _underlaySizeCli); }   // coverage sheet size in metres
+            else if (a.StartsWith("--underlaydrop=")) { float.TryParse(a.Substring("--underlaydrop=".Length), System.Globalization.CultureInfo.InvariantCulture, out _underlayDropCli); _underlayDropSet = true; }   // metres below detail chunks
             else if (a.StartsWith("--fogviewscale=")) { float.TryParse(a.Substring("--fogviewscale=".Length), System.Globalization.CultureInfo.InvariantCulture, out _fogViewScaleCli); _fogViewScaleSet = true; }   // ARC B Task 3
             else if (a.StartsWith("--lookahead=")) { float.TryParse(a.Substring("--lookahead=".Length), System.Globalization.CultureInfo.InvariantCulture, out _lookaheadCli); _lookaheadSet = true; }   // ARC B Task 4
             else if (a.StartsWith("--shadowatlas=")) { int.TryParse(a.Substring("--shadowatlas=".Length), out _shadowAtlasCli); }   // ARC A.1 shadow atlas px
@@ -254,6 +260,12 @@ public partial class TerrainLabUI : Control
         if (_chunkOpsCeilCli > 0) { _terrain.SetSpeedChunkOpsCeil(_chunkOpsCeilCli); }
         if (_chunkOpsGainSet) { _terrain.SetSpeedChunkOpsPerMps(_chunkOpsGainCli); }
         if (_streamPriorityCli >= 0) { _terrain.SetPrioritizeNearBirths(_streamPriorityCli == 1); }
+        if (_retireGraceCeilCli > 0) { _terrain.SetSpeedRetireGraceCeil(_retireGraceCeilCli); }
+        if (_retireGraceGainSet) { _terrain.SetSpeedRetireGracePerMps(_retireGraceGainCli); }
+        if (_retainedShadowsCli >= 0) { _terrain.SetRetainedChunksCastShadows(_retainedShadowsCli == 1); }
+        if (_underlayCli >= 0) { _terrain.SetCoverageUnderlay(_underlayCli == 1); }
+        if (_underlaySizeCli > 0f) { _terrain.SetCoverageUnderlaySize(_underlaySizeCli); }
+        if (_underlayDropSet) { _terrain.SetCoverageUnderlayDrop(_underlayDropCli); }
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
         if (_aabbSpeedSet) { _terrain.SetCdlodAabbSpeed(_aabbSpeedCli); }
@@ -344,6 +356,14 @@ public partial class TerrainLabUI : Control
     private float _chunkOpsGainCli;   // --chunkopsgain=F -> extra births per m/s
     private bool _chunkOpsGainSet;
     private int _streamPriorityCli = -1; // --priority=0|1 -> nearest-first chunk birth priority
+    private int _retireGraceCeilCli = -1; // --retireceil=N -> speed-scaled retire-grace cap
+    private float _retireGraceGainCli; // --retiregain=F -> extra grace frames per m/s
+    private bool _retireGraceGainSet;
+    private int _retainedShadowsCli = -1; // --retainedshadows=0|1 -> stale fallback chunks cast shadows
+    private int _underlayCli = -1; // --underlay=0|1 -> coarse visual coverage underlay
+    private float _underlaySizeCli = -1f; // --underlaysize=N -> coverage sheet size in metres
+    private float _underlayDropCli; // --underlaydrop=N -> metres below detail chunks
+    private bool _underlayDropSet;
     private bool _fogViewScaleSet;
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)
     private bool _lookaheadSet;

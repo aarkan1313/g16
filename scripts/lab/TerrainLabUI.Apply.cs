@@ -93,6 +93,8 @@ public partial class TerrainLabUI : Control
             case "sun_surface_on": _cloud?.SetSunSurfaceOn(on); break;   // sun-disc surface (cloud_sky material)
             case "time_running":   _timeRunning = on; break;             // ST4-1 auto day/night cycle play/pause
             case "cdlod_priority": _terrain.SetPrioritizeNearBirths(on); break;
+            case "cdlod_retained_shadows": _terrain.SetRetainedChunksCastShadows(on); break;
+            case "cdlod_underlay": _terrain.SetCoverageUnderlay(on); break;
         }
     }
 
@@ -121,6 +123,10 @@ public partial class TerrainLabUI : Control
             case "retire_grace":    _terrain.SetRetireGrace(Mathf.RoundToInt(v)); break;
             case "chunk_ops_ceil":  _terrain.SetSpeedChunkOpsCeil(Mathf.RoundToInt(v)); break;
             case "chunk_ops_gain":  _terrain.SetSpeedChunkOpsPerMps(v); break;
+            case "retire_grace_ceil": _terrain.SetSpeedRetireGraceCeil(Mathf.RoundToInt(v)); break;
+            case "retire_grace_gain": _terrain.SetSpeedRetireGracePerMps(v); break;
+            case "underlay_size":   _terrain.SetCoverageUnderlaySize(v); break;
+            case "underlay_drop":   _terrain.SetCoverageUnderlayDrop(v); break;
             case "load_ring":       _terrain.SetLoadRing(Mathf.RoundToInt(v)); break;   // ARC B Task 1: CDLOD load-ring radius (1=3×3, 2=5×5)
             case "fog_depth_begin": _lighting.FogDepthBegin = v; ComposeLighting(); break;   // VIEW-DISTANCE: depth-fog start distance (clear nearer than this)
             case "cdlod_lookahead": _terrain.SetCdlodLookahead(v); break;   // ARC B Task 4: predictive-loading lookahead (s; 0=off)
