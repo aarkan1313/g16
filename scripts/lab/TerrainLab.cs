@@ -192,6 +192,11 @@ public partial class TerrainLab : MeshInstance3D
     public void SetFieldCache(bool on) { if (_cdlod != null) { _cdlod.FieldCache = on; } }   // per-chunk field cache A/B
     public void SetBakeReq(int n) { _cdlod?.SetBakeReq(n); }   // field-cache bake throttle
     public void SetChunkOps(int n) { if (_cdlod != null) { _cdlod.MaxChunkOps = Mathf.Max(1, n); } }   // per-frame birth cap (unthrottle = high)
+    public void SetFarChunkOps(int n) { _cdlod?.SetFarChunkOps(n); }
+    public void SetRetireGrace(int frames) { _cdlod?.SetRetireGrace(frames); }
+    public void SetSpeedChunkOpsCeil(int n) { _cdlod?.SetSpeedChunkOpsCeil(n); }
+    public void SetSpeedChunkOpsPerMps(float opsPerMps) { _cdlod?.SetSpeedChunkOpsPerMps(opsPerMps); }
+    public void SetPrioritizeNearBirths(bool on) { _cdlod?.SetPrioritizeNearBirths(on); }
     public void SetShadowRing(float meters) { if (_cdlod != null) { _cdlod.ShadowCasterRadius = Mathf.Max(0f, meters); } }   // CSM caster radius around camera
     public float ShadowRing => _cdlod?.ShadowCasterRadius ?? 0f;
     public int LoadRing => _cdlod?.LoadRing ?? 5;

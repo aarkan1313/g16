@@ -92,6 +92,7 @@ public partial class TerrainLabUI : Control
             case "volfog": UiEnv.Environment.VolumetricFogEnabled = on; break;
             case "sun_surface_on": _cloud?.SetSunSurfaceOn(on); break;   // sun-disc surface (cloud_sky material)
             case "time_running":   _timeRunning = on; break;             // ST4-1 auto day/night cycle play/pause
+            case "cdlod_priority": _terrain.SetPrioritizeNearBirths(on); break;
         }
     }
 
@@ -114,6 +115,12 @@ public partial class TerrainLabUI : Control
             case "shadow_bias":     _sunDisc.ShadowNormalBias = v; sun.ShadowNormalBias = v; break;   // acne<->peter-panning
             case "shadow_dist":     _sunDisc.ShadowMaxDist = v; sun.DirectionalShadowMaxDistance = v; break;   // shadow draw distance
             case "shadow_ring":     _terrain.SetShadowRing(v); break;
+            case "chunk_ops":       _terrain.SetChunkOps(Mathf.RoundToInt(v)); break;
+            case "far_chunk_ops":   _terrain.SetFarChunkOps(Mathf.RoundToInt(v)); break;
+            case "bake_req":        _terrain.SetBakeReq(Mathf.RoundToInt(v)); break;
+            case "retire_grace":    _terrain.SetRetireGrace(Mathf.RoundToInt(v)); break;
+            case "chunk_ops_ceil":  _terrain.SetSpeedChunkOpsCeil(Mathf.RoundToInt(v)); break;
+            case "chunk_ops_gain":  _terrain.SetSpeedChunkOpsPerMps(v); break;
             case "load_ring":       _terrain.SetLoadRing(Mathf.RoundToInt(v)); break;   // ARC B Task 1: CDLOD load-ring radius (1=3×3, 2=5×5)
             case "fog_depth_begin": _lighting.FogDepthBegin = v; ComposeLighting(); break;   // VIEW-DISTANCE: depth-fog start distance (clear nearer than this)
             case "cdlod_lookahead": _terrain.SetCdlodLookahead(v); break;   // ARC B Task 4: predictive-loading lookahead (s; 0=off)

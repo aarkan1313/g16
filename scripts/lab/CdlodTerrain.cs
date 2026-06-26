@@ -87,6 +87,9 @@ public sealed partial class CdlodTerrain : Node3D
     public int ActiveRing = 4;        // near/far boundary — sub-root chunks (near CDLOD) vs root chunks (horizon shell)
     public float ShadowCasterRadius = 5500f;         // camera-centered CSM caster ring; kept beyond shadow_dist so it cannot visibly pop
     public float AabbTightenMaxSpeed = 1800f;         // skip render-thread AABB readbacks during fast traversal; catch up when motion settles
+    public int SpeedChunkOpsCeil = 64;                // cap for optional speed-scaled near births
+    public float SpeedChunkOpsPerMps = 0.0f;          // optional extra births per m/s; default 0 keeps normal perf stable
+    public bool PrioritizeNearBirths = true;          // spend capped births on nearest missing chunks first
     private Vector2 _shadowCenterXZ;                 // current camera XZ for ring tests; set once per Tick()
     public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
                                              // center-cell boundary before the loaded window re-centers (anti-thrash near a seam).
@@ -106,6 +109,7 @@ public sealed partial class CdlodTerrain : Node3D
     public int TotalSnaps, TotalBirths;   // perf instrumentation (cumulative since enable); active chunk count = ActiveCount
     public int TotalRebirths;             // CHURN diagnostic: births of a key retired within the last 30 frames (= thrash, not clean streaming)
     public int ActiveCount => _active.Count;
+    private Vector3 _priorityCam;
     private readonly Dictionary<long, int> _recentRetire = new();   // key → frame retired (for rebirth detection)
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped
@@ -166,6 +170,11 @@ public sealed partial class CdlodTerrain : Node3D
 
     public void SetLodViz(bool on) { _lodViz = on; _forceReapply = true; }   // re-push lod_viz to existing chunks
     public void SetBakeReq(int n) { if (_fieldCache != null) { _fieldCache.MaxRequestsPerFrame = Mathf.Max(1, n); } }   // field-cache bake throttle
+    public void SetFarChunkOps(int n) { FarChunkOps = Mathf.Max(0, n); }
+    public void SetRetireGrace(int frames) { RetireGrace = Mathf.Max(1, frames); }
+    public void SetSpeedChunkOpsCeil(int n) { SpeedChunkOpsCeil = Mathf.Max(1, n); }
+    public void SetSpeedChunkOpsPerMps(float opsPerMps) { SpeedChunkOpsPerMps = Mathf.Max(0f, opsPerMps); }
+    public void SetPrioritizeNearBirths(bool on) { PrioritizeNearBirths = on; }
 
     /// S3.5: configure the async AABB tightener (CLI/lab tunables). probeRes/maxReq <= 0 leave the default.
     public void ConfigureAabb(bool tighten, int probeRes = 0, int maxReq = 0)
@@ -223,6 +232,12 @@ public sealed partial class CdlodTerrain : Node3D
         Vector2 centerOrigin = ComputeCenterOrigin(camPos + bias);   // Task 2 hysteresis on the (Task 4) predicted point
         List<CdlodChunk> leaves = _qt.SelectRoaming(camPos, centerOrigin);   // S3: roaming root → infinite streaming
         _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
+        if (PrioritizeNearBirths)
+        {
+            _priorityCam = camPos;
+            leaves.Sort(CompareChunkPriority);
+        }
+
         // Live A/B toggles (lodviz / tighten) force a one-frame full re-apply of existing chunks.
         if (_aabbReset) { _tightened.Clear(); foreach (var kv in _active) { kv.Value.Tightened = false; } _aabbReset = false; }
         bool force = _forceReapply; _forceReapply = false;
@@ -236,6 +251,7 @@ public sealed partial class CdlodTerrain : Node3D
         ReleaseDelayedCacheLayers();
         // Near vs far birth budgets (independent so far shell can't starve near detail).
         // Root-size chunks = far horizon shell; sub-root = near CDLOD.
+        int nearBudget = EffectiveNearBudget(speedXZ);
         int nearBirths = 0, farBirths = 0;
         for (int i = 0; i < leaves.Count; i++)
         {
@@ -252,7 +268,7 @@ public sealed partial class CdlodTerrain : Node3D
                 // Root-size chunks are far horizon shell — separate lazy budget, no cache, no AABB.
                 bool isFar = c.Size >= _regionSize;
                 if (isFar)  { if (farBirths  >= FarChunkOps)  { continue; } farBirths++;  }
-                else        { if (nearBirths >= MaxChunkOps)   { continue; } nearBirths++; }
+                else        { if (nearBirths >= nearBudget)    { continue; } nearBirths++; }
 
                 if (_recentRetire.TryGetValue(key, out int rf) && _frame - rf < 30) { TotalRebirths++; }
                 ChunkSlot ns = AcquireSlot();
@@ -302,7 +318,7 @@ public sealed partial class CdlodTerrain : Node3D
         {
             int births = nearBirths + farBirths;
             _dbgBirthsAcc += births;
-            if (nearBirths >= MaxChunkOps || farBirths >= FarChunkOps) { _dbgCapped++; }
+            if (nearBirths >= nearBudget || farBirths >= FarChunkOps) { _dbgCapped++; }
             if (_frame % 30 == 0)
             {
                 int bakePend = (FieldCache && _fieldCache != null) ? _fieldCache.PendingCount : 0;
@@ -318,6 +334,33 @@ public sealed partial class CdlodTerrain : Node3D
     {
         if (!allowAabbTighten || slot.IsFar || slot.Tightened || _tightened.ContainsKey(key)) { return; }
         _aabbProvider.Request(key, c.OriginXZ, c.Size);
+    }
+
+    private int EffectiveNearBudget(float speedXZ)
+    {
+        int extra = Mathf.FloorToInt(speedXZ * SpeedChunkOpsPerMps);
+        int cap = Mathf.Max(MaxChunkOps, SpeedChunkOpsCeil);
+        return Mathf.Clamp(MaxChunkOps + extra, 1, cap);
+    }
+
+    private int CompareChunkPriority(CdlodChunk a, CdlodChunk b)
+    {
+        float da = ChunkDistanceSq(a, _priorityCam);
+        float db = ChunkDistanceSq(b, _priorityCam);
+        int cmp = da.CompareTo(db);
+        if (cmp != 0) { return cmp; }
+        cmp = a.Size.CompareTo(b.Size);
+        if (cmp != 0) { return cmp; }
+        cmp = a.OriginXZ.X.CompareTo(b.OriginXZ.X);
+        return cmp != 0 ? cmp : a.OriginXZ.Y.CompareTo(b.OriginXZ.Y);
+    }
+
+    private static float ChunkDistanceSq(CdlodChunk c, Vector3 cam)
+    {
+        float cx = Mathf.Clamp(cam.X, c.OriginXZ.X, c.OriginXZ.X + c.Size);
+        float cz = Mathf.Clamp(cam.Z, c.OriginXZ.Y, c.OriginXZ.Y + c.Size);
+        float dx = cam.X - cx, dz = cam.Z - cz;
+        return dx * dx + dz * dz;
     }
 
     /// ARC B Task 2: the cell-aligned world origin of the (hysteretic) window-center cell. The naive center is

@@ -140,6 +140,11 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--fieldcache=")) { _fieldCacheCli = a.Substring("--fieldcache=".Length) == "1" ? 1 : 0; }   // per-chunk field cache on/off A/B
             else if (a.StartsWith("--bakereq=")) { int.TryParse(a.Substring("--bakereq=".Length), out _bakeReqCli); }   // field-cache bake throttle
             else if (a.StartsWith("--chunkops=")) { int.TryParse(a.Substring("--chunkops=".Length), out _chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle = high)
+            else if (a.StartsWith("--farops=")) { int.TryParse(a.Substring("--farops=".Length), out _farChunkOpsCli); }   // far/horizon root birth cap
+            else if (a.StartsWith("--retiregrace=")) { int.TryParse(a.Substring("--retiregrace=".Length), out _retireGraceCli); }   // unseen frames before retire
+            else if (a.StartsWith("--chunkopsceil=")) { int.TryParse(a.Substring("--chunkopsceil=".Length), out _chunkOpsCeilCli); }   // speed-scaled chunk birth cap
+            else if (a.StartsWith("--chunkopsgain=")) { float.TryParse(a.Substring("--chunkopsgain=".Length), System.Globalization.CultureInfo.InvariantCulture, out _chunkOpsGainCli); _chunkOpsGainSet = true; }   // extra births per m/s
+            else if (a.StartsWith("--priority=")) { _streamPriorityCli = a.Substring("--priority=".Length) == "1" ? 1 : 0; }   // nearest-first birth priority
             else if (a.StartsWith("--fogviewscale=")) { float.TryParse(a.Substring("--fogviewscale=".Length), System.Globalization.CultureInfo.InvariantCulture, out _fogViewScaleCli); _fogViewScaleSet = true; }   // ARC B Task 3
             else if (a.StartsWith("--lookahead=")) { float.TryParse(a.Substring("--lookahead=".Length), System.Globalization.CultureInfo.InvariantCulture, out _lookaheadCli); _lookaheadSet = true; }   // ARC B Task 4
             else if (a.StartsWith("--shadowatlas=")) { int.TryParse(a.Substring("--shadowatlas=".Length), out _shadowAtlasCli); }   // ARC A.1 shadow atlas px
@@ -244,6 +249,11 @@ public partial class TerrainLabUI : Control
         if (_fieldCacheCli >= 0) { _terrain.SetFieldCache(_fieldCacheCli == 1); }   // per-chunk field cache A/B (before first Tick)
         if (_bakeReqCli > 0) { _terrain.SetBakeReq(_bakeReqCli); }   // field-cache bake throttle
         if (_chunkOpsCli > 0) { _terrain.SetChunkOps(_chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle)
+        if (_farChunkOpsCli >= 0) { _terrain.SetFarChunkOps(_farChunkOpsCli); }
+        if (_retireGraceCli > 0) { _terrain.SetRetireGrace(_retireGraceCli); }
+        if (_chunkOpsCeilCli > 0) { _terrain.SetSpeedChunkOpsCeil(_chunkOpsCeilCli); }
+        if (_chunkOpsGainSet) { _terrain.SetSpeedChunkOpsPerMps(_chunkOpsGainCli); }
+        if (_streamPriorityCli >= 0) { _terrain.SetPrioritizeNearBirths(_streamPriorityCli == 1); }
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
         if (_aabbSpeedSet) { _terrain.SetCdlodAabbSpeed(_aabbSpeedCli); }
@@ -328,6 +338,12 @@ public partial class TerrainLabUI : Control
     private int _bakeReqCli = -1;     // --bakereq=N → field-cache bake throttle (-1 = leave default)
     private int _chunkOpsCli = -1;    // --chunkops=N → per-frame chunk-birth cap (unthrottle = high; -1 = leave default 24)
     private float _fogViewScaleCli;   // --fogviewscale=F → ARC B Task 3 FogViewScale (gated by _fogViewScaleSet)
+    private int _farChunkOpsCli = -1; // --farops=N -> far/horizon root birth cap
+    private int _retireGraceCli = -1; // --retiregrace=N -> unseen frames before a chunk retires
+    private int _chunkOpsCeilCli = -1; // --chunkopsceil=N -> speed-scaled near birth cap
+    private float _chunkOpsGainCli;   // --chunkopsgain=F -> extra births per m/s
+    private bool _chunkOpsGainSet;
+    private int _streamPriorityCli = -1; // --priority=0|1 -> nearest-first chunk birth priority
     private bool _fogViewScaleSet;
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)
     private bool _lookaheadSet;
