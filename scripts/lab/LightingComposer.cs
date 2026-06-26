@@ -357,6 +357,9 @@ public sealed class LightingComposer
         env.GlowIntensity = Grade.Glow * 0.35f;
         env.SetGlowLevel(4, 0.0f); env.SetGlowLevel(5, 0.0f); env.SetGlowLevel(6, 0.0f);
 
+        // Push sun direction to terrain for horizon shadow march.
+        var terr = _host.Terrain;
+        if (terr != null) { terr.SetVector3("sun_dir_to", SunNode.GlobalTransform.Basis.Z.Normalized()); }
         ApplyOvercastScaling();           // sun energy + ambient + fog color (overcast-scaled) — the one writer of these
         _host.SyncLightControlsToScene(); // Light-tab sliders reflect the composed state
 

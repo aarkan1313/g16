@@ -106,6 +106,7 @@ uniform float ground_rough = 0.92;
 // marches field_macro_height (macro only), increasing stride, gated OFF at high sun (no long shadows there).
 // Default OFF while tuning the base lighting stack; enable with P once sun shadows look correct.
 uniform bool  hz_on = false;                                   // off by default — treat as macro shadow accent, not primary lighting
+uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);               // unit dir TOWARD the sun (pushed by LightingComposer each Compose)
 uniform float hz_steps    : hint_range(4.0, 48.0)   = 10.0;    // march steps
 uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 3500.0; // horizontal reach (m)
 uniform float hz_stride0  : hint_range(4.0, 200.0)  = 40.0;    // first step length (m)
