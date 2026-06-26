@@ -117,6 +117,19 @@ public sealed partial class CdlodTerrain : Node3D
     public int TotalSnaps, TotalBirths;   // perf instrumentation (cumulative since enable); active chunk count = ActiveCount
     public int TotalRebirths;             // CHURN diagnostic: births of a key retired within the last 30 frames (= thrash, not clean streaming)
     public int ActiveCount => _active.Count;
+    public int LastFrameIndex { get; private set; }
+    public bool LastOriginSnapped { get; private set; }
+    public int LastLeafCount { get; private set; }
+    public int LastActiveCount { get; private set; }
+    public int LastNearBirths { get; private set; }
+    public int LastFarBirths { get; private set; }
+    public int LastRetires { get; private set; }
+    public int LastBakePending { get; private set; }
+    public int LastCachePending { get; private set; }
+    public int LastEffectiveNearBudget { get; private set; }
+    public int LastEffectiveRetireGrace { get; private set; }
+    public int LastTightenedCount { get; private set; }
+    public float LastSpeedXZ { get; private set; }
     private Vector3 _priorityCam;
     private readonly Dictionary<long, int> _recentRetire = new();   // key → frame retired (for rebirth detection)
 
@@ -242,6 +255,7 @@ public sealed partial class CdlodTerrain : Node3D
         // A snap shifts every chunk's render-relative position → re-apply positions for all live slots this
         // frame. Snaps are rare (every 8192 m of travel), so this is a once-per-snap cost, not per-frame.
         bool snapped = _renderOrigin.X != _lastRenderOrigin.X || _renderOrigin.Z != _lastRenderOrigin.Z;
+        bool originSnapped = snapped;
         _lastRenderOrigin = _renderOrigin;
         if (snapped) { TotalSnaps++; }   // perf instrumentation: real renderOrigin snaps (8192 m crossings, pre-force)
         UpdateCoverageUnderlay(camPos);
@@ -336,6 +350,7 @@ public sealed partial class CdlodTerrain : Node3D
             }
             if (unseen >= retireGrace) { _scratchDead.Add(kv.Key); }
         }
+        int retired = _scratchDead.Count;
         for (int i = 0; i < _scratchDead.Count; i++)
         {
             ChunkSlot dead = _active[_scratchDead[i]];
@@ -348,6 +363,20 @@ public sealed partial class CdlodTerrain : Node3D
 
         if (allowAabbTighten) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
         if (FieldCache && _fieldCache != null) { _fieldCache.Pump(); }
+
+        LastFrameIndex = _frame;
+        LastOriginSnapped = originSnapped;
+        LastLeafCount = leaves.Count;
+        LastActiveCount = _active.Count;
+        LastNearBirths = nearBirths;
+        LastFarBirths = farBirths;
+        LastRetires = retired;
+        LastBakePending = (FieldCache && _fieldCache != null) ? _fieldCache.PendingCount : 0;
+        LastCachePending = _cachePending.Count;
+        LastEffectiveNearBudget = nearBudget;
+        LastEffectiveRetireGrace = retireGrace;
+        LastTightenedCount = _tightened.Count;
+        LastSpeedXZ = speedXZ;
 
         // Streaming diagnostic (DebugStream): which stage lags? births capped → throttle-bound; bakePend high →
         // bake backlog; leaves≫active → can't fill; leaves small → load-ring too small. Off by default.
