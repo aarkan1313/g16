@@ -130,7 +130,6 @@ public partial class TerrainLabUI : Control, ILightingHost
     public CloudVolume? Cloud => _cloud;
     public float Overcast => _overcast;
     public bool AtmosphereOn => _atmosphereOn;
-    public bool AerialOn => _aerialOn;
     public AtmosphereCompute? Atmosphere => _atmosphere;
     public TerrainLab? Terrain => _terrain;   // relight #1: indirect-fill uniform target
     // ARC B Task 3: the CDLOD load boundary (LoadRing·rootSize) the fog density couples to — 0 when CDLOD is

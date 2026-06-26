@@ -41,15 +41,6 @@ public partial class AtmosphereCompute : Node
     private Texture2Drd? _skyViewRd;
     private bool _ready;
 
-    // --- AT-2 aerial-perspective froxel LUT (3D, camera-frustum aligned) ---
-    private const int AerialW = 32, AerialH = 32, AerialD = 32;
-    private Rid _aerialShader, _aerialPipe, _aerialTex, _aerialSet;
-    private Texture3Drd? _aerialRd;   // 3D LUT → Texture3Drd (sampled as sampler3D in aerial_screen.gdshader)
-    private bool _camDirty = true, _aerialCheckRequested;
-    private Vector3 _camPos = Vector3.Zero;
-    private float _aerialFar = 64000f;                       // metres (matches camera far-clip + aerial_far; SetCamera overrides per-frame)
-    private Godot.Projection _invViewProj = Godot.Projection.Identity;
-
     public Texture2Drd? SkyViewTexture => _skyViewRd;
     public bool Ready => _ready;
 
@@ -71,23 +62,9 @@ public partial class AtmosphereCompute : Node
     private Vector3 _lastCloudColorSun = new Vector3(2f, 2f, 2f);   // != any unit sun → forces the first readback
     public void SetCloudLightWanted(bool on) { _cloudLightWanted = on; if (on) { _lastCloudColorSun = new Vector3(2f, 2f, 2f); } }
 
-    public Texture3Drd? AerialTexture => _aerialRd;
-    public bool AerialReady => _ready && _aerialRd != null;
-    /// Push the camera each frame (cheap aerial-only recompute path). farDist = max aerial range (m).
-    /// Skips the per-frame aerial froxel recompute when nothing actually moved (static camera = no wasted
-    /// dispatch). Exact equality is correct here: identical camera → identical froxel.
-    public void SetCamera(Vector3 camPos, float farDist, Godot.Projection invViewProj)
-    {
-        if (camPos == _camPos && farDist == _aerialFar && invViewProj == _invViewProj) { return; }
-        _camPos = camPos; _aerialFar = farDist; _invViewProj = invViewProj; _camDirty = true;
-    }
-    /// One-shot aerial readback on the next recompute. Forces enable + a recompute.
-    public void RequestAerialCheck() { _aerialCheckRequested = true; _enabled = true; _camDirty = true; }
-
     public void Attach()
     {
         _skyViewRd = new Texture2Drd();   // empty RID now; filled on the render thread in InitCompute
-        _aerialRd  = new Texture3Drd();   // AT-2 aerial froxel (3D); RID filled in InitCompute
         RenderingServer.CallOnRenderThread(Callable.From(InitCompute));
     }
 
@@ -125,9 +102,7 @@ public partial class AtmosphereCompute : Node
     {
         if (!_ready) { return; }
         if (!_enabled) { return; }
-        // Sun/param change → recompute all four LUTs. Camera-only change → cheap aerial-only recompute.
-        if (_dirty) { _dirty = false; _camDirty = false; RenderingServer.CallOnRenderThread(Callable.From(RecomputeAll)); }
-        else if (_camDirty) { _camDirty = false; RenderingServer.CallOnRenderThread(Callable.From(RecomputeAerial)); }
+        if (_dirty) { _dirty = false; RenderingServer.CallOnRenderThread(Callable.From(RecomputeAll)); }
     }
 
     private void InitCompute()
@@ -137,16 +112,13 @@ public partial class AtmosphereCompute : Node
         _transShader = Compile("res://shaders/atmosphere_transmittance.glsl", "atmo_transmittance");
         _msShader    = Compile("res://shaders/atmosphere_multiscatter.glsl", "atmo_multiscatter");
         _skyShader   = Compile("res://shaders/atmosphere_skyview.glsl", "atmo_skyview");
-        _aerialShader = Compile("res://shaders/atmosphere_aerial.glsl", "atmo_aerial");
         if (!_transShader.IsValid) { GD.PrintErr("AtmosphereCompute: transmittance shader failed — aborting init"); return; }
         _transPipe = _rd.ComputePipelineCreate(_transShader);
         if (_msShader.IsValid)  { _msPipe  = _rd.ComputePipelineCreate(_msShader); }
         if (_skyShader.IsValid) { _skyPipe = _rd.ComputePipelineCreate(_skyShader); }
-        if (_aerialShader.IsValid) { _aerialPipe = _rd.ComputePipelineCreate(_aerialShader); }
         _transTex = CreateTex(TransW, TransH);
         _msTex    = CreateTex(MsW, MsH);
         _skyTex   = CreateTex(SkyW, SkyH);
-        _aerialTex = CreateTex3D(AerialW, AerialH, AerialD);
         var ss = new RDSamplerState
         {
             MagFilter = RenderingDevice.SamplerFilter.Linear, MinFilter = RenderingDevice.SamplerFilter.Linear,
@@ -155,7 +127,6 @@ public partial class AtmosphereCompute : Node
         _sampler = _rd.SamplerCreate(ss);
         _paramBuf = _rd.StorageBufferCreate((uint)BuildParams().Length);
         if (_skyViewRd != null) { _skyViewRd.TextureRdRid = _skyTex; }   // assign ONCE, before any sampling
-        if (_aerialRd != null) { _aerialRd.TextureRdRid = _aerialTex; }  // assign ONCE (3D RID → Texture3Drd)
         // AT-3 #7: the 3-texel cloud-light extractor (samples the sky + trans LUTs at 3 coords → a 3x1 image).
         _clShader = Compile("res://shaders/atmosphere_cloudlight.glsl", "atmo_cloudlight");
         if (_clShader.IsValid)
@@ -209,12 +180,12 @@ public partial class AtmosphereCompute : Node
     // only the first vec4 (sun_turb); the larger buffer is harmless. Std430Writer keeps alignment.
     private byte[] BuildParams()
     {
-        var w = new Std430Writer().Vec4(_sunDir, _turbidity).Vec4(_camPos, _aerialFar);
-        var p = _invViewProj;   // Godot.Projection columns X/Y/Z/W are Vector4 (column-major, same as GLSL mat4)
-        w.Vec4(p.X.X, p.X.Y, p.X.Z, p.X.W).Vec4(p.Y.X, p.Y.Y, p.Y.Z, p.Y.W)
-         .Vec4(p.Z.X, p.Z.Y, p.Z.Z, p.Z.W).Vec4(p.W.X, p.W.Y, p.W.Z, p.W.W);
-        // C3 Unit 5 tail (sky/aerial read these; trans/ms ignore them — they only read the head): extra-sun
-        // count + per-sun (dir,intensity) + (color). MUST match the Params struct order in atmosphere_skyview/aerial.glsl.
+        // Layout must match the Params struct in atmosphere_skyview.glsl (offsets for cam_pos_far + inv_view_proj
+        // are declared in the shader for C3 extra-sun tail alignment, even though skyview doesn't use them).
+        var w = new Std430Writer().Vec4(_sunDir, _turbidity);
+        w.Vec4(Vector3.Zero, 0f);   // cam_pos_far (padding — unused by AT-1 shaders, required for layout)
+        w.Vec4(1f, 0f, 0f, 0f).Vec4(0f, 1f, 0f, 0f).Vec4(0f, 0f, 1f, 0f).Vec4(0f, 0f, 0f, 1f);   // inv_view_proj identity (padding)
+        // C3 Unit 5 tail: extra-sun count + per-sun (dir,intensity) + (color).
         w.Vec4(_extraSunCount, 0f, 0f, 0f);
         for (int i = 0; i < 3; i++) { w.Vec4(_extraSunDirs[i], _extraSunInten[i]); }
         for (int i = 0; i < 3; i++) { w.Vec4(_extraSunCols[i], 0f); }
@@ -243,14 +214,6 @@ public partial class AtmosphereCompute : Node
             var sP   = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 3 }; sP.AddId(_paramBuf);
             _skySet = _rd.UniformSetCreate(new Array<RDUniform> { sImg, sT, sM, sP }, _skyShader, 0);
         }
-        if (_aerialShader.IsValid)
-        {
-            var aImg = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; aImg.AddId(_aerialTex);
-            var aT   = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; aT.AddId(_sampler); aT.AddId(_transTex);
-            var aM   = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; aM.AddId(_sampler); aM.AddId(_msTex);
-            var aP   = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 3 }; aP.AddId(_paramBuf);
-            _aerialSet = _rd.UniformSetCreate(new Array<RDUniform> { aImg, aT, aM, aP }, _aerialShader, 0);
-        }
         if (_clReady)
         {
             var cImg = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; cImg.AddId(_clOutTex);
@@ -272,7 +235,6 @@ public partial class AtmosphereCompute : Node
         Dispatch(_transPipe, _transSet, TransW, TransH);                  // 1. transmittance (no deps)
         if (_msShader.IsValid)  { Dispatch(_msPipe, _msSet, MsW, MsH); }  // 2. multiscatter (reads transmittance)
         if (_skyShader.IsValid) { Dispatch(_skyPipe, _skySet, SkyW, SkyH); } // 3. skyview (reads both)
-        DispatchAerial();                                                 // 4. aerial froxel (reads trans + ms)
         // AT-3: read the cloud-light colors back only when wanted + the sun moved enough (skips the per-frame
         // GPU→CPU sync stall during a running cycle, and all readback when AT-3 is off).
         if (_cloudLightWanted && _sunDir.DistanceTo(_lastCloudColorSun) > CloudColorSunDelta)
@@ -283,28 +245,6 @@ public partial class AtmosphereCompute : Node
         // CLI gates (--atmoscheck / --aerialcheck): print PASS/FAIL then quit with the exit code so they're
         // scriptable in CI (audit #11). RequestCheck/RequestAerialCheck are CLI-only, so quitting here is safe.
         if (_checkRequested) { _checkRequested = false; GetTree().Quit(DumpCheck() ? 0 : 1); }
-        if (_aerialCheckRequested) { _aerialCheckRequested = false; GetTree().Quit(DumpAerialCheck() ? 0 : 1); }
-    }
-
-    // Camera-only recompute: re-upload params (camera moved) + the aerial froxel only (cheap, per-frame).
-    private void RecomputeAerial()
-    {
-        if (!_ready) { return; }
-        byte[] pb = BuildParams();
-        _rd.BufferUpdate(_paramBuf, 0, (uint)pb.Length, pb);
-        EnsureSets();
-        DispatchAerial();
-        if (_aerialCheckRequested) { _aerialCheckRequested = false; GetTree().Quit(DumpAerialCheck() ? 0 : 1); }   // audit #11: scriptable exit
-    }
-
-    private void DispatchAerial()
-    {
-        if (!_aerialShader.IsValid) { return; }
-        long l = _rd.ComputeListBegin();
-        _rd.ComputeListBindComputePipeline(l, _aerialPipe);
-        _rd.ComputeListBindUniformSet(l, _aerialSet, 0);
-        _rd.ComputeListDispatch(l, (uint)((AerialW + 7) / 8), (uint)((AerialH + 7) / 8), 1);  // z looped in-shader
-        _rd.ComputeListEnd();
     }
 
     private void Dispatch(Rid pipe, Rid set, int w, int h)
@@ -442,39 +382,17 @@ public partial class AtmosphereCompute : Node
     private static Vector3 SkyTexel(byte[] d, int x, int y) { int o = (y * SkyW + x) * 8; return new Vector3(Half(d, o), Half(d, o + 2), Half(d, o + 4)); }
     private static Vector3 TransTexel(byte[] d, int x, int y) { int o = (y * TransW + x) * 8; return new Vector3(Half(d, o), Half(d, o + 2), Half(d, o + 4)); }
 
-    // AT-2 aerial froxel self-check (analog of --atmoscheck): readback the 32³ LUT, assert finite,
-    // non-negative in-scatter, and transmittance in [0,1]. Run via --aerialcheck.
-    private bool DumpAerialCheck()
-    {
-        byte[] d = _rd.TextureGetData(_aerialTex, 0);   // 32×32×32 rgba16f
-        int n = AerialW * AerialH * AerialD; bool fin = true; float tmin = 1e9f, tmax = -1e9f, imin = 1e9f, imax = -1e9f;
-        for (int i = 0; i < n; i++)
-        {
-            float r = Half(d, i * 8), g = Half(d, i * 8 + 2), b = Half(d, i * 8 + 4), a = Half(d, i * 8 + 6);
-            if (!float.IsFinite(r) || !float.IsFinite(g) || !float.IsFinite(b) || !float.IsFinite(a)) { fin = false; }
-            float ic = Mathf.Min(r, Mathf.Min(g, b)), ix = Mathf.Max(r, Mathf.Max(g, b));
-            imin = Mathf.Min(imin, ic); imax = Mathf.Max(imax, ix);
-            tmin = Mathf.Min(tmin, a); tmax = Mathf.Max(tmax, a);
-        }
-        // sane = finite + non-negative inscatter + transmittance in [0,1]. imax>0 confirms the froxel
-        // carries real energy (not a degenerate all-zero LUT); printed for the daytime gate, not asserted
-        // (legitimately ~0 at night / sun below horizon).
-        bool pass = fin && imin >= -1e-3f && tmin >= -1e-3f && tmax <= 1.001f;
-        GD.Print($"[aerialcheck] inscatter[{imin:F4}..{imax:F4}] transmittance[{tmin:F3}..{tmax:F3}] finite={fin} -> {(pass ? "PASS" : "FAIL")}");
-        return pass;
-    }
-
     public override void _ExitTree()
     {
         if (_ready)
         {
             RenderingServer.CallOnRenderThread(Callable.From(() =>
             {
-                if (_setsBuilt) { _rd.FreeRid(_transSet); if (_msSet.IsValid) { _rd.FreeRid(_msSet); } if (_skySet.IsValid) { _rd.FreeRid(_skySet); } if (_aerialSet.IsValid) { _rd.FreeRid(_aerialSet); } }
+                if (_setsBuilt) { _rd.FreeRid(_transSet); if (_msSet.IsValid) { _rd.FreeRid(_msSet); } if (_skySet.IsValid) { _rd.FreeRid(_skySet); } }
                 _rd.FreeRid(_sampler); _rd.FreeRid(_paramBuf);
-                _rd.FreeRid(_transTex); _rd.FreeRid(_msTex); _rd.FreeRid(_skyTex); if (_aerialTex.IsValid) { _rd.FreeRid(_aerialTex); }
-                _rd.FreeRid(_transPipe); if (_msPipe.IsValid) { _rd.FreeRid(_msPipe); } if (_skyPipe.IsValid) { _rd.FreeRid(_skyPipe); } if (_aerialPipe.IsValid) { _rd.FreeRid(_aerialPipe); }
-                _rd.FreeRid(_transShader); if (_msShader.IsValid) { _rd.FreeRid(_msShader); } if (_skyShader.IsValid) { _rd.FreeRid(_skyShader); } if (_aerialShader.IsValid) { _rd.FreeRid(_aerialShader); }
+                _rd.FreeRid(_transTex); _rd.FreeRid(_msTex); _rd.FreeRid(_skyTex);
+                _rd.FreeRid(_transPipe); if (_msPipe.IsValid) { _rd.FreeRid(_msPipe); } if (_skyPipe.IsValid) { _rd.FreeRid(_skyPipe); }
+                _rd.FreeRid(_transShader); if (_msShader.IsValid) { _rd.FreeRid(_msShader); } if (_skyShader.IsValid) { _rd.FreeRid(_skyShader); }
             }));
         }
     }

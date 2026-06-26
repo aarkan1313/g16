@@ -36,17 +36,13 @@ public partial class TerrainLabUI : Control
     private bool _lastKey5Down, _lastKey6Down, _lastKey7Down;   // S2b: debounce for the test-path keys (5/6/7)
     // Debug isolation bank (F1..F6): live-flip the screen-space effects that produce camera-locked stipple/ring
     // artifacts, so a "dots in a shifting ring" report can be pinned to ONE system in the running window.
-    private bool _lastF2, _lastF3, _lastF4, _lastF5, _lastF6, _lastF7, _lastF8, _lastF9;
+    private bool _lastF2, _lastF3, _lastF4, _lastF5, _lastF6, _lastF7, _lastF9;
     private bool _lastG;        // G toggles the anti-moiré detail-fade live
     private bool _lastWaterH;   // H toggles the water debug overlay live
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
     private bool _detailFadeOn = false;  // anti-moiré detail-fade default OFF (matches shader default; ring bug fixed at source, fade only washed far detail)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
-    private bool _lastU;        // U steps the aerial isolation viz (anti-sun line hunt)
-    private int _aerialDbg;     // 0 normal, 1 extinction(red), 2 inscatter(green), 3 froxel-z, 4 distance
-    private bool _lastY;        // Y A/Bs the aerial haze fix (fade-to-sky vs old fade-to-black)
-    private bool _aerialHazeOn = true;  // aerial haze fix on by default
     private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)
     private bool _hzOn = false;  // mirror of hz_on; MUST match the shader/JSON default (now false) or the first P-press no-ops
     private bool _lodVizLive;   // V toggles the LOD-band tint live
@@ -127,14 +123,6 @@ public partial class TerrainLabUI : Control
             _cloud?.SetAtmosphereOn(true);
             _atmoMatActivated = true;
         }
-        // AT-2 default-on: enable the aerial composite only once the aerial LUT RID is live (avoids sampling
-        // an unbound 3D texture on frame 1). The cleared LUT is a safe identity (a=1, rgb=0) until the first
-        // recompute lands, so enabling here is harmless even a frame early.
-        if (_aerialOn && !_aerialActivated && _atmosphere != null && _atmosphere.AerialReady)
-        {
-            _aerial?.SetEnabled(true);
-            _aerialActivated = true;
-        }
         // AT-3 default-gated: once the atmosphere has read back its cloud-light colors AND the cloud compute
         // is ready, enable physical cloud lighting at the current strength. While active, keep the 3 colors
         // current as the sun moves (cheap — they're cached Vector3s pushed into the cloud param buffer).
@@ -202,18 +190,6 @@ public partial class TerrainLabUI : Control
             _cloud?.SetCameraWorld(camPos);
             TickPopMeter(camPos);   // S3 --popmeter: live per-frame pop/snap measurement (no-op unless armed)
 
-            // AT-2: push the camera to the atmosphere so the aerial froxel LUT (camera-frustum aligned)
-            // re-marches from the current view each frame. invViewProj reconstructs world from NDC in the
-            // aerial compute (same convention as godray_screen). The view matrix is render-relative now, but the
-            // aerial reconstructs positions in the SAME render frame as the depth buffer, so passing the TRUE
-            // camPos keeps the in-scatter distance/world math consistent with the (true-world) sun + sky.
-            if (_atmosphere != null && _atmosphereOn)
-            {
-                var proj = camN.GetCameraProjection();
-                var vp = proj * new Godot.Projection(camN.GlobalTransform.AffineInverse());
-                _atmosphere.SetCamera(camPos, 90000f, vp.Inverse());   // MUST match AerialPerspective.aerial_far + camera far-clip
-            }
-
             // Inspection light (L): toggle a fixed-angle studio directional to check surfaces.
             bool lDown = Input.IsKeyPressed(Key.L);
             if (lDown && !_lastLDown) { ToggleInspectLight(); }
@@ -246,26 +222,6 @@ public partial class TerrainLabUI : Control
                 bool kO = Input.IsKeyPressed(Key.O);
                 if (kO && !_lastF7) { _atmosphereOn = !_atmosphereOn; _cloud.SetAtmosphereOn(_atmosphereOn); _atmosphere?.SetEnabled(_atmosphereOn); GD.Print($"[dbg] (O) Atmosphere AT-1 = {_atmosphereOn}"); }
                 _lastF7 = kO;
-                bool kK = Input.IsKeyPressed(Key.K);
-                if (kK && !_lastF8) { _aerialOn = !_aerialOn; _aerial?.SetEnabled(_aerialOn); GD.Print($"[dbg] (K) Aerial AT-2 = {_aerialOn}"); }
-                _lastF8 = kK;
-                // U: AERIAL ISOLATION viz stepper (anti-sun line hunt). Cycles aerial debug_mode 0→1→2→3→4:
-                // 0 normal · 1 EXTINCTION darkening (red) · 2 INSCATTER (green) · 3 FROXEL-Z ramp (hard band =
-                // slice/LUT discontinuity = the line) · 4 DISTANCE ramp (constant grey at the line = world-locked).
-                bool kU = Input.IsKeyPressed(Key.U);
-                if (kU && !_lastU)
-                {
-                    _aerialDbg = (_aerialDbg + 1) % 5;
-                    _aerial?.SetDebug(_aerialDbg);
-                    string[] names = { "0 normal", "1 EXTINCTION (red)", "2 INSCATTER (green)", "3 FROXEL-Z", "4 DISTANCE" };
-                    GD.Print($"[dbg] (U) Aerial isolation = {names[_aerialDbg]}");
-                }
-                _lastU = kU;
-                // Y: A/B the aerial HAZE fix (the anti-sun fade-to-black fix). 1 = fade distant terrain to the
-                // sky haze tint (energy-conserving), 0 = old fade-to-black. Instant in-scene A/B for the eye-gate.
-                bool kY = Input.IsKeyPressed(Key.Y);
-                if (kY && !_lastY) { _aerialHazeOn = !_aerialHazeOn; _aerial?.SetHazeStrength(_aerialHazeOn ? 1f : 0f); GD.Print($"[dbg] (Y) Aerial haze fix = {_aerialHazeOn}"); }
-                _lastY = kY;
                 // P: A/B horizon shadows (long-range terrain self-shadow). Best seen at a LOW sun.
                 bool kP = Input.IsKeyPressed(Key.P);
                 if (kP && !_lastHzKey) { _hzOn = !_hzOn; _terrain.SetBool("hz_on", _hzOn); GD.Print($"[dbg] (P) Horizon shadows = {_hzOn}"); }

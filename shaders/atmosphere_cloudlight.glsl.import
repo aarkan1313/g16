@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dho6hjy466qf3"
+path="res://.godot/imported/atmosphere_cloudlight.glsl-af5a854fd6dfcf3a5ca909efd70d0c2b.res"
+
+[deps]
+
+source_file="res://shaders/atmosphere_cloudlight.glsl"
+dest_files=["res://.godot/imported/atmosphere_cloudlight.glsl-af5a854fd6dfcf3a5ca909efd70d0c2b.res"]
+
+[params]
+

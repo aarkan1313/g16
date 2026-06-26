@@ -12,7 +12,6 @@ public interface ILightingHost
     CloudVolume? Cloud { get; }        // sky-shader pass-through target (null = no cloud sky, ProceduralSky fallback)
     float Overcast { get; }            // current overcast amount (written by the cloud-coverage proxy)
     bool AtmosphereOn { get; }         // AT-1 GPU sky on?
-    bool AerialOn { get; }             // AT-2 aerial froxel on?
     float CdlodViewDistance { get; }   // ARC B Task 3: LoadRing·rootSize (load boundary), or 0 if CDLOD off → no fog coupling
     float FogViewScale { get; }        // ARC B Task 3: user multiplier on the radius-coupled fog baseline (0 = coupling off)
     int ShadowAtlasSize { get; }       // ARC A.1: directional shadow atlas px (8192 default; 6144/4096 = perf dial-down)
@@ -323,10 +322,6 @@ public sealed class LightingComposer
         env.FogDepthEnd = Mathf.Max(FogDepthBegin + 1f, FogDepthEnd);
         env.FogDepthCurve = FogDepthCurve;
         env.FogAerialPerspective = Mathf.Min(Weather.FogAerial, 0.5f);
-        // AT-2: when the physical aerial froxel owns distance haze, drop the built-in aerial perspective so
-        // the two don't double-fog. Height fog / FogDensity stay (the froxel only replaces the distance/sky
-        // blend). Toggling AT-2 off restores Weather.FogAerial exactly (this re-runs on Compose).
-        if (_host.AerialOn) { env.FogAerialPerspective = 0.0f; }
         env.FogHeight = Weather.FogHeight;
         env.FogHeightDensity = Weather.FogHeightD * 0.3f;
         env.FogSunScatter = Weather.FogSunScatter * 0.25f;

@@ -50,11 +50,6 @@ public partial class TerrainLabUI : Control
     private float _moonPhaseCli = -1f;   // --moonphase=N → set moon_phase (0 new .. 1 full) at startup for A/B
     private int _atmosphereCli = -1;     // --atmosphere[=1] → enable the AT-1 GPU physical sky at startup
     private bool _atmoCheckCli;          // --atmoscheck → one-shot LUT numeric self-check (readback)
-    private bool _aerialCheckCli;        // --aerialcheck → one-shot AT-2 aerial froxel self-check (readback)
-    private int _aerialCli = -1;         // --aerial[=1] → AT-2 aerial perspective on/off at startup (default ON; =0 restores built-in fog)
-    private float _aerialStrCli = -1f;   // --aerialstr=N → AT-2 in-scatter strength override at startup (A/B)
-    private int _aerialDbgCli = -1;      // --aerialdbg=N → AT-2 isolation viz at startup (1 extinction,2 inscatter,3 froxel-z,4 distance)
-    private float _aerialHazeCli = -1f;  // --aerialhaze=N → AT-2 haze strength at startup (1 fade-to-sky fix, 0 old fade-to-black; A/B)
     private int _cloudLightCli = -1;     // --cloudlight[=1] → AT-3 physical cloud lighting on at startup (default off)
     private float _cloudLightStrCli = -1f; // --cloudlightstr=N → AT-3 cloud-light strength override
     private float _atmoExpCli = -1f;     // --atmoexp=N → AT-1 atmosphere exposure override
@@ -155,11 +150,6 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
             else if (MatchFlag(a, "--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
             else if (a == "--atmoscheck") { _atmoCheckCli = true; }
-            else if (a == "--aerialcheck") { _aerialCheckCli = true; }
-            else if (a.StartsWith("--aerialdbg=")) { int.TryParse(a.Substring("--aerialdbg=".Length), out _aerialDbgCli); }
-            else if (a.StartsWith("--aerialhaze=")) { float.TryParse(a.Substring("--aerialhaze=".Length), out _aerialHazeCli); }
-            else if (a.StartsWith("--aerialstr=")) { float.TryParse(a.Substring("--aerialstr=".Length), out _aerialStrCli); }
-            else if (MatchFlag(a, "--aerial")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _aerialCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--cloudlightstr=")) { float.TryParse(a.Substring("--cloudlightstr=".Length), out _cloudLightStrCli); }
             else if (MatchFlag(a, "--cloudlight")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cloudLightCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--atmoexp=")) { float.TryParse(a.Substring("--atmoexp=".Length), out _atmoExpCli); }
@@ -304,7 +294,6 @@ public partial class TerrainLabUI : Control
         env.FogDensity = 0f;
         env.FogAerialPerspective = 0f;
         env.FogHeightDensity = 0f;
-        _aerial?.SetEnabled(false);          // AT-2 screen-space aerial perspective
         _cloud?.SetAtmosphereOn(false);      // AT-1 physical sky tint on the terrain
         GD.Print("[nofog] all haze OFF (env fog / volfog / aerial / atmosphere) — raw terrain review");
     }

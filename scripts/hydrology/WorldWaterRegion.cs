@@ -14,9 +14,13 @@ public sealed class WorldWaterRegion
     public Vector2 RegionOriginWorld { get; }
 
     private readonly Image _img;
-    private readonly CoarseDrainage _drainage;   // kept for SurfaceYAt (proxy terrain to drape meshes on)
+    private readonly CoarseDrainage _drainage;   // proxy fallback when no real-field grid is available
+    private readonly RegionHeightGrid? _real;    // REAL field height grid (when a FieldCompute is supplied)
 
-    public WorldWaterRegion(WG16.Field.FieldParams fp, WaterParams wp, long regionX, long regionZ)
+    /// fc is OPTIONAL: when supplied (the live --water path), water meshes drape on the EXACT field height
+    /// the terrain uses (no floating). When null (cheap self-checks), the proxy height is used as a fallback.
+    public WorldWaterRegion(WG16.Field.FieldParams fp, WaterParams wp, long regionX, long regionZ,
+                            WG16.Field.FieldCompute? fc = null)
     {
         RegionM = fp.RegionSizeM;
         RegionOriginWorld = new Vector2(regionX * RegionM, regionZ * RegionM);
@@ -26,6 +30,17 @@ public sealed class WorldWaterRegion
         Lakes = LakeGating.GatedLakes(_drainage, t, wp, RegionM);
         _img = WaterTextureBaker.Bake(Rivers, Lakes, wp, RegionOriginWorld, RegionM);
         Texture = ImageTexture.CreateFromImage(_img);
+
+        if (fc != null)
+        {
+            // Real-field height grid over region + halo (so splines exiting the core still drape correctly).
+            // Resolution gives ~16 m cells — fine for draping a river ribbon; one GPU dispatch per region.
+            float span = RegionM * (1 + 2 * wp.HaloRegions);
+            float originX = RegionOriginWorld.X - wp.HaloRegions * RegionM;
+            float originZ = RegionOriginWorld.Y - wp.HaloRegions * RegionM;
+            int res = Mathf.Clamp((int)(span / 16f), 64, 1024);
+            _real = new RegionHeightGrid(fc, fp, originX, originZ, span, res);
+        }
     }
 
     private Color Sample(float wx, float wz)
@@ -40,7 +55,8 @@ public sealed class WorldWaterRegion
     public bool IsWet(float wx, float wz) => Sample(wx, wz).A > 0.5f;
     public float BedAt(float wx, float wz) => Sample(wx, wz).G;
 
-    /// Proxy terrain height (the macro family the carve rides on) — used to drape water meshes into the
-    /// carved groove. Cheap; matches the drainage proxy, not the full field, which is fine for the mesh Y.
-    public float SurfaceYAt(float wx, float wz) => _drainage.ProxyHeight(wx, wz);
+    /// REAL terrain height for draping water meshes — the EXACT field the terrain renders (no floating)
+    /// when a FieldCompute was supplied; the cheap proxy otherwise (self-checks only).
+    public float SurfaceYAt(float wx, float wz) =>
+        _real != null ? _real.HeightAt(wx, wz) : _drainage.ProxyHeight(wx, wz);
 }

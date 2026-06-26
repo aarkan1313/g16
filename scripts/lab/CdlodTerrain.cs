@@ -35,6 +35,7 @@ public sealed partial class CdlodTerrain : Node3D
         public int SeenFrame = -1;     // last Tick frame this slot was in the visible set (vs _frame → retire)
         public int CacheSlot = -1;     // field-cache texture-array layer for this chunk (-1 = none → live-eval path)
         public bool CacheReady;        // the chunk's bake has landed → vertex shader samples the cache, not the field
+        public bool IsFar;             // horizon shell chunk: no field cache, no AABB, no shadow casting
     }
     private int _frame;   // monotonic Tick counter for the seen-this-frame test (no per-slot Variant churn)
     private bool _forceReapply;   // one-shot: re-push lod_viz + AABB to ALL live slots next Tick (live toggle A/B)
@@ -65,6 +66,11 @@ public sealed partial class CdlodTerrain : Node3D
     // the render thread; flipping the same frame it lands can race the imageStore → a reused layer shows the
     // PREVIOUS chunk's data for a frame = a per-chunk flicker during motion). Hold landed bakes this many Ticks.
     private const int CacheReadyDelay = 3;
+    // Delay returning cache layers to the free pool: a retired chunk's bake may still be in-flight on the render
+    // thread. Returning the layer immediately lets a new chunk claim it before the old imageStore completes →
+    // the new chunk's data is overwritten by the old bake for a frame = wrong/flat chunk during fast movement.
+    private const int CacheLayerFreeDelay = 8;
+    private readonly List<(int slot, int releaseFrame)> _cacheLayersPendingFree = new();
     private readonly List<(long key, int slot, int landFrame)> _cachePending = new();
     public bool PinOrigin = false;                  // DEBUG (--pinorigin): pin renderOrigin=0 (no snap) to isolate the snap-pop
     private readonly Dictionary<long, (float lo, float hi)> _tightened = new();   // key → landed tight range (7×7 probe)
@@ -72,13 +78,12 @@ public sealed partial class CdlodTerrain : Node3D
     public int GridN = 65;            // verts/side per chunk (64 quads)
     public int MaxDepth = 6;          // finest LOD depth; tunable
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
-    public int MaxChunkOps = 24;      // S3: BASE pooled-chunk births/frame at rest (velocity-scaled up while moving; tunable via --chunkops)
-    public int MaxChunkOpsCeil = 256; // ceiling on the velocity-scaled birth budget — caps the fast-flight frontier-fill burst
-    public float ChunkOpsPerSpeed = 0.01f;   // births/frame added per m/s of camera speed (25 km/s → +250, clamped to ceil)
-    public int LoadRing = 8;          // ARC B Task 1: load-ring radius (1=3×3, 8=17×17 → ~65 km worst-case loaded edge)
-                                      // pushed to _qt.Ring each Tick. Far cells are beyond the split disc (~20 km) so they
-                                      // stay single coarse 8192 m chunks → growing this is cheap (leaves grow ~570→~900).
-                                      // Live-tunable down for weak HW via the Debug cdlod_loadring slider / --loadring=N.
+    public int MaxChunkOps = 24;      // near chunk births/frame (priority budget); --chunkops overrides
+    public int FarChunkOps = 4;       // far/horizon root chunk births/frame (background budget; they fill lazily)
+    public int MaxChunkOpsCeil = 256; // DISABLED — kept as diagnostic reference only, not used in default path
+    public float ChunkOpsPerSpeed = 0.01f;   // DISABLED — kept as diagnostic reference only, not used in default path
+    public int LoadRing = 8;          // full horizon ring (near + far shell); --loadring=N overrides
+    public int ActiveRing = 4;        // near/far boundary — sub-root chunks (near CDLOD) vs root chunks (horizon shell)
     public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
                                              // center-cell boundary before the loaded window re-centers (anti-thrash near a seam).
                                              // Widened 0.15→0.35: light taps near a cell seam were re-centering the window and
@@ -215,11 +220,10 @@ public sealed partial class CdlodTerrain : Node3D
         // _frame counter is the "seen" test — no per-slot Variant/Meta churn.
         snapped |= force;   // a forced re-apply re-pushes position+lod_viz+AABB to every live slot this frame
         _frame++;
-        // Velocity-scaled birth budget: idle/slow flight stays at the cheap base (you only birth what you need,
-        // so a high ceiling costs NOTHING when slow — weak HW unaffected); fast flight ramps the budget up so the
-        // frontier fills before you reach it (no holes at boost speed). Speed = smoothed true-world XZ velocity.
-        int effOps = Mathf.Min(MaxChunkOpsCeil, MaxChunkOps + (int)(velXZ.Length() * ChunkOpsPerSpeed));
-        int births = 0;
+        ReleaseDelayedCacheLayers();
+        // Near vs far birth budgets (independent so far shell can't starve near detail).
+        // Root-size chunks = far horizon shell; sub-root = near CDLOD.
+        int nearBirths = 0, farBirths = 0;
         for (int i = 0; i < leaves.Count; i++)
         {
             CdlodChunk c = leaves[i];
@@ -231,29 +235,33 @@ public sealed partial class CdlodTerrain : Node3D
             }
             else
             {
-                if (births >= effOps) { continue; }   // S3: velocity-scaled churn budget — rest appear next frame(s); RetireGrace bridges the deferred-birth hole
-                births++;
-                if (_recentRetire.TryGetValue(key, out int rf) && _frame - rf < 30) { TotalRebirths++; }   // CHURN: reborn shortly after retiring = thrash
+                // Root-size chunks are far horizon shell — separate lazy budget, no cache, no AABB.
+                bool isFar = c.Size >= _regionSize;
+                if (isFar)  { if (farBirths  >= FarChunkOps)  { continue; } farBirths++;  }
+                else        { if (nearBirths >= MaxChunkOps)   { continue; } nearBirths++; }
+
+                if (_recentRetire.TryGetValue(key, out int rf) && _frame - rf < 30) { TotalRebirths++; }
                 ChunkSlot ns = AcquireSlot();
                 ns.SeenFrame = _frame;
+                ns.IsFar = isFar;
                 _active[key] = ns;
-                if (FieldCache && _fieldCache != null && _freeLayers.Count > 0)
+
+                // Near only: field cache bake + AABB tighten. Far root chunks are coarse — live eval is fine.
+                if (!isFar && FieldCache && _fieldCache != null && _freeLayers.Count > 0)
                 {
                     ns.CacheSlot = _freeLayers.Pop(); ns.CacheReady = false;
-                    _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);   // fire-and-forget height+normal bake
+                    _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);
                 }
-                // Shadow AABB: the cheap 7×7 probe (independent of the cache). Reading min/max off the 67² bake
-                // instead forced it synchronous (~11 ms render-thread stall/batch) — reverted to this proven probe.
-                if (TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }
-                ApplyChunk(ns, c, key, snapped: true);   // new slot → apply everything (treat as snapped)
+                if (!isFar && TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }
+                ApplyChunk(ns, c, key, snapped: true);
             }
         }
-        TotalBirths += births;   // perf instrumentation: cumulative chunk births (streaming churn)
+        TotalBirths += nearBirths + farBirths;
 
         // Retire slots not seen this frame → hide + return to the free-list (NOT freed; reused next birth).
         // VANISHING-CHUNK FIX (grace period): a chunk gets RetireGrace frames of being unseen before it's
         // actually hidden. When flying fast a parent can leave the leaf set the SAME frame its replacement
-        // children are budget-deferred (births capped at MaxChunkOps) — retiring it immediately leaves a HOLE
+        // children are budget-deferred (births capped at MaxChunkOps/FarChunkOps) — retiring it immediately leaves a HOLE
         // (parent hidden, children not yet born) → the brief flash the user saw. The grace bridges that: the
         // deferred children (24/frame) land within a frame or two and cover the spot before the parent retires.
         // CRUCIAL: the grace is BOUNDED (unlike the old "skip all retires when budgetHit", which under sustained
@@ -266,7 +274,7 @@ public sealed partial class CdlodTerrain : Node3D
             ChunkSlot dead = _active[_scratchDead[i]];
             dead.Mi.Visible = false;
             _free.Push(dead.Mi);
-            if (dead.CacheSlot >= 0) { _freeLayers.Push(dead.CacheSlot); dead.CacheSlot = -1; }   // return the cache layer
+            if (dead.CacheSlot >= 0) { _cacheLayersPendingFree.Add((dead.CacheSlot, _frame + CacheLayerFreeDelay)); dead.CacheSlot = -1; }
             _recentRetire[_scratchDead[i]] = _frame;   // CHURN diagnostic: stamp retire frame for rebirth detection
             _active.Remove(_scratchDead[i]);
         }
@@ -278,11 +286,13 @@ public sealed partial class CdlodTerrain : Node3D
         // bake backlog; leaves≫active → can't fill; leaves small → load-ring too small. Off by default.
         if (DebugStream)
         {
-            _dbgBirthsAcc += births; if (births >= effOps) { _dbgCapped++; }
+            int births = nearBirths + farBirths;
+            _dbgBirthsAcc += births;
+            if (nearBirths >= MaxChunkOps || farBirths >= FarChunkOps) { _dbgCapped++; }
             if (_frame % 30 == 0)
             {
                 int bakePend = (FieldCache && _fieldCache != null) ? _fieldCache.PendingCount : 0;
-                GD.Print($"[streamdiag] f={_frame} leaves={leaves.Count} active={_active.Count} births/30={_dbgBirthsAcc} capped={_dbgCapped}/30 bakePend={bakePend} cachePend={_cachePending.Count} tights={_tightened.Count} snaps={TotalSnaps}");
+                GD.Print($"[streamdiag] f={_frame} leaves={leaves.Count} active={_active.Count} near={nearBirths}/far={farBirths} births/30={_dbgBirthsAcc} capped={_dbgCapped}/30 bakePend={bakePend} cachePend={_cachePending.Count} tights={_tightened.Count} snaps={TotalSnaps}");
                 _dbgBirthsAcc = 0; _dbgCapped = 0;
             }
         }
@@ -337,6 +347,13 @@ public sealed partial class CdlodTerrain : Node3D
             mi.SetInstanceShaderParameter("chunk_slot", (float)slot.CacheSlot);     // field-cache texture-array layer
             mi.SetInstanceShaderParameter("cache_ready", slot.CacheReady ? 1.0f : 0.0f);
             mi.Visible = true;
+            if (isNew)
+            {
+                // Far horizon chunks don't cast shadows — coarse root chunks would inflate the cascade depth.
+                mi.CastShadow = slot.IsFar
+                    ? GeometryInstance3D.ShadowCastingSetting.Off
+                    : GeometryInstance3D.ShadowCastingSetting.On;
+            }
         }
         // AABB: born GENEROUS (no pop-in); tightened in place once the async height-range lands. Re-set only
         // when new, on a snap (position changed), or when a tighten newly lands for this key.
@@ -387,6 +404,17 @@ public sealed partial class CdlodTerrain : Node3D
     /// S3.5: drain async height-ranges that have landed and cache them by key. The keyed pool's ApplyChunk
     /// picks them up for the matching live slot on this/next frame. Bounded to avoid unbounded growth as the
     /// camera streams an infinite world.
+    private void ReleaseDelayedCacheLayers()
+    {
+        for (int i = _cacheLayersPendingFree.Count - 1; i >= 0; i--)
+        {
+            var item = _cacheLayersPendingFree[i];
+            if (_frame < item.releaseFrame) { continue; }
+            _freeLayers.Push(item.slot);
+            _cacheLayersPendingFree.RemoveAt(i);
+        }
+    }
+
     private void DrainTightened()
     {
         while (_aabbProvider.TryTake(out long key, out float lo, out float hi))

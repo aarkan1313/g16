@@ -10,8 +10,6 @@
     { "id": "time_speed", "label": "cycle speed (h/s)", "tab": "Light", "type": "scenef", "scene": "time_speed", "min": 0.0, "max": 6.0, "default": 1.0, "rand": false },
     { "id": "atmosphere_on", "label": "GPU atmosphere (AT-1)", "tab": "Light", "type": "cloud", "cloud": "atmosphere_on", "default": true, "rand": false },
     { "id": "atmo_exposure", "label": "atmosphere exposure", "tab": "Light", "type": "cloudf", "cloud": "atmo_exposure", "min": 0.0, "max": 60.0, "default": 10.0, "rand": false },
-    { "id": "aerial_on", "label": "aerial perspective (AT-2)", "tab": "Light", "type": "cloud", "cloud": "aerial_on", "default": false, "rand": false },
-    { "id": "aerial_strength", "label": "aerial strength", "tab": "Light", "type": "cloudf", "cloud": "aerial_strength", "min": 0.0, "max": 6.0, "default": 0.025, "rand": false },
     { "id": "hz_on", "label": "horizon shadows", "tab": "Light", "type": "toggle", "param": "hz_on", "default": false, "rand": false },
     { "id": "hz_strength", "label": "horizon: strength", "tab": "Light", "type": "slider", "param": "hz_strength", "min": 0.0, "max": 1.0, "default": 0.28, "rand": false },
     { "id": "hz_steps", "label": "horizon: steps", "tab": "Light", "type": "slider", "param": "hz_steps", "min": 4.0, "max": 48.0, "default": 10.0, "rand": false },
