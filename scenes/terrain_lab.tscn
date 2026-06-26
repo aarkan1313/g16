@@ -76,10 +76,11 @@ shadow_enabled = true
 shadow_blur = 1.5
 light_volumetric_fog_energy = 1.0
 directional_shadow_mode = 2
-directional_shadow_split_1 = 0.08
-directional_shadow_split_2 = 0.2
-directional_shadow_split_3 = 0.5
-directional_shadow_max_distance = 8000.0
+directional_shadow_split_1 = 0.05
+directional_shadow_split_2 = 0.15
+directional_shadow_split_3 = 0.40
+directional_shadow_max_distance = 6000.0
+directional_shadow_blend_splits = true
 
 [node name="Env" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
