@@ -36,7 +36,7 @@ public partial class TerrainLabUI : Control
     private bool _lastKey5Down, _lastKey6Down, _lastKey7Down;   // S2b: debounce for the test-path keys (5/6/7)
     // Debug isolation bank (F1..F6): live-flip the screen-space effects that produce camera-locked stipple/ring
     // artifacts, so a "dots in a shifting ring" report can be pinned to ONE system in the running window.
-    private bool _lastF1, _lastF2, _lastF3, _lastF4, _lastF5, _lastF6, _lastF7, _lastF8, _lastF9;
+    private bool _lastF2, _lastF3, _lastF4, _lastF5, _lastF6, _lastF7, _lastF8, _lastF9;
     private bool _lastG;        // G toggles the anti-moiré detail-fade live
     private bool _lastWaterH;   // H toggles the water debug overlay live
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
@@ -225,9 +225,6 @@ public partial class TerrainLabUI : Control
             // never reach the game window.) B SSAO, N SSIL, M SDFGI, , sun shadows, . cloud-shadow, / god rays.
             {
                 var env = UiEnv.Environment;
-                bool kB = Input.IsKeyPressed(Key.B);
-                if (kB && !_lastF1) { env.SsaoEnabled = !env.SsaoEnabled; GD.Print($"[dbg] (B) SSAO = {env.SsaoEnabled}"); }
-                _lastF1 = kB;
                 bool kN = Input.IsKeyPressed(Key.N);
                 if (kN && !_lastF2) { env.SsilEnabled = !env.SsilEnabled; GD.Print($"[dbg] (N) SSIL = {env.SsilEnabled}"); }
                 _lastF2 = kN;

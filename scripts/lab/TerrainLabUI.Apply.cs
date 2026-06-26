@@ -82,7 +82,6 @@ public partial class TerrainLabUI : Control
     {
         switch (target)
         {
-            case "ssao":   UiEnv.Environment.SsaoEnabled = on; break;   // #7 perf: cached nodes
             case "fog":    UiEnv.Environment.FogEnabled = on; break;
             case "meteors_on": _stars.MeteorsOn = on; ComposeLighting(); break;
             case "planets_on":      _stars.PlanetsOn = on; ComposeLighting(); break;        // C2 planets
@@ -156,8 +155,6 @@ public partial class TerrainLabUI : Control
             case "extra_moons":  _lighting.ExtraMoonCount = Mathf.RoundToInt(v); ComposeLighting(); break;   // C3: extra moons (0-2)
             case "inspect_energy":      _inspectEnergy = v; if (_inspectLight != null) { _inspectLight.LightEnergy = v; } break;
             case "ambient":         _baseAmbient = v; ApplyOvercastScaling(); break;
-            case "ssao_intensity":  env.SsaoIntensity = v; break;
-            case "ssao_radius":     env.SsaoRadius = v; break;
             case "fog_density":     env.FogDensity = v; break;
             case "fog_aerial":      env.FogAerialPerspective = v; break;
             case "fog_heightd":     env.FogHeightDensity = v; break;
@@ -209,7 +206,6 @@ public partial class TerrainLabUI : Control
         void Set(string id, float v) { if (_byId.TryGetValue(id, out var c)) { SetWidgetValueSilent(c, v); } }
         Set("sun_energy", sun.LightEnergy); Set("sun_angle", _sunAngle); Set("sun_azimuth", _sunAzimuth);
         Set("sun_soft", sun.ShadowBlur); Set("sun_disc", sun.LightAngularDistance); Set("ambient_e", env.AmbientLightEnergy);
-        Set("ssao_i", env.SsaoIntensity); Set("ssao_r", env.SsaoRadius);
         Set("fog_d", env.FogDensity); Set("fog_aerial", env.FogAerialPerspective);
         Set("fog_heightd", env.FogHeightDensity); Set("exposure", env.TonemapExposure);
         // Sync the 10 sun disc/optical sliders from the CloudVolume backing fields

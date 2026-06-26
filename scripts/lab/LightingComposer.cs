@@ -225,9 +225,7 @@ public sealed class LightingComposer
         {
             RenderingServer.DirectionalShadowAtlasSetSize(_host.ShadowAtlasSize, true);   // ARC A.1: tunable (8192 default; 6144/4096 dial-down — the in-motion shadow-spike lever)
             RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftHigh);   // PCF blur → dissolves texel "squares" cheaply
-            // SSAO is screen-space → its darkening shifts with view angle, same as SSIL (the "visor going down").
-            // The analytic fill in ground.gdshader owns the ambient; SSAO is redundant and causes the visor.
-            if (env != null) { env.SsaoEnabled = false; }
+
             // SSIL DISABLED (2026-06-23): measured ssil ON vs OFF auto-shot diff = 97% of pixels changed, mean
             // shift 52/255 (vs the sun shadow's 0.22) — screen-space indirect light was CRUSHING the whole terrain
             // into dark mud, and because it is screen-space the darkening shifted with view angle. That was the

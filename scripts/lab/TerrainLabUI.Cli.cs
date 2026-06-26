@@ -15,7 +15,7 @@ public partial class TerrainLabUI : Control
     private int _overrideSplat = -1, _overrideSplatDebug = -1;
     private string? _camArg;
     private float _texScale = -1f;
-    private int _probeSsao = -1, _probeShadow = -1, _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
+    private int _probeShadow = -1, _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
     private int _probeSsil = -1;   // --ssil=0/1 isolation probe (screen-space indirect light)
     private float _shadowDistCli = -1f;   // --shadowdist=N → directional shadow max distance (m) A/B (far coverage vs near texel density)
     private int _probeSdfgi = -1;   // --sdfgi=0/1: isolate the real-time GI cost (perf pass)
@@ -90,10 +90,6 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--splatdebug=")) { int.TryParse(a.Substring("--splatdebug=".Length), out _overrideSplatDebug); }
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
-            else if (a.StartsWith("--ssao=")) { _probeSsao = a.Substring("--ssao=".Length) == "1" ? 1 : 0; }
-            else if (a.StartsWith("--ssaoq=")) { int.TryParse(a.Substring("--ssaoq=".Length), out _ssaoQCli); _ssaoQSet = true; }   // ARC A.1: SSAO quality 0=VeryLow..4=Ultra
-            else if (a.StartsWith("--ssaohalf=")) { _ssaoHalfCli = a.Substring("--ssaohalf=".Length) == "1"; _ssaoHalfSet = true; }   // ARC A.1: SSAO half-res
-            else if (a.StartsWith("--ssaoblur=")) { int.TryParse(a.Substring("--ssaoblur=".Length), out _ssaoBlurCli); _ssaoBlurSet = true; }   // ARC A.1: SSAO blur passes
             else if (a.StartsWith("--ssil=")) { _probeSsil = a.Substring("--ssil=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--sdfgi=")) { _probeSdfgi = a.Substring("--sdfgi=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--shadow=")) { _probeShadow = a.Substring("--shadow=".Length) == "1" ? 1 : 0; }
@@ -225,11 +221,6 @@ public partial class TerrainLabUI : Control
             }
         }
         // Lighting isolation probes (fuzz hunt).
-        if (_probeSsao >= 0)
-        {
-            var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
-            env.Environment.SsaoEnabled = _probeSsao == 1;
-        }
         if (_probeSsil >= 0)
         {
             var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
@@ -264,12 +255,6 @@ public partial class TerrainLabUI : Control
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
         if (_shadowAtlasCli > 0) { ShadowAtlasSize = _shadowAtlasCli; RenderingServer.DirectionalShadowAtlasSetSize(_shadowAtlasCli, true); }   // ARC A.1: apply now (composer once-guard may have run)
-        if (_ssaoQSet || _ssaoHalfSet || _ssaoBlurSet)   // ARC A.1: SSAO quality/half-res/blur perf probe (global RenderingServer)
-        {
-            var q = (RenderingServer.EnvironmentSsaoQuality)Mathf.Clamp(_ssaoQSet ? _ssaoQCli : 2, 0, 4);
-            int blur = _ssaoBlurSet ? _ssaoBlurCli : 2;   // ARC A.1: blur passes (the suspected fixed cost)
-            RenderingServer.EnvironmentSetSsaoQuality(q, _ssaoHalfSet ? _ssaoHalfCli : false, 0.5f, blur, 50f, 300f);
-        }
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
         // S3.5: async AABB tighten tunables (--notighten / --aabbres= / --aabbreq=). Only meaningful with CDLOD on.
         if (cdlodWant == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
@@ -354,9 +339,6 @@ public partial class TerrainLabUI : Control
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)
     private bool _lookaheadSet;
     private int _shadowAtlasCli;      // --shadowatlas=N → ARC A.1 directional shadow atlas px (0 = leave default 8192)
-    private int _ssaoQCli = 2; private bool _ssaoQSet;       // --ssaoq=N → ARC A.1 SSAO quality (0..4)
-    private bool _ssaoHalfCli; private bool _ssaoHalfSet;    // --ssaohalf=0/1 → ARC A.1 SSAO half-res
-    private int _ssaoBlurCli = 2; private bool _ssaoBlurSet; // --ssaoblur=N → ARC A.1 SSAO blur passes
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;
