@@ -106,6 +106,17 @@ public sealed partial class CdlodTerrain : Node3D
     public int TotalSnaps, TotalBirths;   // perf instrumentation (cumulative since enable); active chunk count = ActiveCount
     public int TotalRebirths;             // CHURN diagnostic: births of a key retired within the last 30 frames (= thrash, not clean streaming)
     public int ActiveCount => _active.Count;
+    public void ActiveDiagnostics(out int near, out int far, out int shadowCasters, out int cacheReady)
+    {
+        near = 0; far = 0; shadowCasters = 0; cacheReady = 0;
+        foreach (var kv in _active)
+        {
+            ChunkSlot s = kv.Value;
+            if (s.IsFar) { far++; } else { near++; }
+            if (s.CastsShadow) { shadowCasters++; }
+            if (s.CacheReady) { cacheReady++; }
+        }
+    }
     private readonly Dictionary<long, int> _recentRetire = new();   // key → frame retired (for rebirth detection)
 
     // S3: snapped camera-relative render space (floating-origin folded in). renderOrigin = camera XZ snapped

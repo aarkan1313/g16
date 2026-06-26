@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 
 namespace WG16.Lab;
 
@@ -19,6 +20,12 @@ public sealed class LabCliSequences
     private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage; private int _godrayAbFrames;
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum, _profWorst;
     private int _profFrames;
+    private bool _profCollecting;
+    private int _profStartSnaps, _profStartBirths, _profStartRebirths;
+    private readonly List<double> _profFrameMs = new(2048);
+    private readonly List<ProfileSpike> _profSpikes = new(5);
+    private long _visDrawSum, _visObjSum, _visPrimSum, _shDrawSum, _shObjSum, _shPrimSum;
+    private long _visDrawMax, _visObjMax, _visPrimMax, _shDrawMax, _shObjMax, _shPrimMax;
     private bool _profMove;
     private float _profSpeed = 1200f;   // --profspeed= forward m/s for the border-crossing traverse
 
@@ -38,8 +45,131 @@ public sealed class LabCliSequences
     {
         _profileT = 0.0;
         if (dur.HasValue) { _profileDur = dur.Value; }
+        ResetProfileStats();
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Engine.MaxFps = 0;
+    }
+
+    private readonly struct ProfileSpike
+    {
+        public readonly int Frame;
+        public readonly double Ms;
+        public readonly long VisDraw, VisObj, VisPrim, ShDraw, ShObj, ShPrim;
+        public readonly int Snaps, Births, Rebirths, Active;
+
+        public ProfileSpike(int frame, double ms, long visDraw, long visObj, long visPrim, long shDraw, long shObj, long shPrim, int snaps, int births, int rebirths, int active)
+        {
+            Frame = frame; Ms = ms;
+            VisDraw = visDraw; VisObj = visObj; VisPrim = visPrim;
+            ShDraw = shDraw; ShObj = shObj; ShPrim = shPrim;
+            Snaps = snaps; Births = births; Rebirths = rebirths; Active = active;
+        }
+    }
+
+    private void ResetProfileStats()
+    {
+        _profAccum = 0.0; _profWorst = 0.0; _profFrames = 0; _profCollecting = false;
+        _profFrameMs.Clear(); _profSpikes.Clear();
+        _visDrawSum = _visObjSum = _visPrimSum = _shDrawSum = _shObjSum = _shPrimSum = 0;
+        _visDrawMax = _visObjMax = _visPrimMax = _shDrawMax = _shObjMax = _shPrimMax = 0;
+        _profStartSnaps = _profStartBirths = _profStartRebirths = 0;
+    }
+
+    private void BeginProfileCollect()
+    {
+        _profCollecting = true;
+        var cd = _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
+        if (cd != null && cd.Enabled)
+        {
+            _profStartSnaps = cd.TotalSnaps;
+            _profStartBirths = cd.TotalBirths;
+            _profStartRebirths = cd.TotalRebirths;
+        }
+    }
+
+    private void RecordProfileSample(double delta)
+    {
+        var vp = _host.GetViewport();
+        long visDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame);
+        long shDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.DrawCallsInFrame);
+        long visObj = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.ObjectsInFrame);
+        long shObj = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.ObjectsInFrame);
+        long visPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame);
+        long shPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame);
+        var cd = _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
+
+        _profAccum += delta; _profFrames++;
+        _profWorst = Math.Max(_profWorst, delta);
+        double ms = delta * 1000.0;
+        _profFrameMs.Add(ms);
+
+        _visDrawSum += visDraw; _visObjSum += visObj; _visPrimSum += visPrim;
+        _shDrawSum += shDraw; _shObjSum += shObj; _shPrimSum += shPrim;
+        _visDrawMax = Math.Max(_visDrawMax, visDraw); _visObjMax = Math.Max(_visObjMax, visObj); _visPrimMax = Math.Max(_visPrimMax, visPrim);
+        _shDrawMax = Math.Max(_shDrawMax, shDraw); _shObjMax = Math.Max(_shObjMax, shObj); _shPrimMax = Math.Max(_shPrimMax, shPrim);
+
+        int snaps = cd?.TotalSnaps ?? 0;
+        int births = cd?.TotalBirths ?? 0;
+        int rebirths = cd?.TotalRebirths ?? 0;
+        int active = cd?.ActiveCount ?? 0;
+        if (_profSpikes.Count < 5 || ms > _profSpikes[_profSpikes.Count - 1].Ms)
+        {
+            _profSpikes.Add(new ProfileSpike(_profFrames, ms, visDraw, visObj, visPrim, shDraw, shObj, shPrim, snaps, births, rebirths, active));
+            _profSpikes.Sort((a, b) => b.Ms.CompareTo(a.Ms));
+            if (_profSpikes.Count > 5) { _profSpikes.RemoveAt(_profSpikes.Count - 1); }
+        }
+    }
+
+    private static double Percentile(List<double> samples, double pct)
+    {
+        if (samples.Count == 0) { return 0.0; }
+        var sorted = samples.ToArray();
+        Array.Sort(sorted);
+        int idx = (int)Math.Ceiling((pct / 100.0) * sorted.Length) - 1;
+        if (idx < 0) { idx = 0; }
+        if (idx >= sorted.Length) { idx = sorted.Length - 1; }
+        return sorted[idx];
+    }
+
+    private static double FpsFromMs(double ms) => ms > 0.0 ? 1000.0 / ms : 0.0;
+
+    private void PrintProfileSummary()
+    {
+        double avg = _profAccum / Math.Max(_profFrames, 1);
+        GD.Print($"PROFILE: avg {1.0 / avg:0} fps ({avg * 1000:0.0} ms)  worst {1.0 / _profWorst:0} fps ({_profWorst * 1000:0.0} ms)  over {_profFrames} frames");
+
+        double p50 = Percentile(_profFrameMs, 50.0);
+        double p95 = Percentile(_profFrameMs, 95.0);
+        double p99 = Percentile(_profFrameMs, 99.0);
+        GD.Print($"PROFILE-PERCENTILES: p50 {FpsFromMs(p50):0} fps ({p50:0.0} ms)  p95 {FpsFromMs(p95):0} fps ({p95:0.0} ms)  p99 {FpsFromMs(p99):0} fps ({p99:0.0} ms)");
+
+        var vp = _host.GetViewport();
+        long visDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame);
+        long shDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.DrawCallsInFrame);
+        long visObj = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.ObjectsInFrame);
+        long shObj = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.ObjectsInFrame);
+        long visPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame);
+        long shPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame);
+        GD.Print($"PROFILE-RENDER: visible draws={visDraw} objects={visObj} prim={visPrim} | shadow draws={shDraw} objects={shObj} prim={shPrim}");
+
+        long frames = Math.Max(_profFrames, 1);
+        GD.Print($"PROFILE-RENDER-AVG: visible draws={_visDrawSum / frames} objects={_visObjSum / frames} prim={_visPrimSum / frames} | shadow draws={_shDrawSum / frames} objects={_shObjSum / frames} prim={_shPrimSum / frames}");
+        GD.Print($"PROFILE-RENDER-MAX: visible draws={_visDrawMax} objects={_visObjMax} prim={_visPrimMax} | shadow draws={_shDrawMax} objects={_shObjMax} prim={_shPrimMax}");
+
+        for (int i = 0; i < _profSpikes.Count; i++)
+        {
+            ProfileSpike s = _profSpikes[i];
+            GD.Print($"PROFILE-SPIKE: rank={i + 1} frame={s.Frame} {FpsFromMs(s.Ms):0} fps ({s.Ms:0.0} ms) visible draws={s.VisDraw} objects={s.VisObj} prim={s.VisPrim} | shadow draws={s.ShDraw} objects={s.ShObj} prim={s.ShPrim} | stream snaps={s.Snaps - _profStartSnaps} births={s.Births - _profStartBirths} rebirths={s.Rebirths - _profStartRebirths} active={s.Active}");
+        }
+
+        var cd = _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
+        if (cd != null && cd.Enabled)
+        {
+            cd.ActiveDiagnostics(out int near, out int far, out int shadowCasters, out int cacheReady);
+            GD.Print($"PROFILE-STREAM: snaps={cd.TotalSnaps} births={cd.TotalBirths} rebirths={cd.TotalRebirths} activeChunks={cd.ActiveCount} (cumulative since enable; rebirths=thrash)");
+            GD.Print($"PROFILE-STREAM-DELTA: snaps={cd.TotalSnaps - _profStartSnaps} births={cd.TotalBirths - _profStartBirths} rebirths={cd.TotalRebirths - _profStartRebirths}");
+            GD.Print($"PROFILE-CDLOD: active={cd.ActiveCount} near={near} far={far} shadowCasters={shadowCasters} cacheReady={cacheReady}");
+        }
     }
 
     /// --profmove: fly the camera along a BORDER-CROSSING TRAVERSE during a profile so the REAL streaming costs
@@ -115,29 +245,17 @@ public sealed class LabCliSequences
             }
         }
 
-        // --profile=<secs>: warm up 1s, then average frame time, print fps + worst, quit.
+        // --profile=<secs>: warm up 1s, then profile frame-time percentiles, render stats, spike frames, and quit.
         if (_profileT >= 0.0)
         {
             _profileT += delta;
             if (_profileT > 1.0)
             {
-                _profAccum += delta; _profFrames++;
-                _profWorst = Math.Max(_profWorst, delta);
+                if (!_profCollecting) { BeginProfileCollect(); }
+                RecordProfileSample(delta);
                 if (_profileT > 1.0 + _profileDur)
                 {
-                    double avg = _profAccum / Math.Max(_profFrames, 1);
-                    GD.Print($"PROFILE: avg {1.0 / avg:0} fps ({avg * 1000:0.0} ms)  worst {1.0 / _profWorst:0} fps ({_profWorst * 1000:0.0} ms)  over {_profFrames} frames");
-                    var vp = _host.GetViewport();
-                    long visDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame);
-                    long shDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.DrawCallsInFrame);
-                    long visObj = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.ObjectsInFrame);
-                    long shObj = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.ObjectsInFrame);
-                    long visPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame);
-                    long shPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame);
-                    GD.Print($"PROFILE-RENDER: visible draws={visDraw} objects={visObj} prim={visPrim} | shadow draws={shDraw} objects={shObj} prim={shPrim}");
-                    // Streaming churn over the measured window (validates the traverse crossed borders + quantifies it).
-                    var cd = _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
-                    if (cd != null && cd.Enabled) { GD.Print($"PROFILE-STREAM: snaps={cd.TotalSnaps} births={cd.TotalBirths} rebirths={cd.TotalRebirths} activeChunks={cd.ActiveCount} (cumulative since enable; rebirths=thrash)"); }
+                    PrintProfileSummary();
                     _profileT = -1.0;
                     _host.GetTree().Quit();
                 }

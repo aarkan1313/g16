@@ -147,7 +147,7 @@
     { "id": "dbg_fullrough", "label": "force matte (no spec)", "tab": "Debug", "type": "toggle",
       "param": "dbg_fullrough", "default": false, "rand": false },
 
-    { "id": "dbg_shadow", "label": "sun shadows", "tab": "Debug", "type": "scene", "scene": "shadow", "default": true, "rand": false },
+    { "id": "dbg_shadow", "label": "sun shadows", "tab": "Debug", "type": "scene", "scene": "shadow", "default": false, "rand": false },
     { "id": "dbg_fog", "label": "fog", "tab": "Debug", "type": "scene", "scene": "fog", "default": true, "rand": false },
     { "id": "dbg_sun", "label": "sun (vs flat ambient)", "tab": "Debug", "type": "scene", "scene": "sun", "default": true, "rand": false },
     { "id": "gi_proxy", "label": "GI/shadow proxy (perf)", "tab": "Debug", "type": "toggle",

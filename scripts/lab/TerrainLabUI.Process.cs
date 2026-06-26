@@ -42,6 +42,7 @@ public partial class TerrainLabUI : Control
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
     private bool _detailFadeOn = false;  // anti-moiré detail-fade default OFF (matches shader default; ring bug fixed at source, fade only washed far detail)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
+    private bool _lastLiveProfileDump; // B dumps the last rolling profile window to console + artifacts/
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
     private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)
     private bool _hzOn = true;  // mirror of hz_on; MUST match the shader/JSON default or the first P-press no-ops
@@ -50,6 +51,127 @@ public partial class TerrainLabUI : Control
     private bool _godraysOn = true;               // god rays default on; F6 flips it
     private bool _analyticOn = true;        // ground source: live field (default) vs baked; toggled by key 1
     private float _inspectEnergy = 1.0f;   // L-light brightness (Night tab 'inspect light')
+
+    private const int LiveProfileWindowFrames = 512;
+    private readonly LiveProfileSample[] _liveProfile = new LiveProfileSample[LiveProfileWindowFrames];
+    private int _liveProfileIndex, _liveProfileCount;
+
+    private readonly struct LiveProfileSample
+    {
+        public readonly double Ms;
+        public readonly long VisDraw, VisObj, VisPrim, ShDraw, ShObj, ShPrim;
+        public readonly int Snaps, Births, Rebirths, Active;
+
+        public LiveProfileSample(double ms, long visDraw, long visObj, long visPrim, long shDraw, long shObj, long shPrim, int snaps, int births, int rebirths, int active)
+        {
+            Ms = ms;
+            VisDraw = visDraw; VisObj = visObj; VisPrim = visPrim;
+            ShDraw = shDraw; ShObj = shObj; ShPrim = shPrim;
+            Snaps = snaps; Births = births; Rebirths = rebirths; Active = active;
+        }
+    }
+
+    private void RecordLiveProfile(double delta)
+    {
+        var vp = GetViewport();
+        var cd = _terrain.Cdlod;
+        _liveProfile[_liveProfileIndex] = new LiveProfileSample(
+            delta * 1000.0,
+            vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame),
+            vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.ObjectsInFrame),
+            vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame),
+            vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.DrawCallsInFrame),
+            vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.ObjectsInFrame),
+            vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame),
+            cd?.TotalSnaps ?? 0,
+            cd?.TotalBirths ?? 0,
+            cd?.TotalRebirths ?? 0,
+            cd?.ActiveCount ?? 0);
+        _liveProfileIndex = (_liveProfileIndex + 1) % LiveProfileWindowFrames;
+        if (_liveProfileCount < LiveProfileWindowFrames) { _liveProfileCount++; }
+    }
+
+    private static double Percentile(double[] samples, double pct)
+    {
+        if (samples.Length == 0) { return 0.0; }
+        Array.Sort(samples);
+        int idx = (int)Math.Ceiling(samples.Length * pct / 100.0) - 1;
+        if (idx < 0) { idx = 0; }
+        if (idx >= samples.Length) { idx = samples.Length - 1; }
+        return samples[idx];
+    }
+
+    private static double FpsFromMs(double ms) => ms > 0.0 ? 1000.0 / ms : 0.0;
+
+    private void DumpLiveProfile()
+    {
+        if (_liveProfileCount <= 0) { return; }
+
+        double sumMs = 0.0, worstMs = 0.0;
+        long visDrawSum = 0, visObjSum = 0, visPrimSum = 0, shDrawSum = 0, shObjSum = 0, shPrimSum = 0;
+        long visDrawMax = 0, visObjMax = 0, visPrimMax = 0, shDrawMax = 0, shObjMax = 0, shPrimMax = 0;
+        double[] ms = new double[_liveProfileCount];
+        LiveProfileSample[] spikes = new LiveProfileSample[Math.Min(5, _liveProfileCount)];
+
+        int firstIdx = _liveProfileCount == LiveProfileWindowFrames ? _liveProfileIndex : 0;
+        LiveProfileSample first = _liveProfile[firstIdx];
+        LiveProfileSample last = first;
+        for (int i = 0; i < _liveProfileCount; i++)
+        {
+            int idx = _liveProfileCount == LiveProfileWindowFrames ? (_liveProfileIndex + i) % LiveProfileWindowFrames : i;
+            LiveProfileSample s = _liveProfile[idx];
+            last = s;
+            ms[i] = s.Ms;
+            sumMs += s.Ms; worstMs = Math.Max(worstMs, s.Ms);
+            visDrawSum += s.VisDraw; visObjSum += s.VisObj; visPrimSum += s.VisPrim;
+            shDrawSum += s.ShDraw; shObjSum += s.ShObj; shPrimSum += s.ShPrim;
+            visDrawMax = Math.Max(visDrawMax, s.VisDraw); visObjMax = Math.Max(visObjMax, s.VisObj); visPrimMax = Math.Max(visPrimMax, s.VisPrim);
+            shDrawMax = Math.Max(shDrawMax, s.ShDraw); shObjMax = Math.Max(shObjMax, s.ShObj); shPrimMax = Math.Max(shPrimMax, s.ShPrim);
+
+            for (int j = 0; j < spikes.Length; j++)
+            {
+                if (s.Ms <= spikes[j].Ms) { continue; }
+                for (int k = spikes.Length - 1; k > j; k--) { spikes[k] = spikes[k - 1]; }
+                spikes[j] = s;
+                break;
+            }
+        }
+
+        double avgMs = sumMs / _liveProfileCount;
+        double p50 = Percentile((double[])ms.Clone(), 50.0);
+        double p95 = Percentile((double[])ms.Clone(), 95.0);
+        double p99 = Percentile(ms, 99.0);
+        long frames = Math.Max(_liveProfileCount, 1);
+        var lines = new List<string>
+        {
+            $"LIVEPROFILE: frames={_liveProfileCount} avg {FpsFromMs(avgMs):0} fps ({avgMs:0.0} ms) worst {FpsFromMs(worstMs):0} fps ({worstMs:0.0} ms)",
+            $"LIVEPROFILE-PERCENTILES: p50 {FpsFromMs(p50):0} fps ({p50:0.0} ms) p95 {FpsFromMs(p95):0} fps ({p95:0.0} ms) p99 {FpsFromMs(p99):0} fps ({p99:0.0} ms)",
+            $"LIVEPROFILE-RENDER-AVG: visible draws={visDrawSum / frames} objects={visObjSum / frames} prim={visPrimSum / frames} | shadow draws={shDrawSum / frames} objects={shObjSum / frames} prim={shPrimSum / frames}",
+            $"LIVEPROFILE-RENDER-MAX: visible draws={visDrawMax} objects={visObjMax} prim={visPrimMax} | shadow draws={shDrawMax} objects={shObjMax} prim={shPrimMax}",
+            $"LIVEPROFILE-STREAM-DELTA: snaps={last.Snaps - first.Snaps} births={last.Births - first.Births} rebirths={last.Rebirths - first.Rebirths} active={last.Active}"
+        };
+        var cd = _terrain.Cdlod;
+        if (cd != null && cd.Enabled)
+        {
+            cd.ActiveDiagnostics(out int near, out int far, out int shadowCasters, out int cacheReady);
+            lines.Add($"LIVEPROFILE-CDLOD: active={cd.ActiveCount} near={near} far={far} shadowCasters={shadowCasters} cacheReady={cacheReady}");
+        }
+        for (int i = 0; i < spikes.Length; i++)
+        {
+            LiveProfileSample s = spikes[i];
+            lines.Add($"LIVEPROFILE-SPIKE: rank={i + 1} {FpsFromMs(s.Ms):0} fps ({s.Ms:0.0} ms) visible draws={s.VisDraw} objects={s.VisObj} prim={s.VisPrim} | shadow draws={s.ShDraw} objects={s.ShObj} prim={s.ShPrim} | stream snaps={s.Snaps - first.Snaps} births={s.Births - first.Births} rebirths={s.Rebirths - first.Rebirths} active={s.Active}");
+        }
+
+        string dir = ProjectSettings.GlobalizePath("res://artifacts");
+        System.IO.Directory.CreateDirectory(dir);
+        string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        string path = System.IO.Path.Combine(dir, $"live_profile_{stamp}.txt");
+        string latest = System.IO.Path.Combine(dir, "live_profile_last.txt");
+        System.IO.File.WriteAllLines(path, lines);
+        System.IO.File.WriteAllLines(latest, lines);
+        foreach (string line in lines) { GD.Print(line); }
+        GD.Print($"LIVEPROFILE-WROTE: {path}");
+    }
 
     /// Toggle the inspection light (press L). Lazily creates a fixed-angle shadow-casting directional
     /// ("studio key light") that lights the whole scene, so you can check how surfaces read regardless of
@@ -273,6 +395,9 @@ public partial class TerrainLabUI : Control
                     GD.Print($"[ringhunt] (J) diag_mode = {names[_diagMode]}");
                 }
                 _lastJ = kJ;
+                bool kB = Input.IsKeyPressed(Key.B);
+                if (kB && !_lastLiveProfileDump) { DumpLiveProfile(); }
+                _lastLiveProfileDump = kB;
             }
             // ----------------------------------------------------------------------------------------------
 
@@ -302,6 +427,7 @@ public partial class TerrainLabUI : Control
                 _lastKey7Down = Input.IsKeyPressed(Key.Key7);
             }
         }
+        if (_ready) { RecordLiveProfile(delta); }
         // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)
         {
