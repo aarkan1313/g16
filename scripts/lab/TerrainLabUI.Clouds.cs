@@ -13,10 +13,13 @@ public partial class TerrainLabUI : Control
     //      only the public knob setters). _cloud is wired in Stage 3; null = no-op,
     //      so the Clouds tab is inert (but present + tunable in state) until then. --
     private CloudVolume? _cloud;
-    private GodRaysScreen? _godraysScreen;   // screen-space radial scatter (GPU Gems 3) — THE god-ray layer
+    private GodRaysScreen? _godraysScreen;    // screen-space radial scatter (GPU Gems 3) — THE god-ray layer
     private AtmosphereCompute? _atmosphere;   // AT-1 GPU physical sky (Hillaire LUTs); default off
     private bool _atmosphereOn;               // AT-1 on-state mirror (ComposeLighting drops FogSkyAffect so fog stops washing the physical sky)
     private bool _atmoMatActivated;           // AT-1 default-on: the sky material flips to the LUT once it's computed (one-time, in _Process)
+    private AerialPerspectiveV2? _aerialV2;   // AT-2 v2 64-slice log-Z aerial (screen quad)
+    private bool _aerialV2On;                 // UI toggle state (default off, K key toggles)
+    private bool _aerialV2Activated;          // one-time RID push once the LUT is ready (_Process gate)
     private bool _cloudLightOn = true;        // AT-3 physical cloud lighting; default ON (eye-gate PASSED 2026-06-21)
     private bool _cloudLightActivated;        // one-time RID+strength push once both nodes are ready (_Process gate)
     private float _cloudLightStr = 10f;       // atmo cloud-light gain (LUT radiance → ambient); gate-tunable
@@ -26,6 +29,7 @@ public partial class TerrainLabUI : Control
         // 2026-06-19 — it read as a washy fog; screen-space is the crisp AAA look.
         switch (knob)
         {
+            case "aerial_strength": _aerialV2?.SetStrength(v); return;
             case "godray_strength":     _godraysScreen?.SetStrength(v); return;     // beam intensity
             case "godray_length":       _godraysScreen?.SetDensity(v); return;      // LOWER density = longer beams
             case "godray_decay":        _godraysScreen?.SetDecay(v); return;        // shaft falloff
@@ -40,6 +44,7 @@ public partial class TerrainLabUI : Control
     private void ApplyCloudBool(string knob, bool on)
     {
         if (knob == "atmosphere_on") { _atmosphereOn = on; _cloud?.SetAtmosphereOn(on); _atmosphere?.SetEnabled(on); ComposeLighting(); return; }   // AT-1: ComposeLighting re-applies FogSkyAffect so fog stops washing the sky
+        if (knob == "aerial_on") { _aerialV2On = on; _atmosphere?.SetAerialEnabled(on); _aerialV2?.SetEnabled(on); _aerialV2Activated = false; return; }   // AT-2 v2
         // AT-3 physical cloud lighting: off → push strength 0 (mood path); on → re-arm the readiness gate (_Process pushes RIDs+strength when both nodes ready).
         if (knob == "cloud_light") { _cloudLightOn = on; _atmosphere?.SetCloudLightWanted(on); if (!on) { _cloud?.SetCloudAtmoLight(0f); } _cloudLightActivated = false; return; }
         if (knob == "godrays") { _godraysScreen?.SetEnabled(on); return; }   // screen-space radial beams

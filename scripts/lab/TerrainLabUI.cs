@@ -179,6 +179,10 @@ public partial class TerrainLabUI : Control, ILabControls
             _atmosphere.Attach();
             _cloud.SetAtmosphereSkyView(_atmosphere.SkyViewTexture);   // bind the (empty-RID) Texture2Drd now; RID fills on the render thread
         }
+        // AT-2 v2 aerial perspective: 64-slice log-Z froxel, shares AtmosphereCompute's LUTs.
+        _aerialV2 = new AerialPerspectiveV2 { Name = "AerialPerspectiveV2" };
+        GetNode("/root/TerrainLabRoot").AddChild(_aerialV2);
+        _aerialV2.Attach(GetNode<Camera3D>("/root/TerrainLabRoot/Camera"));
         // AT-1 atmosphere CLI overrides (after attach, so both nodes are live)
         if (_atmoExpCli >= 0f) { _cloud.SetKnob("atmo_exposure", _atmoExpCli); }
         if (_atmosphereCli == 1) { _atmosphereOn = true; _cloud.SetAtmosphereOn(true); _atmosphere?.SetEnabled(true); }

@@ -36,7 +36,7 @@ public partial class TerrainLabUI : Control
     private bool _lastKey5Down, _lastKey6Down, _lastKey7Down;   // S2b: debounce for the test-path keys (5/6/7)
     // Debug isolation bank (F1..F6): live-flip the screen-space effects that produce camera-locked stipple/ring
     // artifacts, so a "dots in a shifting ring" report can be pinned to ONE system in the running window.
-    private bool _lastF2, _lastF3, _lastF4, _lastF5, _lastF6, _lastF7, _lastF9;
+    private bool _lastF2, _lastF3, _lastF4, _lastF5, _lastF6, _lastF7, _lastF8, _lastF9;
     private bool _lastG;        // G toggles the anti-moiré detail-fade live
     private bool _lastWaterH;   // H toggles the water debug overlay live
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
@@ -123,6 +123,13 @@ public partial class TerrainLabUI : Control
             _cloud?.SetAtmosphereOn(true);
             _atmoMatActivated = true;
         }
+        // AT-2 v2: bind the froxel LUT Texture3Drd once the compute is ready, then push camera each frame.
+        if (_aerialV2On && !_aerialV2Activated && _atmosphere != null && _atmosphere.AerialReady && _aerialV2 != null)
+        {
+            _aerialV2.SetAerialTexture(_atmosphere.AerialTexture);
+            _aerialV2.SetEnabled(true);
+            _aerialV2Activated = true;
+        }
         // AT-3 default-gated: once the atmosphere has read back its cloud-light colors AND the cloud compute
         // is ready, enable physical cloud lighting at the current strength. While active, keep the 3 colors
         // current as the sun moves (cheap — they're cached Vector3s pushed into the cloud param buffer).
@@ -188,6 +195,13 @@ public partial class TerrainLabUI : Control
             // the render-relative terrain (same floating-origin frame as the CDLOD chunks).
             _waterRenderer?.SetRenderOrigin(_terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero);
             _cloud?.SetCameraWorld(camPos);
+            // AT-2 v2: push camera to AtmosphereCompute so DispatchAerial uses the current view frustum.
+            if (_aerialV2On && _atmosphere != null)
+            {
+                var proj = camN.GetCameraProjection();
+                var vp = proj * new Godot.Projection(camN.GlobalTransform.AffineInverse());
+                _atmosphere.SetAerialCamera(camPos, 64000f, vp.Inverse());
+            }
             TickPopMeter(camPos);   // S3 --popmeter: live per-frame pop/snap measurement (no-op unless armed)
 
             // Inspection light (L): toggle a fixed-angle studio directional to check surfaces.
@@ -222,6 +236,10 @@ public partial class TerrainLabUI : Control
                 bool kO = Input.IsKeyPressed(Key.O);
                 if (kO && !_lastF7) { _atmosphereOn = !_atmosphereOn; _cloud.SetAtmosphereOn(_atmosphereOn); _atmosphere?.SetEnabled(_atmosphereOn); GD.Print($"[dbg] (O) Atmosphere AT-1 = {_atmosphereOn}"); }
                 _lastF7 = kO;
+                // K: A/B aerial perspective AT-2 v2 (64-slice log-Z froxel haze).
+                bool kK = Input.IsKeyPressed(Key.K);
+                if (kK && !_lastF8) { _aerialV2On = !_aerialV2On; _atmosphere?.SetAerialEnabled(_aerialV2On); _aerialV2?.SetEnabled(_aerialV2On); _aerialV2Activated = false; GD.Print($"[dbg] (K) Aerial AT-2 v2 = {_aerialV2On}"); }
+                _lastF8 = kK;
                 // P: A/B horizon shadows (long-range terrain self-shadow). Best seen at a LOW sun.
                 bool kP = Input.IsKeyPressed(Key.P);
                 if (kP && !_lastHzKey) { _hzOn = !_hzOn; _terrain.SetBool("hz_on", _hzOn); GD.Print($"[dbg] (P) Horizon shadows = {_hzOn}"); }
