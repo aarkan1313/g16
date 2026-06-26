@@ -8,7 +8,7 @@ namespace WG16.Lab;
 
 /// CLI-armed capture / profile sequences for headless runs (decomposition Phase 1c). Each is armed by a
 /// flag in ParseCli, ticks once per frame, then captures/measures and quits — self-contained state machines
-/// carved out of the 435-line _Process. Covers: --auto-shot, the drift-free A/B captures (--godrayab,
+/// carved out of the 435-line _Process. Covers: --auto-shot, --visualcheck, the drift-free A/B captures (--godrayab,
 /// --fillab), --profile (frame-time gate), and --profmove (orbit the camera during a profile so motion costs
 /// are paid). Depends only on the host Node (viewport/tree/camera), the god-rays node, and the lighting
 /// composer. The FPS HUD and the async --aabbspike probe stay in _Process (label-owned / async-coupled).
@@ -19,6 +19,7 @@ public sealed class LabCliSequences
     private readonly LightingComposer _lighting;
 
     private string? _autoShotPath; private double _autoShotT = -1.0;
+    private string? _visualCheckPath; private double _visualCheckT = -1.0;
     private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage; private int _godrayAbFrames;
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum, _profWorst;
     private int _profFrames;
@@ -68,6 +69,7 @@ public sealed class LabCliSequences
 
     // ---- arming (called from ParseCli) ----
     public void ArmAutoShot(string path) { _autoShotPath = path; _autoShotT = 0.0; }
+    public void ArmVisualCheck(string? path = null) { _visualCheckPath = path; _visualCheckT = 0.0; }
     public void ArmGodrayAb(string path) { _godrayAbPath = path; _godrayAbT = 0.0; }
     public void EnableProfMove() => _profMove = true;
     public void SetProfSpeed(float mps) { if (mps > 0f) { _profSpeed = mps; } }
@@ -131,6 +133,28 @@ public sealed class LabCliSequences
                 GD.Print($"TerrainLab: auto-shot -> {_autoShotPath}  (frame ~{Engine.GetFramesPerSecond():0} fps)");
                 _autoShotT = -1.0;
                 _host.GetTree().Quit();
+            }
+        }
+
+        if (_visualCheckT >= 0.0)
+        {
+            _visualCheckT += delta;
+            if (_visualCheckT > 1.5)
+            {
+                Engine.TimeScale = 0.0;
+                Image img = _host.GetViewport().GetTexture().GetImage();
+                if (!string.IsNullOrWhiteSpace(_visualCheckPath))
+                {
+                    string? dir = Path.GetDirectoryName(_visualCheckPath);
+                    if (!string.IsNullOrWhiteSpace(dir)) { Directory.CreateDirectory(dir); }
+                    img.SavePng(_visualCheckPath);
+                    GD.Print($"VISUALCHECK-SHOT: {_visualCheckPath}");
+                }
+                bool ok = VisualRegressionCheck.Run(img, out string report);
+                GD.Print($"VISUALCHECK: {(ok ? "PASS" : "FAIL")}  {report}");
+                _visualCheckT = -1.0;
+                Engine.TimeScale = 1.0;
+                _host.GetTree().Quit(ok ? 0 : 1);
             }
         }
 

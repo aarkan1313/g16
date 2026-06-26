@@ -141,11 +141,12 @@ Godot_v4.6.2-stable_mono_win64_console.exe --path C:/Wg16/wg-16-project --render
 - [ ] Run CDLOD mechanical gate bundle.
 - [ ] Run `--shadowcheck`.
 - [ ] Run 5 km/s and 25 km/s profiles.
-- [ ] Capture a visual sanity shot if the change touched rendering behavior.
+- [ ] Run `--visualcheck=artifacts/visualcheck_default.png` for a mathematical rendered-frame sanity gate.
+- [ ] Capture a live visual pass if the change touched rendering behavior.
 - [ ] Commit scoped changes and push.
 
 **Acceptance:**
 
 - The repo contains current numbers and a clear read on remaining spikes.
 - The high-speed path is tunable, not hard-coded around one machine.
-- The visual pass is left ready for live review.
+- The visual pass is backed by a gross-regression metric and left ready for live review.

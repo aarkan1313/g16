@@ -23,6 +23,7 @@ The average frame is already close enough to be useful. The next problem is not 
 - Average frame time at 5 km/s and 25 km/s is near the target on the current machine, but max worst frames are still noisy and sometimes large.
 - Lowering bake request throughput blindly made backlog explode, so the next pass needs smarter scheduling, not lower throughput.
 - Task 1 telemetry is live: `--profile` now reports p50/p95/p99/top spikes and optional CSV output.
+- `--visualcheck[=path.png]` is now the mathematical gross-regression gate for rendered frames. It is a sanity check for blank/flat/blown/monochrome frames, not a substitute for the live look pass.
 
 ## Baseline After Task 1 Telemetry
 
@@ -114,6 +115,10 @@ Use these after any change touching CDLOD, shadows, or profiler code:
 
 ```powershell
 dotnet build WG16.csproj --nologo
+```
+
+```powershell
+Godot_v4.6.2-stable_mono_win64_console.exe --path C:/Wg16/wg-16-project --rendering-driver vulkan scenes/terrain_lab.tscn -- --visualcheck=artifacts/visualcheck_default.png
 ```
 
 ```powershell

@@ -76,6 +76,7 @@ public partial class TerrainLabUI : Control
         foreach (string a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--auto-shot=")) { _cliSeq.ArmAutoShot(a.Substring("--auto-shot=".Length)); }
+            else if (MatchFlag(a, "--visualcheck")) { _cliSeq.ArmVisualCheck(a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : null); }
             else if (a.StartsWith("--blend=")) { int.TryParse(a.Substring("--blend=".Length), out _overrideBlend); }
             else if (a.StartsWith("--mask=")) { int.TryParse(a.Substring("--mask=".Length), out _overrideMask); }
             else if (a.StartsWith("--tile=")) { int.TryParse(a.Substring("--tile=".Length), out _overrideTile); }
