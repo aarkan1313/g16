@@ -65,9 +65,7 @@ public partial class TerrainLabUI : Control
     private int _analyticCli = -1;   // --analytic[=0|1] → S1 ground source: live field vs baked (default: leave shader default ON)
     private int _texturesCli = -1;   // --textures[=0|1] → minimal surfacing slice on/off at startup
     private bool _cdlodTestCli;      // --cdlodtest → S2a Task-1 sanity: one full-region chunk instance
-    // CDLOD default (perf arc step 0, 2026-06-24): ON for the lab/game (infinite quadtree), OFF in ReviewMode
-    // (the look-review scene judges on the stable single mesh). -1 = unset → the ReviewMode-aware default at the
-    // apply decides; --cdlod=0/1 overrides explicitly.
+    // CDLOD default: ON in all scenes. --cdlod=0/1 overrides explicitly.
     private int _cdlodCli = -1;      // --cdlod[=0|1] → infinite quadtree terrain vs the single mesh
     private int _testPathCli = -1;   // --testpath=N → run S2b LOD-crossing test path N (0-based) headlessly, then quit
     private int _lodVizCli = -1;     // --lodviz[=1] → tint chunks by LOD level
@@ -119,7 +117,6 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--godraydbg=")) { int.TryParse(a.Substring("--godraydbg=".Length), out _godrayDbgCli); }
             else if (a.StartsWith("--godrayhp=")) { float.TryParse(a.Substring("--godrayhp=".Length), out _godrayHpCli); }
             else if (a.StartsWith("--godrayab=")) { _cliSeq.ArmGodrayAb(a.Substring("--godrayab=".Length)); }
-            else if (a.StartsWith("--fillab=")) { _cliSeq.ArmFillAb(a.Substring("--fillab=".Length)); }   // relight #1 drift-free fill A/B
             else if (a.StartsWith("--glow=")) { _glowCli = a.Substring("--glow=".Length) == "1" ? 1 : 0; }
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a == "--lookatmoon") { _lookAtMoonCli = true; }
@@ -150,6 +147,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--loadring=")) { int.TryParse(a.Substring("--loadring=".Length), out _loadRingCli); }   // ARC B Task 1: load-ring radius (1=3×3, 2=5×5)
             else if (a.StartsWith("--fieldcache=")) { _fieldCacheCli = a.Substring("--fieldcache=".Length) == "1" ? 1 : 0; }   // per-chunk field cache on/off A/B
             else if (a.StartsWith("--bakereq=")) { int.TryParse(a.Substring("--bakereq=".Length), out _bakeReqCli); }   // field-cache bake throttle
+            else if (a.StartsWith("--chunkops=")) { int.TryParse(a.Substring("--chunkops=".Length), out _chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle = high)
             else if (a.StartsWith("--fogviewscale=")) { float.TryParse(a.Substring("--fogviewscale=".Length), System.Globalization.CultureInfo.InvariantCulture, out _fogViewScaleCli); _fogViewScaleSet = true; }   // ARC B Task 3
             else if (a.StartsWith("--lookahead=")) { float.TryParse(a.Substring("--lookahead=".Length), System.Globalization.CultureInfo.InvariantCulture, out _lookaheadCli); _lookaheadSet = true; }   // ARC B Task 4
             else if (a.StartsWith("--shadowatlas=")) { int.TryParse(a.Substring("--shadowatlas=".Length), out _shadowAtlasCli); }   // ARC A.1 shadow atlas px
@@ -256,13 +254,13 @@ public partial class TerrainLabUI : Control
         if (_analyticCli >= 0) { _analyticOn = _analyticCli == 1; _terrain.SetAnalytic(_analyticOn); }   // keep key-1 toggle in sync with the CLI default
         if (_texturesCli >= 0) { _terrain.SetTexturesOn(_texturesCli == 1); }   // minimal surfacing slice
         if (_cdlodTestCli) { _terrain.SetAnalytic(true); _terrain.CdlodTestOneChunk(_params); }   // S2a Task-1 sanity
-        // CDLOD default: ON for the lab/game (infinite), but OFF in ReviewMode (review.tscn judges LOOK on the
-        // stable single mesh — streaming churn distracts from eye-gating palette/clouds/shadows). --cdlod= overrides.
-        int cdlodWant = _cdlodCli >= 0 ? _cdlodCli : (ReviewMode ? 0 : 1);
+        // CDLOD default: ON in all scenes. --cdlod=0 overrides to single mesh if needed.
+        int cdlodWant = _cdlodCli >= 0 ? _cdlodCli : 1;
         _terrain.SetAnalytic(true); _terrain.SetCdlod(cdlodWant == 1);
         if (_loadRingCli >= 0) { _terrain.SetLoadRing(_loadRingCli); }   // ARC B Task 1: load-ring radius override
         if (_fieldCacheCli >= 0) { _terrain.SetFieldCache(_fieldCacheCli == 1); }   // per-chunk field cache A/B (before first Tick)
         if (_bakeReqCli > 0) { _terrain.SetBakeReq(_bakeReqCli); }   // field-cache bake throttle
+        if (_chunkOpsCli > 0) { _terrain.SetChunkOps(_chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle)
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
         if (_shadowAtlasCli > 0) { ShadowAtlasSize = _shadowAtlasCli; RenderingServer.DirectionalShadowAtlasSetSize(_shadowAtlasCli, true); }   // ARC A.1: apply now (composer once-guard may have run)
@@ -350,6 +348,7 @@ public partial class TerrainLabUI : Control
     private int _loadRingCli = -1;    // --loadring=N → ARC B Task 1 CdlodTerrain.LoadRing (-1 = leave default 2)
     private int _fieldCacheCli = -1;  // --fieldcache=0|1 → per-chunk field cache (-1 = leave default on)
     private int _bakeReqCli = -1;     // --bakereq=N → field-cache bake throttle (-1 = leave default)
+    private int _chunkOpsCli = -1;    // --chunkops=N → per-frame chunk-birth cap (unthrottle = high; -1 = leave default 24)
     private float _fogViewScaleCli;   // --fogviewscale=F → ARC B Task 3 FogViewScale (gated by _fogViewScaleSet)
     private bool _fogViewScaleSet;
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)

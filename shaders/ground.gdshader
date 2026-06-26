@@ -99,19 +99,6 @@ uniform float cliff_lo = 0.45;
 uniform float cliff_hi = 0.72;
 uniform float ground_rough = 0.92;
 
-// ── Analytic indirect FILL (relight sub-project #1) ──────────────────────────────────────────
-// Replaces the dead-blue flat ambient on shaded slopes with a cool sky hemisphere + a warm
-// sun->ground bounce. Injected via EMISSION (unshaded indirect). LinearRGB. fill_on default false
-// => byte-identical to the old render until LightingComposer pushes it on. See spec 2026-06-23.
-uniform bool  fill_on = false;
-uniform vec3  sky_zenith  : source_color = vec3(0.13, 0.22, 0.40);   // up-facing cool fill
-uniform vec3  sky_horizon : source_color = vec3(0.40, 0.45, 0.50);   // grazing fill
-uniform vec3  sky_ground  : source_color = vec3(0.22, 0.19, 0.16);   // down-facing (earth) fill
-uniform vec3  sun_radiance : source_color = vec3(1.0, 0.93, 0.82);   // sun_color * sun_energy
-uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);                       // unit dir TOWARD the sun
-uniform vec3  ground_albedo : source_color = vec3(0.70, 0.56, 0.40); // slightly warmer — keeps shadowed terrain readable without going blue/black
-uniform float sky_strength    : hint_range(0.0, 2.0) = 1.15;
-uniform float bounce_strength : hint_range(0.0, 2.0) = 0.85;
 
 // ── Heightfield HORIZON SHADOWS (long-range terrain self-shadow) ─────────────────────────────
 // Per-pixel macro-height march toward the sun: where the terrain rises above the sun ray, occlude the
@@ -495,26 +482,6 @@ void fragment() {
         }
         ALBEDO = water_debug_tint(c, v_surf_xz);
         ROUGHNESS = ground_rough;
-    }
-
-    // Analytic indirect FILL — applied to ALL render paths (the LIVE path is `use_textures`, not the
-    // legacy ramp). Placed at the end of fragment() so it rides whatever ALBEDO/normal the branch set.
-    // World normal: v_normal (+Y up). EMISSION = unshaded indirect (sky hemisphere + warm ground bounce).
-    if (fill_on) {
-        vec3 nf = normalize(v_normal);
-        float up = clamp(nf.y, -1.0, 1.0);
-        // Cool sky hemisphere: zenith when up-facing, horizon at grazing, ground tint when down-facing.
-        vec3 sky = (up >= 0.0) ? mix(sky_horizon, sky_zenith, up)
-                               : mix(sky_horizon, sky_ground, -up);
-        float sky_vis = 0.5 + 0.5 * up;                  // 1 up-facing .. 0.5 vertical .. 0 down
-        vec3 sky_fill = sky * sky_vis * sky_strength;
-        // Warm bounce off sunlit ground: scales with sun elevation (lit-ground amount) and is
-        // strongest on faces NOT pointing at the sky (down/sideways slopes see the lit sand).
-        float sun_up = clamp(sun_dir_to.y, 0.0, 1.0);    // sun elevation -> how much ground is lit
-        float bounce_vis = clamp(1.0 - up, 0.0, 1.0) * 0.5;
-        vec3 bounce = sun_radiance * ground_albedo * sun_up * bounce_vis * bounce_strength;
-        // Indirect light responds to surface albedo (warm bounce on sand = warm sand).
-        EMISSION = (sky_fill + bounce) * ALBEDO;
     }
 
     // Heightfield horizon shadow → occlude DIRECT light (AO_LIGHT_AFFECT=1 makes AO multiply direct light).

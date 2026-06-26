@@ -42,18 +42,15 @@ public sealed class LightingComposer
     public MoonState Moon { get; } = new();
     public StarsState Stars { get; } = new();
     public Color SkyTint { get; set; } = Colors.White;   // ST4-2 fantasy sky tint (white = no tint)
-    public bool FillEnabled { get; set; } = true;        // master A/B for the analytic indirect fill (relight #1)
     // Overcast-scaled bases (captured by Compose, scaled by ApplyOvercastScaling — the live sliders set these).
     public float BaseAmbient { get; set; } = 0.4f;
     public float BaseSunEnergy { get; set; } = 1.3f;
     public Color BaseFogColor { get; set; } = new(0.71f, 0.78f, 0.86f);
-    // VIEW-DISTANCE: DEPTH-mode distance fog so near is crystal-clear and haze concentrates FAR away
-    // ("less up-close fog, deeper farther-away fog"). Decoupled from the load radius. Fog is ZERO until
-    // FogDepthBegin, then eases in (FogDepthCurve > 1 → slow start, density piled toward the end) to FULL at
-    // FogDepthEnd (~just inside the camera far-clip → hides the streaming/clip seam). All live-tunable, HW-free.
-    public float FogDepthBegin { get; set; } = 22000f;   // m: terrain is fully clear out to here
-    public float FogDepthEnd   { get; set; } = 62000f;   // m: full fog by here (keep ≤ camera far-clip 64 km)
-    public float FogDepthCurve { get; set; } = 3.0f;     // >1 → fog stays thin most of the way, ramps up only far out
+    // VIEW-DISTANCE: DEPTH-mode distance fog. Starts close and ramps gradually so there is no
+    // sudden wall or ground-ring artifact. FogDepthCurve ≤ 1.5 keeps the ramp near-linear.
+    public float FogDepthBegin { get; set; } = 55000f;   // m: terrain stays clear out to 55 km
+    public float FogDepthEnd   { get; set; } = 90000f;   // m: full fog by here (matches camera far-clip 90 km)
+    public float FogDepthCurve { get; set; } = 1.5f;     // low = gradual ramp; high = wall at the far end
     // Sun orientation (degrees) — written by Compose from the arc, also by the sun-angle/azimuth sliders.
     public float SunAngle { get; set; } = 35f;
     public float SunAzimuth { get; set; } = 40f;
@@ -228,9 +225,9 @@ public sealed class LightingComposer
         {
             RenderingServer.DirectionalShadowAtlasSetSize(_host.ShadowAtlasSize, true);   // ARC A.1: tunable (8192 default; 6144/4096 dial-down — the in-motion shadow-spike lever)
             RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftHigh);   // PCF blur → dissolves texel "squares" cheaply
-            // SSAO was the harsh "second shadow system": intensity 2.0 raked across the faceted 4 m mesh and read
-            // as jagged shadows. Dial to subtle valley AO (the look fix); revisit when the higher-res CDLOD mesh lands.
-            if (env != null) { env.SsaoIntensity = 0.6f; }
+            // SSAO is screen-space → its darkening shifts with view angle, same as SSIL (the "visor going down").
+            // The analytic fill in ground.gdshader owns the ambient; SSAO is redundant and causes the visor.
+            if (env != null) { env.SsaoEnabled = false; }
             // SSIL DISABLED (2026-06-23): measured ssil ON vs OFF auto-shot diff = 97% of pixels changed, mean
             // shift 52/255 (vs the sun shadow's 0.22) — screen-space indirect light was CRUSHING the whole terrain
             // into dark mud, and because it is screen-space the darkening shifted with view angle. That was the
@@ -635,37 +632,11 @@ public sealed class LightingComposer
         var env = EnvNode.Environment;
         var sun = SunNode;
         float oc = _host.Overcast;
-        env.AmbientLightEnergy = BaseAmbient * Mathf.Lerp(1f, 0.7f, oc);     // sky fill DOWN (grey gloom)
+        env.AmbientLightEnergy = BaseAmbient * Mathf.Lerp(1f, 0.7f, oc);
         env.AmbientLightSkyContribution = Time.AmbientSky;
-        // Relight #1 (2026-06-23): the terrain's shaded-slope FILL is now owned by ground.gdshader's
-        // analytic indirect term (cool sky hemisphere + warm ground bounce), pushed in PushTerrainFill().
-        // So the env ambient drops to a low NEUTRAL flat base — sky-contribution 0 so no blue sky is pulled
-        // back in to re-create the dead-blue slopes; other lit objects keep a small fill. (Was the warm-flat
-        // WIP: energy 0.9 / sky 0.4 / warm-white, which couldn't beat the blue because it was non-directional.)
-        env.AmbientLightEnergy = 0.12f;
-        env.AmbientLightSkyContribution = 0.0f;
-        env.AmbientLightColor = new Color(0.5f, 0.5f, 0.5f);
         sun.LightEnergy = BaseSunEnergy * (1f - oc * 0.8f);                  // direct sun DOWN under cloud
-        PushTerrainFill();
         var cloud = _host.Cloud;
         env.FogLightColor = (cloud != null) ? BaseFogColor.Lerp(cloud.SkyHorizonColor, 0.55f * oc) : BaseFogColor;
     }
 
-    /// Push the analytic indirect-fill uniforms to the terrain (relight #1). Cool sky hemisphere from the
-    /// day-script sky colors + warm sun->ground bounce from the current sun. Called every Compose so the
-    /// fill tracks time-of-day/mood through the one-writer. Colors → linear (EMISSION is linear radiance).
-    private void PushTerrainFill()
-    {
-        var t = _host.Terrain;
-        if (t == null) { return; }
-        Vector3 toSun = SunNode.GlobalTransform.Basis.Z.Normalized();   // +Basis.Z points TOWARD the sun
-        Color sunRad = (Time.SunColor * Time.SunEnergy).SrgbToLinear();
-        t.SetBool("fill_on", FillEnabled);
-        t.SetColor("sky_zenith",  Time.SkyTop.SrgbToLinear());
-        t.SetColor("sky_horizon", Time.SkyHorizon.SrgbToLinear());
-        t.SetColor("sky_ground",  Time.SkyGround.SrgbToLinear());
-        t.SetColor("sun_radiance", new Color(sunRad.R, sunRad.G, sunRad.B));
-        t.SetVector3("sun_dir_to", toSun);
-        // ground_albedo + sky_strength/bounce_strength keep their shader defaults until the Task 3 sliders set them.
-    }
 }

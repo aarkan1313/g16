@@ -17,7 +17,6 @@ public sealed class LabCliSequences
 
     private string? _autoShotPath; private double _autoShotT = -1.0;
     private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage; private int _godrayAbFrames;
-    private string? _fillAbPath; private double _fillAbT = -1.0; private int _fillAbStage; private int _fillAbFrames;
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum, _profWorst;
     private int _profFrames;
     private bool _profMove;
@@ -33,7 +32,6 @@ public sealed class LabCliSequences
     // ---- arming (called from ParseCli) ----
     public void ArmAutoShot(string path) { _autoShotPath = path; _autoShotT = 0.0; }
     public void ArmGodrayAb(string path) { _godrayAbPath = path; _godrayAbT = 0.0; }
-    public void ArmFillAb(string path) { _fillAbPath = path; _fillAbT = 0.0; }
     public void EnableProfMove() => _profMove = true;
     public void SetProfSpeed(float mps) { if (mps > 0f) { _profSpeed = mps; } }
     public void ArmProfile(double? dur)
@@ -112,32 +110,6 @@ public sealed class LabCliSequences
                     _host.GetViewport().GetTexture().GetImage().SavePng(_godrayAbPath + "_off.png");
                     GD.Print($"TerrainLab: godray A/B -> {_godrayAbPath}_on.png / _off.png (2-frame gap)");
                     _godrayAbT = -1.0;
-                    _host.GetTree().Quit();
-                }
-            }
-        }
-
-        // --fillab=<path>: DRIFT-FREE indirect-fill A/B (relight #1). Freeze the day cycle, capture fill ON,
-        // toggle FillEnabled OFF + recompose, capture, quit. The two frames differ ONLY by the fill term.
-        if (_fillAbT >= 0.0 && _fillAbPath != null)
-        {
-            _fillAbT += delta;
-            if (_fillAbStage == 0 && _fillAbT > 1.5)
-            {
-                Engine.TimeScale = 0.0;                       // FREEZE: sun/day-cycle stop -> pure A/B
-                _lighting.FillEnabled = true; _lighting.Compose();
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_fillAbPath)!);
-                _host.GetViewport().GetTexture().GetImage().SavePng(_fillAbPath + "_fillon.png");
-                _lighting.FillEnabled = false; _lighting.Compose();
-                _fillAbStage = 1; _fillAbFrames = 0;
-            }
-            else if (_fillAbStage == 1)
-            {
-                if (++_fillAbFrames >= 3)                     // let the recompose flush
-                {
-                    _host.GetViewport().GetTexture().GetImage().SavePng(_fillAbPath + "_filloff.png");
-                    GD.Print($"TerrainLab: fillab -> {_fillAbPath}_fillon.png / _filloff.png (frozen)");
-                    _fillAbT = -1.0;
                     _host.GetTree().Quit();
                 }
             }

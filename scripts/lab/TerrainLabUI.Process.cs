@@ -47,7 +47,6 @@ public partial class TerrainLabUI : Control
     private int _aerialDbg;     // 0 normal, 1 extinction(red), 2 inscatter(green), 3 froxel-z, 4 distance
     private bool _lastY;        // Y A/Bs the aerial haze fix (fade-to-sky vs old fade-to-black)
     private bool _aerialHazeOn = true;  // aerial haze fix on by default
-    private bool _lastFillAb;   // I A/Bs the analytic indirect fill (relight #1)
     private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)
     private bool _hzOn = false;  // mirror of hz_on; MUST match the shader/JSON default (now false) or the first P-press no-ops
     private bool _lodVizLive;   // V toggles the LOD-band tint live
@@ -270,11 +269,6 @@ public partial class TerrainLabUI : Control
                 bool kY = Input.IsKeyPressed(Key.Y);
                 if (kY && !_lastY) { _aerialHazeOn = !_aerialHazeOn; _aerial?.SetHazeStrength(_aerialHazeOn ? 1f : 0f); GD.Print($"[dbg] (Y) Aerial haze fix = {_aerialHazeOn}"); }
                 _lastY = kY;
-                // I: A/B the analytic indirect FILL (relight #1). On = warm sky+bounce fill on shaded slopes;
-                // Off = the raw low-ambient look (dead blue) for comparison. Toggles the master FillEnabled.
-                bool kI = Input.IsKeyPressed(Key.I);
-                if (kI && !_lastFillAb) { _lighting.FillEnabled = !_lighting.FillEnabled; ComposeLighting(); GD.Print($"[dbg] (I) Indirect fill = {_lighting.FillEnabled}"); }
-                _lastFillAb = kI;
                 // P: A/B horizon shadows (long-range terrain self-shadow). Best seen at a LOW sun.
                 bool kP = Input.IsKeyPressed(Key.P);
                 if (kP && !_lastHzKey) { _hzOn = !_hzOn; _terrain.SetBool("hz_on", _hzOn); GD.Print($"[dbg] (P) Horizon shadows = {_hzOn}"); }
