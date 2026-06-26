@@ -17,8 +17,8 @@ public partial class TerrainLabUI : Control
     private AtmosphereCompute? _atmosphere;   // AT-1 GPU physical sky (Hillaire LUTs); default off
     private bool _atmosphereOn;               // AT-1 on-state mirror (ComposeLighting drops FogSkyAffect so fog stops washing the physical sky)
     private bool _atmoMatActivated;           // AT-1 default-on: the sky material flips to the LUT once it's computed (one-time, in _Process)
-    private AerialPerspective? _aerial;       // AT-2 screen-space aerial perspective (distance haze); default ON with the atmosphere
-    private bool _aerialOn = true;            // AT-2 on-state (default on; --aerial=0 / Light-tab toggle = off → built-in fog restored)
+    private AerialPerspective? _aerial;       // AT-2 screen-space aerial perspective (distance haze); off by default until froxel artifact is resolved
+    private bool _aerialOn = false;           // AT-2 off by default — froxel Z-slice artifact produces "visor" line; re-enable with K or --aerial=1
     private bool _aerialActivated;            // AT-2 default-on: the pass enables once the aerial LUT RID is live (one-time, in _Process)
     private bool _cloudLightOn = true;        // AT-3 physical cloud lighting; default ON (eye-gate PASSED 2026-06-21)
     private bool _cloudLightActivated;        // one-time RID+strength push once both nodes are ready (_Process gate)

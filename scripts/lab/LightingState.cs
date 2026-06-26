@@ -27,7 +27,7 @@ public sealed class TimeState
     // transitional sun + sky + ambient look (atmosphere-driven from Task 6):
     public float SunAngle = 35f, SunAzimuth = 40f, SunEnergy = 1.3f;
     public Color SunColor = new(1f, 0.95f, 0.86f);
-    public float Ambient = 0.4f, AmbientSky = 1.0f;
+    public float Ambient = 0.65f, AmbientSky = 1.0f;
     public Color SkyTop = new(0.30f, 0.48f, 0.74f), SkyHorizon = new(0.68f, 0.74f, 0.80f), SkyGround = new(0.22f, 0.26f, 0.22f);
 
     public TimeState Clone() => (TimeState)MemberwiseClone();
@@ -41,7 +41,7 @@ public sealed class TimeKey
     public float Hour = 12f, SunEnergy = 1.4f;
     public Color SunColor = new(1f, 0.95f, 0.86f);
     public Color SkyTop = new(0.30f, 0.48f, 0.74f), SkyHorizon = new(0.68f, 0.74f, 0.80f), SkyGround = new(0.22f, 0.26f, 0.22f);
-    public float Ambient = 0.45f, AmbientSky = 0.95f;
+    public float Ambient = 0.65f, AmbientSky = 0.95f;
 }
 
 /// CELESTIAL sun appearance (Stage-1 disc + shadow softness). Orthogonal to the Time physics; bound to
@@ -54,15 +54,12 @@ public sealed class SunDiscState
     // per-frame re-assert. Defaults == the previously hard-coded values, so behaviour is unchanged at first.
     // Bias is the acne<->peter-panning lever (was never set = Godot default 1.0/2.0); MaxDist/splits were
     // literals in ComposeLighting. Tunable so the terrain lane can re-dial shadows as the geometry evolves.
-    public float ShadowNormalBias = 1.0f;   // sun.ShadowNormalBias — raise to kill acne, lower if shadows detach
-    public float ShadowMaxDist = 6000f;      // sun.DirectionalShadowMaxDistance (m) — shadow draw distance.
-                                             // (2026-06-24 spike: A/B'd 500m vs 6km vs 24km at a low-sun vista —
-                                             // VISUALLY IDENTICAL. The shadow map only does near/mid CONTACT shadows
-                                             // (~5% of pixels, range-independent); distant terrain casts nothing
-                                             // castable at coarse LOD. So range is NOT the lever for long-range
-                                             // terrain shadows — that needs a heightfield horizon pass. Kept at 6000
-                                             // (best near texel density); tunable live via the 'shadow_dist' slider / --shadowdist.)
-    public float ShadowSplit1 = 0.10f, ShadowSplit2 = 0.28f, ShadowSplit3 = 0.60f;   // cascade split fractions
+    public float ShadowNormalBias = 1.1f;    // sun.ShadowNormalBias — raise to kill acne, lower if shadows detach or float
+    public float ShadowMaxDist = 4000f;      // sun.DirectionalShadowMaxDistance (m) — near/mid contact shadows only.
+                                             // A/B'd 500m vs 6km vs 24km at a low-sun vista — visually similar.
+                                             // 4000m: enough to cast shadows on nearby ridges visible in frame
+                                             // while keeping cascade budget focused near the camera.
+    public float ShadowSplit1 = 0.06f, ShadowSplit2 = 0.20f, ShadowSplit3 = 0.50f;   // more near-focused split distribution
     public float Size = 0.6f, Limb = 0.55f;
     public float CoronaSize = 1200f, CoronaEnergy = 2.0f, HaloSize = 90f, HaloEnergy = 0.4f;
     public float Redden = 1.0f, ReddenOnset = 0.25f, HorizonGrow = 0.6f, CloudRedden = 0.8f;

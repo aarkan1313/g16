@@ -90,21 +90,29 @@ void main(){
     vec3 sunDir = normalize(P.sun_turb.xyz);
     int nExtra = int(P.sun_meta.x + 0.5);
 
+    // Clip froxel integration to the terrain/ground. Without this, downward rays cross below sea
+    // level (alt < 0 → exp() density EXPLODES) and the old altitude clamp `max(alt, 0)` replaced
+    // the correct "stop here" with maximum ground density in every beyond-terrain slice. The linear
+    // interpolation between the last valid slice and those over-scattered slices created a hard
+    // VISIBLE BAND at the ray-ground intersection distance — the "visor going down as you look down"
+    // artifact. Fix: clamp t_m to t_ground_m so beyond-terrain sub-steps have dt=0 and contribute
+    // zero scatter (lum/tr frozen), producing a smooth froxel with no density discontinuity.
+    float t_ground_m = maxDist;
+    if (rayDir.y < 0.0 && camPos.y > 0.0) {
+        t_ground_m = min(maxDist, -camPos.y / rayDir.y);
+    }
+
     vec3 lum = vec3(0.0), tr = vec3(1.0);
     float prevT = 0.0;
     const int SUB = 4;
     for (int z = 0; z < sz.z; z++){
         float frac = (float(z) + 1.0) / float(sz.z);
-        float t_m = maxDist * frac * frac;            // quadratic near-bias, metres
+        float t_m = min(maxDist * frac * frac, t_ground_m);   // clamp to ground: beyond-terrain slices get dt=0
         for (int s = 0; s < SUB; s++){
             float mid = mix(prevT, t_m, (float(s) + 0.5) / float(SUB));   // metres
             float dt_Mm = ((t_m - prevT) / float(SUB)) * 1e-6;
-            // Clamp altitude to >= sea level. Aerial rays look DOWN/along terrain, so without this the
-            // sample point dives BELOW the ground radius at large t → negative altKM → exp() density
-            // EXPLODES → runaway extinction + in-scatter that washes the whole frame. (The sky LUTs never
-            // hit this: sky rays go UP.) Real haze along the ground sits at ~sea-level density.
-            float alt_Mm = max(camY_Mm + rayDir.y * mid * 1e-6, 0.0);
-            vec3 pos = vec3(0.0, groundRadiusMM + alt_Mm, 0.0);
+            float alt_Mm = camY_Mm + rayDir.y * mid * 1e-6;   // can be negative only if t_m > t_ground_m, but that can't happen now
+            vec3 pos = vec3(0.0, groundRadiusMM + max(alt_Mm, 0.0), 0.0);   // keep pos valid for LUT even at rounding edge
             vec3 rs; float ms; vec3 ext; getScatteringValues(pos, rs, ms, ext);
             vec3 sampleTr = exp(-dt_Mm * ext);
             vec3 inS = sunInScatter(rayDir, pos, sunDir, vec3(1.0), rs, ms);   // primary

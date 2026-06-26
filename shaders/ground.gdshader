@@ -109,22 +109,23 @@ uniform vec3  sky_horizon : source_color = vec3(0.40, 0.45, 0.50);   // grazing 
 uniform vec3  sky_ground  : source_color = vec3(0.22, 0.19, 0.16);   // down-facing (earth) fill
 uniform vec3  sun_radiance : source_color = vec3(1.0, 0.93, 0.82);   // sun_color * sun_energy
 uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);                       // unit dir TOWARD the sun
-uniform vec3  ground_albedo : source_color = vec3(0.62, 0.50, 0.36); // representative sand albedo
-uniform float sky_strength    : hint_range(0.0, 2.0) = 1.0;
-uniform float bounce_strength : hint_range(0.0, 2.0) = 1.0;
+uniform vec3  ground_albedo : source_color = vec3(0.70, 0.56, 0.40); // slightly warmer — keeps shadowed terrain readable without going blue/black
+uniform float sky_strength    : hint_range(0.0, 2.0) = 1.15;
+uniform float bounce_strength : hint_range(0.0, 2.0) = 0.85;
 
 // ── Heightfield HORIZON SHADOWS (long-range terrain self-shadow) ─────────────────────────────
 // Per-pixel macro-height march toward the sun: where the terrain rises above the sun ray, occlude the
 // DIRECT light via AO + AO_LIGHT_AFFECT=1 (no light()/BRDF rewrite). hz_on=false => byte-identical. Cheap:
 // marches field_macro_height (macro only), increasing stride, gated OFF at high sun (no long shadows there).
-uniform bool  hz_on = true;                                    // shipped ON (eye-gate 2026-06-24); JSON control mirrors this
-uniform float hz_steps    : hint_range(4.0, 48.0)   = 16.0;    // march steps (int() in the loop)
-uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 6000.0; // horizontal reach (m)
-uniform float hz_stride0  : hint_range(4.0, 200.0)  = 30.0;    // first step length (m); stride grows from here
-uniform float hz_growth   : hint_range(1.0, 2.0)    = 1.35;    // stride multiplier per step (LOD march)
-uniform float hz_softness : hint_range(0.005, 0.30) = 0.10;    // penumbra width (angle units; higher = softer)
-uniform float hz_strength : hint_range(0.0, 1.0)    = 0.6;     // final occlusion gain — 0.6 keeps some sun in shadow (not pitch dark)
-uniform float hz_sun_gate : hint_range(0.05, 1.0)   = 0.5;     // skip march when sun_dir_to.y > this (sin elev; 0.5 = 30 deg)
+// Default OFF while tuning the base lighting stack; enable with P once sun shadows look correct.
+uniform bool  hz_on = false;                                   // off by default — treat as macro shadow accent, not primary lighting
+uniform float hz_steps    : hint_range(4.0, 48.0)   = 10.0;    // march steps
+uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 3500.0; // horizontal reach (m)
+uniform float hz_stride0  : hint_range(4.0, 200.0)  = 40.0;    // first step length (m)
+uniform float hz_growth   : hint_range(1.0, 2.0)    = 1.45;    // stride multiplier per step
+uniform float hz_softness : hint_range(0.005, 0.30) = 0.22;    // wider penumbra = softer macro shadow
+uniform float hz_strength : hint_range(0.0, 1.0)    = 0.28;    // gentle accent — not the primary shadow system
+uniform float hz_sun_gate : hint_range(0.05, 1.0)   = 0.35;    // only at low sun (sin elev < 0.35 ≈ 20 deg)
 
 // S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
 // detail transitions share a single soft band (no quality-pop / no stacked rings). UNUSED today — the
