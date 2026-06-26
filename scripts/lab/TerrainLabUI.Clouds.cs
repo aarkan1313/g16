@@ -53,7 +53,7 @@ public partial class TerrainLabUI : Control
         if (knob == "cirrus_on") { _cloud?.SetCirrusOn(on); return; }     // CO-2 cirrus sky-layer toggle
         _cloud?.SetKnobBool(knob, on);
         // clouds-enabled is the master visual gate; terrain cloud shadows remain opt-in via the debug toggle.
-        if (knob == "enabled") { _terrain.SetBool("cloud_shadow_on", on && _terrainCloudShadowOn); }
+        if (knob == "enabled") { _cloud?.SetShadowMapWanted(on && _terrainCloudShadowOn); _terrain.SetBool("cloud_shadow_on", on && _terrainCloudShadowOn); }
     }
 
     // ---- cloud PRESETS (named sky looks) — logic lives in CloudPresets.cs; picker UI + forwarders here ----

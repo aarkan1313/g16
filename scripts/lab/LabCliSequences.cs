@@ -127,6 +127,14 @@ public sealed class LabCliSequences
                 {
                     double avg = _profAccum / Math.Max(_profFrames, 1);
                     GD.Print($"PROFILE: avg {1.0 / avg:0} fps ({avg * 1000:0.0} ms)  worst {1.0 / _profWorst:0} fps ({_profWorst * 1000:0.0} ms)  over {_profFrames} frames");
+                    var vp = _host.GetViewport();
+                    long visDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame);
+                    long shDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.DrawCallsInFrame);
+                    long visObj = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.ObjectsInFrame);
+                    long shObj = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.ObjectsInFrame);
+                    long visPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame);
+                    long shPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame);
+                    GD.Print($"PROFILE-RENDER: visible draws={visDraw} objects={visObj} prim={visPrim} | shadow draws={shDraw} objects={shObj} prim={shPrim}");
                     // Streaming churn over the measured window (validates the traverse crossed borders + quantifies it).
                     var cd = _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
                     if (cd != null && cd.Enabled) { GD.Print($"PROFILE-STREAM: snaps={cd.TotalSnaps} births={cd.TotalBirths} rebirths={cd.TotalRebirths} activeChunks={cd.ActiveCount} (cumulative since enable; rebirths=thrash)"); }

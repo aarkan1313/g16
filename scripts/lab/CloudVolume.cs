@@ -76,6 +76,7 @@ public partial class CloudVolume : Node
     public void SetCloudAtmoColors(Vector3 zenith, Vector3 horizon, Vector3 sunTrans) { _atmoZenith = zenith; _atmoHorizon = horizon; _atmoSunTrans = sunTrans; }
     private Texture2Drd? _shadowRd;
     private float _shadowStrength = 0.25f;   // opt-in terrain receive; keep it subtle when enabled
+    private bool _shadowMapWanted;           // default view does not consume the 512² cloud-shadow map
     private bool _computeReady;
     private int _frame;
     private float _lastTime;          // for CPU drift integration (dt)
@@ -350,13 +351,18 @@ public partial class CloudVolume : Node
         _rd.ComputeListEnd();
 
         // --- cloud-shadow map dispatch (same density field, top-down toward sun) ---
-        byte[] spb = BuildShadowParams(p, now);
-        _rd.BufferUpdate(_shadowParamBuf, 0, (uint)spb.Length, spb);
-        long slist = _rd.ComputeListBegin();
-        _rd.ComputeListBindComputePipeline(slist, _shadowPipeline);
-        _rd.ComputeListBindUniformSet(slist, _shadowSet, 0);
-        _rd.ComputeListDispatch(slist, (uint)((ShadowRes + 7) / 8), (uint)((ShadowRes + 7) / 8), 1);
-        _rd.ComputeListEnd();
+        // The default review look does not consume this texture: terrain cloud shadows are opt-in and the
+        // god-ray layer defaults to screen luminance occlusion. Skip the dispatch unless a consumer asks for it.
+        if (_shadowMapWanted)
+        {
+            byte[] spb = BuildShadowParams(p, now);
+            _rd.BufferUpdate(_shadowParamBuf, 0, (uint)spb.Length, spb);
+            long slist = _rd.ComputeListBegin();
+            _rd.ComputeListBindComputePipeline(slist, _shadowPipeline);
+            _rd.ComputeListBindUniformSet(slist, _shadowSet, 0);
+            _rd.ComputeListDispatch(slist, (uint)((ShadowRes + 7) / 8), (uint)((ShadowRes + 7) / 8), 1);
+            _rd.ComputeListEnd();
+        }
 
         if (_statsCountdown > 0 && --_statsCountdown == 0) { DumpDomeStats(p); }
     }
@@ -660,6 +666,7 @@ public partial class CloudVolume : Node
     public CloudParams Params => _p;
     public bool Enabled => _enabled;
     public bool ComputeReady => _computeReady;     // shadow Texture2Drd RID is live
+    public void SetShadowMapWanted(bool wanted) => _shadowMapWanted = wanted;
     public Color SkyHorizonColor => _skyHorizon;   // for aerial-perspective tinting
 
     // ---- public knob interface (UI → here only). Knobs mutate _p; RenderProcess

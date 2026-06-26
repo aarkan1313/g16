@@ -228,7 +228,7 @@ public partial class TerrainLabUI : Control
                 if (kComma && !_lastF4) { UiSun.ShadowEnabled = !UiSun.ShadowEnabled; GD.Print($"[dbg] (,) Sun shadows = {UiSun.ShadowEnabled}"); }
                 _lastF4 = kComma;
                 bool kPeriod = Input.IsKeyPressed(Key.Period);
-                if (kPeriod && !_lastF5) { _terrainCloudShadowOn = !_terrainCloudShadowOn; _terrain.SetBool("cloud_shadow_on", _terrainCloudShadowOn && (_cloud?.Enabled ?? true)); GD.Print($"[dbg] (.) Cloud shadow on terrain = {_terrainCloudShadowOn}"); }
+                if (kPeriod && !_lastF5) { _terrainCloudShadowOn = !_terrainCloudShadowOn; _cloud?.SetShadowMapWanted(_terrainCloudShadowOn); _terrain.SetBool("cloud_shadow_on", _terrainCloudShadowOn && (_cloud?.Enabled ?? true)); GD.Print($"[dbg] (.) Cloud shadow on terrain = {_terrainCloudShadowOn}"); }
                 _lastF5 = kPeriod;
                 bool kSlash = Input.IsKeyPressed(Key.Slash);
                 if (kSlash && !_lastF6) { _godraysOn = !_godraysOn; _godraysScreen?.SetEnabled(_godraysOn); GD.Print($"[dbg] (/) God rays = {_godraysOn}"); }

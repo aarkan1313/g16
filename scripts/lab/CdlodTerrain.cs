@@ -86,6 +86,7 @@ public sealed partial class CdlodTerrain : Node3D
     public int LoadRing = 8;          // full horizon ring (near + far shell); --loadring=N overrides
     public int ActiveRing = 4;        // near/far boundary — sub-root chunks (near CDLOD) vs root chunks (horizon shell)
     public float ShadowCasterRadius = 5500f;         // camera-centered CSM caster ring; kept beyond shadow_dist so it cannot visibly pop
+    public float AabbTightenMaxSpeed = 1800f;         // skip render-thread AABB readbacks during fast traversal; catch up when motion settles
     private Vector2 _shadowCenterXZ;                 // current camera XZ for ring tests; set once per Tick()
     public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
                                              // center-cell boundary before the loaded window re-centers (anti-thrash near a seam).
@@ -182,7 +183,13 @@ public sealed partial class CdlodTerrain : Node3D
             _forceReapply = true;
             if (!tighten) { _aabbReset = true; }   // OFF: drop landed tights so existing chunks snap back to generous
         }
-        GD.Print($"CdlodTerrain: AABB tighten={(tighten ? "on" : "OFF")} probeRes={_aabbProvider?.ProbeRes} maxReq={_aabbProvider?.MaxRequestsPerFrame}");
+        GD.Print($"CdlodTerrain: AABB tighten={(tighten ? "on" : "OFF")} probeRes={_aabbProvider?.ProbeRes} maxReq={_aabbProvider?.MaxRequestsPerFrame} speedMax={AabbTightenMaxSpeed:F0}");
+    }
+
+    public void SetAabbTightenMaxSpeed(float metersPerSecond)
+    {
+        AabbTightenMaxSpeed = Mathf.Max(0f, metersPerSecond);
+        GD.Print($"CdlodTerrain: AABB tighten speedMax={AabbTightenMaxSpeed:F0} m/s");
     }
 
     public bool TightenEnabled => TightenAabb;
@@ -204,6 +211,8 @@ public sealed partial class CdlodTerrain : Node3D
         _lastRenderOrigin = _renderOrigin;
         if (snapped) { TotalSnaps++; }   // perf instrumentation: real renderOrigin snaps (8192 m crossings, pre-force)
         _shadowCenterXZ = new Vector2(camPos.X, camPos.Z);
+        float speedXZ = new Vector2(velXZ.X, velXZ.Z).Length();
+        bool allowAabbTighten = TightenAabb && speedXZ <= AabbTightenMaxSpeed;
 
         _qt.Ring = LoadRing;   // ARC B Task 1: live-tunable load-ring radius (slider/CLI → takes effect next select)
         // ARC B Task 4: bias the window center forward by the camera velocity (clamped to ~1.5 cells so a wild
@@ -236,6 +245,7 @@ public sealed partial class CdlodTerrain : Node3D
             {
                 slot.SeenFrame = _frame;            // still visible → keep
                 ApplyChunk(slot, c, key, snapped);  // re-pushes ONLY what changed (mask / landed tighten / snap)
+                QueueAabbTightenIfAllowed(allowAabbTighten, key, c, slot);
             }
             else
             {
@@ -256,8 +266,8 @@ public sealed partial class CdlodTerrain : Node3D
                     ns.CacheSlot = _freeLayers.Pop(); ns.CacheReady = false;
                     _fieldCache.Request(key, ns.CacheSlot, c.OriginXZ, c.Size);
                 }
-                if (!isFar && TightenAabb) { _aabbProvider.Request(key, c.OriginXZ, c.Size); }
                 ApplyChunk(ns, c, key, snapped: true);
+                QueueAabbTightenIfAllowed(allowAabbTighten, key, c, ns);
             }
         }
         TotalBirths += nearBirths + farBirths;
@@ -283,7 +293,7 @@ public sealed partial class CdlodTerrain : Node3D
             _active.Remove(_scratchDead[i]);
         }
 
-        if (TightenAabb) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
+        if (allowAabbTighten) { _aabbProvider.Pump(); }   // S3.5: dispatch queued tighten requests on the render thread
         if (FieldCache && _fieldCache != null) { _fieldCache.Pump(); }
 
         // Streaming diagnostic (DebugStream): which stage lags? births capped → throttle-bound; bakePend high →
@@ -303,6 +313,12 @@ public sealed partial class CdlodTerrain : Node3D
     }
     public bool DebugStream = false;   // --streamdbg: per-30-frame streaming-state log
     private int _dbgBirthsAcc, _dbgCapped;
+
+    private void QueueAabbTightenIfAllowed(bool allowAabbTighten, long key, CdlodChunk c, ChunkSlot slot)
+    {
+        if (!allowAabbTighten || slot.IsFar || slot.Tightened || _tightened.ContainsKey(key)) { return; }
+        _aabbProvider.Request(key, c.OriginXZ, c.Size);
+    }
 
     /// ARC B Task 2: the cell-aligned world origin of the (hysteretic) window-center cell. The naive center is
     /// floor(cam / root); a raw floor re-centers the instant the camera crosses a cell boundary, so oscillating

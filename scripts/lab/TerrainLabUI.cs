@@ -214,7 +214,7 @@ public partial class TerrainLabUI : Control, ILabControls
         if (_autoTimeCli >= 0f) { _timeSpeed = _autoTimeCli; _timeRunning = true; GD.Print($"[autotime] day/night cycle ON, {_autoTimeCli} h/s"); }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
-        if (_shadowDbgCli == 1) { _terrainCloudShadowOn = true; _terrain.SetBool("cloud_shadow_on", true); _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
+        if (_shadowDbgCli == 1) { _terrainCloudShadowOn = true; _cloud.SetShadowMapWanted(true); _terrain.SetBool("cloud_shadow_on", true); _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
         if (_shadowCheckCli)   // numeric proof: correlate shadow vs cloud-overhead, print PASS/FAIL
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");

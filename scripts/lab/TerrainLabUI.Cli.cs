@@ -135,6 +135,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--notighten") { _noTightenCli = true; }   // S3.5: disable async AABB tighten → generous AABB fallback
             else if (a.StartsWith("--aabbres=")) { int.TryParse(a.Substring("--aabbres=".Length), out _aabbResCli); }   // S3.5: ProbeRes
             else if (a.StartsWith("--aabbreq=")) { int.TryParse(a.Substring("--aabbreq=".Length), out _aabbReqCli); }   // S3.5: MaxRequestsPerFrame
+            else if (a.StartsWith("--aabbspeed=")) { float.TryParse(a.Substring("--aabbspeed=".Length), System.Globalization.CultureInfo.InvariantCulture, out _aabbSpeedCli); _aabbSpeedSet = true; }   // speed gate for AABB readback probes
             else if (a.StartsWith("--loadring=")) { int.TryParse(a.Substring("--loadring=".Length), out _loadRingCli); }   // ARC B Task 1: load-ring radius (1=3×3, 2=5×5)
             else if (a.StartsWith("--fieldcache=")) { _fieldCacheCli = a.Substring("--fieldcache=".Length) == "1" ? 1 : 0; }   // per-chunk field cache on/off A/B
             else if (a.StartsWith("--bakereq=")) { int.TryParse(a.Substring("--bakereq=".Length), out _bakeReqCli); }   // field-cache bake throttle
@@ -245,6 +246,7 @@ public partial class TerrainLabUI : Control
         if (_chunkOpsCli > 0) { _terrain.SetChunkOps(_chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle)
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
+        if (_aabbSpeedSet) { _terrain.SetCdlodAabbSpeed(_aabbSpeedCli); }
         if (_shadowRingCli >= 0f) { _terrain.SetShadowRing(_shadowRingCli); }
         if (_shadowAtlasCli > 0) { ShadowAtlasSize = _shadowAtlasCli; RenderingServer.DirectionalShadowAtlasSetSize(_shadowAtlasCli, true); }   // ARC A.1: apply now (composer once-guard may have run)
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
@@ -330,6 +332,8 @@ public partial class TerrainLabUI : Control
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)
     private bool _lookaheadSet;
     private int _shadowAtlasCli;      // --shadowatlas=N → ARC A.1 directional shadow atlas px (0 = leave default 8192)
+    private float _aabbSpeedCli;      // --aabbspeed=N -> max camera m/s that may run AABB readback probes
+    private bool _aabbSpeedSet;
     private float _shadowRingCli = -1f; // --shadowring=N -> CSM caster ring radius; 0 = all near CDLOD chunks
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
