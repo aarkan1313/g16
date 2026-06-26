@@ -28,12 +28,12 @@ adjustment_enabled = true
 adjustment_brightness = 1.0
 adjustment_contrast = 1.08
 adjustment_saturation = 1.12
-ssao_enabled = true
+ssao_enabled = false
 ssao_radius = 8.0
 ssao_intensity = 2.0
 ssao_power = 1.5
 ssao_detail = 0.5
-ssil_enabled = true
+ssil_enabled = false
 ssil_intensity = 1.0
 sdfgi_enabled = false
 sdfgi_use_occlusion = true
@@ -83,7 +83,7 @@ directional_shadow_mode = 2
 directional_shadow_split_1 = 0.08
 directional_shadow_split_2 = 0.2
 directional_shadow_split_3 = 0.5
-directional_shadow_max_distance = 8000.0
+directional_shadow_max_distance = 3500.0
 
 [node name="Env" type="WorldEnvironment" parent="."]
 environment = SubResource("env")

@@ -49,28 +49,29 @@ public sealed class CloudPresets
     }
 
     /// Apply a cloud preset by setting each named control through the registry (→ CloudVolume).
-    /// Controls not in the preset are left as-is. jitter>0 = seeded ± around each value (surprise-me).
+    /// Controls not in the preset are reset to useful cloud defaults. jitter>0 = seeded ± around each value.
     public void Apply(int idx, float jitter = 0f)
     {
         if (idx < 0 || idx >= _presets.Count) { return; }
-        // CO-4: reset the cloud-TYPE levers first so every preset is SELF-CONTAINED — a preset that doesn't
-        // mention cirrus/stratus/profile/macro gets the clean cumulus look, not leftover state from a prior pick.
-        foreach (var id in new[] { "cloud_profile_on", "cloud_cirrus_on" })
-            if (_reg.TryGet(id, out var bc)) { _reg.SetValue(bc, false); }
-        foreach (var id in new[] { "cloud_shape_mode", "cloud_anti_repeat" })
-            if (_reg.TryGet(id, out var fc)) { _reg.SetValue(fc, 0.0f); }
+        // Presets are self-contained: a prior shadow/review preset can turn the volume off, while cirrus used
+        // to keep rendering independently. Force the master cloud gate back on unless randomize locks it.
+        if (_reg.TryGet("cloud_enabled", out var enabled) && !(jitter > 0f && enabled.Locked)) { _reg.SetValue(enabled, true); }
+        if (_reg.TryGet("cloud_profile_on", out var profile) && !(jitter > 0f && profile.Locked)) { _reg.SetValue(profile, true); }
+        if (_reg.TryGet("cloud_cirrus_on", out var cirrus) && !(jitter > 0f && cirrus.Locked)) { _reg.SetValue(cirrus, false); }
+        if (_reg.TryGet("cloud_shape_mode", out var shape) && !(jitter > 0f && shape.Locked)) { _reg.SetValue(shape, 0.0f); }
+        if (_reg.TryGet("cloud_anti_repeat", out var anti) && !(jitter > 0f && anti.Locked)) { _reg.SetValue(anti, 0.45f); }
         var values = _presets[idx].values;
         foreach (var key in values.Keys)
         {
             string id = key.AsString();
             if (!_reg.TryGet(id, out LabControl c)) { continue; }
             if (jitter > 0f && c.Locked) { continue; }   // randomize respects locks; explicit pick doesn't
-            float v = values[key].AsSingle();
-            // ranged presets / surprise-me (roadmap #3): seeded ± jitter of the knob's range, CENTERED on a
-            // known-good preset value → always coherent. Respects the rand flag (so e.g. shadow_strength stays).
-            if (jitter > 0f && c.Rand)
+            Variant v = CoercePresetValue(c, values[key]);
+            // Coherent surprise-me: jitter visible cloud appearance, but leave perf/debug/shadow/god-ray switches stable.
+            if (jitter > 0f && ShouldJitter(c))
             {
-                v = Mathf.Clamp(v + (float)(_rng.NextDouble() * 2.0 - 1.0) * jitter * (c.Max - c.Min), c.Min, c.Max);
+                float f = v.AsSingle();
+                v = Mathf.Clamp(f + (float)(_rng.NextDouble() * 2.0 - 1.0) * jitter * (c.Max - c.Min), c.Min, c.Max);
             }
             _reg.SetValue(c, v);
         }
@@ -80,4 +81,24 @@ public sealed class CloudPresets
         _getCloud()?.SetLayers(layers != null ? CloudLayers.FromGodotArray(layers) : CloudLayers.Load());
         GD.Print($"Clouds: applied preset '{_presets[idx].name}'" + (jitter > 0f ? " (jittered)" : ""));
     }
+
+    private static Variant CoercePresetValue(LabControl c, Variant raw)
+    {
+        if (c.Type == "cloud" || c.Type == "toggle" || c.Type == "scene")
+        {
+            return raw.VariantType == Variant.Type.Bool ? raw.AsBool() : raw.AsSingle() >= 0.5f;
+        }
+        if (c.Type == "cloudi") { return Mathf.Round(Number(raw)); }
+        return Number(raw);
+    }
+
+    private static bool ShouldJitter(LabControl c)
+    {
+        if (c.Tab != "Clouds" || c.Type != "cloudf") { return false; }
+        string id = c.Id;
+        return !(id.Contains("shadow") || id.Contains("godray") || id.Contains("debug")
+            || id == "cloud_perdeck" || id == "cloud_overcast");
+    }
+
+    private static float Number(Variant raw) => raw.VariantType == Variant.Type.Bool ? (raw.AsBool() ? 1f : 0f) : raw.AsSingle();
 }

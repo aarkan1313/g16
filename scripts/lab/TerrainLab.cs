@@ -192,6 +192,8 @@ public partial class TerrainLab : MeshInstance3D
     public void SetFieldCache(bool on) { if (_cdlod != null) { _cdlod.FieldCache = on; } }   // per-chunk field cache A/B
     public void SetBakeReq(int n) { _cdlod?.SetBakeReq(n); }   // field-cache bake throttle
     public void SetChunkOps(int n) { if (_cdlod != null) { _cdlod.MaxChunkOps = Mathf.Max(1, n); } }   // per-frame birth cap (unthrottle = high)
+    public void SetShadowRing(float meters) { if (_cdlod != null) { _cdlod.ShadowCasterRadius = Mathf.Max(0f, meters); } }   // CSM caster radius around camera
+    public float ShadowRing => _cdlod?.ShadowCasterRadius ?? 0f;
     public int LoadRing => _cdlod?.LoadRing ?? 5;
     public void CdlodTick(Vector3 camPos, Vector3 velXZ = default) { _cdlod?.Tick(camPos, velXZ); }   // ARC B Task 4: vel for predictive loading
     public void SetCdlodLookahead(float seconds) { if (_cdlod != null) { _cdlod.PredictLookahead = Mathf.Max(0f, seconds); } }

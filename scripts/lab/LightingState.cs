@@ -55,10 +55,9 @@ public sealed class SunDiscState
     // Bias is the acne<->peter-panning lever (was never set = Godot default 1.0/2.0); MaxDist/splits were
     // literals in ComposeLighting. Tunable so the terrain lane can re-dial shadows as the geometry evolves.
     public float ShadowNormalBias = 3.0f;    // sun.ShadowNormalBias — raise to kill acne, lower if shadows detach or float
-    public float ShadowMaxDist = 4000f;      // sun.DirectionalShadowMaxDistance (m) — near/mid contact shadows only.
-                                             // A/B'd 500m vs 6km vs 24km at a low-sun vista — visually similar.
-                                             // 4000m: enough to cast shadows on nearby ridges visible in frame
-                                             // while keeping cascade budget focused near the camera.
+    public float ShadowMaxDist = 3500f;      // sun.DirectionalShadowMaxDistance (m) — near/detail contact shadows only.
+                                             // Broad far-terrain occlusion belongs to horizon shadows; keeping CSM
+                                             // short avoids coarse CDLOD chunks casting blocky shifting shadows.
     public float ShadowSplit1 = 0.06f, ShadowSplit2 = 0.20f, ShadowSplit3 = 0.50f;   // more near-focused split distribution
     public float Size = 0.6f, Limb = 0.55f;
     public float CoronaSize = 1200f, CoronaEnergy = 2.0f, HaloSize = 90f, HaloEnergy = 0.4f;

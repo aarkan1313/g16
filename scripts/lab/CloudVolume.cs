@@ -75,7 +75,7 @@ public partial class CloudVolume : Node
     public void SetCloudAtmoLight(float strength) { _atmoCloudStrength = Mathf.Max(0f, strength); }
     public void SetCloudAtmoColors(Vector3 zenith, Vector3 horizon, Vector3 sunTrans) { _atmoZenith = zenith; _atmoHorizon = horizon; _atmoSunTrans = sunTrans; }
     private Texture2Drd? _shadowRd;
-    private float _shadowStrength = 0.45f;   // was 0.7 — clouds are sparse; subtler ground shadow
+    private float _shadowStrength = 0.25f;   // opt-in terrain receive; keep it subtle when enabled
     private bool _computeReady;
     private int _frame;
     private float _lastTime;          // for CPU drift integration (dt)
@@ -93,9 +93,9 @@ public partial class CloudVolume : Node
     private float RegionM = 8192f;
 
     private float _cellScale = 1.6f;   // clump-scale knob: higher = smaller/more clumps (anti-slab). >1 = tighter than the old fixed look.
-    // CO-1 vertical profile (drives layer 0, the knob cumulus deck). Default OFF = approved
-    // slab look; toggle on + tune to make decks read as 3D volumes (eye-gate).
-    private bool _profileOn = false;
+    // CO-1 vertical profile (drives layer 0, the knob cumulus deck). Default ON so the
+    // startup/preset volume reads as a cloud body instead of only a flat haze layer.
+    private bool _profileOn = true;
     private float _profileBottom = 0.15f;   // believable cumulus starting point (applied only when _profileOn)
     private float _profileTop = 0.6f;
     private float _anvil = 0f;
@@ -680,7 +680,7 @@ public partial class CloudVolume : Node
             _enabled = on;
             _skyMat?.SetShaderParameter("cloud_enabled", on);
         }
-        if (knob == "profile_on") { _profileOn = on; }   // CO-1 vertical-profile gate (default off = slab look)
+        if (knob == "profile_on") { _profileOn = on; }   // CO-1 vertical-profile gate
     }
 
     public void SetKnobInt(string knob, int v)

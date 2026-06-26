@@ -142,6 +142,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--fogviewscale=")) { float.TryParse(a.Substring("--fogviewscale=".Length), System.Globalization.CultureInfo.InvariantCulture, out _fogViewScaleCli); _fogViewScaleSet = true; }   // ARC B Task 3
             else if (a.StartsWith("--lookahead=")) { float.TryParse(a.Substring("--lookahead=".Length), System.Globalization.CultureInfo.InvariantCulture, out _lookaheadCli); _lookaheadSet = true; }   // ARC B Task 4
             else if (a.StartsWith("--shadowatlas=")) { int.TryParse(a.Substring("--shadowatlas=".Length), out _shadowAtlasCli); }   // ARC A.1 shadow atlas px
+            else if (a.StartsWith("--shadowring=")) { float.TryParse(a.Substring("--shadowring=".Length), System.Globalization.CultureInfo.InvariantCulture, out _shadowRingCli); }
             else if (MatchFlag(a, "--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--lodviz")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _lodVizCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--testpath=")) { int.TryParse(a.Substring("--testpath=".Length), out _testPathCli); }   // S2b: run LOD-crossing test path N, print report, quit
@@ -244,6 +245,7 @@ public partial class TerrainLabUI : Control
         if (_chunkOpsCli > 0) { _terrain.SetChunkOps(_chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle)
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
+        if (_shadowRingCli >= 0f) { _terrain.SetShadowRing(_shadowRingCli); }
         if (_shadowAtlasCli > 0) { ShadowAtlasSize = _shadowAtlasCli; RenderingServer.DirectionalShadowAtlasSetSize(_shadowAtlasCli, true); }   // ARC A.1: apply now (composer once-guard may have run)
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
         // S3.5: async AABB tighten tunables (--notighten / --aabbres= / --aabbreq=). Only meaningful with CDLOD on.
@@ -328,6 +330,7 @@ public partial class TerrainLabUI : Control
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)
     private bool _lookaheadSet;
     private int _shadowAtlasCli;      // --shadowatlas=N → ARC A.1 directional shadow atlas px (0 = leave default 8192)
+    private float _shadowRingCli = -1f; // --shadowring=N -> CSM caster ring radius; 0 = all near CDLOD chunks
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;

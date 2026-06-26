@@ -44,7 +44,7 @@ public partial class AerialPerspectiveV2 : Node3D
         Projection vp = proj * new Projection(_cam.GlobalTransform.AffineInverse());
         _mat.SetShaderParameter("inv_view_proj", vp.Inverse());
         _mat.SetShaderParameter("cam_world", _cam.GlobalPosition);
-        _mat.SetShaderParameter("aerial_far", 64000f);
+        _mat.SetShaderParameter("aerial_far", _cam.Far);
         _mat.SetShaderParameter("aerial_z_near", 1f);
     }
 }

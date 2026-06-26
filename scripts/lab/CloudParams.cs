@@ -39,8 +39,8 @@ public record CloudParams(
     public const string Path = "res://data/cloud_params.json";
 
     public static CloudParams Defaults() => new(
-        Coverage: 0.55f,        // ~50% sky fill on the round-2 weather curve (mean ~0.56)
-        Density: 1.0f,
+        Coverage: 0.62f,        // visibly present by default; presets can still go sparse/overcast
+        Density: 1.15f,
         CloudType: 0.6f,        // mostly cumulus
         AltitudeM: 1800f,
         ThicknessM: 1400f,
@@ -53,7 +53,7 @@ public record CloudParams(
         Detail: 0.4f,
         DetailSize: 1.0f,
         Edge: 0.5f,
-        Opacity: 1.0f,
+        Opacity: 1.25f,
         Brightness: 1.0f,
         Ambient: 0.7f,
         RaymarchSteps: 128,

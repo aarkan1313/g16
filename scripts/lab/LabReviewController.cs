@@ -187,13 +187,13 @@ public sealed class LabReviewController
                 switch (_shadowPresetIdx)
                 {
                     case 1: // SOFTER — mild over-soften (~0.9 deg)
-                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.9f); Set("sun_soft", 1.4f); Set("shadow_dist", 6000f);
+                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.9f); Set("sun_soft", 1.4f); Set("shadow_dist", 3500f);
                         break;
                     case 2: // SOFTEST (unphysical, A/B only)
-                        Set("shadow_bias", 1.5f); Set("sun_disc", 2.5f); Set("sun_soft", 3.5f); Set("shadow_dist", 6000f);
+                        Set("shadow_bias", 1.5f); Set("sun_disc", 2.5f); Set("sun_soft", 3.5f); Set("shadow_dist", 3500f);
                         break;
                     default: // 0 — PHYSICAL: penumbra ~0.53 deg = real sun.
-                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.55f); Set("sun_soft", 1.0f); Set("shadow_dist", 6000f);
+                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.55f); Set("sun_soft", 1.0f); Set("shadow_dist", 3500f);
                         break;
                 }
                 _shadowPresetIdx %= 3;   // 3 presets now (physical / softer / softest)

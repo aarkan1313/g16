@@ -168,7 +168,7 @@ public sealed class LightingComposer
         Time.SkyGround = m.ContainsKey("sky_ground") ? Col(m["sky_ground"]) : new Color(0.22f, 0.26f, 0.22f);
 
         SunDisc.ShadowSoft = F(m, "shadow_soft", 1.0f); SunDisc.DiscAngular = F(m, "sun_disc", 0.6f);
-        SunDisc.ShadowNormalBias = F(m, "shadow_bias", 1.0f); SunDisc.ShadowMaxDist = F(m, "shadow_dist", 6000f);
+        SunDisc.ShadowNormalBias = F(m, "shadow_bias", 1.0f); SunDisc.ShadowMaxDist = F(m, "shadow_dist", 3500f);
         SunDisc.Size = F(m, "sun_size", 0.6f); SunDisc.Limb = F(m, "sun_limb", 0.70f);   // polish: more spherical default
         SunDisc.CoronaSize = F(m, "sun_corona_size", 1200f); SunDisc.CoronaEnergy = F(m, "sun_corona_energy", 2.0f);
         SunDisc.HaloSize = F(m, "sun_halo_size", 90f); SunDisc.HaloEnergy = F(m, "sun_halo_energy", 0.4f);
@@ -225,13 +225,17 @@ public sealed class LightingComposer
             RenderingServer.DirectionalShadowAtlasSetSize(_host.ShadowAtlasSize, true);   // ARC A.1: tunable (8192 default; 6144/4096 dial-down — the in-motion shadow-spike lever)
             RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftHigh);   // PCF blur → dissolves texel "squares" cheaply
 
+            // SSAO/SSIL DISABLED: scene files and legacy plans drifted here; force the review baseline
+            // from code so shadow tuning is not contaminated by screen-space AO.
+            env.SsaoEnabled = false;
+
             // SSIL DISABLED (2026-06-23): measured ssil ON vs OFF auto-shot diff = 97% of pixels changed, mean
             // shift 52/255 (vs the sun shadow's 0.22) — screen-space indirect light was CRUSHING the whole terrain
             // into dark mud, and because it is screen-space the darkening shifted with view angle. That was the
             // long-hunted "anti-sun darkness / shadow that grows when you look down": SSIL, not shadows/SSAO/aerial.
             // Net-negative on large dune relief (steep depth gradients → false occlusion). Off until a tamed,
             // terrain-aware pass is justified. Toggle live with key N to A/B.
-            if (env != null) { env.SsilEnabled = false; }
+            env.SsilEnabled = false;
             _shadowTuned = true;
         }
         sun.DirectionalShadowBlendSplits = true;                        // cross-fade cascade seams

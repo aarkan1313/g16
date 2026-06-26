@@ -46,7 +46,7 @@ public partial class AtmosphereCompute : Node
     private Texture3Drd? _aerialRd;   // exposed to the screen-shader quad (AerialPerspectiveV2)
     private bool _aerialEnabled;
     private Vector3 _aerialCamPos;
-    private float _aerialFar = 64000f;
+    private float _aerialFar = 90000f;
     private Godot.Projection _aerialInvViewProj = Godot.Projection.Identity;
     private bool _aerialCamDirty;
     public Texture3Drd? AerialTexture => _aerialRd;

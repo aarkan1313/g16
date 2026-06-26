@@ -1,21 +1,21 @@
 {
-  "_comment": "Named cloud sky looks for the Clouds-tab preset picker. Keys are lab_controls.json control ids. RECALIBRATED 2026-06-18 (round 2) to the new weather field (mean ~0.56, large-scale systems) where the coverage knob maps ~directly to sky fill: fill% ~= 132*coverage - 23 (cov 0.32~19%, 0.48~40%, 0.65~63%, 0.75~76%, 0.88~93%). Brightness/ambient tuned against the fixed lighting (premultiplied composite + direct-sun extinction + multi-scatter contrast + 2-octave detail erosion). Stormy = DARK + towering. NOTE: presets drive layer 0 (cumulus) only; full deck-stack driving is roadmap #2.",
+  "_comment": "Named cloud sky looks for the Clouds-tab preset picker. Keys are lab_controls.json control ids. RECALIBRATED to the current weather field (mean ~0.56, large-scale systems). Presets drive the knob-backed layer 0 and may optionally author extra layers via layers[].",
   "presets": [
     {
       "name": "Clear",
-      "values": { "cloud_coverage": 0.32, "cloud_density": 0.8, "cloud_type": 0.65, "cloud_size": 1.3, "cloud_edge": 0.6, "cloud_detail": 0.5, "cloud_opacity": 0.95, "cloud_brightness": 1.15, "cloud_ambient": 0.85, "cloud_altitude": 2400, "cloud_thickness": 700, "cloud_drift_speed": 6.0, "cloud_drift_dir": 45 }
+      "values": { "cloud_coverage": 0.32, "cloud_density": 1.0, "cloud_type": 0.65, "cloud_size": 1.15, "cloud_cell_scale": 1.5, "cloud_edge": 0.55, "cloud_detail": 0.5, "cloud_opacity": 1.15, "cloud_brightness": 1.12, "cloud_ambient": 0.85, "cloud_altitude": 2200, "cloud_thickness": 900, "cloud_profile_on": 1, "cloud_profile_bottom": 0.12, "cloud_profile_top": 0.62, "cloud_anti_repeat": 0.35, "cloud_cirrus_on": 0, "cloud_drift_speed": 6.0, "cloud_drift_dir": 45 }
     },
     {
       "name": "Scattered",
-      "values": { "cloud_coverage": 0.48, "cloud_density": 1.0, "cloud_type": 0.6, "cloud_size": 1.0, "cloud_edge": 0.55, "cloud_detail": 0.5, "cloud_opacity": 1.0, "cloud_brightness": 1.1, "cloud_ambient": 0.8, "cloud_altitude": 2100, "cloud_thickness": 1100, "cloud_drift_speed": 9.0, "cloud_drift_dir": 60 }
+      "values": { "cloud_coverage": 0.52, "cloud_density": 1.2, "cloud_type": 0.62, "cloud_size": 1.0, "cloud_cell_scale": 1.55, "cloud_edge": 0.55, "cloud_detail": 0.5, "cloud_opacity": 1.35, "cloud_brightness": 1.08, "cloud_ambient": 0.8, "cloud_altitude": 1900, "cloud_thickness": 1300, "cloud_profile_on": 1, "cloud_profile_bottom": 0.14, "cloud_profile_top": 0.6, "cloud_anti_repeat": 0.55, "cloud_cirrus_on": 0, "cloud_drift_speed": 9.0, "cloud_drift_dir": 60 }
     },
     {
       "name": "Broken",
-      "values": { "cloud_coverage": 0.65, "cloud_density": 1.2, "cloud_type": 0.5, "cloud_size": 0.9, "cloud_edge": 0.5, "cloud_detail": 0.55, "cloud_opacity": 1.3, "cloud_brightness": 1.0, "cloud_ambient": 0.78, "cloud_altitude": 1800, "cloud_thickness": 1400, "cloud_drift_speed": 12.0, "cloud_drift_dir": 75 }
+      "values": { "cloud_coverage": 0.68, "cloud_density": 1.35, "cloud_type": 0.55, "cloud_size": 0.9, "cloud_cell_scale": 1.75, "cloud_edge": 0.48, "cloud_detail": 0.58, "cloud_opacity": 1.55, "cloud_brightness": 1.0, "cloud_ambient": 0.78, "cloud_altitude": 1700, "cloud_thickness": 1550, "cloud_profile_on": 1, "cloud_profile_bottom": 0.15, "cloud_profile_top": 0.58, "cloud_anti_repeat": 0.7, "cloud_cirrus_on": 0, "cloud_drift_speed": 12.0, "cloud_drift_dir": 75 }
     },
     {
       "name": "Overcast",
-      "values": { "cloud_coverage": 0.88, "cloud_density": 1.5, "cloud_type": 0.2, "cloud_size": 2.2, "cloud_edge": 0.35, "cloud_detail": 0.45, "cloud_opacity": 1.6, "cloud_brightness": 0.92, "cloud_ambient": 1.1, "cloud_altitude": 1400, "cloud_thickness": 1300, "cloud_drift_speed": 7.0, "cloud_drift_dir": 90 },
+      "values": { "cloud_coverage": 0.9, "cloud_density": 1.75, "cloud_type": 0.2, "cloud_size": 2.0, "cloud_cell_scale": 1.0, "cloud_edge": 0.32, "cloud_detail": 0.35, "cloud_opacity": 1.85, "cloud_brightness": 0.9, "cloud_ambient": 1.12, "cloud_altitude": 1300, "cloud_thickness": 1600, "cloud_profile_on": 0, "cloud_shape_mode": 1.0, "cloud_anti_repeat": 0.25, "cloud_cirrus_on": 0, "cloud_drift_speed": 7.0, "cloud_drift_dir": 90 },
       "_layers_note": "roadmap #2: Overcast STACKS decks. Layer 0 = knob-driven low stratus (overridden by values above); layers 1-2 add mid stratocumulus + high cirrus. coverage_weight mixes each deck's share of the master coverage knob.",
       "layers": [
         { "altitude": 1400, "thickness": 1300, "type": 0.2, "enabled": true },
@@ -25,7 +25,7 @@
     },
     {
       "name": "Stormy",
-      "values": { "cloud_coverage": 0.78, "cloud_density": 2.0, "cloud_type": 0.85, "cloud_size": 1.2, "cloud_edge": 0.5, "cloud_detail": 0.65, "cloud_opacity": 2.4, "cloud_brightness": 0.42, "cloud_ambient": 0.38, "cloud_altitude": 1000, "cloud_thickness": 2400, "cloud_drift_speed": 16.0, "cloud_drift_dir": 220 }
+      "values": { "cloud_coverage": 0.78, "cloud_density": 2.2, "cloud_type": 0.9, "cloud_size": 1.15, "cloud_cell_scale": 1.25, "cloud_edge": 0.48, "cloud_detail": 0.68, "cloud_opacity": 2.65, "cloud_brightness": 0.42, "cloud_ambient": 0.38, "cloud_altitude": 950, "cloud_thickness": 2600, "cloud_profile_on": 1, "cloud_profile_bottom": 0.1, "cloud_profile_top": 0.45, "cloud_anvil": 0.75, "cloud_anti_repeat": 0.5, "cloud_cirrus_on": 0, "cloud_drift_speed": 16.0, "cloud_drift_dir": 220 }
     },
     {
       "name": "Fair Weather Cumulus",

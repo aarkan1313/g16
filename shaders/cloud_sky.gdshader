@@ -614,7 +614,7 @@ void sky(){
     bg += moon_layers(rd);
     bg += extra_moons(rd);     // C3: additional moons (no-op when extra_moon_count == 0)
 
-    vec4 ci = cirrus_layer(rd);              // CO-2: high thin layer, OVER sun/moon, UNDER cumulus
+    vec4 ci = cloud_enabled ? cirrus_layer(rd) : vec4(0.0); // master cloud toggle gates both cirrus and the volume
     bg = bg * (1.0 - ci.a) + ci.rgb * ci.a;
 
     vec3 outColor = bg;

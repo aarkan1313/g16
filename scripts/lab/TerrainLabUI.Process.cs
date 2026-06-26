@@ -44,9 +44,9 @@ public partial class TerrainLabUI : Control
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
     private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)
-    private bool _hzOn = false;  // mirror of hz_on; MUST match the shader/JSON default (now false) or the first P-press no-ops
+    private bool _hzOn = true;  // mirror of hz_on; MUST match the shader/JSON default or the first P-press no-ops
     private bool _lodVizLive;   // V toggles the LOD-band tint live
-    private bool _terrainCloudShadowOn = true;   // mirrors cloud_shadow_on (set true once the cloud RID is live); F5 flips it
+    private bool _terrainCloudShadowOn = false;  // opt-in terrain receive for cloud shadows; . flips it once the cloud RID is live
     private bool _godraysOn = true;               // god rays default on; F6 flips it
     private bool _analyticOn = true;        // ground source: live field (default) vs baked; toggled by key 1
     private float _inspectEnergy = 1.0f;   // L-light brightness (Night tab 'inspect light')
@@ -195,12 +195,15 @@ public partial class TerrainLabUI : Control
             // the render-relative terrain (same floating-origin frame as the CDLOD chunks).
             _waterRenderer?.SetRenderOrigin(_terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero);
             _cloud?.SetCameraWorld(camPos);
-            // AT-2 v2: push camera to AtmosphereCompute so DispatchAerial uses the current view frustum.
+            // AT-2 v2: push camera in the SAME render-relative frame as inv_view_proj.
+            // Clouds/terrain still need TRUE-world camPos above; the aerial LUT only needs
+            // altitude + view ray direction, so mixing true XZ with render-relative wf would
+            // skew the ray direction at each floating-origin snap.
             if (_aerialV2On && _atmosphere != null)
             {
                 var proj = camN.GetCameraProjection();
                 var vp = proj * new Godot.Projection(camN.GlobalTransform.AffineInverse());
-                _atmosphere.SetAerialCamera(camPos, 64000f, vp.Inverse());
+                _atmosphere.SetAerialCamera(camN.GlobalPosition, camN.Far, vp.Inverse());
             }
             TickPopMeter(camPos);   // S3 --popmeter: live per-frame pop/snap measurement (no-op unless armed)
 
@@ -209,10 +212,10 @@ public partial class TerrainLabUI : Control
             if (lDown && !_lastLDown) { ToggleInspectLight(); }
             _lastLDown = lDown;
 
-            // --- Debug isolation bank (B N M , . /) --------------------------------------------------------
+            // --- Debug isolation bank (N M , . /) ----------------------------------------------------------
             // Live-flip each camera-locked screen-space effect to pin a "dots in a shifting ring" artifact to
             // its source. Each prints its new state. (Moved off F-keys: those get grabbed by the OS/IDE and
-            // never reach the game window.) B SSAO, N SSIL, M SDFGI, , sun shadows, . cloud-shadow, / god rays.
+            // never reach the game window.) N SSIL, M SDFGI, , sun shadows, . cloud-shadow, / god rays.
             {
                 var env = UiEnv.Environment;
                 bool kN = Input.IsKeyPressed(Key.N);
@@ -225,7 +228,7 @@ public partial class TerrainLabUI : Control
                 if (kComma && !_lastF4) { UiSun.ShadowEnabled = !UiSun.ShadowEnabled; GD.Print($"[dbg] (,) Sun shadows = {UiSun.ShadowEnabled}"); }
                 _lastF4 = kComma;
                 bool kPeriod = Input.IsKeyPressed(Key.Period);
-                if (kPeriod && !_lastF5) { _terrainCloudShadowOn = !_terrainCloudShadowOn; _terrain.SetBool("cloud_shadow_on", _terrainCloudShadowOn); GD.Print($"[dbg] (.) Cloud shadow on terrain = {_terrainCloudShadowOn}"); }
+                if (kPeriod && !_lastF5) { _terrainCloudShadowOn = !_terrainCloudShadowOn; _terrain.SetBool("cloud_shadow_on", _terrainCloudShadowOn && (_cloud?.Enabled ?? true)); GD.Print($"[dbg] (.) Cloud shadow on terrain = {_terrainCloudShadowOn}"); }
                 _lastF5 = kPeriod;
                 bool kSlash = Input.IsKeyPressed(Key.Slash);
                 if (kSlash && !_lastF6) { _godraysOn = !_godraysOn; _godraysScreen?.SetEnabled(_godraysOn); GD.Print($"[dbg] (/) God rays = {_godraysOn}"); }
@@ -302,7 +305,7 @@ public partial class TerrainLabUI : Control
         // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)
         {
-            _terrain.SetBool("cloud_shadow_on", true);
+            _terrain.SetBool("cloud_shadow_on", _terrainCloudShadowOn && _cloud.Enabled);
             _godraysScreen?.SetCloudOcclusionReady(true);   // god-ray cloud sampling: same frame the RID goes live
             _shadowEnabledOnce = true;
         }

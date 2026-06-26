@@ -113,6 +113,7 @@ public partial class TerrainLabUI : Control
             case "sun_disc":        _sunDisc.DiscAngular = v; sun.LightAngularDistance = v; break;   // PCSS penumbra width (+ disc size)
             case "shadow_bias":     _sunDisc.ShadowNormalBias = v; sun.ShadowNormalBias = v; break;   // acne<->peter-panning
             case "shadow_dist":     _sunDisc.ShadowMaxDist = v; sun.DirectionalShadowMaxDistance = v; break;   // shadow draw distance
+            case "shadow_ring":     _terrain.SetShadowRing(v); break;
             case "load_ring":       _terrain.SetLoadRing(Mathf.RoundToInt(v)); break;   // ARC B Task 1: CDLOD load-ring radius (1=3×3, 2=5×5)
             case "fog_depth_begin": _lighting.FogDepthBegin = v; ComposeLighting(); break;   // VIEW-DISTANCE: depth-fog start distance (clear nearer than this)
             case "cdlod_lookahead": _terrain.SetCdlodLookahead(v); break;   // ARC B Task 4: predictive-loading lookahead (s; 0=off)
@@ -206,6 +207,7 @@ public partial class TerrainLabUI : Control
         void Set(string id, float v) { if (_byId.TryGetValue(id, out var c)) { SetWidgetValueSilent(c, v); } }
         Set("sun_energy", sun.LightEnergy); Set("sun_angle", _sunAngle); Set("sun_azimuth", _sunAzimuth);
         Set("sun_soft", sun.ShadowBlur); Set("sun_disc", sun.LightAngularDistance); Set("ambient_e", env.AmbientLightEnergy);
+        Set("shadow_bias", sun.ShadowNormalBias); Set("shadow_dist", sun.DirectionalShadowMaxDistance); Set("shadow_ring", _terrain.ShadowRing);
         Set("fog_d", env.FogDensity); Set("fog_aerial", env.FogAerialPerspective);
         Set("fog_heightd", env.FogHeightDensity); Set("exposure", env.TonemapExposure);
         // Sync the 10 sun disc/optical sliders from the CloudVolume backing fields

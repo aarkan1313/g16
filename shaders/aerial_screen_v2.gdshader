@@ -16,7 +16,7 @@ uniform sampler2D depth_tex  : hint_depth_texture;
 uniform sampler3D aerial_tex : filter_linear;
 uniform mat4  inv_view_proj;
 uniform vec3  cam_world = vec3(0.0);
-uniform float aerial_far = 64000.0;         // metres — MUST match compute shader cam_pos_far.w
+uniform float aerial_far = 90000.0;         // metres — MUST match compute shader cam_pos_far.w
 uniform float aerial_z_near = 1.0;          // log-Z near anchor (MUST match compute shader Z_NEAR = 1.0)
 uniform float aerial_strength = 10.0;
 // Path-radiance haze: as transmittance drops, distant terrain fades to this tint (not to black).

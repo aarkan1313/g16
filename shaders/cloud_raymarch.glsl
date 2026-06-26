@@ -343,10 +343,9 @@ void main(){
                 vec3 amb = ambEnd * P.ambient * mix(0.25, 1.0, h);
                 // powder (dark edges) only when looking TOWARD the sun (back-lit); gated.
                 float powder = mix(1.0, 1.0 - exp(-dens * 2.0 * P.powder), forward);
-                // VIEW-ray extinction. Was 0.02 → meanAlpha only ~0.52 (clouds half-transparent,
-                // read as wispy haze not solid masses = "not a ton of clouds"). Raised so healthy
-                // cloud bodies reach high opacity within a deck while wisps stay translucent.
-                float sigma = dens * 0.05 * opac;
+                // VIEW-ray extinction. Keep healthy cumulus/stratus masses solid enough to read as bodies
+                // while edge wisps remain translucent.
+                float sigma = dens * 0.065 * opac;
                 float beer = exp(-sigma * dt);
                 // NIGHT MOONLIGHT: a weak 2nd directional light (same scatter model as the sun) so night/dusk
                 // clouds get silver-lit edges/undersides instead of going black. Gated: w==0 (day/no moon) skips

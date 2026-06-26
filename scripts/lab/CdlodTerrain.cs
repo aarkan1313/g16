@@ -36,6 +36,7 @@ public sealed partial class CdlodTerrain : Node3D
         public int CacheSlot = -1;     // field-cache texture-array layer for this chunk (-1 = none → live-eval path)
         public bool CacheReady;        // the chunk's bake has landed → vertex shader samples the cache, not the field
         public bool IsFar;             // horizon shell chunk: no field cache, no AABB, no shadow casting
+        public bool CastsShadow;       // last pushed CastShadow state (shadow-ring membership changes as camera moves)
     }
     private int _frame;   // monotonic Tick counter for the seen-this-frame test (no per-slot Variant churn)
     private bool _forceReapply;   // one-shot: re-push lod_viz + AABB to ALL live slots next Tick (live toggle A/B)
@@ -84,6 +85,8 @@ public sealed partial class CdlodTerrain : Node3D
     public float ChunkOpsPerSpeed = 0.01f;   // DISABLED — kept as diagnostic reference only, not used in default path
     public int LoadRing = 8;          // full horizon ring (near + far shell); --loadring=N overrides
     public int ActiveRing = 4;        // near/far boundary — sub-root chunks (near CDLOD) vs root chunks (horizon shell)
+    public float ShadowCasterRadius = 5500f;         // camera-centered CSM caster ring; kept beyond shadow_dist so it cannot visibly pop
+    private Vector2 _shadowCenterXZ;                 // current camera XZ for ring tests; set once per Tick()
     public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
                                              // center-cell boundary before the loaded window re-centers (anti-thrash near a seam).
                                              // Widened 0.15→0.35: light taps near a cell seam were re-centering the window and
@@ -200,6 +203,7 @@ public sealed partial class CdlodTerrain : Node3D
         bool snapped = _renderOrigin.X != _lastRenderOrigin.X || _renderOrigin.Z != _lastRenderOrigin.Z;
         _lastRenderOrigin = _renderOrigin;
         if (snapped) { TotalSnaps++; }   // perf instrumentation: real renderOrigin snaps (8192 m crossings, pre-force)
+        _shadowCenterXZ = new Vector2(camPos.X, camPos.Z);
 
         _qt.Ring = LoadRing;   // ARC B Task 1: live-tunable load-ring radius (slider/CLI → takes effect next select)
         // ARC B Task 4: bias the window center forward by the camera velocity (clamped to ~1.5 cells so a wild
@@ -347,13 +351,14 @@ public sealed partial class CdlodTerrain : Node3D
             mi.SetInstanceShaderParameter("chunk_slot", (float)slot.CacheSlot);     // field-cache texture-array layer
             mi.SetInstanceShaderParameter("cache_ready", slot.CacheReady ? 1.0f : 0.0f);
             mi.Visible = true;
-            if (isNew)
-            {
-                // Far horizon chunks don't cast shadows — coarse root chunks would inflate the cascade depth.
-                mi.CastShadow = slot.IsFar
-                    ? GeometryInstance3D.ShadowCastingSetting.Off
-                    : GeometryInstance3D.ShadowCastingSetting.On;
-            }
+        }
+        bool wantsShadow = CastsCsmShadow(c, slot);
+        if (isNew || slot.CastsShadow != wantsShadow)
+        {
+            mi.CastShadow = wantsShadow
+                ? GeometryInstance3D.ShadowCastingSetting.On
+                : GeometryInstance3D.ShadowCastingSetting.Off;
+            slot.CastsShadow = wantsShadow;
         }
         // AABB: born GENEROUS (no pop-in); tightened in place once the async height-range lands. Re-set only
         // when new, on a snap (position changed), or when a tighten newly lands for this key.
@@ -391,6 +396,22 @@ public sealed partial class CdlodTerrain : Node3D
         }
     }
 
+    private bool CastsCsmShadow(CdlodChunk c, ChunkSlot slot)
+    {
+        if (slot.IsFar) { return false; }
+        if (ShadowCasterRadius <= 0f) { return true; }   // diagnostic: all near CDLOD chunks cast
+
+        // Test square-vs-circle overlap against an expanded ring. This includes coarse chunks before their
+        // terrain LOD splits, so shadows already exist and only gain detail as the viewer approaches.
+        float half = c.Size * 0.5f;
+        float centerX = c.OriginXZ.X + half;
+        float centerZ = c.OriginXZ.Y + half;
+        float dx = Mathf.Abs(centerX - _shadowCenterXZ.X);
+        float dz = Mathf.Abs(centerZ - _shadowCenterXZ.Y);
+        float expanded = ShadowCasterRadius + half * 1.4142136f;   // chunk half-diagonal
+        return (dx * dx + dz * dz) <= expanded * expanded;
+    }
+
     /// Get an instance for a new chunk: reuse a retired one from the free-list, else create one (bounded by the
     /// churn budget at the call site). Marked Level=-1 so ApplyChunk does a full first push.
     private ChunkSlot AcquireSlot()
@@ -398,7 +419,7 @@ public sealed partial class CdlodTerrain : Node3D
         MeshInstance3D mi;
         if (_free.Count > 0) { mi = _free.Pop(); }
         else { mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat }; AddChild(mi); _instanceCount++; }
-        return new ChunkSlot { Mi = mi, Mask = -1, Tightened = false, Level = -1 };
+        return new ChunkSlot { Mi = mi, Mask = -1, Tightened = false, Level = -1, CastsShadow = false };
     }
 
     /// S3.5: drain async height-ranges that have landed and cache them by key. The keyed pool's ApplyChunk
