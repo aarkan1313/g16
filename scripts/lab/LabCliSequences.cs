@@ -1,14 +1,11 @@
 using Godot;
 using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 
 namespace WG16.Lab;
 
 /// CLI-armed capture / profile sequences for headless runs (decomposition Phase 1c). Each is armed by a
 /// flag in ParseCli, ticks once per frame, then captures/measures and quits — self-contained state machines
-/// carved out of the 435-line _Process. Covers: --auto-shot, --visualcheck, the drift-free A/B captures (--godrayab,
+/// carved out of the 435-line _Process. Covers: --auto-shot, the drift-free A/B captures (--godrayab,
 /// --fillab), --profile (frame-time gate), and --profmove (orbit the camera during a profile so motion costs
 /// are paid). Depends only on the host Node (viewport/tree/camera), the god-rays node, and the lighting
 /// composer. The FPS HUD and the async --aabbspike probe stay in _Process (label-owned / async-coupled).
@@ -19,46 +16,11 @@ public sealed class LabCliSequences
     private readonly LightingComposer _lighting;
 
     private string? _autoShotPath; private double _autoShotT = -1.0;
-    private string? _visualCheckPath; private double _visualCheckT = -1.0;
     private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage; private int _godrayAbFrames;
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum, _profWorst;
     private int _profFrames;
     private bool _profMove;
     private float _profSpeed = 1200f;   // --profspeed= forward m/s for the border-crossing traverse
-    private string? _profileLogPath;
-    private CdlodTerrain? _cdlod;
-    private readonly List<ProfileFrame> _profSamples = new();
-    private readonly List<ProfileFrame> _profTop = new();
-    private const int ProfileTopCount = 8;
-
-    private sealed class ProfileFrame
-    {
-        public int Sample;
-        public double Delta;
-        public int CdlodFrame;
-        public bool Snapped;
-        public int Leaves;
-        public int Active;
-        public int NearBirths;
-        public int FarBirths;
-        public int Retires;
-        public int BakePending;
-        public int CachePending;
-        public int NearBudget;
-        public int RetireGrace;
-        public int CacheRequests;
-        public int Tightened;
-        public float Speed;
-        public int TotalSnaps;
-        public int TotalBirths;
-        public int TotalRebirths;
-        public long VisibleDraws;
-        public long ShadowDraws;
-        public long VisibleObjects;
-        public long ShadowObjects;
-        public long VisiblePrimitives;
-        public long ShadowPrimitives;
-    }
 
     public LabCliSequences(Node host, GodRaysScreen? godrays, LightingComposer lighting)
     {
@@ -69,20 +31,13 @@ public sealed class LabCliSequences
 
     // ---- arming (called from ParseCli) ----
     public void ArmAutoShot(string path) { _autoShotPath = path; _autoShotT = 0.0; }
-    public void ArmVisualCheck(string? path = null) { _visualCheckPath = path; _visualCheckT = 0.0; }
     public void ArmGodrayAb(string path) { _godrayAbPath = path; _godrayAbT = 0.0; }
     public void EnableProfMove() => _profMove = true;
     public void SetProfSpeed(float mps) { if (mps > 0f) { _profSpeed = mps; } }
-    public void SetProfileLogPath(string path) { if (!string.IsNullOrWhiteSpace(path)) { _profileLogPath = path; } }
     public void ArmProfile(double? dur)
     {
         _profileT = 0.0;
         if (dur.HasValue) { _profileDur = dur.Value; }
-        _profAccum = 0.0;
-        _profWorst = 0.0;
-        _profFrames = 0;
-        _profSamples.Clear();
-        _profTop.Clear();
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Engine.MaxFps = 0;
     }
@@ -136,28 +91,6 @@ public sealed class LabCliSequences
             }
         }
 
-        if (_visualCheckT >= 0.0)
-        {
-            _visualCheckT += delta;
-            if (_visualCheckT > 1.5)
-            {
-                Engine.TimeScale = 0.0;
-                Image img = _host.GetViewport().GetTexture().GetImage();
-                if (!string.IsNullOrWhiteSpace(_visualCheckPath))
-                {
-                    string? dir = Path.GetDirectoryName(_visualCheckPath);
-                    if (!string.IsNullOrWhiteSpace(dir)) { Directory.CreateDirectory(dir); }
-                    img.SavePng(_visualCheckPath);
-                    GD.Print($"VISUALCHECK-SHOT: {_visualCheckPath}");
-                }
-                bool ok = VisualRegressionCheck.Run(img, out string report);
-                GD.Print($"VISUALCHECK: {(ok ? "PASS" : "FAIL")}  {report}");
-                _visualCheckT = -1.0;
-                Engine.TimeScale = 1.0;
-                _host.GetTree().Quit(ok ? 0 : 1);
-            }
-        }
-
         // --godrayab=<path>: drift-free A/B — capture <path>_on.png, toggle god rays OFF, a few frames later
         // capture <path>_off.png, quit. Freezing the scene makes the diff PURELY the god-ray pass.
         if (_godrayAbT >= 0.0 && _godrayAbPath != null)
@@ -188,20 +121,12 @@ public sealed class LabCliSequences
             _profileT += delta;
             if (_profileT > 1.0)
             {
-                ProfileFrame sample = CaptureProfileFrame(delta, _profFrames + 1);
-                _profSamples.Add(sample);
-                TrackTopSpike(sample);
                 _profAccum += delta; _profFrames++;
                 _profWorst = Math.Max(_profWorst, delta);
                 if (_profileT > 1.0 + _profileDur)
                 {
                     double avg = _profAccum / Math.Max(_profFrames, 1);
-                    List<ProfileFrame> sorted = new(_profSamples);
-                    sorted.Sort((a, b) => a.Delta.CompareTo(b.Delta));
-                    double p50 = Percentile(sorted, 0.50);
-                    double p95 = Percentile(sorted, 0.95);
-                    double p99 = Percentile(sorted, 0.99);
-                    GD.Print($"PROFILE: avg {1.0 / avg:0} fps ({avg * 1000:0.0} ms)  p50 {p50 * 1000:0.0} ms  p95 {p95 * 1000:0.0} ms  p99 {p99 * 1000:0.0} ms  worst {1.0 / _profWorst:0} fps ({_profWorst * 1000:0.0} ms)  over {_profFrames} frames");
+                    GD.Print($"PROFILE: avg {1.0 / avg:0} fps ({avg * 1000:0.0} ms)  worst {1.0 / _profWorst:0} fps ({_profWorst * 1000:0.0} ms)  over {_profFrames} frames");
                     var vp = _host.GetViewport();
                     long visDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame);
                     long shDraw = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.DrawCallsInFrame);
@@ -210,8 +135,6 @@ public sealed class LabCliSequences
                     long visPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame);
                     long shPrim = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame);
                     GD.Print($"PROFILE-RENDER: visible draws={visDraw} objects={visObj} prim={visPrim} | shadow draws={shDraw} objects={shObj} prim={shPrim}");
-                    PrintTopSpikes();
-                    WriteProfileLogIfRequested();
                     // Streaming churn over the measured window (validates the traverse crossed borders + quantifies it).
                     var cd = _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
                     if (cd != null && cd.Enabled) { GD.Print($"PROFILE-STREAM: snaps={cd.TotalSnaps} births={cd.TotalBirths} rebirths={cd.TotalRebirths} activeChunks={cd.ActiveCount} (cumulative since enable; rebirths=thrash)"); }
@@ -220,112 +143,5 @@ public sealed class LabCliSequences
                 }
             }
         }
-    }
-
-    private CdlodTerrain? GetCdlod()
-    {
-        return _cdlod ??= _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
-    }
-
-    private ProfileFrame CaptureProfileFrame(double delta, int sampleIndex)
-    {
-        var vp = _host.GetViewport();
-        var cd = GetCdlod();
-        return new ProfileFrame
-        {
-            Sample = sampleIndex,
-            Delta = delta,
-            CdlodFrame = cd?.LastFrameIndex ?? -1,
-            Snapped = cd?.LastOriginSnapped ?? false,
-            Leaves = cd?.LastLeafCount ?? -1,
-            Active = cd?.LastActiveCount ?? -1,
-            NearBirths = cd?.LastNearBirths ?? -1,
-            FarBirths = cd?.LastFarBirths ?? -1,
-            Retires = cd?.LastRetires ?? -1,
-            BakePending = cd?.LastBakePending ?? -1,
-            CachePending = cd?.LastCachePending ?? -1,
-            NearBudget = cd?.LastEffectiveNearBudget ?? -1,
-            RetireGrace = cd?.LastEffectiveRetireGrace ?? -1,
-            CacheRequests = cd?.LastCacheRequests ?? -1,
-            Tightened = cd?.LastTightenedCount ?? -1,
-            Speed = cd?.LastSpeedXZ ?? 0f,
-            TotalSnaps = cd?.TotalSnaps ?? -1,
-            TotalBirths = cd?.TotalBirths ?? -1,
-            TotalRebirths = cd?.TotalRebirths ?? -1,
-            VisibleDraws = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame),
-            ShadowDraws = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.DrawCallsInFrame),
-            VisibleObjects = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.ObjectsInFrame),
-            ShadowObjects = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.ObjectsInFrame),
-            VisiblePrimitives = vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame),
-            ShadowPrimitives = vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame),
-        };
-    }
-
-    private void TrackTopSpike(ProfileFrame sample)
-    {
-        _profTop.Add(sample);
-        _profTop.Sort((a, b) => b.Delta.CompareTo(a.Delta));
-        if (_profTop.Count > ProfileTopCount) { _profTop.RemoveAt(_profTop.Count - 1); }
-    }
-
-    private static double Percentile(List<ProfileFrame> sorted, double p)
-    {
-        if (sorted.Count == 0) { return 0.0; }
-        int idx = Math.Clamp((int)Math.Ceiling(p * sorted.Count) - 1, 0, sorted.Count - 1);
-        return sorted[idx].Delta;
-    }
-
-    private void PrintTopSpikes()
-    {
-        if (_profTop.Count == 0) { return; }
-        GD.Print($"PROFILE-SPIKES: top {_profTop.Count} frames");
-        for (int i = 0; i < _profTop.Count; i++)
-        {
-            ProfileFrame s = _profTop[i];
-            int missing = (s.Leaves >= 0 && s.Active >= 0) ? Math.Max(0, s.Leaves - s.Active) : -1;
-            GD.Print($"PROFILE-SPIKE {i + 1}: {s.Delta * 1000:0.0} ms sample={s.Sample} cdlodFrame={s.CdlodFrame} snap={(s.Snapped ? 1 : 0)} leaves={s.Leaves} active={s.Active} missing={missing} births={s.NearBirths}+{s.FarBirths} retires={s.Retires} cacheReq={s.CacheRequests} bakePend={s.BakePending} cachePend={s.CachePending} budget={s.NearBudget} grace={s.RetireGrace} speed={s.Speed:0} visDraw={s.VisibleDraws} shDraw={s.ShadowDraws} shObj={s.ShadowObjects}");
-        }
-    }
-
-    private void WriteProfileLogIfRequested()
-    {
-        if (string.IsNullOrWhiteSpace(_profileLogPath)) { return; }
-        string? dir = Path.GetDirectoryName(_profileLogPath);
-        if (!string.IsNullOrWhiteSpace(dir)) { Directory.CreateDirectory(dir); }
-
-        using StreamWriter w = new(_profileLogPath);
-        w.WriteLine("sample,ms,cdlod_frame,snap,leaves,active,missing,near_births,far_births,retires,cache_requests,bake_pending,cache_pending,near_budget,retire_grace,tightened,speed_mps,total_snaps,total_births,total_rebirths,visible_draws,shadow_draws,visible_objects,shadow_objects,visible_primitives,shadow_primitives");
-        foreach (ProfileFrame s in _profSamples)
-        {
-            int missing = (s.Leaves >= 0 && s.Active >= 0) ? Math.Max(0, s.Leaves - s.Active) : -1;
-            w.WriteLine(string.Join(",",
-                s.Sample.ToString(CultureInfo.InvariantCulture),
-                (s.Delta * 1000.0).ToString("0.###", CultureInfo.InvariantCulture),
-                s.CdlodFrame.ToString(CultureInfo.InvariantCulture),
-                s.Snapped ? "1" : "0",
-                s.Leaves.ToString(CultureInfo.InvariantCulture),
-                s.Active.ToString(CultureInfo.InvariantCulture),
-                missing.ToString(CultureInfo.InvariantCulture),
-                s.NearBirths.ToString(CultureInfo.InvariantCulture),
-                s.FarBirths.ToString(CultureInfo.InvariantCulture),
-                s.Retires.ToString(CultureInfo.InvariantCulture),
-                s.CacheRequests.ToString(CultureInfo.InvariantCulture),
-                s.BakePending.ToString(CultureInfo.InvariantCulture),
-                s.CachePending.ToString(CultureInfo.InvariantCulture),
-                s.NearBudget.ToString(CultureInfo.InvariantCulture),
-                s.RetireGrace.ToString(CultureInfo.InvariantCulture),
-                s.Tightened.ToString(CultureInfo.InvariantCulture),
-                s.Speed.ToString("0.###", CultureInfo.InvariantCulture),
-                s.TotalSnaps.ToString(CultureInfo.InvariantCulture),
-                s.TotalBirths.ToString(CultureInfo.InvariantCulture),
-                s.TotalRebirths.ToString(CultureInfo.InvariantCulture),
-                s.VisibleDraws.ToString(CultureInfo.InvariantCulture),
-                s.ShadowDraws.ToString(CultureInfo.InvariantCulture),
-                s.VisibleObjects.ToString(CultureInfo.InvariantCulture),
-                s.ShadowObjects.ToString(CultureInfo.InvariantCulture),
-                s.VisiblePrimitives.ToString(CultureInfo.InvariantCulture),
-                s.ShadowPrimitives.ToString(CultureInfo.InvariantCulture)));
-        }
-        GD.Print($"PROFILE-LOG: {_profileLogPath}");
     }
 }

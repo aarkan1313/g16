@@ -40,7 +40,7 @@ public partial class TerrainLabUI : Control
     private bool _lastG;        // G toggles the anti-moiré detail-fade live
     private bool _lastWaterH;   // H toggles the water debug overlay live
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
-    private bool _detailFadeOn = false;  // texture quality default; G toggles the diagnostic anti-moiré fade
+    private bool _detailFadeOn = false;  // anti-moiré detail-fade default OFF (matches shader default; ring bug fixed at source, fade only washed far detail)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
     private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)
@@ -251,7 +251,8 @@ public partial class TerrainLabUI : Control
                 bool kV = Input.IsKeyPressed(Key.V);
                 if (kV && !_lastF9) { _lodVizLive = !_lodVizLive; _terrain.SetCdlodViz(_lodVizLive); GD.Print($"[dbg] (V) LOD-band tint = {_lodVizLive}"); }
                 _lastF9 = kV;
-                // G: live A/B the diagnostic anti-moiré detail-fade. Default stays OFF so review keeps material detail.
+                // G: live A/B the anti-moiré detail-fade (the dot-grid fix). Flip OFF to see the speckle moiré
+                // return, ON to see it dissolve to flat mean colour with distance.
                 bool kG = Input.IsKeyPressed(Key.G);
                 if (kG && !_lastG) { _detailFadeOn = !_detailFadeOn; _terrain.SetFloat("detail_fade_on", _detailFadeOn ? 1f : 0f); GD.Print($"[dbg] (G) anti-moiré detail-fade = {_detailFadeOn}"); }
                 _lastG = kG;

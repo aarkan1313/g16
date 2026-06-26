@@ -133,10 +133,14 @@ float detail_fade(float dist) { return 1.0 - smoothstep(detail_fade_near, detail
 // mean. Tunable; ~2..8 dissolves high-contrast speckle right as it stops being resolvable (kills the dot-grid).
 uniform float detail_fp_lo = 1.0;
 uniform float detail_fp_hi = 3.0;
-// DEFAULT OFF (2026-06-26): this dissolve-to-mean fade hides too much material texture for
-// the 5 km/s quality target. Keep it diagnostic-only until surfacing has a quality-preserving
-// anti-moire path.
-uniform float detail_fade_on = 0.0;   // live A/B (key G): 1 = diagnostic detail-fade ON, 0 = raw detail
+// DEFAULT OFF (2026-06-23): this dissolve-to-mean fade was added to mask the CDLOD UV-ring bug now
+// fixed at the source (v_surf_xz = vtrue_fine, commit 38aab96). With the bug gone the fade only HURTS —
+// it washes wanted far-field detail toward flat mean colour (eye-confirmed: terrain looks better with it
+// off). Kept (not deleted) because real distance detail-management is genuine surfacing-arc work; the
+// dissolve-to-mean METHOD is the wrong lever for it (use mip/aniso — present — + detail/macro blending or
+// texture-array LOD later). Toksvig (below) is INDEPENDENT of this and stays on: it solves a different,
+// real problem (normal-map specular AA). Key G still A/Bs the fade live.
+uniform float detail_fade_on = 0.0;   // live A/B (key G): 1 = anti-moiré detail-fade ON, 0 = OFF (default, raw detail)
 
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)
@@ -419,7 +423,14 @@ void fragment() {
         float sum = max(w0 + w1 + w2 + w3 + w4, 1e-4);
 
         vec3 wpos = vec3(v_surf_xz.x, v_h, v_surf_xz.y);
-        // Diagnostic distance fade only. Default is OFF because dissolving to mean color hides material quality.
+        // FOOTPRINT DETAIL-FADE: blend every per-texel sample toward its texture MEAN as the texture footprint
+        // per screen-pixel grows, so wherever a pixel covers many texels (far AND/OR grazing) the surface goes
+        // flat average colour with NO high-contrast speckle. That speckle (stones in mat2, grains in mat0) is
+        // what aliased into the fixed-distance "dot-grid"/concentric-rings moiré: it reads as a screen-locked
+        // OVERLAY (not sliding with the terrain) because minification moiré's beat frequency is set by the pixel
+        // grid, not the surface. Mips+anisotropy can't kill it (contrast too high, 12 m tiling resonates), so we
+        // remove the high frequencies at the source. Driving the fade by fwidth(uv) (texels/pixel) — not raw
+        // distance — auto-targets BOTH distance and grazing angle, and keeps head-on near ground fully sharp.
         float dist = distance(cam_world, wpos);
         float dis = detail_dissolve(dist) * detail_fade_on;    // 0 near .. 1 far (gated by the live G toggle)
         // rock (mat3) uses triplanar (steep faces); others use planar world-XZ uv (cheaper, they're flat-ish).
