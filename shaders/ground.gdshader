@@ -133,10 +133,10 @@ float detail_fade(float dist) { return 1.0 - smoothstep(detail_fade_near, detail
 // mean. Tunable; ~2..8 dissolves high-contrast speckle right as it stops being resolvable (kills the dot-grid).
 uniform float detail_fp_lo = 1.0;
 uniform float detail_fp_hi = 3.0;
-// DEFAULT ON (2026-06-26): raw 12 m texture tiling at low grazing review angles produces obvious stripe
-// moire. This fade keeps near terrain textured but collapses unresolved far/grazing detail toward material
-// means. Key G still A/Bs the fade live.
-uniform float detail_fade_on = 1.0;   // live A/B (key G): 1 = anti-moiré detail-fade ON, 0 = raw detail
+// DEFAULT OFF (2026-06-26): the footprint fade is useful as a diagnostic A/B, but it hides too much
+// material texture for the 5 km/s quality target. Keep it opt-in on key G until surfacing has a
+// quality-preserving anti-moire path.
+uniform float detail_fade_on = 0.0;   // live A/B (key G): 1 = anti-moiré detail-fade ON, 0 = raw detail
 
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)
