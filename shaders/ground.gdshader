@@ -171,6 +171,9 @@ uniform float debug_field = 0.0;
 uniform sampler2D debug_field_tex : filter_linear;
 uniform float debug_wxz = 0.0;   // DEBUG: 1.0 = output reconstructed world XZ (mod 512) as R/G color
 uniform float diag_mode = 0.0;   // RING HUNT: 0 normal, 1 grey base, 2 +albedo, 3 +roughness, 4 +normalmap (key H steps)
+uniform bool dbg_use_normalmap = true;
+uniform bool dbg_fullrough = false;
+uniform bool dbg_unlit = false;
 
 // --- HYDROLOGY carve. The region water texture: R=dist-to-river(m), G=bedDepth(m), B=flow, A=wet mask.
 // Carve = subtract a compact-support groove where wet. Default OFF (no texture bound) so the base field
@@ -438,7 +441,7 @@ void fragment() {
         // we can pin the ring source by adding ONE channel at a time onto the known-clean flat-grey base.
         // Normal-map perturbation, rolled OFF with distance (nfade: 1 near .. 0 far) so far normals collapse to
         // the smooth geometric normal (belt-and-suspenders with Toksvig). Proper tangent-space basis.
-        float nfade = (1.0 - dis);
+        float nfade = dbg_use_normalmap ? (1.0 - dis) : 0.0;
         vec3 nrm_pert = v_normal;
         nrm_pert = apply_nrm_tangent(nrm_pert, mat1_nrm, uv, (w1 + w2) / sum * nfade);
         nrm_pert = apply_nrm_tangent(nrm_pert, mat0_nrm, uv, w0 / sum * nfade);
@@ -490,5 +493,18 @@ void fragment() {
     if (hz_on) {
         AO = horizon_shadow(v_surf_xz, v_h, normalize(sun_dir_to));
         AO_LIGHT_AFFECT = 1.0;
+    }
+    if (dbg_fullrough) {
+        ROUGHNESS = 1.0;
+        SPECULAR = 0.0;
+    }
+    if (dbg_unlit) {
+        vec3 unlit = ALBEDO;
+        ALBEDO = vec3(0.0);
+        EMISSION = unlit;
+        AO = 1.0;
+        AO_LIGHT_AFFECT = 0.0;
+        ROUGHNESS = 1.0;
+        SPECULAR = 0.0;
     }
 }

@@ -109,6 +109,7 @@ public sealed class LabReviewController
     {
         if (_reviewLabel == null) { BuildReviewLabel(); }
         if (_nightGate) { ApplyReviewNight(n); return; }   // --nightgate=1: keys read data/review_night.json
+        if (n != 4) { _terrain.SetBool("dbg_unlit", false); }
         string title, judge;
         switch (n)
         {
@@ -192,7 +193,14 @@ public sealed class LabReviewController
                 Set("sun_surface_on", false);
                 Set("sun_corona_energy", 0f);
                 Set("sun_halo_energy", 0f);
+                Set("atmosphere_on", false);
                 Set("time_of_day", 17f);
+                Set("dbg_fog", false);
+                Set("dbg_sun", _shadowReviewOn);
+                Set("sun_energy", _shadowReviewOn ? 1.2f : 0f);
+                Set("ambient_e", _shadowReviewOn ? 0.5f : 1.0f);
+                Set("dbg_fullrough", true);
+                Set("dbg_normalmap", false);
                 Set("hz_strength", 0.18f);
                 Set("hz_steps", 1f);
                 Set("hz_maxdist", 9000f);
@@ -204,12 +212,14 @@ public sealed class LabReviewController
                 Set("hz_fade_dist", 4000f);
                 Set("hz_on", _shadowReviewOn);
                 _terrain.SetBool("hz_on", _shadowReviewOn);
+                _terrain.SetBool("dbg_unlit", !_shadowReviewOn);
                 title = _shadowReviewOn
                     ? "4 - Shadows A/B - terrain horizon ON  (press 4 -> OFF)"
-                    : "4 - Shadows A/B - shadowless low sun  (press 4 -> ON)";
+                    : "4 - Shadows A/B - unlit/no shadows  (press 4 -> ON)";
                 judge = _shadowReviewOn
                     ? "Same low-sun terrain frame with only the terrain horizon shader owner enabled. Judge soft landform darkening, no chunk/LOD popping, no black blobs, and no engine shadow artifacts."
-                    : "Low-sun shadowless baseline. Press 4 again without moving much to compare against the horizon-shadow version; terrain, clouds, fog, and time stay pinned.";
+                    : "Full isolation baseline: terrain is self-lit, so sun light, horizon shadow, fog, god rays, sun glow, specular, normal maps, and ambient directionality cannot contribute. Press 4 again to turn the low-sun horizon-shadow review back on.";
+                GD.Print($"[review-shadow] key4 hz_on={_shadowReviewOn} sun={_shadowReviewOn} unlit={!_shadowReviewOn} matte=on normalmaps=off sunOverlay=off");
                 break;
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle.
                 if (_lastPreset != 6)
@@ -340,6 +350,7 @@ public sealed class LabReviewController
 
     private void BaselineGround()
     {
+        _terrain.SetBool("dbg_unlit", false);
         _sky.ApplyMood(2);                                     // midday = neutral
         Set("cloud_enabled", false);
     }
