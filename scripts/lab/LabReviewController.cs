@@ -182,9 +182,16 @@ public sealed class LabReviewController
                 }
                 break;
             case 4:
-                _shadowReviewOn = _lastPreset == 4 && !_shadowReviewOn;
+                _shadowReviewOn = _lastPreset == 4 ? !ControlBool("hz_on") : false;
                 _sky.ApplyMood(5);
                 Set("cloud_enabled", false);
+                Set("cloud_godrays", false);
+                Set("cloud_godray_backlit", false);
+                Set("aerial_on", false);
+                Set("volfog_on", false);
+                Set("sun_surface_on", false);
+                Set("sun_corona_energy", 0f);
+                Set("sun_halo_energy", 0f);
                 Set("time_of_day", 17f);
                 Set("hz_strength", 0.18f);
                 Set("hz_steps", 1f);
@@ -196,6 +203,7 @@ public sealed class LabReviewController
                 Set("hz_full_dist", 1000f);
                 Set("hz_fade_dist", 4000f);
                 Set("hz_on", _shadowReviewOn);
+                _terrain.SetBool("hz_on", _shadowReviewOn);
                 title = _shadowReviewOn
                     ? "4 - Shadows A/B - terrain horizon ON  (press 4 -> OFF)"
                     : "4 - Shadows A/B - shadowless low sun  (press 4 -> ON)";
@@ -323,6 +331,11 @@ public sealed class LabReviewController
     {
         if (_reg.TryGet(id, out var c)) { _reg.SetValue(c, v); }
         else { GD.PushWarning($"[review] unknown control id '{id}' (skipped)"); }
+    }
+
+    private bool ControlBool(string id)
+    {
+        return _reg.TryGet(id, out var c) && c.Value.VariantType == Variant.Type.Bool && c.Value.AsBool();
     }
 
     private void BaselineGround()
