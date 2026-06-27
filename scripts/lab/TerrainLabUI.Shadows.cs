@@ -15,7 +15,7 @@ public partial class TerrainLabUI
     {
         _shadowRegistry = new ShadowRegistry(this);
         _shadowRegistry.Register(new HorizonMarchOwner(_terrain));
-        _shadowRegistry.Register(new CsmCastOwner(this, GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain")) { Enabled = true });
+        _shadowRegistry.Register(new CsmCastOwner(this) { Enabled = true });
     }
 
     private void TickShadows(double delta) => _shadowRegistry?.Tick(delta);

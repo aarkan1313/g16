@@ -5,20 +5,23 @@ namespace WG16.Lab;
 
 /// NearCast owner: Godot cascaded shadow maps on the sun, capped to a near band, with CDLOD casting gated to
 /// its finest leaves. The registry drives sun.ShadowEnabled (via WantsSunShadow); this owner sets the sun's
-/// CSM mode/distance/bias and the terrain's caster-min-level when enabled. DiagIds cover BOTH the sun light
-/// tag and the chunk caster tag so --shadowcheck recognises them (no rogue).
+/// CSM mode/distance/bias and the terrain's caster-min-level once both nodes exist. DiagIds cover BOTH the sun
+/// light tag and the chunk caster tag so --shadowcheck recognises them (no rogue).
 public sealed class CsmCastOwner : IShadowOwner
 {
     private readonly Node _host;
-    private readonly CdlodTerrain? _terrain;
+    // Resolved LAZILY in Tick: CdlodTerrain is AddChild'd DEFERRED (TerrainLab.cs), so it does NOT exist yet
+    // when InitShadows() runs during _Ready. Same for the Sun on the very first frames.
+    private CdlodTerrain? _terrain;
     private bool _enabled;
     private bool _applied;
 
     // Tunables (conservative near band; refine at eye-gate).
     public float MaxDistance = 1500f;   // DirectionalShadowMaxDistance (near band)
-    public int   CasterTopLevels = 2;   // finest N LOD levels cast
+    public int   CasterTopLevels = 7;   // finest N LOD levels cast (7=all; MaxDistance is the real limiter,
+                                        // so this works at any altitude. Distance-gating is a future perf refinement.)
 
-    public CsmCastOwner(Node host, CdlodTerrain? terrain) { _host = host; _terrain = terrain; }
+    public CsmCastOwner(Node host) { _host = host; }
 
     public string Name => "csm-near";
     public ShadowSlot Slot => ShadowSlot.NearCast;
@@ -39,22 +42,18 @@ public sealed class CsmCastOwner : IShadowOwner
     public void Tick(double delta)
     {
         if (_applied) { return; }
+        var sun = _host.GetNodeOrNull<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        _terrain ??= _host.GetNodeOrNull<CdlodTerrain>("/root/TerrainLabRoot/CdlodTerrain");
+        if (sun == null || _terrain == null) { return; }   // retry next frame (both are set up deferred)
         _applied = true;
 
         // sun.ShadowEnabled is owned by the registry (WantsSunShadow); we only set the CSM PARAMS here.
-        var sun = _host.GetNodeOrNull<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
-        if (sun != null)
-        {
-            sun.DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits;
-            sun.DirectionalShadowMaxDistance = _enabled ? MaxDistance : 100f;
-            sun.ShadowBias = 0.04f;
-            sun.ShadowNormalBias = 1.5f;
-            sun.ShadowBlur = 1.0f;
-        }
+        sun.DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits;
+        sun.DirectionalShadowMaxDistance = _enabled ? MaxDistance : 100f;
+        sun.ShadowBias = 0.04f;
+        sun.ShadowNormalBias = 1.5f;
+        sun.ShadowBlur = 1.0f;
         // Caster gate: finest CasterTopLevels levels cast when enabled, none when off.
-        if (_terrain != null)
-        {
-            _terrain.SetShadowCasterMinLevel(_enabled ? (_terrain.MaxDepth - (CasterTopLevels - 1)) : 99);
-        }
+        _terrain.SetShadowCasterMinLevel(_enabled ? (_terrain.MaxDepth - (CasterTopLevels - 1)) : 99);
     }
 }
