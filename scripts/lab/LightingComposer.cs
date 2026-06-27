@@ -216,9 +216,13 @@ public sealed class LightingComposer
         // Do NOT force it here (the old hardcoded `= false` blocked the whole stack). ──
         if (!_occlusionPolicyPushed)
         {
-            // SSAO/SSIL DISABLED: scene files and legacy plans drifted here; force the review baseline
-            // from code so the terrain baseline is not contaminated by screen-space AO.
-            env.SsaoEnabled = false;
+            // SSAO ENABLED (Phase 2, 2026-06-27): the erosion-lab reference (finite 2m eroded mesh, default
+            // Godot lighting) looks great BECAUSE it has SSAO on — it is the contact grounding that stops the
+            // terrain reading as flat/floating. WG16 had it force-disabled; turn it on. radius/intensity mirror
+            // erosion-lab (Main.tscn: ssao_radius=3, ssao_intensity=1).
+            env.SsaoEnabled = true;
+            env.SsaoRadius = 3.0f;
+            env.SsaoIntensity = 1.0f;
 
             // SSIL DISABLED (2026-06-23): measured ssil ON vs OFF auto-shot diff = 97% of pixels changed, mean
             // shift 52/255 (vs the sun shadow's 0.22) — screen-space indirect light was CRUSHING the whole terrain

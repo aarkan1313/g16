@@ -196,7 +196,8 @@ public sealed class LabReviewController
                 Set("cloud_enabled", false);     // clouds OFF (their own shadows would confound the read)
                 Set("cloud_godrays", false);
                 Set("cloud_godray_backlit", false);
-                Set("aerial_on", false);
+                Set("aerial_on", true);          // gentle depth haze hides the CSM max-distance cutoff "moving line"
+                Set("aerial_strength", 0.6f);
                 Set("volfog_on", false);
                 // SHOW the sun. dbg_sun MUST stay true: dbg_sun=false hides the Sun DirectionalLight3D
                 // (TerrainLabUI.Apply.cs:89) → LIGHT0_ENABLED false in cloud_sky.gdshader → sun_layers()
