@@ -50,9 +50,10 @@ public sealed class CsmCastOwner : IShadowOwner
         // sun.ShadowEnabled is owned by the registry (WantsSunShadow); we only set the CSM PARAMS here.
         sun.DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits;
         sun.DirectionalShadowMaxDistance = _enabled ? MaxDistance : 100f;
-        sun.ShadowBias = 0.04f;
-        sun.ShadowNormalBias = 1.5f;
+        sun.ShadowBias = 0.12f;          // raised for the huge terrain scale (8192 m region) -> kills acne
+        sun.ShadowNormalBias = 4.0f;     // normal-offset is the strongest acne lever on big shadow texels
         sun.ShadowBlur = 1.0f;
+        sun.DirectionalShadowBlendSplits = true;   // smooth the cascade transitions (the "bands")
         // Caster gate: finest CasterTopLevels levels cast when enabled, none when off.
         _terrain.SetShadowCasterMinLevel(_enabled ? (_terrain.MaxDepth - (CasterTopLevels - 1)) : 99);
     }
