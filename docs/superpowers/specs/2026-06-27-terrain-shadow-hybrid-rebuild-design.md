@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-27
 - **Branch:** experiment/presentation
-- **Status:** Design approved (brainstorming); pending spec review → writing-plans
+- **Status:** Approved + **Phase 0 SHIPPED** (`a4771fb..f546040`, pushed). Yaw report **resolved — not a bug** (directional slope shading; horizon shadow ~0, proven via `--yawab`/`e48e8f2`). **NEXT REORDERED: near-CSM cast shadows first** (user's pain + visible payoff), then far horizon-map + AO.
 - **Supersedes the runtime approach of:** the single `hz_on` heightfield march in `shaders/ground.gdshader`
 - **Builds on:** `docs/SHADOWS_AUDIT_2026_06_27.md` (catalog + Pillars-Aligned Direction), the per-chunk GPU field-cache, `ShadowDiagnostics`
 

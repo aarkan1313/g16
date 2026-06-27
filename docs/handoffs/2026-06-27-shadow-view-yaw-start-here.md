@@ -1,5 +1,18 @@
 # Shadow view-yaw blocker - START HERE (2026-06-27)
 
+> ## ✅ RESOLVED + SUPERSEDED (updated later the same day, 2026-06-27)
+>
+> **The yaw "blocker" was never a bug.** Two parts:
+> 1. *"Shadows vanish on yaw"* = the day/night clock still running on review key 4 (sun rose past `hz_sun_gate`, shader returned 1.0 everywhere). **Fixed `238700d`** (key 4 freezes time + clears stray luminaries) + added `dbg_hz_mask` / `--hzmask=1` overlay.
+> 2. *"Shadows still yaw"* = **directional N·L slope shading**, not a cast shadow. Proven with a new `--yawab` frozen-yaw A/B (`e48e8f2`): the raw horizon-shadow mask is **~0 (all-black)** at normal views, and the dark dune faces that read as "shadow" show **zero** horizon shadow in the mask → they're slope shading (world-locked, correct). **The current terrain shadow is effectively ABSENT, not buggy.**
+>
+> **Decision: full hybrid shadow rebuild** (user-approved). Spec: `docs/superpowers/specs/2026-06-27-terrain-shadow-hybrid-rebuild-design.md`.
+> **Phase 0 SHIPPED + pushed** (`a4771fb..f546040`): `ShadowRegistry` + `IShadowOwner`/`ShadowSlot` + `HorizonMarchOwner` (wraps `hz_on`, zero visual change) + `--shadowcheck` self-check (green/red proven). Plan: `docs/superpowers/plans/2026-06-27-shadow-rebuild-phase0-registry.md`.
+>
+> **NEXT (reordered): near-CSM crisp cast shadows** — the user's actual pain + the visible Enshrouded payoff (was Phase 3, now next). It's the graveyard-risk piece (CSM-for-terrain died WG1-15) → fix = CSM near-band-only where CDLOD is uniformly finest (caster==visible). Then far horizon-map + contact AO. **Keep the lighting; rebuild only shadows.** North-star = Enshrouded (same/slightly better). Optional cheap lever to soften the "moving curtain": more ambient fill on anti-sun faces.
+>
+> Everything below is the ORIGINAL yaw-blocker handoff (now history).
+
 Use this handoff when resuming the WG16 shadow/lighting work in a fresh chat.
 
 ## Copy/paste starter prompt
