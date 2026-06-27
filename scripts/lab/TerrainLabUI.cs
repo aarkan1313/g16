@@ -312,6 +312,7 @@ public partial class TerrainLabUI : Control, ILabControls
         if (_meteorDebugCli) { _cloud?.SetMeteorDebug(true); }   // C2: force a meteor streak for headless capture
         // --review=N: drive a review preset at startup (verify/screenshot the keypress path headlessly). LAST so it wins.
         if (_reviewCli > 0) { _review.ApplyReview(_reviewCli); }
+        if (_cleanCli) { ApplyCleanMode(); }   // --clean: erosion-lab parity, LAST so it overrides review's post layers
     }
 
     public override void _ExitTree() => _fc?.Dispose();

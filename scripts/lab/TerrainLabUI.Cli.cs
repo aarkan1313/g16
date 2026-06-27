@@ -108,6 +108,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--glow=")) { _glowCli = a.Substring("--glow=".Length) == "1" ? 1 : 0; }
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a == "--lookatmoon") { _lookAtMoonCli = true; }
+            else if (a == "--clean") { _cleanCli = true; }   // strip to erosion-lab parity (filmic+SSAO only) for A/B
             else if (a.StartsWith("--time=")) { float.TryParse(a.Substring("--time=".Length), out _timeCli); }
             else if (a.StartsWith("--suns=")) { int.TryParse(a.Substring("--suns=".Length), out _sunsCli); }
             else if (a.StartsWith("--moons=")) { int.TryParse(a.Substring("--moons=".Length), out _moonsCli); }
@@ -277,6 +278,25 @@ public partial class TerrainLabUI : Control
         _cloud?.SetAtmosphereOn(false);      // AT-1 physical sky tint on the terrain
         GD.Print("[nofog] all haze OFF (env fog / volfog / aerial / atmosphere) — raw terrain review");
     }
+
+    /// REVIEW (--clean): strip WG16 down to erosion-lab's lighting baseline so terrain + sun CSM + SSAO can be
+    /// judged side-by-side against the reference lab with nothing layered on top. The env-level parity (filmic
+    /// tonemap, no grade/glow/fog, fixed sun/ambient, SSAO on) is owned by LightingComposer.CleanParity so it
+    /// survives every recompose; here we additionally kill the screen-space / cloud post layers erosion-lab has
+    /// none of (cloud shadows, aerial perspective, GPU atmosphere, godrays, volumetric fog) and show the sun.
+    /// Applied LAST (after --review) so it wins over any preset that re-enables a post layer.
+    private void ApplyCleanMode()
+    {
+        _lighting.CleanParity = true;
+        OverrideToggle("cloud_enabled", false);    // no volumetric clouds → no cloud shadow map on terrain
+        OverrideToggle("aerial_on", false);        // AT-2 screen-space aerial perspective off
+        OverrideToggle("atmosphere_on", false);    // AT-1 GPU physical sky off
+        OverrideToggle("volfog_on", false);
+        OverrideToggle("cloud_godrays", false);
+        OverrideToggle("dbg_sun", true);           // sun disc visible
+        ComposeLighting();                         // apply CleanParity now
+        GD.Print("[clean] erosion-lab parity: filmic tonemap + SSAO only — NO grade/glow/fog/aerial/atmosphere/cloud/overcast. Terrain + sun CSM.");
+    }
     // Combined exit-code state for the one-shot regression-gate self-checks (audit #1). Any gate check
     // sets _checkRan + ANDs its pass into _checkPass; AttachClouds then Quit(_checkPass?0:1) so CI can gate.
     private bool _checkRan;
@@ -291,6 +311,7 @@ public partial class TerrainLabUI : Control
     private bool _pinOriginCli;       // --pinorigin → DEBUG pin renderOrigin=0
     private bool _debugWxzCli;        // --debugwxz → DEBUG shader world-XZ color
     private bool _noFogCli;           // --nofog → REVIEW kill all haze (fog+aerial+atmosphere)
+    private bool _cleanCli;           // --clean → strip to erosion-lab parity (filmic+SSAO only) for A/B vs the reference lab
     private bool _popMeterCli;        // --popmeter → S3 live per-frame pop meter (HUD + log) while you fly
     private bool _aabbSpikeCli;       // --aabbspike → S3.5 async GPU height-range feasibility spike (vs sync ref)
     private bool _streamDbgCli;       // --streamdbg → CDLOD per-30-frame streaming-state log

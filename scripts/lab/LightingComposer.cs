@@ -41,6 +41,10 @@ public sealed class LightingComposer
     public MoonState Moon { get; } = new();
     public StarsState Stars { get; } = new();
     public Color SkyTint { get; set; } = Colors.White;   // ST4-2 fantasy sky tint (white = no tint)
+    // CLEAN PARITY (--clean): when true, Compose strips its whole grade/fog/overcast stack down to the
+    // erosion-lab baseline (filmic tonemap + SSAO + sky ambient, nothing else) so terrain + sun CSM can be
+    // A/B'd against the reference lab with no post masking the read. Survives every recompose.
+    public bool CleanParity { get; set; } = false;
     // Overcast-scaled bases (captured by Compose, scaled by ApplyOvercastScaling — the live sliders set these).
     public float BaseAmbient { get; set; } = 0.4f;
     public float BaseSunEnergy { get; set; } = 1.3f;
@@ -348,6 +352,27 @@ public sealed class LightingComposer
         ComposeExtraSuns();               // C3 Unit 4: extra sun discs + terrain lights (no-op when ExtraSunCount==0)
         ComposeExtraMoons();              // C3 Unit 6: extra moon discs (no-op when ExtraMoonCount==0)
         RebuildAndBudget();               // C3: keep the luminary list + allocation current
+
+        if (CleanParity) { ApplyCleanParity(env, sun); }   // --clean: LAST, overrides the grade + overcast writers above
+    }
+
+    /// CLEAN PARITY (--clean): strip the WG16 grade/fog/overcast stack down to erosion-lab's baseline so the
+    /// terrain + sun CSM + SSAO can be judged with nothing layered on top. erosion-lab's entire env is just
+    /// filmic tonemap + sky ambient + SSAO (radius 3, intensity 1) — match exactly. SSAO is left as the
+    /// _occlusionPolicyPushed block set it (already erosion-lab config). Runs last in Compose so it wins.
+    private void ApplyCleanParity(Godot.Environment env, DirectionalLight3D sun)
+    {
+        env.TonemapMode = Godot.Environment.ToneMapper.Filmic;   // erosion-lab Main.tscn: tonemap_mode = 2
+        env.TonemapExposure = 1.0f;
+        env.TonemapWhite = 1.0f;
+        env.AdjustmentEnabled = false;        // no contrast / saturation / brightness grade
+        env.GlowEnabled = false;              // no bloom
+        env.FogEnabled = false;               // no depth / aerial-perspective / height fog
+        env.VolumetricFogEnabled = false;
+        env.AmbientLightColor = new Color(1f, 1f, 1f);   // no night tint
+        env.AmbientLightEnergy = BaseAmbient;            // fixed — no overcast dimming
+        env.AmbientLightSkyContribution = 1.0f;
+        sun.LightEnergy = BaseSunEnergy;                 // fixed — no overcast dimming
     }
 
     /// C3 Unit 4: orient each extra sun on its own offset arc, drive its non-shadowing terrain light, and
