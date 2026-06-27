@@ -11,3 +11,4 @@ source_file="res://shaders/atmosphere_aerial_v2.glsl"
 dest_files=["res://.godot/imported/atmosphere_aerial_v2.glsl-894b7772aae85233eaed640f0567c513.res"]
 
 [params]
+
