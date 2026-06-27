@@ -93,6 +93,22 @@ chosen at the eye-gate. World-lock is provable via the existing `--yawab`.
 
 This is the discipline that was missing every prior attempt — encoded here as the build contract.
 
+0. **Slice 0 — Strip the baggage (no behavior change).** Build the new system on genuinely clean ground first.
+   Delete the dead CSM debris from the failed near-CSM attempt; keep the registry guardrail; evolve (don't
+   delete) the FarCast march. Concretely:
+   - **Delete** `scripts/lab/CsmCastOwner.cs` (+ `.uid`) and its registration in `TerrainLabUI.Shadows.cs`.
+   - **Revert** `CdlodTerrain` caster-gating — remove `_shadowCasterMinLevel`, `SetShadowCasterMinLevel()`, and
+     the per-chunk `CastShadow` branch (`:81-84`, `:372-374`); chunks return to plain `CastShadow.Off`.
+   - **Strip** the `WantsSunShadow` plumbing (`LightingComposer` / `ILightingHost` / `ShadowRegistry` /
+     `TerrainLabUI.Shadows`); `sun.ShadowEnabled` goes back to a hardcoded `false`. Keep the `ShadowSlot.NearCast`
+     enum value as documented intent (zero code) — the future objects-only CSM owner re-adds the hook then.
+   - **Archive** the now-superseded shadow docs to `docs/archive/`: the `terrain-shadow-hybrid-rebuild`,
+     `shadow-rebuild-near-csm`, and `terrain-horizon-shadows-design` specs/plans + stale shadow handoffs. Keep
+     `SHADOWS_AUDIT_2026_06_27.md` and this spec.
+   - **Keep** `ShadowRegistry`, `IShadowOwner`/`ShadowSlot`, `ShadowDiagnostics`, `ShadowCheck`,
+     `TerrainLabUI.Shadows` (the guardrail) and the `hz_*` march (evolved in Slice 1).
+   *Gate:* `dotnet build` 0 errors; render byte-identical to tag `shadowless-clean-2026-06-27` (still shadowless);
+   `--shadowcheck` green with 0 engine shadow draws. Mechanical only — no eye-gate needed (no visual change).
 1. **Slice 1 — Far ridge shadows.** Min-max macro pyramid + accelerated march; hard shadows; far band only
    (extends today's macro march). Biggest payoff (low-sun ridge drama), lowest new risk.
    *Gate:* long ridge shadows appear at low sun; `--yawab` world-locked; no pop/flicker flying + teleporting;
