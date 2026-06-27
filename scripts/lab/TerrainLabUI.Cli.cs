@@ -68,6 +68,7 @@ public partial class TerrainLabUI : Control
     // --aerial vs --aerialdbg=, --water vs --watercheck=) regardless of the if-chain ORDER — the #13 parse
     // hazard, where one reorder used to silently mis-parse. New prefix flags should use this too.
     private int _horizonShadowCli = -1;   // --horizon=0|1 -> terrain heightfield horizon shadow
+    private int _hzMaskCli = -1;          // --hzmask=0|1 -> diagnostic: raw horizon-shadow scalar as emission
 
     private static bool MatchFlag(string a, string name) => a == name || a.StartsWith(name + "=");
 
@@ -145,6 +146,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--analytic")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _analyticCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--textures")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _texturesCli = (s == "1") ? 1 : 0; }   // minimal surfacing slice on/off
             else if (a.StartsWith("--horizon=")) { _horizonShadowCli = a.Substring("--horizon=".Length) == "1" ? 1 : 0; }
+            else if (a.StartsWith("--hzmask=")) { _hzMaskCli = a.Substring("--hzmask=".Length) == "1" ? 1 : 0; }
             else if (MatchFlag(a, "--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
             else if (a == "--atmoscheck") { _atmoCheckCli = true; }
             else if (a.StartsWith("--cloudlightstr=")) { float.TryParse(a.Substring("--cloudlightstr=".Length), out _cloudLightStrCli); }
@@ -227,6 +229,7 @@ public partial class TerrainLabUI : Control
         if (_aabbSpeedSet) { _terrain.SetCdlodAabbSpeed(_aabbSpeedCli); }
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
         if (_horizonShadowCli >= 0) { OverrideToggle("hz_on", _horizonShadowCli == 1); }
+        if (_hzMaskCli >= 0) { _terrain.SetBool("dbg_hz_mask", _hzMaskCli == 1); }
         // S3.5: async AABB tighten tunables (--notighten / --aabbres= / --aabbreq=). Only meaningful with CDLOD on.
         if (cdlodWant == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
         {

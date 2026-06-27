@@ -195,6 +195,12 @@ public sealed class LabReviewController
                 Set("sun_halo_energy", 0f);
                 Set("atmosphere_on", false);
                 Set("time_of_day", 17f);
+                _setTimeRunning(false);          // FIX: freeze the day/night clock. Without this the sun keeps
+                                                 // rising past hz_sun_gate (0.35), horizon_shadow() returns 1.0
+                                                 // everywhere, and shadows "vanish when you move the view" — a
+                                                 // time confound, not a yaw bug. (Keys 2 and 3 already do this.)
+                Set("extra_suns", 0f);           // review hygiene: clear leftover C3 luminaries so no stray
+                Set("extra_moons", 0f);          // directional fill light contaminates the shadow read.
                 Set("dbg_fog", false);
                 Set("dbg_sun", _shadowReviewOn);
                 Set("sun_energy", _shadowReviewOn ? 1.2f : 0f);

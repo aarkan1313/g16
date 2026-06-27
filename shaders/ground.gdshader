@@ -174,6 +174,9 @@ uniform float diag_mode = 0.0;   // RING HUNT: 0 normal, 1 grey base, 2 +albedo,
 uniform bool dbg_use_normalmap = true;
 uniform bool dbg_fullrough = false;
 uniform bool dbg_unlit = false;
+uniform bool dbg_hz_mask = false;   // DIAGNOSTIC (default off): paint the raw horizon-shadow scalar as
+                                    // view-independent emission (white = fully shadowed). A stationary yaw
+                                    // test must leave it unchanged — proof the mask is world-anchored.
 
 // --- HYDROLOGY carve. The region water texture: R=dist-to-river(m), G=bedDepth(m), B=flow, A=wet mask.
 // Carve = subtract a compact-support groove where wet. Default OFF (no texture bound) so the base field
@@ -502,6 +505,18 @@ void fragment() {
         vec3 unlit = ALBEDO;
         ALBEDO = vec3(0.0);
         EMISSION = unlit;
+        AO = 1.0;
+        AO_LIGHT_AFFECT = 0.0;
+        ROUGHNESS = 1.0;
+        SPECULAR = 0.0;
+    }
+    if (dbg_hz_mask) {
+        // Stationary yaw test: this scalar depends ONLY on world surface XZ/height, the world sun direction,
+        // and camera POSITION — never camera orientation. It must NOT change as you turn. If it does, the
+        // horizon math has a hidden view dependency; if it's stable, any visible "shadow shift" is lighting.
+        float hz_dbg = horizon_shadow(v_surf_xz, v_h, normalize(sun_dir_to));
+        ALBEDO = vec3(0.0);
+        EMISSION = vec3(1.0 - hz_dbg);
         AO = 1.0;
         AO_LIGHT_AFFECT = 0.0;
         ROUGHNESS = 1.0;
