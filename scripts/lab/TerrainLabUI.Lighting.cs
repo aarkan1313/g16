@@ -19,6 +19,7 @@ public partial class TerrainLabUI : Control, ILightingHost
     // advances _time.TimeOfDay by _timeSpeed h/real-second and re-DriveTime()s — manual scrub still works.
     private bool _timeRunning = false;
     private float _timeSpeed = 1.0f;   // in-world hours per real second
+    private bool _volumetricFogOn = false;   // composer-owned runtime state; default matches lab_controls.json
 
     // ── Forwarding shims: same names the rest of TerrainLabUI already uses → the composer's state. ──
     // Reference-type state: get-only is enough (callers mutate `.X` through the returned instance).
@@ -130,6 +131,7 @@ public partial class TerrainLabUI : Control, ILightingHost
     public CloudVolume? Cloud => _cloud;
     public float Overcast => _overcast;
     public bool AtmosphereOn => _atmosphereOn;
+    public bool VolumetricFogOn => _volumetricFogOn;
     public AtmosphereCompute? Atmosphere => _atmosphere;
     public TerrainLab? Terrain => _terrain;   // relight #1: indirect-fill uniform target
     // ARC B Task 3: the CDLOD load boundary (LoadRing·rootSize) the fog density couples to — 0 when CDLOD is

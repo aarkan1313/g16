@@ -12,6 +12,7 @@ public interface ILightingHost
     CloudVolume? Cloud { get; }        // sky-shader pass-through target (null = no cloud sky, ProceduralSky fallback)
     float Overcast { get; }            // current overcast amount (written by the cloud-coverage proxy)
     bool AtmosphereOn { get; }         // AT-1 GPU sky on?
+    bool VolumetricFogOn { get; }      // optional legacy volumetric fog; default off
     float CdlodViewDistance { get; }   // ARC B Task 3: LoadRing·rootSize (load boundary), or 0 if CDLOD off → no fog coupling
     float FogViewScale { get; }        // ARC B Task 3: user multiplier on the radius-coupled fog baseline (0 = coupling off)
     int ShadowAtlasSize { get; }       // ARC A.1: directional shadow atlas px (8192 default; 6144/4096 = perf dial-down)
@@ -329,7 +330,7 @@ public sealed class LightingComposer
         env.FogHeight = Weather.FogHeight;
         env.FogHeightDensity = Weather.FogHeightD * 0.3f;
         env.FogSunScatter = Weather.FogSunScatter * 0.25f;
-        env.VolumetricFogEnabled = false;
+        env.VolumetricFogEnabled = _host.VolumetricFogOn;
         // NIGHT: stop the depth fog from washing the night. Fog/aerial perspective is a DISTANCE effect
         // (far-off haze in a large world), so at night drop how much it tints the SKY dome — the sky keeps
         // its own dark night gradient and the moon/stars read against black (the atmosphere stage will own

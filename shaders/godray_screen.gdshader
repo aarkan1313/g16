@@ -31,7 +31,7 @@ uniform sampler2D depth_tex  : hint_depth_texture;
 // (top-down sun transmittance over world XZ) at this pixel's world position. occ_mode==3.
 uniform sampler2D cloud_shadow_tex : filter_linear, repeat_disable, hint_default_white;
 uniform float cloud_shadow_region = 8192.0;   // CloudVolume.RegionSize
-uniform bool  cloud_shadow_on = false;         // false until CloudVolume.ComputeReady (RID live)
+uniform bool  cloud_shadow_on = false;         // true only when the cloud shadow map is requested and its RID is live
 uniform mat4  inv_view_proj;                    // inverse(projection*view), for depth→world reconstruction
 uniform vec3  cam_world = vec3(0.0);            // camera world pos (for the sky view-ray origin)
 uniform float cloud_altitude = 1850.0;          // cloud-deck height to project sky view-rays to (world Y)

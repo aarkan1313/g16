@@ -195,7 +195,7 @@ public partial class TerrainLabUI : Control, ILabControls
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
-        if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
+        if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); SetTerrainCloudShadowEnabled(_terrainCloudShadowOn); }
         if (_temporalCli > 0) { _cloud.SetKnobInt("temporal_frames", _temporalCli); }   // roadmap #4 amortization
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
         if (_cloudParallaxCli >= 0f) { _cloud.SetKnob("camera_parallax", _cloudParallaxCli); }
@@ -215,7 +215,7 @@ public partial class TerrainLabUI : Control, ILabControls
         if (_autoTimeCli >= 0f) { _timeSpeed = _autoTimeCli; _timeRunning = true; GD.Print($"[autotime] day/night cycle ON, {_autoTimeCli} h/s"); }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
-        if (_shadowDbgCli == 1) { _terrainCloudShadowOn = true; _cloud.SetShadowMapWanted(true); _terrain.SetBool("cloud_shadow_on", true); _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
+        if (_shadowDbgCli == 1) { SetTerrainCloudShadowEnabled(true); _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
         if (_shadowCheckCli)   // numeric proof: correlate shadow vs cloud-overhead, print PASS/FAIL
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
@@ -309,7 +309,7 @@ public partial class TerrainLabUI : Control, ILabControls
         if (_cloudParallaxCli >= 0f) { _cloud.SetKnob("camera_parallax", _cloudParallaxCli); }   // --cloudparallax still overrides the preset
         PushSunToCloud(GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
         // --godrays drives the screen-space beam layer (GodRaysScreen reads the sun per-frame).
-        if (_godraysOnCli >= 0) { _godraysScreen?.SetEnabled(_godraysOnCli == 1); }
+        if (_godraysOnCli >= 0) { SetGodRaysEnabled(_godraysOnCli == 1); }
         if (_godrayDbgCli != 0) { _godraysScreen?.SetDebug(_godrayDbgCli); }   // --godraydbg=N diagnostic
         if (_godrayHpCli >= 0f) { _godraysScreen?.SetHighpass(_godrayHpCli); }   // --godrayhp=N A/B the high-pass
         if (_glowCli >= 0) { GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment.GlowEnabled = _glowCli == 1; }   // --glow diagnostic

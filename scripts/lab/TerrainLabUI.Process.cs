@@ -48,7 +48,7 @@ public partial class TerrainLabUI : Control
     private bool _hzOn = true;  // mirror of hz_on; MUST match the shader/JSON default or the first P-press no-ops
     private bool _lodVizLive;   // V toggles the LOD-band tint live
     private bool _terrainCloudShadowOn = false;  // opt-in terrain receive for cloud shadows; . flips it once the cloud RID is live
-    private bool _godraysOn = true;               // god rays default on; F6 flips it
+    private bool _godraysOn = false;              // mirror of cloud_godrays; MUST match JSON/default OFF
     private bool _analyticOn = true;        // ground source: live field (default) vs baked; toggled by key 1
     private float _inspectEnergy = 1.0f;   // L-light brightness (Night tab 'inspect light')
 
@@ -69,6 +69,29 @@ public partial class TerrainLabUI : Control
             ShDraw = shDraw; ShObj = shObj; ShPrim = shPrim;
             Snaps = snaps; Births = births; Rebirths = rebirths; Active = active;
         }
+    }
+
+    private bool TerrainCloudShadowActive => _terrainCloudShadowOn && (_cloud?.Enabled ?? true);
+
+    private void SetTerrainCloudShadowEnabled(bool on)
+    {
+        _terrainCloudShadowOn = on;
+        bool active = TerrainCloudShadowActive;
+        _cloud?.SetShadowMapWanted(active);
+        _terrain.SetBool("cloud_shadow_on", active);
+        _godraysScreen?.SetCloudOcclusionReady(active && (_cloud?.ComputeReady ?? false));
+    }
+
+    private void SetGodRaysEnabled(bool on)
+    {
+        _godraysOn = on;
+        _godraysScreen?.SetEnabled(on);
+    }
+
+    private void SetHorizonShadowsEnabled(bool on)
+    {
+        _hzOn = on;
+        _terrain.SetBool("hz_on", on);
     }
 
     private void RecordLiveProfile(double delta)
@@ -350,10 +373,10 @@ public partial class TerrainLabUI : Control
                 if (kComma && !_lastF4) { UiSun.ShadowEnabled = !UiSun.ShadowEnabled; GD.Print($"[dbg] (,) Sun shadows = {UiSun.ShadowEnabled}"); }
                 _lastF4 = kComma;
                 bool kPeriod = Input.IsKeyPressed(Key.Period);
-                if (kPeriod && !_lastF5) { _terrainCloudShadowOn = !_terrainCloudShadowOn; _cloud?.SetShadowMapWanted(_terrainCloudShadowOn); _terrain.SetBool("cloud_shadow_on", _terrainCloudShadowOn && (_cloud?.Enabled ?? true)); GD.Print($"[dbg] (.) Cloud shadow on terrain = {_terrainCloudShadowOn}"); }
+                if (kPeriod && !_lastF5) { SetTerrainCloudShadowEnabled(!_terrainCloudShadowOn); GD.Print($"[dbg] (.) Cloud shadow on terrain = {_terrainCloudShadowOn}"); }
                 _lastF5 = kPeriod;
                 bool kSlash = Input.IsKeyPressed(Key.Slash);
-                if (kSlash && !_lastF6) { _godraysOn = !_godraysOn; _godraysScreen?.SetEnabled(_godraysOn); GD.Print($"[dbg] (/) God rays = {_godraysOn}"); }
+                if (kSlash && !_lastF6) { SetGodRaysEnabled(!_godraysOn); GD.Print($"[dbg] (/) God rays = {_godraysOn}"); }
                 _lastF6 = kSlash;
                 // O atmosphere (AT-1 GPU sky tint), K aerial perspective (AT-2 camera froxel) — the two
                 // camera-aligned volumes NOT covered above; froxel volumes are the classic concentric-ring suspect.
@@ -367,7 +390,7 @@ public partial class TerrainLabUI : Control
                 _lastF8 = kK;
                 // P: A/B horizon shadows (long-range terrain self-shadow). Best seen at a LOW sun.
                 bool kP = Input.IsKeyPressed(Key.P);
-                if (kP && !_lastHzKey) { _hzOn = !_hzOn; _terrain.SetBool("hz_on", _hzOn); GD.Print($"[dbg] (P) Horizon shadows = {_hzOn}"); }
+                if (kP && !_lastHzKey) { SetHorizonShadowsEnabled(!_hzOn); GD.Print($"[dbg] (P) Horizon shadows = {_hzOn}"); }
                 _lastHzKey = kP;
                 // V: live LOD-band tint toggle — flip on to see if the dot-rings line up with LOD boundaries.
                 bool kV = Input.IsKeyPressed(Key.V);
@@ -428,11 +451,10 @@ public partial class TerrainLabUI : Control
             }
         }
         if (_ready) { RecordLiveProfile(delta); }
-        // L2: enable terrain shadow sampling once the cloud shadow map's RID is live.
+        // L2: once the cloud shadow Texture2Drd RID is live, enable only the opt-in cloud-shadow receivers.
         if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)
         {
-            _terrain.SetBool("cloud_shadow_on", _terrainCloudShadowOn && _cloud.Enabled);
-            _godraysScreen?.SetCloudOcclusionReady(true);   // god-ray cloud sampling: same frame the RID goes live
+            SetTerrainCloudShadowEnabled(_terrainCloudShadowOn);
             _shadowEnabledOnce = true;
         }
 

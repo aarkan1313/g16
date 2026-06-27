@@ -44,6 +44,7 @@ public partial class TerrainLabUI : Control
                 break;
             case "toggle":
                 if (c.Field != null) { SetTerrainBoolField(c.Field, c.Value.AsBool()); }
+                else if (c.Param == "hz_on") { SetHorizonShadowsEnabled(c.Value.AsBool()); }
                 else if (c.Param != null) { _terrain.SetBool(c.Param, c.Value.AsBool()); }
                 break;
             case "enum":
@@ -89,7 +90,7 @@ public partial class TerrainLabUI : Control
             case "shadow": UiSun.ShadowEnabled = on; break;
             case "sun":    UiSun.Visible = on; break;
             case "sdfgi":  UiEnv.Environment.SdfgiEnabled = on; break;
-            case "volfog": UiEnv.Environment.VolumetricFogEnabled = on; break;
+            case "volfog": _volumetricFogOn = on; UiEnv.Environment.VolumetricFogEnabled = on; break;
             case "sun_surface_on": _cloud?.SetSunSurfaceOn(on); break;   // sun-disc surface (cloud_sky material)
             case "time_running":   _timeRunning = on; break;             // ST4-1 auto day/night cycle play/pause
         }

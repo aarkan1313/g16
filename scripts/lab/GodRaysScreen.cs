@@ -96,8 +96,8 @@ public partial class GodRaysScreen : Node3D
         if (tex != null) { _mat.SetShaderParameter("cloud_shadow_tex", tex); }
         _mat.SetShaderParameter("cloud_shadow_region", region);
     }
-    /// Enable cloud-field sampling only once the shadow Texture2Drd RID is live (CloudVolume.ComputeReady),
-    /// else the material samples an empty RID on frame 1 (errors). Mirrors the terrain's cloud_shadow_on gate.
+    /// Enable cloud-field sampling only when the shadow Texture2Drd RID is live and the cloud-shadow
+    /// map is intentionally being dispatched. Mirrors the terrain's cloud_shadow_on gate.
     public void SetCloudOcclusionReady(bool ready) => _mat.SetShaderParameter("cloud_shadow_on", ready);
     /// Cloud-deck altitude (world Y) that sky view-rays project to for the shadow-map lookup.
     public void SetCloudAltitude(float y) => _mat.SetShaderParameter("cloud_altitude", y);

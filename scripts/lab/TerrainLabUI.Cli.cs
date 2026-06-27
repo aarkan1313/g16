@@ -296,6 +296,7 @@ public partial class TerrainLabUI : Control
     {
         var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment;
         env.FogEnabled = false;
+        _volumetricFogOn = false;
         env.VolumetricFogEnabled = false;
         env.FogDensity = 0f;
         env.FogAerialPerspective = 0f;
