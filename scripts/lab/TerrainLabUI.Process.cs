@@ -43,6 +43,8 @@ public partial class TerrainLabUI : Control
     private bool _detailFadeOn = false;  // anti-moiré detail-fade default OFF (matches shader default; ring bug fixed at source, fade only washed far detail)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private bool _lastLiveProfileDump; // B dumps the last rolling profile window to console + artifacts/
+    private bool _lastShadowN;  // N toggles the Sun CSM shadow live (isolate "shadows crawl when I turn")
+    private bool _lastSsaoM;    // M toggles SSAO live (the other view-dependent suspect)
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
     private bool _lodVizLive;   // V toggles the LOD-band tint live
     private bool _godraysOn = false;              // mirror of cloud_godrays; MUST match JSON/default OFF
@@ -382,6 +384,23 @@ public partial class TerrainLabUI : Control
                 bool kB = Input.IsKeyPressed(Key.B);
                 if (kB && !_lastLiveProfileDump) { DumpLiveProfile(); }
                 _lastLiveProfileDump = kB;
+                // N / M: UN-PARKED shadow + SSAO live toggles (the two view-dependent suspects for "shadows
+                // crawl when I turn"). These work in BOTH scenes — the review number keys (4) do not. Stand
+                // still, turn to see the crawl, then flip N (then M): whichever toggle kills the crawl is it.
+                bool kN = Input.IsKeyPressed(Key.N);
+                if (kN && !_lastShadowN)
+                {
+                    var sun = GetNodeOrNull<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+                    if (sun != null) { sun.ShadowEnabled = !sun.ShadowEnabled; GD.Print($"[isolate] (N) Sun CSM shadow = {sun.ShadowEnabled}"); }
+                }
+                _lastShadowN = kN;
+                bool kM = Input.IsKeyPressed(Key.M);
+                if (kM && !_lastSsaoM)
+                {
+                    var env = GetNodeOrNull<WorldEnvironment>("/root/TerrainLabRoot/Env")?.Environment;
+                    if (env != null) { env.SsaoEnabled = !env.SsaoEnabled; GD.Print($"[isolate] (M) SSAO = {env.SsaoEnabled}"); }
+                }
+                _lastSsaoM = kM;
             }
             // ----------------------------------------------------------------------------------------------
 

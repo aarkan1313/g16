@@ -313,6 +313,70 @@ public partial class TerrainLabUI : Control, ILabControls
         // --review=N: drive a review preset at startup (verify/screenshot the keypress path headlessly). LAST so it wins.
         if (_reviewCli > 0) { _review.ApplyReview(_reviewCli); }
         if (_cleanCli) { ApplyCleanMode(); }   // --clean: erosion-lab parity, LAST so it overrides review's post layers
+        ApplyShadowDiagOverrides();            // --sunshadow / --shadowdist / --shadowatlas: shadow-isolation A/B, wins over review/clean
+        ApplyTerrainStripOverrides();          // --fullrough / --normalmap / --unlit: terrain-material strip A/B, wins over review/clean
+        ApplyOrbitOverride();                  // --orbit: LookAt camera, LAST so it owns the camera (view-dependence probe)
+    }
+
+    /// Terrain-material strip overrides (--fullrough / --normalmap / --unlit). Drive the ground.gdshader debug
+    /// switches headlessly so the view-dependent-shading bisection (handoff 2026-06-27) is reproducible without
+    /// the dead review keys. Applied after review/clean so the A/B value wins.
+    private void ApplyTerrainStripOverrides()
+    {
+        if (_fullroughCli >= 0) { _terrain.SetBool("dbg_fullrough", _fullroughCli == 1); }
+        if (_normalmapCli >= 0) { _terrain.SetBool("dbg_normalmap", _normalmapCli == 1); }
+        if (_unlitCli >= 0) { _terrain.SetBool("dbg_unlit", _unlitCli == 1); }
+        if (_fullroughCli >= 0 || _normalmapCli >= 0 || _unlitCli >= 0)
+        {
+            GD.Print($"[strip] fullrough={(_fullroughCli < 0 ? "-" : _fullroughCli.ToString())} " +
+                     $"normalmap={(_normalmapCli < 0 ? "-" : _normalmapCli.ToString())} unlit={(_unlitCli < 0 ? "-" : _unlitCli.ToString())}");
+        }
+    }
+
+    /// --orbit=cx,cy,cz,dist,elevDeg,azDeg → place the camera at (dist, elev, az) around target (cx,cy,cz) and
+    /// LookAt it. The view-dependence probe: capture two azimuths of the SAME terrain target; correct shading is
+    /// identical on the same hills from both angles, view-dependent shading differs. Applied last so it owns the
+    /// camera over --review's FrameSunForShadowReview and --cam.
+    private void ApplyOrbitOverride()
+    {
+        if (string.IsNullOrEmpty(_orbitCli)) { return; }
+        string[] p = _orbitCli.Split(',');
+        if (p.Length < 6) { GD.Print("[orbit] need cx,cy,cz,dist,elev,az"); return; }
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        float cx = float.Parse(p[0], ci), cy = float.Parse(p[1], ci), cz = float.Parse(p[2], ci);
+        float dist = float.Parse(p[3], ci), elev = Mathf.DegToRad(float.Parse(p[4], ci)), az = Mathf.DegToRad(float.Parse(p[5], ci));
+        var cam = GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+        if (cam == null) { return; }
+        Vector3 target = new Vector3(cx, cy, cz);
+        Vector3 off = new Vector3(Mathf.Cos(elev) * Mathf.Sin(az), Mathf.Sin(elev), Mathf.Cos(elev) * Mathf.Cos(az)) * dist;
+        cam.Position = target + off;
+        cam.LookAt(target, Vector3.Up);
+        GD.Print($"[orbit] target=({cx},{cy},{cz}) dist={dist} elev={float.Parse(p[4], ci)} az={float.Parse(p[5], ci)} → campos={cam.Position}");
+    }
+
+    /// Shadow-isolation CLI overrides (--sunshadow / --shadowdist / --shadowatlas). Applied last so they win
+    /// over the review preset + clean mode. --sunshadow=0 forces the Sun's CSM off without needing the
+    /// review.tscn-only number keys → isolates "shadows crawl when I turn" as the cast shadow vs SSAO.
+    /// --shadowdist enlarges the camera-locked bubble toward erosion-lab's world-covering 8000m to test
+    /// whether a bigger bubble stops the rotation crawl; --shadowatlas raises atlas px to counter coarse texels.
+    private void ApplyShadowDiagOverrides()
+    {
+        var sun = GetNodeOrNull<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        if (sun != null)
+        {
+            if (_sunShadowCli >= 0) { sun.ShadowEnabled = _sunShadowCli == 1; }
+            if (_shadowDistCli > 0f) { sun.DirectionalShadowMaxDistance = _shadowDistCli; }
+        }
+        if (_shadowAtlasCli > 0)
+        {
+            RenderingServer.DirectionalShadowAtlasSetSize(_shadowAtlasCli, true);
+        }
+        if (_sunShadowCli >= 0 || _shadowDistCli > 0f || _shadowAtlasCli > 0)
+        {
+            GD.Print($"[shadowdiag] sunshadow={(_sunShadowCli < 0 ? "(default)" : _sunShadowCli.ToString())} " +
+                     $"dist={(_shadowDistCli > 0f ? _shadowDistCli + "m" : "(default 800)")} " +
+                     $"atlas={(_shadowAtlasCli > 0 ? _shadowAtlasCli + "px" : "(default 4096)")}");
+        }
     }
 
     public override void _ExitTree() => _fc?.Dispose();

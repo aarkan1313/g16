@@ -1,0 +1,12 @@
+LIVEPROFILE: frames=512 avg 150 fps (6.7 ms) worst 103 fps (9.7 ms)
+LIVEPROFILE-PERCENTILES: p50 145 fps (6.9 ms) p95 127 fps (7.9 ms) p99 120 fps (8.3 ms)
+LIVEPROFILE-RENDER-AVG: visible draws=34 objects=287 prim=2358544 | shadow draws=36 objects=136 prim=1120720
+LIVEPROFILE-RENDER-MAX: visible draws=37 objects=329 prim=2695168 | shadow draws=53 objects=242 prim=1982464
+LIVEPROFILE-SHADOWS: clean=NO lights=1/1 geomCasters=885/850 cdlodCasters=0 terrainShaderOwners=0 ssao=True ssil=False sdfgi=False render draws=38 objects=142 prim=1163264 owners=light:/root/TerrainLabRoot/Sun,ssao:/root/TerrainLabRoot/Env,caster:/root/TerrainLabRoot/CdlodTerrain/@MeshInstance3D@852,caster:/root/TerrainLabRoot/CdlodTerrain/@MeshInstance3D@853,caster:/root/TerrainLabRoot/CdlodTerrain/@MeshInstance3D@854,caster:/root/TerrainLabRoot/CdlodTerrain/@MeshInstance3D@855,caster:/root/TerrainLabRoot/CdlodTerrain/@MeshInstance3D@856,caster:/root/TerrainLabRoot/CdlodTerrain/@MeshInstance3D@857
+LIVEPROFILE-STREAM-DELTA: snaps=1 births=377 rebirths=26 active=850
+LIVEPROFILE-CDLOD: active=850 near=593 far=257 shadowCasters=0 cacheReady=593
+LIVEPROFILE-SPIKE: rank=1 103 fps (9.7 ms) visible draws=35 objects=281 prim=2301952 | shadow draws=38 objects=142 prim=1163264 | stream snaps=1 births=377 rebirths=26 active=850
+LIVEPROFILE-SPIKE: rank=2 103 fps (9.7 ms) visible draws=35 objects=281 prim=2301952 | shadow draws=42 objects=145 prim=1187840 | stream snaps=1 births=377 rebirths=26 active=850
+LIVEPROFILE-SPIKE: rank=3 120 fps (8.3 ms) visible draws=35 objects=307 prim=2514944 | shadow draws=41 objects=171 prim=1400832 | stream snaps=0 births=116 rebirths=22 active=843
+LIVEPROFILE-SPIKE: rank=4 120 fps (8.3 ms) visible draws=35 objects=305 prim=2498560 | shadow draws=42 objects=177 prim=1449984 | stream snaps=0 births=137 rebirths=22 active=859
+LIVEPROFILE-SPIKE: rank=5 120 fps (8.3 ms) visible draws=34 objects=319 prim=2613248 | shadow draws=39 objects=198 prim=1622016 | stream snaps=0 births=143 rebirths=22 active=856

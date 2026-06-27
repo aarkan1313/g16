@@ -109,6 +109,13 @@ public partial class TerrainLabUI : Control
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a == "--lookatmoon") { _lookAtMoonCli = true; }
             else if (a == "--clean") { _cleanCli = true; }   // strip to erosion-lab parity (filmic+SSAO only) for A/B
+            else if (a.StartsWith("--orbit=")) { _orbitCli = a.Substring("--orbit=".Length); }   // cx,cy,cz,dist,elevDeg,azDeg → LookAt camera (same-patch two-angle view-dependence probe)
+            else if (MatchFlag(a, "--fullrough")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _fullroughCli = (s == "1") ? 1 : 0; }   // dbg_fullrough (kill specular)
+            else if (MatchFlag(a, "--normalmap")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _normalmapCli = (s == "1") ? 1 : 0; }   // dbg_normalmap
+            else if (MatchFlag(a, "--unlit")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _unlitCli = (s == "1") ? 1 : 0; }   // dbg_unlit (albedo via EMISSION)
+            else if (a.StartsWith("--sunshadow=")) { _sunShadowCli = a.Substring("--sunshadow=".Length) == "1" ? 1 : 0; }   // force Sun.ShadowEnabled (isolate CSM vs SSAO)
+            else if (a.StartsWith("--shadowdist=")) { float.TryParse(a.Substring("--shadowdist=".Length), System.Globalization.CultureInfo.InvariantCulture, out _shadowDistCli); }   // DirectionalShadowMaxDistance (bubble size A/B)
+            else if (a.StartsWith("--shadowatlas=")) { int.TryParse(a.Substring("--shadowatlas=".Length), out _shadowAtlasCli); }   // directional shadow atlas size
             else if (a.StartsWith("--time=")) { float.TryParse(a.Substring("--time=".Length), out _timeCli); }
             else if (a.StartsWith("--suns=")) { int.TryParse(a.Substring("--suns=".Length), out _sunsCli); }
             else if (a.StartsWith("--moons=")) { int.TryParse(a.Substring("--moons=".Length), out _moonsCli); }
@@ -312,6 +319,13 @@ public partial class TerrainLabUI : Control
     private bool _debugWxzCli;        // --debugwxz → DEBUG shader world-XZ color
     private bool _noFogCli;           // --nofog → REVIEW kill all haze (fog+aerial+atmosphere)
     private bool _cleanCli;           // --clean → strip to erosion-lab parity (filmic+SSAO only) for A/B vs the reference lab
+    private string _orbitCli = "";    // --orbit=cx,cy,cz,dist,elev,az → LookAt camera for the same-patch two-angle view-dependence probe
+    private int _fullroughCli = -1;   // --fullrough[=1] → dbg_fullrough (ROUGHNESS=1, SPECULAR=0): strip the specular suspect
+    private int _normalmapCli = -1;   // --normalmap[=0] → dbg_normalmap
+    private int _unlitCli = -1;       // --unlit[=1] → dbg_unlit (albedo straight to EMISSION, no lighting)
+    private int _sunShadowCli = -1;   // --sunshadow=0/1 → force Sun.ShadowEnabled (isolate CSM cast shadow vs SSAO crawl)
+    private float _shadowDistCli = -1f; // --shadowdist=N → DirectionalShadowMaxDistance (bubble-size A/B: 800 vs erosion-lab's 8000)
+    private int _shadowAtlasCli = -1; // --shadowatlas=N → directional shadow atlas px (counter coarse texels at a big bubble)
     private bool _popMeterCli;        // --popmeter → S3 live per-frame pop meter (HUD + log) while you fly
     private bool _aabbSpikeCli;       // --aabbspike → S3.5 async GPU height-range feasibility spike (vs sync ref)
     private bool _streamDbgCli;       // --streamdbg → CDLOD per-30-frame streaming-state log
