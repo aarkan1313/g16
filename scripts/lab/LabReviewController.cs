@@ -199,7 +199,9 @@ public sealed class LabReviewController
                 Set("sun_corona_energy", 1.0f);
                 Set("sun_halo_energy", 1.0f);
                 Set("atmosphere_on", true);
-                Set("time_of_day", 17f);         // low sun = long ridge shadows (the regime Slice 1 targets)
+                _sky.LoadSun();                  // apply a sun preset so the DISC actually renders (not just glow)
+                if (_sky.Sun.Count > 0) { _sky.ApplySun(0); }
+                Set("time_of_day", 16.7f);       // sun ~18-20 deg: clearly above horizon AND under the shadow gate
                 _setTimeRunning(false);          // freeze the clock, else the sun climbs past hz_sun_gate and the
                                                  // shadow fades — a TIME confound that masquerades as a yaw bug.
                 Set("extra_suns", 0f);           // clear stray C3 luminaries so no extra directional fill
@@ -212,8 +214,8 @@ public sealed class LabReviewController
                 Set("dbg_normalmap", false);
                 _terrain.SetBool("dbg_unlit", false);   // KEEP terrain lit in BOTH states (constant lighting)
                 // Slice 1 far-ridge defaults (strong + full-vista so the cast shadow clearly reads):
-                Set("hz_strength", 0.70f);
-                Set("hz_steps", 12f);
+                Set("hz_strength", 0.55f);
+                Set("hz_steps", 24f);
                 Set("hz_maxdist", 12000f);
                 Set("hz_stride0", 30f);
                 Set("hz_growth", 1.45f);
@@ -223,7 +225,7 @@ public sealed class LabReviewController
                 Set("hz_fade_dist", 11000f);
                 Set("hz_on", _shadowReviewOn);
                 _terrain.SetBool("hz_on", _shadowReviewOn);
-                if (_lastPreset != 4) { LookAtSun(); }   // first press: frame the sun so shadow direction is legible
+                if (_lastPreset != 4) { FrameSunForShadowReview(); }   // first press: high vantage, sun in frame
                 title = _shadowReviewOn
                     ? "4 · Far-ridge shadows: terrain horizon ON  (press 4 → OFF)"
                     : "4 · Far-ridge shadows: OFF — same lit frame  (press 4 → ON)";
@@ -380,6 +382,20 @@ public sealed class LabReviewController
         cam.Position = new Vector3(0, 400, 900);
         var toSun = sun.GlobalTransform.Basis.Z.Normalized();
         cam.LookAt(cam.GlobalPosition + toSun, Vector3.Up);
+    }
+
+    /// Key 4 vantage: stand HIGH on the anti-sun side and look ACROSS the terrain toward the (low) sun, so the
+    /// disc is unoccluded in the upper frame AND long ridge shadows stretch toward the camera — the ideal
+    /// far-shadow review angle. basis.Z of the sun light points toward the disc.
+    private void FrameSunForShadowReview()
+    {
+        var cam = _host.GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+        var sun = _host.GetNodeOrNull<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+        if (cam == null || sun == null) { return; }
+        Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();
+        Vector3 backHoriz = new Vector3(-toSun.X, 0f, -toSun.Z).Normalized();   // away from the sun, level
+        cam.Position = backHoriz * 1600f + new Vector3(0f, 1150f, 0f);          // high + back so nothing occludes
+        cam.LookAt(cam.GlobalPosition + toSun, Vector3.Up);                     // aim straight at the disc
     }
 
     private void BuildReviewLabel()
