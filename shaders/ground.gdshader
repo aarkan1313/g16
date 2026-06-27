@@ -362,9 +362,16 @@ float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
     float sun_up = sdir.y;
     if (sun_up <= 0.02 || sun_up >= hz_sun_gate) { return 1.0; }
 
-    float cam_dist = distance(cam_world.xz, surf_xz);
-    if (cam_dist >= hz_fade_dist) { return 1.0; }
-    float dist_weight = 1.0 - smoothstep(hz_full_dist, hz_fade_dist, cam_dist);
+    // WORLD-LOCKED coverage fade. The baked heightmap only covers world XZ in [-region/2, region/2];
+    // dissolve the shadow as a fragment nears that data edge so it doesn't pop where samples clamp flat.
+    // This depends ONLY on world position (origin-relative), NEVER on the camera. The old ramp keyed on
+    // distance(cam_world, surf_xz) — that is what made the shadow strengthen/fade/cull as you flew (the
+    // recurring "view-dependent shadows" bug) AND left the far review vista almost shadow-free so toggling
+    // looked like a no-op. cam_world is no longer referenced here. (hz_full_dist/hz_fade_dist now unused.)
+    float edge_dist = max(abs(surf_xz.x), abs(surf_xz.y));
+    float cover = region_size * 0.5;
+    if (edge_dist >= cover) { return 1.0; }
+    float dist_weight = 1.0 - smoothstep(cover * 0.85, cover, edge_dist);
 
     vec2 hdir = sdir.xz;
     float hlen = length(hdir);

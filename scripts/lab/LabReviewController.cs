@@ -214,12 +214,12 @@ public sealed class LabReviewController
                 Set("extra_moons", 0f);          // contaminates the shadow read.
                 Set("dbg_fog", false);
                 Set("sun_energy", 1.2f);         // lighting held CONSTANT in both A/B states
-                Set("ambient_e", 0.5f);
+                Set("ambient_e", 0.30f);         // lower fill so the cast shadow READS (was 0.5 = washed it out)
                 Set("dbg_fullrough", true);      // matte: no specular flicker confounding the read
                 Set("dbg_normalmap", false);
                 _terrain.SetBool("dbg_unlit", false);   // KEEP terrain lit in BOTH states (constant lighting)
                 // Slice 1 far-ridge defaults (strong + full-vista so the cast shadow clearly reads):
-                Set("hz_strength", 0.55f);
+                Set("hz_strength", 0.85f);
                 Set("hz_steps", 24f);
                 Set("hz_maxdist", 12000f);
                 Set("hz_stride0", 30f);
