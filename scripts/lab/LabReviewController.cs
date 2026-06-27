@@ -195,19 +195,24 @@ public sealed class LabReviewController
                 Set("cloud_godray_backlit", false);
                 Set("aerial_on", false);
                 Set("volfog_on", false);
-                Set("sun_surface_on", true);     // SHOW the sun + sky so you can orient (shadows point away from it)
-                Set("sun_corona_energy", 1.0f);
-                Set("sun_halo_energy", 1.0f);
+                // SHOW the sun. THE bug that hid it all along: dbg_sun=false (set below in earlier drafts)
+                // hides the Sun DirectionalLight3D node (TerrainLabUI.Apply.cs:89), which makes LIGHT0_ENABLED
+                // false in cloud_sky.gdshader, so sun_layers() early-returns vec3(0) — NO disc at any size/
+                // exposure. dbg_sun MUST stay true so the light feeds the sky. Surface OFF keeps the bright
+                // 12x disc (surface mode drops it to 2.5x, cloud_sky.gdshader:255); bigger size reads at a
+                // glance. atmosphere ON = the normal nice sky; the disc punches through it.
+                Set("dbg_sun", true);            // <- the fix: Sun visible so the sky shader can draw the disc
+                Set("sun_surface_on", false);
+                Set("sun_corona_energy", 2.0f);
+                Set("sun_halo_energy", 0.6f);
+                Set("sun_size", 1.6f);
                 Set("atmosphere_on", true);
-                _sky.LoadSun();                  // apply a sun preset so the DISC actually renders (not just glow)
-                if (_sky.Sun.Count > 0) { _sky.ApplySun(0); }
                 Set("time_of_day", 16.7f);       // sun ~18-20 deg: clearly above horizon AND under the shadow gate
                 _setTimeRunning(false);          // freeze the clock, else the sun climbs past hz_sun_gate and the
                                                  // shadow fades — a TIME confound that masquerades as a yaw bug.
                 Set("extra_suns", 0f);           // clear stray C3 luminaries so no extra directional fill
                 Set("extra_moons", 0f);          // contaminates the shadow read.
                 Set("dbg_fog", false);
-                Set("dbg_sun", false);
                 Set("sun_energy", 1.2f);         // lighting held CONSTANT in both A/B states
                 Set("ambient_e", 0.5f);
                 Set("dbg_fullrough", true);      // matte: no specular flicker confounding the read
