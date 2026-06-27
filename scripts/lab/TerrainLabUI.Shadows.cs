@@ -6,6 +6,9 @@ public partial class TerrainLabUI
 {
     private ShadowRegistry _shadowRegistry = null!;
 
+    /// ILightingHost: the shadow registry owns whether the sun casts (read by LightingComposer.Compose).
+    public bool WantsSunShadow => _shadowRegistry?.WantsSunShadow ?? false;
+
     /// Phase 0: construct the registry + register the existing horizon march (FarCast). Later phases
     /// register NearCast (CSM) and ContactAo owners here. Called from _Ready after _terrain is resolved.
     private void InitShadows()
