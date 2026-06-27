@@ -104,15 +104,15 @@ uniform float ground_rough = 0.92;
 // It is default-off, independent of CDLOD chunk residency/LOD, and does not enable any engine shadow maps.
 uniform bool  hz_on = false;
 uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);
-uniform float hz_steps    : hint_range(1.0, 32.0) = 32.0;     // Slice 1: real 32-step march (was 1 = ~no-op)
+uniform float hz_steps    : hint_range(1.0, 32.0) = 12.0;     // Slice 1: 12-step march (was 1=no-op; 32 was too costly)
 uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 12000.0;  // march reach toward the sun (tall distant occluders)
 uniform float hz_stride0  : hint_range(4.0, 200.0) = 30.0;
 uniform float hz_growth   : hint_range(1.0, 2.0) = 1.45;
 uniform float hz_softness : hint_range(0.005, 0.30) = 0.20;
 uniform float hz_strength : hint_range(0.0, 1.0) = 0.70;      // clearly visible for the eye-gate (dial down to taste)
 uniform float hz_sun_gate : hint_range(0.05, 1.0) = 0.50;     // active up to sun elevation sin ~0.5 (covers low+mid sun)
-uniform float hz_full_dist : hint_range(250.0, 12000.0) = 500.0;   // Slice 1: macro march covers the WHOLE vista (near refine = Slice 2)
-uniform float hz_fade_dist : hint_range(500.0, 24000.0) = 16000.0;
+uniform float hz_full_dist : hint_range(250.0, 12000.0) = 8000.0;  // CONSTANT strength to 8km (world-locked, not a camera-distance ramp)
+uniform float hz_fade_dist : hint_range(500.0, 24000.0) = 11000.0; // fade 8-11km then cull (also limits marching pixels)
 
 
 // S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
@@ -497,8 +497,12 @@ void fragment() {
     }
 
     if (hz_on) {
-        AO = horizon_shadow(v_surf_xz, v_h, normalize(sun_dir_to));
-        AO_LIGHT_AFFECT = 1.0;
+        // Only march where the surface faces the sun. Back-facing pixels are already shadowed by N·L, so
+        // marching them is wasted work (the field march is the dominant per-pixel cost). Big perf win at low sun.
+        if (dot(v_normal, normalize(sun_dir_to)) > 0.0) {
+            AO = horizon_shadow(v_surf_xz, v_h, normalize(sun_dir_to));
+            AO_LIGHT_AFFECT = 1.0;
+        }
     }
     if (dbg_fullrough) {
         ROUGHNESS = 1.0;

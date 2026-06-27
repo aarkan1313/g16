@@ -213,14 +213,14 @@ public sealed class LabReviewController
                 _terrain.SetBool("dbg_unlit", false);   // KEEP terrain lit in BOTH states (constant lighting)
                 // Slice 1 far-ridge defaults (strong + full-vista so the cast shadow clearly reads):
                 Set("hz_strength", 0.70f);
-                Set("hz_steps", 32f);
+                Set("hz_steps", 12f);
                 Set("hz_maxdist", 12000f);
                 Set("hz_stride0", 30f);
                 Set("hz_growth", 1.45f);
                 Set("hz_softness", 0.20f);
                 Set("hz_sun_gate", 0.50f);
-                Set("hz_full_dist", 500f);
-                Set("hz_fade_dist", 16000f);
+                Set("hz_full_dist", 8000f);
+                Set("hz_fade_dist", 11000f);
                 Set("hz_on", _shadowReviewOn);
                 _terrain.SetBool("hz_on", _shadowReviewOn);
                 title = _shadowReviewOn
