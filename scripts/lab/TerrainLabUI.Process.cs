@@ -45,6 +45,8 @@ public partial class TerrainLabUI : Control
     private bool _lastLiveProfileDump; // B dumps the last rolling profile window to console + artifacts/
     private bool _lastShadowN;  // N toggles the Sun CSM shadow live (isolate "shadows crawl when I turn")
     private bool _lastSsaoM;    // M toggles SSAO live (the other view-dependent suspect)
+    private bool _lastTexU;     // U toggles terrain textures live (the surfacing = the real "moving shadows" suspect)
+    private bool _texturesLive = true;   // live mirror of use_textures for the U toggle
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
     private bool _lodVizLive;   // V toggles the LOD-band tint live
     private bool _godraysOn = false;              // mirror of cloud_godrays; MUST match JSON/default OFF
@@ -401,6 +403,13 @@ public partial class TerrainLabUI : Control
                     if (env != null) { env.SsaoEnabled = !env.SsaoEnabled; GD.Print($"[isolate] (M) SSAO = {env.SsaoEnabled}"); }
                 }
                 _lastSsaoM = kM;
+                // U: UN-PARKED terrain-surfacing toggle. The deep-dive (handoff 2026-06-27) pinned the
+                // "moving shadows" to the TEXTURED surfacing (dark slope albedo + normal-map striations that
+                // shimmer in motion), NOT cast shadows/SSAO/specular. Flip U OFF while flying → terrain goes to
+                // the matte height-colour path (erosion-lab-like); if the "moving shadows" vanish, it's surfacing.
+                bool kU = Input.IsKeyPressed(Key.U);
+                if (kU && !_lastTexU) { _texturesLive = !_texturesLive; _terrain.SetTexturesOn(_texturesLive); GD.Print($"[isolate] (U) terrain textures = {_texturesLive}"); }
+                _lastTexU = kU;
             }
             // ----------------------------------------------------------------------------------------------
 

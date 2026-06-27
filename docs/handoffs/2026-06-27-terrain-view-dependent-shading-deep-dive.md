@@ -128,3 +128,45 @@ C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64.ex
 ## Reference
 - erosion-lab: `C:\Wg16\erosion-lab\ErosionLab\{Main.tscn,Main.cs,TerrainMesh.cs}` — the matte,
   single-mesh, default-lighting control that does NOT exhibit the bug.
+
+---
+
+## FINDINGS — verified by screenshot bisection (2026-06-27)
+
+Captured at a FIXED camera (`--cam=0,608,846,-20,<yaw>`) and an orbit, time≈noon, `--clean`.
+Shots in the session scratchpad: A/E (full), F (yaw+12), G (specular off), H (normal-map off),
+I (textures off), C/D (full strip).
+
+1. **Pure camera ROTATION does NOT change the shading.** E (yaw 0) vs F (yaw 12): the dark near
+   dune + snow patch simply pan across the frame; brightness is unchanged. ⇒ the symptom is **not**
+   a view-dependent specular/IBL term, and **not** cast-shadow crawl. Terrain shading is world-locked.
+2. **Specular ruled OUT.** G (`dbg_fullrough`, SPECULAR=0) is identical to E. The prime suspect
+   (glossy 0.04 roughness sky reflection) is NOT visibly contributing at this sun/camera.
+3. **The dark "shadowy" slopes are TEXTURE ALBEDO, not shadows.** I (`use_textures=false`) turns the
+   dark brown near dune PALE/matte (height-colour path) — erosion-lab-like. The dark slope is the
+   rock/soil material the slope-blend puts on steep faces, not a cast or N·L shadow.
+4. **The shimmering striations/combing are NORMAL MAPS.** H (`dbg_normalmap=false`, textures still on)
+   keeps the dark albedo but the diagonal striations VANISH.
+5. **Cause of "shadows move when I turn" = the TEXTURED SURFACING in MOTION**, i.e. (a) dark slope
+   albedo + (b) normal-map striations that shimmer as you fly. This matches the existing memory
+   `wg16-mipmap-fuzz-gotcha` ("terrain motion artifacts come from textures; show live, not in stills")
+   and `ground-texture-feedback`. It is NOT shadows / SSAO / specular / CSM — all ruled out above.
+
+### What this means
+The whole "real shadows / world-locked" arc was chasing the wrong layer. The shadows ARE world-locked
+(Phase 1 CSM is fine). The thing that reads as "moving shadows" and "doesn't look like erosion-lab" is
+the **terrain surfacing**: too-dark slope material + aliased/striated normal maps that shimmer in
+motion. erosion-lab looks clean because it is **matte vertex-colour with no normal maps**.
+
+### Remaining verification
+- [ ] Confirm in MOTION (the symptom only lives there): fly with textures ON (shimmer) vs OFF
+  (key `U`) — does the "moving shadows" vanish with `U` off? (live toggle added 2026-06-27)
+- [ ] If yes, the fix is a SURFACING decision (not lighting): options below.
+
+### Fix options (surfacing, not lighting)
+- **A. Matte/erosion-lab parity:** drop normal maps + lighten slope albedo (closest to the look the
+  user likes). Cheapest, most erosion-lab-like.
+- **B. Fix the normal maps:** they read as aliased combing — check mipmaps on import
+  (`wg16-mipmap-fuzz-gotcha`), reduce perturbation strength, or fix the distance/footprint fade so
+  they don't shimmer. Keeps detail, more work.
+- **C. Lighten/retune the slope material** so steep faces aren't near-black (the "shadow" look).
