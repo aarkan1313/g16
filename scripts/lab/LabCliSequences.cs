@@ -18,6 +18,7 @@ public sealed class LabCliSequences
 
     private string? _autoShotPath; private double _autoShotT = -1.0;
     private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage; private int _godrayAbFrames;
+    private string? _yawAbPath; private double _yawAbT = -1.0; private int _yawAbStage; private int _yawAbFrames; private float _yawAbDeg = 25f;
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum, _profWorst;
     private int _profFrames;
     private bool _profCollecting;
@@ -39,6 +40,7 @@ public sealed class LabCliSequences
     // ---- arming (called from ParseCli) ----
     public void ArmAutoShot(string path) { _autoShotPath = path; _autoShotT = 0.0; }
     public void ArmGodrayAb(string path) { _godrayAbPath = path; _godrayAbT = 0.0; }
+    public void ArmYawAb(string path) { _yawAbPath = path; _yawAbT = 0.0; }
     public void EnableProfMove() => _profMove = true;
     public void SetProfSpeed(float mps) { if (mps > 0f) { _profSpeed = mps; } }
     public void ArmProfile(double? dur)
@@ -241,6 +243,32 @@ public sealed class LabCliSequences
                     _host.GetViewport().GetTexture().GetImage().SavePng(_godrayAbPath + "_off.png");
                     GD.Print($"TerrainLab: godray A/B -> {_godrayAbPath}_on.png / _off.png (2-frame gap)");
                     _godrayAbT = -1.0;
+                    _host.GetTree().Quit();
+                }
+            }
+        }
+
+        // --yawab=<path>: WORLD-ANCHORED invariant test. Freeze, capture <path>_a.png, yaw the camera, capture
+        // <path>_b.png, quit. Same position + time + frozen scene ⇒ only the yaw differs. A world-locked shadow
+        // mask stays GLUED to terrain (only the framing scrolls); a view-dependent bug slides vs the terrain.
+        if (_yawAbT >= 0.0 && _yawAbPath != null)
+        {
+            _yawAbT += delta;
+            if (_yawAbStage == 0 && _yawAbT > 1.5)
+            {
+                Engine.TimeScale = 0.0;   // freeze: only the camera yaw differs between A and B
+                _host.GetViewport().GetTexture().GetImage().SavePng(_yawAbPath + "_a.png");
+                var cam = _host.GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+                if (cam != null) { Vector3 r = cam.RotationDegrees; cam.RotationDegrees = new Vector3(r.X, r.Y + _yawAbDeg, r.Z); }
+                _yawAbStage = 1; _yawAbFrames = 0;
+            }
+            else if (_yawAbStage == 1)
+            {
+                if (++_yawAbFrames >= 2)
+                {
+                    _host.GetViewport().GetTexture().GetImage().SavePng(_yawAbPath + "_b.png");
+                    GD.Print($"TerrainLab: yaw A/B -> {_yawAbPath}_a.png / _b.png (+{_yawAbDeg:0}deg yaw, frozen)");
+                    _yawAbT = -1.0;
                     _host.GetTree().Quit();
                 }
             }
