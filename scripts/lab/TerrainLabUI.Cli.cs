@@ -157,6 +157,7 @@ public partial class TerrainLabUI : Control
             else if (a == "--profmove") { _cliSeq.EnableProfMove(); }
             else if (a.StartsWith("--profspeed=")) { if (float.TryParse(a.Substring("--profspeed=".Length), System.Globalization.CultureInfo.InvariantCulture, out float ps)) _cliSeq.SetProfSpeed(ps); }
             else if (a == "--fieldcheck") { _fieldCheckCli = true; }
+            else if (a == "--shadowcheck") { _shadowCheckCli = true; }   // Phase 0: registry/auditor agreement self-check
             else if (a == "--lightcheck") { _lightCheckCli = true; }
             else if (a == "--cloudstats") { _cloudStatsCli = true; }
             else if (a.StartsWith("--preset=")) { int.TryParse(a.Substring("--preset=".Length), out _presetCli); }
@@ -287,6 +288,7 @@ public partial class TerrainLabUI : Control
     private bool _checkRan;
     private bool _checkPass = true;
     private bool _fieldCheckCli;      // --fieldcheck → one-shot field determinism/parity self-check (S1)
+    private bool _shadowCheckCli;     // --shadowcheck → one-shot shadow registry/auditor agreement self-check
     private bool _cdlodCheckCli;      // --cdlodcheck → quadtree neighbor-invariant + stats self-check (S2a)
     private bool _morphCheckCli;      // --morphcheck → S2b geomorph pop-free numeric backstop (PASS/FAIL)
     private bool _stitchCheckCli;     // --stitchcheck → S2d edge-stitch seam-coincidence guard (PASS/FAIL)

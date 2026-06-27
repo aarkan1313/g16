@@ -273,6 +273,7 @@ public partial class TerrainLabUI : Control
             if (_byId.TryGetValue("time_of_day", out var tc)) { SetWidgetValueSilent(tc, h); }
         }
         TickShadows(delta);   // Phase 0: shadow registry tick (owners may no-op)
+        RunShadowCheckIfRequested();   // Phase 0: --shadowcheck one-shot, exits 0/1
         // push camera world pos for the ground anti-repetition distance LOD (Unit 1)
         // AND the world-space cloud raymarch (rays start at the camera so clouds stay world-anchored).
         if (_ready)

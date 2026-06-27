@@ -15,4 +15,16 @@ public partial class TerrainLabUI
     }
 
     private void TickShadows(double delta) => _shadowRegistry?.Tick(delta);
+
+    private bool _shadowCheckRan;
+
+    /// Runs once, after the scene is up and the registry exists, when --shadowcheck was passed. Exits the
+    /// process 0 (pass) / 1 (fail) so CI can gate. Runs in _Process (not _Ready) so the first frame's
+    /// owners/diagnostics are real.
+    private void RunShadowCheckIfRequested()
+    {
+        if (!_shadowCheckCli || _shadowCheckRan || !_ready || _shadowRegistry == null) { return; }
+        _shadowCheckRan = true;
+        GetTree().Quit(ShadowCheck.Run(_shadowRegistry, this) ? 0 : 1);
+    }
 }
