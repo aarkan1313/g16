@@ -33,6 +33,7 @@ public sealed class LabReviewController
     private int _atmoStep;        // AT-1 atmosphere time-of-day preset on review key 8
     private int _c3Idx;           // Celestial C3 multi-luminary on review key 5
     private int _terrainDebugMode; // S3: 0 default · 1 no-tighten · 2 lod-viz · 3 single mesh
+    private bool _shadowReviewOn; // key 4: low-sun shadowless vs terrain horizon shadow A/B
     private List<Godot.Collections.Dictionary>? _nightStates;
 
     public LabReviewController(Node host, ILabControls reg, SkyPresets sky, LightingComposer lighting,
@@ -181,11 +182,26 @@ public sealed class LabReviewController
                 }
                 break;
             case 4:
+                _shadowReviewOn = _lastPreset == 4 && !_shadowReviewOn;
                 _sky.ApplyMood(5);
                 Set("cloud_enabled", false);
-                Set("time_of_day", 13f);
-                title = "4 · Shadowless lighting baseline";
-                judge = "Current review baseline: terrain, sun, moon, inspection light, and material board are shadowless. Use this view to judge terrain color, LOD, fog, and lighting without stale CSM artifacts.";
+                Set("time_of_day", 17f);
+                Set("hz_strength", 0.18f);
+                Set("hz_steps", 1f);
+                Set("hz_maxdist", 9000f);
+                Set("hz_stride0", 40f);
+                Set("hz_growth", 1.45f);
+                Set("hz_softness", 0.28f);
+                Set("hz_sun_gate", 0.35f);
+                Set("hz_full_dist", 1000f);
+                Set("hz_fade_dist", 4000f);
+                Set("hz_on", _shadowReviewOn);
+                title = _shadowReviewOn
+                    ? "4 - Shadows A/B - terrain horizon ON  (press 4 -> OFF)"
+                    : "4 - Shadows A/B - shadowless low sun  (press 4 -> ON)";
+                judge = _shadowReviewOn
+                    ? "Same low-sun terrain frame with only the terrain horizon shader owner enabled. Judge soft landform darkening, no chunk/LOD popping, no black blobs, and no engine shadow artifacts."
+                    : "Low-sun shadowless baseline. Press 4 again without moving much to compare against the horizon-shadow version; terrain, clouds, fog, and time stay pinned.";
                 break;
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle.
                 if (_lastPreset != 6)
