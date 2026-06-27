@@ -83,7 +83,6 @@ public partial class TerrainLabUI : Control, ILabControls
         InitRandomizer();      // Phase 3c: randomize/lock logic (cloud-random injected as a delegate)
         InitCloudPresets();    // cloud preset library (logic in CloudPresets.cs; picker built in BuildPanel)
         InitReview();          // Phase 3d: eye-gate review controller (needs _sky/_lighting/_terrain + _nightGate)
-        InitShadows();         // Phase 0: shadow registry + horizon-march owner (needs _terrain)
         LabRegistryLoader.LoadLibrary(_materials);
         _groundPalette = LabRegistryLoader.LoadGroundPalette();   // GM1: before LoadRegistry builds material controls
         LoadMoods();

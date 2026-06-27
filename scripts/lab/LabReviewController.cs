@@ -183,62 +183,51 @@ public sealed class LabReviewController
                 }
                 break;
             case 4:
-                // SLICE-1 FAR-RIDGE SHADOW A/B. A low-sun, neutral-lit, decontaminated terrain frame where
-                // pressing 4 flips ONLY the terrain horizon (self-)shadow on↔off. Lighting is held CONSTANT
-                // across the toggle, so the ONLY thing that changes is the CAST shadow — that is how you tell
-                // a real cast shadow from N·L slope shading (the recurring confound). Toggle the SHADOW, not
-                // the camera. First press = ON (so it's visible immediately); press 4 again to compare OFF.
-                _shadowReviewOn = _lastPreset == 4 ? !ControlBool("hz_on") : true;
+            {
+                // ENGINE SUN-SHADOW A/B (standard Forward+ stack). Pressing 4 flips ONLY the Sun's engine
+                // CSM ShadowEnabled on↔off. Lighting is held CONSTANT across the toggle, so the ONLY thing
+                // that changes is the engine cast shadow — that is how you tell a real cast shadow from N·L
+                // slope shading (the recurring confound). First press = ON; press 4 again to compare OFF.
+                // NOTE Phase 0: the Sun scene node + CDLOD casters are not yet configured (Phase 1), so the
+                // toggle may show little/no shadow here — that is correct for the clean baseline.
+                var sunNode = _host.GetNodeOrNull<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+                _shadowReviewOn = _lastPreset == 4 ? !(sunNode?.ShadowEnabled ?? false) : true;
                 _sky.ApplyMood(5);
                 Set("cloud_enabled", false);     // clouds OFF (their own shadows would confound the read)
                 Set("cloud_godrays", false);
                 Set("cloud_godray_backlit", false);
                 Set("aerial_on", false);
                 Set("volfog_on", false);
-                // SHOW the sun. THE bug that hid it all along: dbg_sun=false (set below in earlier drafts)
-                // hides the Sun DirectionalLight3D node (TerrainLabUI.Apply.cs:89), which makes LIGHT0_ENABLED
-                // false in cloud_sky.gdshader, so sun_layers() early-returns vec3(0) — NO disc at any size/
-                // exposure. dbg_sun MUST stay true so the light feeds the sky. Surface OFF keeps the bright
-                // 12x disc (surface mode drops it to 2.5x, cloud_sky.gdshader:255); bigger size reads at a
-                // glance. atmosphere ON = the normal nice sky; the disc punches through it.
-                Set("dbg_sun", true);            // <- the fix: Sun visible so the sky shader can draw the disc
+                // SHOW the sun. dbg_sun MUST stay true: dbg_sun=false hides the Sun DirectionalLight3D
+                // (TerrainLabUI.Apply.cs:89) → LIGHT0_ENABLED false in cloud_sky.gdshader → sun_layers()
+                // early-returns vec3(0), no disc at any size. Surface OFF keeps the bright 12x disc.
+                Set("dbg_sun", true);
                 Set("sun_surface_on", false);
                 Set("sun_corona_energy", 2.0f);
                 Set("sun_halo_energy", 0.6f);
                 Set("sun_size", 1.6f);
                 Set("atmosphere_on", true);
-                Set("time_of_day", 16.7f);       // sun ~18-20 deg: clearly above horizon AND under the shadow gate
-                _setTimeRunning(false);          // freeze the clock, else the sun climbs past hz_sun_gate and the
-                                                 // shadow fades — a TIME confound that masquerades as a yaw bug.
+                Set("time_of_day", 16.7f);       // sun ~18-20 deg: low, clearly above horizon
+                _setTimeRunning(false);          // freeze the clock so a moving sun isn't a confound
                 Set("extra_suns", 0f);           // clear stray C3 luminaries so no extra directional fill
                 Set("extra_moons", 0f);          // contaminates the shadow read.
                 Set("dbg_fog", false);
                 Set("sun_energy", 1.2f);         // lighting held CONSTANT in both A/B states
-                Set("ambient_e", 0.30f);         // lower fill so the cast shadow READS (was 0.5 = washed it out)
+                Set("ambient_e", 0.30f);         // lower fill so the cast shadow READS
                 Set("dbg_fullrough", true);      // matte: no specular flicker confounding the read
                 Set("dbg_normalmap", false);
                 _terrain.SetBool("dbg_unlit", false);   // KEEP terrain lit in BOTH states (constant lighting)
-                // Slice 1 far-ridge defaults (strong + full-vista so the cast shadow clearly reads):
-                Set("hz_strength", 0.85f);
-                Set("hz_steps", 24f);
-                Set("hz_maxdist", 12000f);
-                Set("hz_stride0", 30f);
-                Set("hz_growth", 1.45f);
-                Set("hz_softness", 0.20f);
-                Set("hz_sun_gate", 0.50f);
-                Set("hz_full_dist", 8000f);
-                Set("hz_fade_dist", 11000f);
-                Set("hz_on", _shadowReviewOn);
-                _terrain.SetBool("hz_on", _shadowReviewOn);
-                if (_lastPreset != 4) { FrameSunForShadowReview(); }   // first press: high vantage, sun in frame
+                if (sunNode != null) { sunNode.ShadowEnabled = _shadowReviewOn; }   // THE toggle: engine CSM on/off
+                if (_lastPreset != 4) { FrameSunForShadowReview(); }   // first press: frame the sun + terrain
                 title = _shadowReviewOn
-                    ? "4 · Far-ridge shadows: terrain horizon ON  (press 4 → OFF)"
-                    : "4 · Far-ridge shadows: OFF — same lit frame  (press 4 → ON)";
+                    ? "4 · Sun CSM shadows: ON  (press 4 → OFF)"
+                    : "4 · Sun CSM shadows: OFF — same lit frame  (press 4 → ON)";
                 judge = _shadowReviewOn
-                    ? "Low sun, lit terrain. The ONLY change from OFF is the cast shadow. JUDGE (in motion): ridges throw long shadows across valleys/onto each other; a shadow stays GLUED to its caster as you fly + yaw (world-locked, doesn't swim); NO chunk/LOD popping, flicker, or black blobs while moving. Tune 'horizon shadow *' on the Light tab. Watch fps once warmed."
-                    : "Same lit low-sun frame, horizon shadow OFF. Any darkness you see HERE is slope shading (N·L), not a cast shadow. Press 4 to flip the cast shadow back ON and compare — the difference is the new far-ridge shadow.";
-                GD.Print($"[review-shadow] key4 far-ridge hz_on={_shadowReviewOn}");
+                    ? "Low sun, lit terrain. The ONLY change from OFF is the engine cast shadow. JUDGE (in motion): a shadow stays GLUED to its caster as you fly + yaw (no swim); NO chunk/LOD popping, flicker, or black blobs while moving. (Phase 0: casters not configured yet — little shadow expected until Phase 1.)"
+                    : "Same lit low-sun frame, Sun shadows OFF. Any darkness you see HERE is slope shading (N·L), not a cast shadow. Press 4 to flip the engine cast shadow back ON and compare.";
+                GD.Print($"[review-shadow] key4 sun-csm ShadowEnabled={_shadowReviewOn}");
                 break;
+            }
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle.
                 if (_lastPreset != 6)
                 {
@@ -399,7 +388,7 @@ public sealed class LabReviewController
         if (cam == null || sun == null) { return; }
         Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();
         Vector3 backHoriz = new Vector3(-toSun.X, 0f, -toSun.Z).Normalized();   // away from the sun, level
-        cam.Position = backHoriz * 1600f + new Vector3(0f, 1150f, 0f);          // high + back so nothing occludes
+        cam.Position = backHoriz * 1200f + new Vector3(0f, 600f, 0f);           // mid vantage: sun + near-bubble terrain in frame
         cam.LookAt(cam.GlobalPosition + toSun, Vector3.Up);                     // aim straight at the disc
     }
 

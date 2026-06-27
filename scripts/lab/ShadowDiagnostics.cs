@@ -68,17 +68,6 @@ public static class ShadowDiagnostics
             if (shadowCasters > 0) { AddOwner(owners, "cdlod", cd); }
         }
 
-        var terrain = context.GetNodeOrNull<TerrainLab>("/root/TerrainLabRoot/TerrainLab");
-        if (terrain?.MaterialOverride is ShaderMaterial mat)
-        {
-            Variant hz = mat.GetShaderParameter("hz_on");
-            if (hz.VariantType == Variant.Type.Bool && hz.AsBool())
-            {
-                s.TerrainShaderOwners++;
-                AddOwner(owners, "terrain:horizon", terrain);
-            }
-        }
-
         s.Owners = owners.Count == 0 ? "none" : string.Join(",", owners);
         return s;
     }

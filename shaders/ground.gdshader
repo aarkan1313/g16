@@ -99,21 +99,6 @@ uniform float cliff_lo = 0.45;
 uniform float cliff_hi = 0.72;
 uniform float ground_rough = 0.92;
 
-// Terrain heightfield horizon shadow. This is the only planned ground-shadow owner in the review baseline:
-// a world-locked macro-height march toward the sun that attenuates direct light through AO_LIGHT_AFFECT.
-// It is default-off, independent of CDLOD chunk residency/LOD, and does not enable any engine shadow maps.
-uniform bool  hz_on = false;
-uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);
-uniform float hz_steps    : hint_range(1.0, 32.0) = 12.0;     // Slice 1: 12-step march (was 1=no-op; 32 was too costly)
-uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 12000.0;  // march reach toward the sun (tall distant occluders)
-uniform float hz_stride0  : hint_range(4.0, 200.0) = 30.0;
-uniform float hz_growth   : hint_range(1.0, 2.0) = 1.45;
-uniform float hz_softness : hint_range(0.005, 0.30) = 0.20;
-uniform float hz_strength : hint_range(0.0, 1.0) = 0.70;      // clearly visible for the eye-gate (dial down to taste)
-uniform float hz_sun_gate : hint_range(0.05, 1.0) = 0.50;     // active up to sun elevation sin ~0.5 (covers low+mid sun)
-uniform float hz_full_dist : hint_range(250.0, 12000.0) = 8000.0;  // CONSTANT strength to 8km (world-locked, not a camera-distance ramp)
-uniform float hz_fade_dist : hint_range(500.0, 24000.0) = 11000.0; // fade 8-11km then cull (also limits marching pixels)
-
 
 // S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
 // detail transitions share a single soft band (no quality-pop / no stacked rings). UNUSED today — the
@@ -174,9 +159,6 @@ uniform float diag_mode = 0.0;   // RING HUNT: 0 normal, 1 grey base, 2 +albedo,
 uniform bool dbg_use_normalmap = true;
 uniform bool dbg_fullrough = false;
 uniform bool dbg_unlit = false;
-uniform bool dbg_hz_mask = false;   // DIAGNOSTIC (default off): paint the raw horizon-shadow scalar as
-                                    // view-independent emission (white = fully shadowed). A stationary yaw
-                                    // test must leave it unchanged — proof the mask is world-anchored.
 
 // --- HYDROLOGY carve. The region water texture: R=dist-to-river(m), G=bedDepth(m), B=flow, A=wet mask.
 // Carve = subtract a compact-support groove where wet. Default OFF (no texture bound) so the base field
@@ -358,57 +340,6 @@ float toksvig_rough_floor(float gloss) {
     return sqrt(clamp(1.0 - gloss, 0.0, 1.0));         // normal variance → minimum roughness
 }
 
-float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
-    float sun_up = sdir.y;
-    if (sun_up <= 0.02 || sun_up >= hz_sun_gate) { return 1.0; }
-
-    // WORLD-LOCKED coverage fade. The baked heightmap only covers world XZ in [-region/2, region/2];
-    // dissolve the shadow as a fragment nears that data edge so it doesn't pop where samples clamp flat.
-    // This depends ONLY on world position (origin-relative), NEVER on the camera. The old ramp keyed on
-    // distance(cam_world, surf_xz) — that is what made the shadow strengthen/fade/cull as you flew (the
-    // recurring "view-dependent shadows" bug) AND left the far review vista almost shadow-free so toggling
-    // looked like a no-op. cam_world is no longer referenced here. (hz_full_dist/hz_fade_dist now unused.)
-    float edge_dist = max(abs(surf_xz.x), abs(surf_xz.y));
-    float cover = region_size * 0.5;
-    if (edge_dist >= cover) { return 1.0; }
-    float dist_weight = 1.0 - smoothstep(cover * 0.85, cover, edge_dist);
-
-    vec2 hdir = sdir.xz;
-    float hlen = length(hdir);
-    if (hlen < 1e-4) { return 1.0; }
-    hdir /= hlen;
-
-    // Self-consistent REFERENCE height: sample the SAME heightmap at the fragment's own XZ. Comparing the
-    // marched heightmap samples against the MESH height (surf_h, baked by the DIFFERENT per-chunk field cache)
-    // made every near sample read slightly above the surface → cross-source self-shadow ACNE (the streaks).
-    // The +bias gives ~1 texel of grazing slack so flat/convex ground doesn't shadow itself.
-    vec2 fuv = (surf_xz + vec2(region_size * 0.5)) / region_size;
-    float ref_h = texture(heightmap, fuv).r + 3.0;
-    float tan_sun = sun_up / hlen;
-    float max_angle = -1e9;
-    int count = int(hz_steps);
-    float denom = max(float(count - 1), 1.0);
-
-    for (int i = 0; i < count; i++) {
-        float t = count <= 1 ? 0.5 : float(i) / denom;
-        float dist = mix(hz_stride0, hz_maxdist, pow(t, hz_growth));
-        if (dist > hz_maxdist) { break; }
-        // Sample the BAKED region heightmap (one cheap texture fetch) instead of EVALUATING the procedural
-        // field (continent+uplift FBM ~27ms/12 steps — the perf collapse). The region covers world XZ in
-        // [-region/2, region/2]; outside it clamps (repeat_disable) so far-from-origin shadows fade to flat
-        // (acceptable for the near-origin eye-gate; the roaming clipmap is the infinite-world follow-up).
-        vec2 suv = (surf_xz + hdir * dist + vec2(region_size * 0.5)) / region_size;
-        float h = texture(heightmap, suv).r;
-        max_angle = max(max_angle, (h - ref_h) / dist);
-    }
-
-    float occ = smoothstep(0.0, hz_softness, max_angle - tan_sun);
-    // Smooth the high-sun boundary: fade the shadow OUT as the sun climbs toward hz_sun_gate (instead of the
-    // hard early-out popping) so a moving sun doesn't snap shadows on/off across the gate.
-    float sun_fade = 1.0 - smoothstep(hz_sun_gate * 0.6, hz_sun_gate, sun_up);
-    return clamp(1.0 - occ * hz_strength * dist_weight * sun_fade, 0.0, 1.0);
-}
-
 void fragment() {
     if (debug_field > 0.5) {   // erosion-lab false-colour overlay (water/sediment/flow), region-UV sampled
         vec2 ruv = v_surf_xz / region_size + vec2(0.5);
@@ -513,14 +444,6 @@ void fragment() {
         ROUGHNESS = ground_rough;
     }
 
-    if (hz_on) {
-        // Only march where the surface faces the sun. Back-facing pixels are already shadowed by N·L, so
-        // marching them is wasted work (the field march is the dominant per-pixel cost). Big perf win at low sun.
-        if (dot(v_normal, normalize(sun_dir_to)) > 0.0) {
-            AO = horizon_shadow(v_surf_xz, v_h, normalize(sun_dir_to));
-            AO_LIGHT_AFFECT = 1.0;
-        }
-    }
     if (dbg_fullrough) {
         ROUGHNESS = 1.0;
         SPECULAR = 0.0;
@@ -529,18 +452,6 @@ void fragment() {
         vec3 unlit = ALBEDO;
         ALBEDO = vec3(0.0);
         EMISSION = unlit;
-        AO = 1.0;
-        AO_LIGHT_AFFECT = 0.0;
-        ROUGHNESS = 1.0;
-        SPECULAR = 0.0;
-    }
-    if (dbg_hz_mask) {
-        // Stationary yaw test: this scalar depends ONLY on world surface XZ/height, the world sun direction,
-        // and camera POSITION — never camera orientation. It must NOT change as you turn. If it does, the
-        // horizon math has a hidden view dependency; if it's stable, any visible "shadow shift" is lighting.
-        float hz_dbg = horizon_shadow(v_surf_xz, v_h, normalize(sun_dir_to));
-        ALBEDO = vec3(0.0);
-        EMISSION = vec3(1.0 - hz_dbg);
         AO = 1.0;
         AO_LIGHT_AFFECT = 0.0;
         ROUGHNESS = 1.0;
