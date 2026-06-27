@@ -183,6 +183,7 @@ public partial class TerrainLabUI : Control
     private void PushSunToCloud(DirectionalLight3D sun)
     {
         Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();   // -(-Z forward) = +Z
+        _terrain?.SetVector3("sun_dir_to", toSun);
         _cloud?.SetSun(toSun, sun.LightColor, sun.LightEnergy);
         _atmosphere?.SetSun(toSun);   // AT-1: recompute the sky-view LUT when the sun moves
         // the visible disc uses the BASE (un-dimmed) energy — overcast must not dim the sun in a gap.

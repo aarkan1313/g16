@@ -99,6 +99,21 @@ uniform float cliff_lo = 0.45;
 uniform float cliff_hi = 0.72;
 uniform float ground_rough = 0.92;
 
+// Terrain heightfield horizon shadow. This is the only planned ground-shadow owner in the review baseline:
+// a world-locked macro-height march toward the sun that attenuates direct light through AO_LIGHT_AFFECT.
+// It is default-off, independent of CDLOD chunk residency/LOD, and does not enable any engine shadow maps.
+uniform bool  hz_on = false;
+uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);
+uniform float hz_steps    : hint_range(1.0, 32.0) = 1.0;
+uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 9000.0;
+uniform float hz_stride0  : hint_range(4.0, 200.0) = 40.0;
+uniform float hz_growth   : hint_range(1.0, 2.0) = 1.45;
+uniform float hz_softness : hint_range(0.005, 0.30) = 0.28;
+uniform float hz_strength : hint_range(0.0, 1.0) = 0.18;
+uniform float hz_sun_gate : hint_range(0.05, 1.0) = 0.35;
+uniform float hz_full_dist : hint_range(250.0, 12000.0) = 1000.0;
+uniform float hz_fade_dist : hint_range(500.0, 24000.0) = 4000.0;
+
 
 // S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
 // detail transitions share a single soft band (no quality-pop / no stacked rings). UNUSED today — the
@@ -337,6 +352,37 @@ float toksvig_rough_floor(float gloss) {
     return sqrt(clamp(1.0 - gloss, 0.0, 1.0));         // normal variance → minimum roughness
 }
 
+float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
+    float sun_up = sdir.y;
+    if (sun_up <= 0.02 || sun_up >= hz_sun_gate) { return 1.0; }
+
+    float cam_dist = distance(cam_world.xz, surf_xz);
+    if (cam_dist >= hz_fade_dist) { return 1.0; }
+    float dist_weight = 1.0 - smoothstep(hz_full_dist, hz_fade_dist, cam_dist);
+
+    vec2 hdir = sdir.xz;
+    float hlen = length(hdir);
+    if (hlen < 1e-4) { return 1.0; }
+    hdir /= hlen;
+
+    FieldP fp = ground_fieldp();
+    float tan_sun = sun_up / hlen;
+    float max_angle = -1e9;
+    int count = int(hz_steps);
+    float denom = max(float(count - 1), 1.0);
+
+    for (int i = 0; i < count; i++) {
+        float t = count <= 1 ? 0.5 : float(i) / denom;
+        float dist = mix(hz_stride0, hz_maxdist, pow(t, hz_growth));
+        if (dist > hz_maxdist) { break; }
+        float h = field_macro_height(surf_xz + hdir * dist, uint(analytic_seed), fp);
+        max_angle = max(max_angle, (h - surf_h) / dist);
+    }
+
+    float occ = smoothstep(0.0, hz_softness, max_angle - tan_sun);
+    return clamp(1.0 - occ * hz_strength * dist_weight, 0.0, 1.0);
+}
+
 void fragment() {
     if (debug_field > 0.5) {   // erosion-lab false-colour overlay (water/sediment/flow), region-UV sampled
         vec2 ruv = v_surf_xz / region_size + vec2(0.5);
@@ -441,4 +487,8 @@ void fragment() {
         ROUGHNESS = ground_rough;
     }
 
+    if (hz_on) {
+        AO = horizon_shadow(v_surf_xz, v_h, normalize(sun_dir_to));
+        AO_LIGHT_AFFECT = 1.0;
+    }
 }

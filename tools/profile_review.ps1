@@ -4,7 +4,9 @@ param(
     [int]$Speed = 600,
     [switch]$StationaryOnly,
     [switch]$MoveOnly,
-    [switch]$FeatureSweep
+    [switch]$FeatureSweep,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$SceneArgs = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,7 +24,7 @@ function Invoke-ReviewProfile {
     )
 
     Write-Host "===== $Name ====="
-    $engineArgs = @("--path", $Root, "--rendering-driver", "vulkan", "scenes/review.tscn", "--") + $UserArgs
+    $engineArgs = @("--path", $Root, "--rendering-driver", "vulkan", "scenes/review.tscn", "--") + $UserArgs + $SceneArgs
     $oldErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     $out = & $Godot @engineArgs 2>&1

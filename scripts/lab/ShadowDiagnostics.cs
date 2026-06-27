@@ -14,6 +14,7 @@ public static class ShadowDiagnostics
         public int GeometryCasters;
         public int VisibleGeometryCasters;
         public int CdlodShadowCasters;
+        public int TerrainShaderOwners;
         public bool Ssao;
         public bool Ssil;
         public bool Sdfgi;
@@ -26,6 +27,7 @@ public static class ShadowDiagnostics
             ShadowLights == 0 &&
             GeometryCasters == 0 &&
             CdlodShadowCasters == 0 &&
+            TerrainShaderOwners == 0 &&
             !Ssao && !Ssil && !Sdfgi &&
             ShadowDraws == 0 &&
             ShadowObjects == 0 &&
@@ -35,6 +37,7 @@ public static class ShadowDiagnostics
         {
             return $"{prefix}: clean={(Clean ? "YES" : "NO")} lights={ShadowLights}/{VisibleShadowLights} " +
                    $"geomCasters={GeometryCasters}/{VisibleGeometryCasters} cdlodCasters={CdlodShadowCasters} " +
+                   $"terrainShaderOwners={TerrainShaderOwners} " +
                    $"ssao={Ssao} ssil={Ssil} sdfgi={Sdfgi} " +
                    $"render draws={ShadowDraws} objects={ShadowObjects} prim={ShadowPrimitives} owners={Owners}";
         }
@@ -63,6 +66,17 @@ public static class ShadowDiagnostics
             cd.ActiveDiagnostics(out _, out _, out int shadowCasters, out _);
             s.CdlodShadowCasters = shadowCasters;
             if (shadowCasters > 0) { AddOwner(owners, "cdlod", cd); }
+        }
+
+        var terrain = context.GetNodeOrNull<TerrainLab>("/root/TerrainLabRoot/TerrainLab");
+        if (terrain?.MaterialOverride is ShaderMaterial mat)
+        {
+            Variant hz = mat.GetShaderParameter("hz_on");
+            if (hz.VariantType == Variant.Type.Bool && hz.AsBool())
+            {
+                s.TerrainShaderOwners++;
+                AddOwner(owners, "terrain:horizon", terrain);
+            }
         }
 
         s.Owners = owners.Count == 0 ? "none" : string.Join(",", owners);

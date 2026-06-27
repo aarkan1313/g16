@@ -13,7 +13,7 @@
 | --- | --- | --- | --- |
 | Engine sun CSM | `scenes/review.tscn`, `scenes/terrain_lab.tscn`, `scripts/lab/LightingComposer.cs`, `scripts/lab/TerrainLabUI.*` | Scene default was off, but UI/CLI/hotkeys could re-enable it. Composer still tuned atlas/splits. | Runtime now forces `Sun.ShadowEnabled=false`; UI/CLI/hotkeys removed. |
 | CDLOD terrain shadow casters | `scripts/lab/CdlodTerrain.cs`, `scripts/lab/TerrainLab.cs` | Camera-centered caster ring decided per chunk, causing separate shadow LOD/caster state from visible terrain LOD. | `TerrainShadowsEnabled=false`; terrain meshes and GI proxy never cast. |
-| Heightfield horizon shadows | `shaders/ground.gdshader`, `data/lab_controls.json`, `scripts/lab/TerrainLabUI.Process.cs` | `hz_on=true` despite the original plan requiring default-off until eye/perf gates. | Default returned to `false`; controls and `P` hotkey removed. |
+| Heightfield horizon shadows | `shaders/ground.gdshader`, `data/lab_controls.json`, `scripts/lab/TerrainLabUI.Apply.cs`, `scripts/lab/TerrainLabUI.Cli.cs` | `hz_on=true` despite the original plan requiring default-off until eye/perf gates. | Reintroduced as the only approved terrain shadow owner: default-off, explicit Light-tab controls, `--horizon=0|1`, sun vector synced from the existing composer/sliders, no hotkey. |
 | Cloud ground shadows | `scripts/lab/CloudVolume.cs`, `scripts/lab/TerrainLabUI.cs`, `shaders/ground.gdshader`, `shaders/cloud_shadow*.glsl` | Compute map existed, terrain receive/debug could be armed, and controls exposed ground shadow strength. | Terrain receiver/debug, compute map, and numeric `--shadowcheck` path removed. |
 | Cloud self-lighting/shadowing | `shaders/cloud_raymarch.glsl`, `scripts/lab/CloudVolume.cs` | Part of cloud volume shape and contouring, not the bad terrain shadow system. | Preserved. |
 | God-ray occlusion | `scripts/lab/GodRaysScreen.cs`, `shaders/godray_screen.gdshader` | Default screen-luminance mode; dormant cloud-shadow mode existed but was not active. | Preserved screen-luminance path; deleted shadow-map input/fallback. |
@@ -41,10 +41,24 @@ Recommended rebuild:
 5. For clouds, leave terrain receive deleted until a separate cloud-shadow spec exists. If it returns, it should be a world-anchored transmittance cache with an explicit visual/perf gate, not hidden coupling to the sky raymarch.
 6. Keep SSAO/SSIL/SDFGI out of the default landscape pass. Reintroduce only as small-radius contact/cavity support after terrain material detail exists.
 
+## Rebuild Slice 1 - Terrain Horizon Shadow
+
+- `shaders/ground.gdshader` owns one optional terrain self-shadow path: a world-space macro-height march toward the sun, applied through `AO` + `AO_LIGHT_AFFECT` so it attenuates direct light without enabling engine shadow maps.
+- The path samples `field_macro_height`, not visible CDLOD chunks, so terrain shadowing is independent of chunk load, caster rings, and visible LOD. The expected behavior is same large-scale answer at distance, not lit/unlit popping as chunks load.
+- `hz_on` remains default `false`. The Light tab exposes the tuning knobs, and CLI verification uses `--horizon=1`.
+- The default active setting is deliberately cheap: one broad geometric sample, full strength to 1 km, smooth fade to 4 km. The sample count still tunes from 1 to 32 for quality sweeps, but higher counts are explicit review/perf choices.
+- `ShadowDiagnostics` now distinguishes the shader owner from engine shadow work: horizon enabled reports `terrainShaderOwners=1` and `owners=terrain:horizon:/root/TerrainLabRoot/TerrainLab` while shadow draw calls remain zero.
+
 ## Current Validation
 
 - Edited JSON files parse (`lab_controls`, `lighting_moods`, `luminaries`, `item_schemas`, `cloud_presets`, `cloud_layers`, `cloud_params`).
 - `dotnet build WG16.csproj` succeeds with existing warnings.
-- Active-code scan found no old terrain/cloud/horizon shadow APIs or controls and no `ShadowEnabled=true`, `shadow_enabled=true`, `CastShadow.On`, `SSAO`, `SSIL`, or `SDFGI` enable path.
+- Active-code scan found no cloud-ground shadow receiver and no `ShadowEnabled=true`, `shadow_enabled=true`, `CastShadow.On`, `SSAO`, `SSIL`, or `SDFGI` enable path. The only terrain shadow hits are the intended `hz_on` shader/control/CLI/diagnostic paths.
 - `ShadowDiagnostics` now reports actual active shadow lights, geometry casters, CDLOD shadow casters, SSAO/SSIL/SDFGI flags, and Godot shadow render counters through `PROFILE-SHADOWS` and `LIVEPROFILE-SHADOWS`.
-- Runtime FPS/profile data from this already-running Codex shell is not authoritative right now: the stale HKCU `VK_INSTANCE_LAYERS=VK_LAYER_NV_nomad` / `VK_LAYER_PATH` values were cleared after diagnosis, but this process still inherits the old values unless cleared per child. Even with those cleared, `vulkaninfo --summary` still fails to detect a valid GPU/ICD in this session while Windows sees the Intel and RTX adapters, so Godot can fall back to Microsoft Basic Render Driver here.
+- Runtime profile, stationary default: `avg 138 fps (7.2 ms)`, `worst 104 fps (9.6 ms)`, shadow draws/objects/primitives all `0`, `PROFILE-SHADOWS clean=YES terrainShaderOwners=0`.
+- Runtime profile, low sun shadowless `--time=17`: `avg 136 fps (7.4 ms)`, `worst 108 fps (9.3 ms)`, shadow draws/objects/primitives all `0`, `PROFILE-SHADOWS clean=YES`.
+- Runtime profile, active low-sun horizon `--horizon=1 --time=17`: `avg 120 fps (8.3 ms)`, `worst 98 fps (10.2 ms)`, shadow draws/objects/primitives all `0`, `PROFILE-SHADOWS clean=NO terrainShaderOwners=1 owners=terrain:horizon:/root/TerrainLabRoot/TerrainLab`.
+- Runtime profile, 5000 m/s default: `avg 142 fps (7.0 ms)`, `worst 103 fps (9.7 ms)`, shadow draws/objects/primitives all `0`, `PROFILE-SHADOWS clean=YES`.
+- Runtime profile, 5000 m/s active low-sun horizon `--horizon=1 --time=17`: `avg 128 fps (7.8 ms)`, `worst 100 fps (10.0 ms)`, shadow draws/objects/primitives all `0`, `PROFILE-SHADOWS clean=NO terrainShaderOwners=1`.
+- Numeric terrain gates pass: `--fieldcheck` reports `maxAbsDiff=0m`; `--popcheck` reports `height worst-at-swap Δh=0.000m` and `normal worst-at-swap Δn=0.0°`.
+- Known unrelated shutdown warnings still print in Godot runs: invalid texture binding, null uniform-set parameter, and RID/font leak messages at exit.
