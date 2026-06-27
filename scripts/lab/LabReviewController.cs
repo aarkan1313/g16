@@ -223,6 +223,7 @@ public sealed class LabReviewController
                 Set("hz_fade_dist", 11000f);
                 Set("hz_on", _shadowReviewOn);
                 _terrain.SetBool("hz_on", _shadowReviewOn);
+                if (_lastPreset != 4) { LookAtSun(); }   // first press: frame the sun so shadow direction is legible
                 title = _shadowReviewOn
                     ? "4 · Far-ridge shadows: terrain horizon ON  (press 4 → OFF)"
                     : "4 · Far-ridge shadows: OFF — same lit frame  (press 4 → ON)";

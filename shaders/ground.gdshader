@@ -371,6 +371,12 @@ float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
     if (hlen < 1e-4) { return 1.0; }
     hdir /= hlen;
 
+    // Self-consistent REFERENCE height: sample the SAME heightmap at the fragment's own XZ. Comparing the
+    // marched heightmap samples against the MESH height (surf_h, baked by the DIFFERENT per-chunk field cache)
+    // made every near sample read slightly above the surface → cross-source self-shadow ACNE (the streaks).
+    // The +bias gives ~1 texel of grazing slack so flat/convex ground doesn't shadow itself.
+    vec2 fuv = (surf_xz + vec2(region_size * 0.5)) / region_size;
+    float ref_h = texture(heightmap, fuv).r + 3.0;
     float tan_sun = sun_up / hlen;
     float max_angle = -1e9;
     int count = int(hz_steps);
@@ -386,7 +392,7 @@ float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
         // (acceptable for the near-origin eye-gate; the roaming clipmap is the infinite-world follow-up).
         vec2 suv = (surf_xz + hdir * dist + vec2(region_size * 0.5)) / region_size;
         float h = texture(heightmap, suv).r;
-        max_angle = max(max_angle, (h - surf_h) / dist);
+        max_angle = max(max_angle, (h - ref_h) / dist);
     }
 
     float occ = smoothstep(0.0, hz_softness, max_angle - tan_sun);
