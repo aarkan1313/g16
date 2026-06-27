@@ -104,15 +104,15 @@ uniform float ground_rough = 0.92;
 // It is default-off, independent of CDLOD chunk residency/LOD, and does not enable any engine shadow maps.
 uniform bool  hz_on = false;
 uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);
-uniform float hz_steps    : hint_range(1.0, 32.0) = 1.0;
-uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 9000.0;
-uniform float hz_stride0  : hint_range(4.0, 200.0) = 40.0;
+uniform float hz_steps    : hint_range(1.0, 32.0) = 32.0;     // Slice 1: real 32-step march (was 1 = ~no-op)
+uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 12000.0;  // march reach toward the sun (tall distant occluders)
+uniform float hz_stride0  : hint_range(4.0, 200.0) = 30.0;
 uniform float hz_growth   : hint_range(1.0, 2.0) = 1.45;
-uniform float hz_softness : hint_range(0.005, 0.30) = 0.28;
-uniform float hz_strength : hint_range(0.0, 1.0) = 0.18;
-uniform float hz_sun_gate : hint_range(0.05, 1.0) = 0.35;
-uniform float hz_full_dist : hint_range(250.0, 12000.0) = 1000.0;
-uniform float hz_fade_dist : hint_range(500.0, 24000.0) = 4000.0;
+uniform float hz_softness : hint_range(0.005, 0.30) = 0.20;
+uniform float hz_strength : hint_range(0.0, 1.0) = 0.70;      // clearly visible for the eye-gate (dial down to taste)
+uniform float hz_sun_gate : hint_range(0.05, 1.0) = 0.50;     // active up to sun elevation sin ~0.5 (covers low+mid sun)
+uniform float hz_full_dist : hint_range(250.0, 12000.0) = 500.0;   // Slice 1: macro march covers the WHOLE vista (near refine = Slice 2)
+uniform float hz_fade_dist : hint_range(500.0, 24000.0) = 16000.0;
 
 
 // S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
@@ -386,7 +386,10 @@ float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
     }
 
     float occ = smoothstep(0.0, hz_softness, max_angle - tan_sun);
-    return clamp(1.0 - occ * hz_strength * dist_weight, 0.0, 1.0);
+    // Smooth the high-sun boundary: fade the shadow OUT as the sun climbs toward hz_sun_gate (instead of the
+    // hard early-out popping) so a moving sun doesn't snap shadows on/off across the gate.
+    float sun_fade = 1.0 - smoothstep(hz_sun_gate * 0.6, hz_sun_gate, sun_up);
+    return clamp(1.0 - occ * hz_strength * dist_weight * sun_fade, 0.0, 1.0);
 }
 
 void fragment() {
