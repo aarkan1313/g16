@@ -54,10 +54,12 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     // directional light so night/dusk clouds aren't black. w = phase·presence·user strength (0 = skip → free).
     vec4 moon_dir;        // xyz = unit dir TO the moon, w = cloud-light strength
     vec4 moon_color;      // rgb = moon tint (cool white), a unused
+    vec4 visual_origin;   // xy = sky-cloud density origin, z = camera_parallax, w unused
 } P;
 #define WIND vec2(P.tail.x, P.tail.y)
 #define CELL_SCALE P.tail.z
 #define LAYER_COUNT P.tail.w
+#define CLOUD_ORIGIN P.visual_origin.xy
 // per-layer field accessor. f: 0 alt,1 thick,2 size,3 cell,4 covW,5 dens,6 opac,7 type,
 // 8 edge,9 detail,10 detailSize,11 noiseId, 12 phaseG,13 phaseIso,14 albedo,15 sunAbsorb,
 // 16 tintR,17 tintG,18 tintB, 19 profileBottom,20 profileTop,21 anvil, 22-23 reserved.
@@ -71,15 +73,17 @@ const float PI = 3.14159265;
 // sky / shadow / check computes. The DETAIL-EROSION below is deliberately the CRISP variant (two
 // octaves, harder edge erosion) — the sky needs fine cauliflower silhouettes. cloud_shadow.glsl
 // uses a cheaper 1-octave variant; that divergence is intentional, NOT drift.
-// One cloud deck's density at world point p. baseR/topR = this deck's shell radii; all shape
-// params come from the LAYER args (so each deck differs in size/clump/type/etc).
-float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
+// One cloud deck's density at local shell point p. worldXZ is the visible sky-cloud
+// footprint for weather/noise; camera_parallax=1 makes it the true camera-world path.
+// baseR/topR = this deck's shell radii; all shape params come from the LAYER args
+// (so each deck differs in size/clump/type/etc).
+float layer_density(vec3 p, vec2 worldXZ, float baseR, float topR, vec2 windOff,
                     float lsize, float lcell, float ldens, float ltype,
                     float ledge, float ldetail, float ldetsize, float covW,
                     float pBottom, float pTop, float anvil, float shapeMode, float antiRep){
     float r = length(p);
     float h = clamp((r - baseR) / max(topR - baseR, 1.0), 0.0, 1.0);
-    vec3 lp = vec3(p.x, r - baseR, p.z);
+    vec3 lp = vec3(worldXZ.x, r - baseR, worldXZ.y);
 
     vec2 wuv = lp.xz * WEATHER_SCALE + windOff * WEATHER_SCALE;
     vec4 w = texture(weather_tex, wuv);
@@ -135,16 +139,19 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     // DETAIL EROSION — stronger + biting harder at edges (low shape) and tops (audit:
     // round blobs = erosion too weak). erodeAmt up; also erode more where shape is small.
     if (ldetail > 0.0){
+        float baseShape = shape;
         float dScale = DETAIL_SCALE / max(ldetsize, 0.01);
         vec3 duv = lp * dScale + vec3(wDetail.x, h, wDetail.y) * dScale;
         // two-octave detail erosion → finer cauliflower than a single tap (the 32³ detail
         // volume alone reads soft/blobby). A 3.1× finer octave carves small-scale bumps.
-        float det = texture(detail_tex, duv).r;
+        float detLow = texture(detail_tex, duv).r;
         float det2 = texture(detail_tex, duv * 3.1 + vec3(0.37)).r;
-        det = det * 0.6 + det2 * 0.4;
-        float edgeBoost = mix(2.3, 0.5, shape);              // erode edges MUCH harder → crisp silhouettes
+        float det = detLow * 0.6 + det2 * 0.4;
+        float edgeBand = clamp(baseShape * (1.0 - baseShape) * 4.0, 0.0, 1.0);
+        float contour = (det2 - detLow) * edgeBand * (0.20 + 0.10 * ledge) * ldetail * (1.0 - 0.55 * shapeMode);
+        float edgeBoost = mix(2.3, 0.5, baseShape);          // erode edges MUCH harder → crisp silhouettes
         float erodeAmt = mix(0.45, 0.95, h) * ldetail * edgeBoost * (1.0 - 0.7 * shapeMode);   // stratus: smoother (less cauliflower)
-        shape = clamp(remap(shape, det * erodeAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
+        shape = clamp(remap(baseShape, det * erodeAmt, 1.0, 0.0, 1.0) + contour, 0.0, 1.0);
     }
     return shape * ldens * densBias;   // opacity applied by the caller (sigma)
 }
@@ -152,14 +159,14 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
 // Sum every active layer whose band contains p. Returns total density + a density-weighted
 // opacity. activeOut = the index of the densest-contributing deck at p (decks are
 // altitude-separated so usually exactly one), used by the caller to pick per-deck lighting.
-float density_all(vec3 p, vec2 windOff, out float opacOut, out int activeOut){
+float density_all(vec3 p, vec2 worldXZ, vec2 windOff, out float opacOut, out int activeOut){
     int n = clamp(int(LAYER_COUNT), 1, 8);
     float total = 0.0; float opAccum = 0.0; float r = length(p);
     float bestD = -1.0; activeOut = 0;
     for (int i = 0; i < n; i++){
         float baseR = PLANET_R + LF(i,0), topR = baseR + LF(i,1);
         if (r < baseR || r > topR) continue;
-        float d = layer_density(p, baseR, topR, windOff,
+        float d = layer_density(p, worldXZ, baseR, topR, windOff,
             LF(i,2), LF(i,3), LF(i,5), LF(i,7), LF(i,8), LF(i,9), LF(i,10), LF(i,4),
             LF(i,19), LF(i,20), LF(i,21), LF(i,22), LF(i,23));
         total += d; opAccum += d * LF(i,6);
@@ -169,8 +176,8 @@ float density_all(vec3 p, vec2 windOff, out float opacOut, out int activeOut){
     return total;
 }
 // density-only overload (sun light-march doesn't care which deck).
-float density_all(vec3 p, vec2 windOff, out float opacOut){
-    int unused; return density_all(p, windOff, opacOut, unused);
+float density_all(vec3 p, vec2 worldXZ, vec2 windOff, out float opacOut){
+    int unused; return density_all(p, worldXZ, windOff, opacOut, unused);
 }
 
 // deck-ID overlay palette (debug): each deck gets a saturated flat color so the user can
@@ -191,12 +198,16 @@ float hg(float cosA, float g){
 // light march toward the sun summing ALL decks — returns raw OPTICAL DEPTH toward the sun
 // (the caller does multi-octave multiple-scattering from it, per the audit). Cone-ish: a
 // long final tap captures distant self-shadowing cheaply.
-float light_optical_depth(vec3 p, vec3 L, vec2 windOff){
+float light_optical_depth(vec3 p, vec2 worldXZ, vec3 L, vec2 windOff){
     const int LSTEPS = 6;
     float lss = 220.0;
-    float d = 0.0; vec3 q = p; float op;
-    for (int i = 0; i < LSTEPS; i++){ q += L * lss; d += density_all(q, windOff, op) * lss; }
-    d += density_all(p + L * lss * 16.0, windOff, op) * lss;   // far tap (distant deck shadowing)
+    float d = 0.0; vec3 q = p; vec2 qxz = worldXZ; float op;
+    for (int i = 0; i < LSTEPS; i++){
+        q += L * lss;
+        qxz += L.xz * lss;
+        d += density_all(q, qxz, windOff, op) * lss;
+    }
+    d += density_all(p + L * lss * 16.0, worldXZ + L.xz * lss * 16.0, windOff, op) * lss;   // far tap (distant deck shadowing)
     // SUN extinction coefficient. Was 0.02 → for any real cloud the summed sun-path density
     // drove od to ~10-30, so exp(-od)≈0 EVERYWHERE: direct sun never reached the cloud and
     // it was lit by ambient ONLY (measured meanCloudLuma 0.187 = dim grey mush). Recalibrated
@@ -244,28 +255,25 @@ void main(){
     // TEMPORAL AMORTIZATION (roadmap #4, toggleable). Update only 1/stride of texels each frame,
     // cycling the offset over `stride` frames; non-updated texels PERSIST from prior frames
     // (history lives in out_tex, now read+write). Refreshed texels BLEND with history to smooth
-    // the refresh seam. stride=1 (temporal_frames=1, the default) = every texel every frame = the
-    // validated look, zero amortization. Higher stride = cheaper (fewer marches) but stale texels
-    // can shimmer under fast drift — the dispersed (idx%stride) pattern keeps it noise, not rows.
-    // Evaluate per scene; safe because default is OFF.
+    // the refresh seam. stride=1 (temporal_frames=1) = every texel every frame = zero
+    // amortization. The review default is 2: it preserves the converged look while halving
+    // refreshed dome texels per frame; higher stride is a tuning knob but can show stale texels
+    // under fast drift. The dispersed (idx%stride) pattern keeps it noise, not rows.
     int stride = clamp(int(P.update.y), 1, 16);
     int idx = px.y * int(P.tex_size.x) + px.x;
     vec4 history = imageLoad(out_tex, px);
     if (stride > 1 && (idx % stride) != int(P.update.x)) { return; }   // keep history (persistence)
 
-    // Curved shell anchored at the CAMERA (world space → density samples land at true
-    // world XZ, so the ground shadow matches the visible cloud). The curved shell (vs a
-    // flat slab) makes horizon rays traverse a longer chord → a real horizon cloud band.
-    // Clamp the origin to just BELOW the cloud base when the camera is above the layer —
-    // clouds aren't geometry; always march as if viewed from under the shell (fixes
-    // "clouds vanish from above"). Sampling stays world XZ → shadow stays coupled.
+    // Curved shell in the camera's local tangent frame. XZ stays local to avoid far-world
+    // precision loss, but Y is the true camera altitude: flying into/above clouds must not
+    // keep sampling a fake under-cloud dome. Density/weather samples use CLOUD_ORIGIN, which
+    // equals true camera XZ only when camera_parallax is 1.
     vec3 rd = dir_from_texel(px);
     // full span across all ACTIVE decks: march one shell from min-base to max-top.
     int nL = clamp(int(LAYER_COUNT), 1, 8);
     float minBase = 1e9, maxTop = -1e9;
     for (int i = 0; i < nL; i++){ float a = LF(i,0); minBase = min(minBase, a); maxTop = max(maxTop, a + LF(i,1)); }
-    float belowBase = min(P.cam_world.y, minBase - 1.0);
-    vec3 ro = vec3(P.cam_world.x, PLANET_R + belowBase, P.cam_world.z);
+    vec3 ro = vec3(0.0, PLANET_R + P.cam_world.y, 0.0);
     float baseR = PLANET_R + minBase;
     float topR  = PLANET_R + maxTop;
     vec2 hitB = ray_sphere(ro, rd, baseR);
@@ -314,7 +322,8 @@ void main(){
         float t = tStart;
         for (int i = 0; i < maxSteps && t < tEnd; i++){
             vec3 p = ro + rd * t;
-            float opac; int act; float dens = density_all(p, windOff, opac, act);   // sum all decks; act = densest deck
+            vec2 worldXZ = CLOUD_ORIGIN + rd.xz * t;
+            float opac; int act; float dens = density_all(p, worldXZ, windOff, opac, act);   // sum all decks; act = densest deck
             if (dens > 0.001){
                 // PER-DECK LIGHTING (roadmap #1): the deck containing p picks its own phase,
                 // albedo, sun-absorption + tint so cumulus reads forward-scattering/dark-cored
@@ -328,7 +337,7 @@ void main(){
                 vec3  tint    = mix(vec3(1.0), vec3(LF(act,16), LF(act,17), LF(act,18)), pdeck);
 
                 float dt = fineStep;
-                float od = light_optical_depth(p, L, windOff) * absorb;   // per-deck sun absorption
+                float od = light_optical_depth(p, worldXZ, L, windOff) * absorb;   // per-deck sun absorption
                 // MULTIPLE-SCATTERING: a SHARP direct term (exp(-od)*phase) → dark self-shadowed
                 // cores = 3D FORM, plus a softer isotropic fill (exp(-od*0.25)) for voluminous
                 // interior light WITHOUT flattening. The old 3-octave loop summed ~1.75 weight
@@ -353,7 +362,7 @@ void main(){
                 vec3 moonLit = vec3(0.0);
                 if (P.moon_dir.w > 0.001){
                     vec3 mL = normalize(P.moon_dir.xyz);
-                    float odM = light_optical_depth(p, mL, windOff) * absorb;
+                    float odM = light_optical_depth(p, worldXZ, mL, windOff) * absorb;
                     float mPhase = mix(globalPhase, hg(dot(rd, mL), LF(act, 12)), pdeck);
                     float moonScatter = exp(-odM) * mPhase + 0.45 * exp(-odM * 0.25);
                     moonLit = P.moon_color.rgb * P.moon_dir.w * moonScatter;

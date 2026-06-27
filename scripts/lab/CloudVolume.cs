@@ -33,11 +33,36 @@ public partial class CloudVolume : Node
     private Color _sunColor = new Color(1f, 0.95f, 0.85f);
     private float _sunEnergy = 1.3f;
     // camera world position — the world-space cloud raymarch starts rays here so the
-    // visible clouds and the ground shadow map share one world-XZ frame (the fix for
-    // the origin-dome-vs-world-shadow mismatch + camera-motion jitter). Pushed each
-    // frame from TerrainLabUI._Process.
+    // sky-cloud XZ footprint can advance slower than the player so low decks do not read as
+    // sliding at full flight speed. camera_parallax=1 restores exact world-locked sampling.
     private Vector3 _camWorld = Vector3.Zero;
-    public void SetCameraWorld(Vector3 p) { _camWorld = p; _skyMat?.SetShaderParameter("cam_world", p); }   // world-anchored cirrus parallax
+    private bool _hasVisualCloudOrigin;
+    private Vector3 _lastCloudCameraWorld;
+    private Vector2 _visualCloudOrigin;
+    public void SetCameraWorld(Vector3 p)
+    {
+        if (!_hasVisualCloudOrigin)
+        {
+            _visualCloudOrigin = new Vector2(p.X, p.Z);
+            _hasVisualCloudOrigin = true;
+        }
+        else
+        {
+            Vector2 deltaXZ = new Vector2(p.X - _lastCloudCameraWorld.X, p.Z - _lastCloudCameraWorld.Z);
+            if (deltaXZ.LengthSquared() > 4096f * 4096f)
+            {
+                _visualCloudOrigin = new Vector2(p.X, p.Z);
+            }
+            else
+            {
+                _visualCloudOrigin += deltaXZ * Mathf.Clamp(_p.CameraParallax, 0f, 1f);
+            }
+        }
+
+        _lastCloudCameraWorld = p;
+        _camWorld = p;
+        _skyMat?.SetShaderParameter("cam_world", p);
+    }
     // mood sky colors → cloud ambient/background (set by TerrainLabUI.ApplyMood)
     // _sky*Base = the mood sky colors (input); _sky* = after the overcast grey-shift (what the
     // shaders see). Overcast greys BOTH the sky background AND the cloud ambient fill (the raymarch
@@ -47,6 +72,10 @@ public partial class CloudVolume : Node
     private Color _skyTopBase = new Color(0.30f, 0.48f, 0.74f);
     private Color _skyHorizonBase = new Color(0.68f, 0.74f, 0.80f);
     private Color _groundBase = new Color(0.22f, 0.26f, 0.22f);
+    private bool _skyUniformsDirty = true;
+    private Color _lastSkyTopPushed = new Color(-1f, -1f, -1f);
+    private Color _lastSkyHorizonPushed = new Color(-1f, -1f, -1f);
+    private Color _lastGroundPushed = new Color(-1f, -1f, -1f);
 
     // render-thread compute resources (created in InitCompute on the render thread)
     private RenderingDevice _rd = null!;
@@ -80,6 +109,8 @@ public partial class CloudVolume : Node
     private bool _computeReady;
     private int _frame;
     private float _lastTime;          // for CPU drift integration (dt)
+    private bool _hasFullRefreshCam;
+    private Vector3 _lastFullRefreshCam;
     private Vector2 _windOffset;      // accumulated wind offset (m) — changing speed changes rate, not position
     // Lat-long cloud dome resolution (az 0..2π : el 0..π/2 = 4:1). Configurable at launch via
     // --cloudtex=H (sets TexH=H, TexW=4H). Default raised to 1024×256: at 512×128 the lat-long
@@ -104,12 +135,16 @@ public partial class CloudVolume : Node
     private float _antiRepeat = 0f;  // CO-3: 0 off (default) .. 1 macro coverage/size variety (drives layer 0)
     private System.Collections.Generic.List<CloudLayer> _layers = new();
     private int _layerCount;
+    private float[]? _packedLayerCache;
+    private int _packedLayerCacheCount;
+    private bool _packedLayersDirty = true;
 
     public void Attach(Godot.Environment env, Camera3D cam, float regionSizeM)
     {
         _p = CloudParams.Load();
         _layers = CloudLayers.Load();
         if (_layers.Count == 0) { _layers.Add(default); }   // ensure at least layer 0 (filled from knobs)
+        SetCameraWorld(cam.GlobalPosition);
         _env = env;
         RegionM = regionSizeM;   // lock cloud shadow/god-ray footprint to the terrain
         _origSky = env.Sky;
@@ -321,9 +356,19 @@ public partial class CloudVolume : Node
     {
         if (!_computeReady) { return; }
         CloudParams p = _p;
-        int stride = Math.Clamp(p.TemporalFrames, 1, 64);
+        int requestedStride = Math.Clamp(p.TemporalFrames, 1, 64);
+        Vector2 deltaXZ = new Vector2(_camWorld.X - _lastFullRefreshCam.X, _camWorld.Z - _lastFullRefreshCam.Z);
+        bool forceFullRefresh = !_hasFullRefreshCam
+            || Mathf.Abs(_camWorld.Y - _lastFullRefreshCam.Y) > 64f
+            || deltaXZ.LengthSquared() > 1024f * 1024f;
+        int stride = forceFullRefresh ? 1 : requestedStride;
         int offset = _frame % stride;
         _frame++;
+        if (forceFullRefresh)
+        {
+            _lastFullRefreshCam = _camWorld;
+            _hasFullRefreshCam = true;
+        }
 
         // Integrate drift on the CPU: advance a persistent wind offset by dir*speed*dt each
         // frame. Changing the speed/dir knob then changes the RATE, not the position — the
@@ -398,7 +443,7 @@ public partial class CloudVolume : Node
     // Field order MUST match cloud_shadow.glsl's ParamsBuf; Std430Writer handles alignment.
     private byte[] BuildShadowParams(CloudParams p, float time)
     {
-        float[] layerData = PackLayers(out _layerCount);
+        float[] layerData = GetPackedLayers(out _layerCount);
         return new Std430Writer()
             .Vec4(_sunDir, 0f)                          // sun_dir
             .Vec2(ShadowRes, ShadowRes)                 // tex_size
@@ -426,6 +471,7 @@ public partial class CloudVolume : Node
         if (layers == null || layers.Count == 0) { return; }
         if (layers.Count > CloudLayers.MaxLayers) { layers = layers.GetRange(0, CloudLayers.MaxLayers); }
         _layers = layers;
+        MarkLayersDirty();
         var on = _layers.FindAll(l => l.Enabled);
         GD.Print($"CloudVolume: layer stack set — {on.Count} deck(s), altitudes [{string.Join(", ", on.ConvertAll(l => l.Altitude.ToString("0")))}]");
     }
@@ -436,11 +482,29 @@ public partial class CloudVolume : Node
     {
         if (i < 0 || i >= _layers.Count) { return; }
         _layers[i] = _layers[i] with { CoverageWeight = Mathf.Max(0f, w) };
+        MarkLayersDirty();
     }
 
     /// The exact packed layer buffer production renders (layer-0 override incl. profile/shape/anti-repeat
     /// applied). Used by CloudShadowCheck so the diagnostic tests the ACTIVE config, not a rebuilt neutral one.
-    public float[] PackedLayers(out int count) => PackLayers(out count);
+    public float[] PackedLayers(out int count)
+    {
+        float[] packed = GetPackedLayers(out count);
+        return (float[])packed.Clone();
+    }
+
+    private void MarkLayersDirty() => _packedLayersDirty = true;
+
+    private float[] GetPackedLayers(out int count)
+    {
+        if (_packedLayersDirty || _packedLayerCache == null)
+        {
+            _packedLayerCache = PackLayers(out _packedLayerCacheCount);
+            _packedLayersDirty = false;
+        }
+        count = _packedLayerCacheCount;
+        return _packedLayerCache;
+    }
 
     // Layer 0's deck params come from the legacy flat knobs (_p / _cellScale) so the single-
     // layer look + the existing UI keep working; layers 1+ are the JSON data verbatim.
@@ -465,7 +529,7 @@ public partial class CloudVolume : Node
     // SAME ORDER as cloud_raymarch.glsl's ParamsBuf and the offsets can't drift.
     private byte[] BuildParams(CloudParams p, float time, int offset, int stride)
     {
-        float[] layerData = PackLayers(out _layerCount);
+        float[] layerData = GetPackedLayers(out _layerCount);
         return new Std430Writer()
             .Vec4(_sunDir, _sunEnergy)                  // sun_dir
             .Vec4(_sunColor.R, _sunColor.G, _sunColor.B, _atmoCloudStrength)   // sun_color.rgb mood; a = AT-3 strength (0 = off)
@@ -490,6 +554,7 @@ public partial class CloudVolume : Node
             .Vec4(_atmoSunTrans, 0f)                    // AT-3 atmo_suntrans (reddened direct light)
             .Vec4(_moonCloudDir.X, _moonCloudDir.Y, _moonCloudDir.Z, _moonCloudStrength)   // night moonlight: dir + strength
             .Vec4(_moonCloudColor.X, _moonCloudColor.Y, _moonCloudColor.Z, 0f)             // night moonlight: tint
+            .Vec4(_visualCloudOrigin.X, _visualCloudOrigin.Y, p.CameraParallax, 0f)         // visible-cloud origin + camera parallax
             .ToArray();
     }
     private float _perDeck = 1f;   // per-deck phase/albedo/tint ON by default; --perdeck toggles
@@ -643,6 +708,7 @@ public partial class CloudVolume : Node
     public void SetSkyColors(Color top, Color horizon, Color ground)
     {
         _skyTopBase = top; _skyHorizonBase = horizon; _groundBase = ground;
+        _skyUniformsDirty = true;
         ApplyOvercastSky();
     }
 
@@ -652,15 +718,34 @@ public partial class CloudVolume : Node
     private static readonly Color OvercastTop = new Color(0.55f, 0.58f, 0.62f);
     private static readonly Color OvercastHorizon = new Color(0.66f, 0.68f, 0.70f);
     private static readonly Color OvercastGround = new Color(0.32f, 0.34f, 0.34f);
+    private static bool Close(Color a, Color b)
+        => Mathf.Abs(a.R - b.R) < 0.0001f
+        && Mathf.Abs(a.G - b.G) < 0.0001f
+        && Mathf.Abs(a.B - b.B) < 0.0001f
+        && Mathf.Abs(a.A - b.A) < 0.0001f;
+
     private void ApplyOvercastSky()
     {
         float oc = Overcast();
-        _skyTop = _skyTopBase.Lerp(OvercastTop, oc);
-        _skyHorizon = _skyHorizonBase.Lerp(OvercastHorizon, oc);
+        Color nextTop = _skyTopBase.Lerp(OvercastTop, oc);
+        Color nextHorizon = _skyHorizonBase.Lerp(OvercastHorizon, oc);
         Color ground = _groundBase.Lerp(OvercastGround, oc);
+        _skyTop = nextTop;
+        _skyHorizon = nextHorizon;
+        if (!_skyUniformsDirty
+            && Close(nextTop, _lastSkyTopPushed)
+            && Close(nextHorizon, _lastSkyHorizonPushed)
+            && Close(ground, _lastGroundPushed))
+        {
+            return;
+        }
         _skyMat?.SetShaderParameter("sky_top", _skyTop);
         _skyMat?.SetShaderParameter("sky_horizon", _skyHorizon);
         _skyMat?.SetShaderParameter("ground_color", ground);
+        _lastSkyTopPushed = nextTop;
+        _lastSkyHorizonPushed = nextHorizon;
+        _lastGroundPushed = ground;
+        _skyUniformsDirty = false;
     }
 
     public CloudParams Params => _p;
@@ -687,7 +772,7 @@ public partial class CloudVolume : Node
             _enabled = on;
             _skyMat?.SetShaderParameter("cloud_enabled", on);
         }
-        if (knob == "profile_on") { _profileOn = on; }   // CO-1 vertical-profile gate
+        if (knob == "profile_on") { _profileOn = on; MarkLayersDirty(); }   // CO-1 vertical-profile gate
     }
 
     public void SetKnobInt(string knob, int v)
@@ -703,32 +788,38 @@ public partial class CloudVolume : Node
     {
         switch (knob)
         {
-            case "coverage":        _p = _p with { Coverage = v }; break;
-            case "density":         _p = _p with { Density = v }; break;
-            case "cloud_type":      _p = _p with { CloudType = v }; break;
-            case "altitude_m":      _p = _p with { AltitudeM = v }; break;
-            case "thickness_m":     _p = _p with { ThicknessM = v }; break;
+            case "coverage":        _p = _p with { Coverage = v }; _skyUniformsDirty = true; break;
+            case "density":         _p = _p with { Density = v }; MarkLayersDirty(); break;
+            case "cloud_type":      _p = _p with { CloudType = v }; MarkLayersDirty(); break;
+            case "altitude_m":      _p = _p with { AltitudeM = v }; MarkLayersDirty(); break;
+            case "thickness_m":     _p = _p with { ThicknessM = v }; MarkLayersDirty(); break;
             case "drift_speed":     _p = _p with { DriftSpeed = v }; break;
             case "drift_dir_deg":   _p = _p with { DriftDirDeg = v }; break;
             case "hg_aniso":        _p = _p with { HgAniso = v }; break;
             case "powder":          _p = _p with { Powder = v }; break;
             case "sun_absorption":  _p = _p with { SunAbsorption = v }; break;
-            case "size":            _p = _p with { Size = v }; break;
-            case "detail":          _p = _p with { Detail = v }; break;
-            case "detail_size":     _p = _p with { DetailSize = v }; break;
-            case "edge":            _p = _p with { Edge = v }; break;
-            case "opacity":         _p = _p with { Opacity = v }; break;
+            case "size":            _p = _p with { Size = v }; MarkLayersDirty(); break;
+            case "detail":          _p = _p with { Detail = v }; MarkLayersDirty(); break;
+            case "detail_size":     _p = _p with { DetailSize = v }; MarkLayersDirty(); break;
+            case "edge":            _p = _p with { Edge = v }; MarkLayersDirty(); break;
+            case "opacity":         _p = _p with { Opacity = v }; MarkLayersDirty(); break;
             case "brightness":      _p = _p with { Brightness = v }; break;
             case "ambient":         _p = _p with { Ambient = v }; break;
+            case "camera_parallax":
+                _p = _p with { CameraParallax = Mathf.Clamp(v, 0f, 1f) };
+                _visualCloudOrigin = new Vector2(_camWorld.X, _camWorld.Z);
+                _lastCloudCameraWorld = _camWorld;
+                _hasVisualCloudOrigin = true;
+                break;
             case "shadow_strength": _shadowStrength = v; break;   // ground-shadow darkness (Stage 5)
-            case "cell_scale":      _cellScale = v; break;        // clump scale (anti-slab; higher = smaller clumps)
+            case "cell_scale":      _cellScale = v; MarkLayersDirty(); break;        // clump scale (anti-slab; higher = smaller clumps)
             case "perdeck":         _perDeck = Mathf.Clamp(v, 0f, 1f); break;   // 0=global lighting, 1=per-deck
-            case "overcast_strength": _overcastStrength = Mathf.Max(0f, v); break;   // overcast gloom dial
-            case "profile_bottom":  _profileBottom = Mathf.Clamp(v, 0f, 0.6f); break;   // CO-1 base round-up height
-            case "profile_top":     _profileTop = Mathf.Clamp(v, 0.2f, 1f); break;      // CO-1 top fade onset
-            case "anvil":           _anvil = Mathf.Clamp(v, 0f, 1f); break;             // CO-1 cumulonimbus top spread
-            case "shape_mode":      _shapeMode = Mathf.Clamp(v, 0f, 1f); break;          // CO-2 cumulus↔stratus sheet
-            case "anti_repeat":     _antiRepeat = Mathf.Clamp(v, 0f, 1f); break;         // CO-3 macro coverage/size variety
+            case "overcast_strength": _overcastStrength = Mathf.Max(0f, v); _skyUniformsDirty = true; break;   // overcast gloom dial
+            case "profile_bottom":  _profileBottom = Mathf.Clamp(v, 0f, 0.6f); MarkLayersDirty(); break;   // CO-1 base round-up height
+            case "profile_top":     _profileTop = Mathf.Clamp(v, 0.2f, 1f); MarkLayersDirty(); break;      // CO-1 top fade onset
+            case "anvil":           _anvil = Mathf.Clamp(v, 0f, 1f); MarkLayersDirty(); break;             // CO-1 cumulonimbus top spread
+            case "shape_mode":      _shapeMode = Mathf.Clamp(v, 0f, 1f); MarkLayersDirty(); break;          // CO-2 cumulus↔stratus sheet
+            case "anti_repeat":     _antiRepeat = Mathf.Clamp(v, 0f, 1f); MarkLayersDirty(); break;         // CO-3 macro coverage/size variety
             case "atmo_exposure":   _atmoExposure = Mathf.Clamp(v, 0f, 60f); _skyMat?.SetShaderParameter("atmo_exposure", _atmoExposure); break;   // AT-1 atmosphere exposure
         }
     }

@@ -49,7 +49,8 @@ uniform vec3  ray_tint : source_color = vec3(1.0, 0.95, 0.85);   // warm beam co
 // exposure = the "flashlight blob". Shafts only appear where occluders carve the rays.
 uniform float density   : hint_range(0.0, 1.0) = 0.45; // sample spread / step length (LOWER = longer beams)
 uniform float decay     : hint_range(0.0, 1.0) = 0.97; // per-step attenuation (→1 = longer shafts)
-uniform float weight    : hint_range(0.0, 0.3) = 0.05; // per-sample intensity (small — summed NUM_SAMPLES times)
+uniform float decay_step : hint_range(0.0, 1.0) = 0.9409; // decay^(64/32), pushed with decay to avoid per-pixel pow()
+uniform float weight    : hint_range(0.0, 0.3) = 0.05; // per-sample intensity (normalized to 64-sample reference)
 uniform float exposure  : hint_range(0.0, 2.0) = 0.5;  // overall strength (UI "god ray strength")
 uniform float dither    : hint_range(0.0, 1.0) = 1.0;  // sample-start jitter to break banding
 // TANGENTIAL OCCLUSION HIGH-PASS (the fix for BOTH the "filter" wash AND the "ring", cheaply & cleanly).
@@ -89,7 +90,8 @@ uniform float cloud_sharpen_hi : hint_range(0.0, 1.0) = 0.75;  // occ_mode 3: tr
 uniform bool  cloud_invert = false;   // occ_mode 2: false = bright cloud is the occluder (daylit, default); true = dark cloud (backlit)
 uniform int   debug_mode = 0;          // 0 = normal; 1 = show occlusion mask; 2 = mark sun_screen_uv + gate
 
-const int NUM_SAMPLES = 64;   // more samples → smooth continuous beams (GPU Gems uses 100)
+const int NUM_SAMPLES = 32;   // static loop for compiler optimization; normalized against prior 64-sample look
+const float SAMPLE_SCALE = 2.0; // 64.0 / 32.0
 
 void vertex() {
 	// Clip-space fullscreen quad (ignore camera transform). z=1 = far plane under Reverse-Z; harmless
@@ -151,14 +153,15 @@ float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.545
 // angles (the angular-mean reference) using the EXACT same accumulation — required for the clear-sky
 // terms to cancel to zero.
 float march_scatter(vec2 start_uv) {
-	vec2 delta = (start_uv - sun_screen_uv) * (1.0 / float(NUM_SAMPLES) * density);
+	float invN = 1.0 / float(NUM_SAMPLES);
+	vec2 delta = (start_uv - sun_screen_uv) * (invN * density);
 	float jitter = mix(1.0, hash(start_uv), dither);   // jittered start kills banding
 	vec2 coord = start_uv - delta * jitter;
 	float illum = 1.0;
 	float s = 0.0;
 	for (int i = 0; i < NUM_SAMPLES; i++) {
-		s += occlusion(coord) * (illum * weight);
-		illum *= decay;
+		s += occlusion(coord) * (illum * weight * SAMPLE_SCALE);
+		illum *= decay_step;
 		coord -= delta;
 	}
 	return s;
@@ -169,20 +172,21 @@ float march_scatter(vec2 start_uv) {
 // aspect-corrected) and accumulate only the positive excess. Uniform sky → 0; alongside a cloud band →
 // a smooth shaft. 3 occlusion taps/step (center + two tangential); runs on every sky pixel within sun_gate.
 float march_beam(vec2 start_uv) {
-	vec2 delta = (start_uv - sun_screen_uv) * (1.0 / float(NUM_SAMPLES) * density);
+	float invN = 1.0 / float(NUM_SAMPLES);
+	vec2 delta = (start_uv - sun_screen_uv) * (invN * density);
+	vec2 to_sun = sun_screen_uv - start_uv;
+	float to_sun_len = length(to_sun);
+	vec2 tang = (to_sun_len > 1e-4) ? vec2(-to_sun.y, to_sun.x) / to_sun_len : vec2(0.0, 1.0);
+	vec2 toff = vec2(tang.x / aspect, tang.y) * gate_width;
 	float jitter = mix(1.0, hash(start_uv), dither);
 	vec2 coord = start_uv - delta * jitter;
 	float illum = 1.0;
 	float s = 0.0;
 	for (int i = 0; i < NUM_SAMPLES; i++) {
-		vec2 t = sun_screen_uv - coord;                         // toward the sun from this sample
-		float tl = length(t);
-		vec2 tang = (tl > 1e-4) ? vec2(-t.y, t.x) / tl : vec2(0.0, 1.0);   // perpendicular
-		vec2 toff = vec2(tang.x / aspect, tang.y) * gate_width;
 		float oc = occlusion(coord);
 		float om = 0.5 * (occlusion(coord + toff) + occlusion(coord - toff));   // tangential local mean
-		s += max(oc - om, 0.0) * (illum * weight);              // positive excess only → smooth bright shaft
-		illum *= decay;
+		s += max(oc - om, 0.0) * (illum * weight * SAMPLE_SCALE);              // positive excess only → smooth bright shaft
+		illum *= decay_step;
 		coord -= delta;
 	}
 	return s;
@@ -208,17 +212,21 @@ void fragment() {
 	// God rays live in the SKY (cloud-gap contrast), so only march sky pixels — terrain stays clean with no
 	// march cost. Skip open sky far from any cloud (no shaft there) → the perf win. highpass 1 = clean
 	// tangential-high-pass shafts (default), 0 = raw additive (old wash+ring) for A/B.
-	float d_here = texture(depth_tex, uv).r;                              // Reverse-Z: sky clears to 0.0
-	bool isSky = d_here < sky_depth_eps;
 	float scatter = 0.0;
-	if (isSky && sun_gate > 0.002) {
-		float s = (highpass >= 0.999) ? march_beam(uv)
-				: (highpass <= 0.001) ? march_scatter(uv)
-				: mix(march_scatter(uv), march_beam(uv), highpass);
+	if (sun_gate > 0.002) {
 		// Smooth radial REACH: rays are strongest near the sun and fade out gently with distance — a soft
 		// vignette, never a hard ring. cloud_radius = reach, radius_soft = how gradual (wide → no visible edge).
 		float reach = 1.0 - smoothstep(cloud_radius, cloud_radius + radius_soft, distance(uv, sun_screen_uv));
-		scatter = s * exposure * sun_gate * sun_cloud_gate() * reach;   // sun_cloud_gate: occ_mode-3-only no-op here
+		if (reach > 0.001) {
+			float d_here = texture(depth_tex, uv).r;                              // Reverse-Z: sky clears to 0.0
+			bool isSky = d_here < sky_depth_eps;
+			if (isSky) {
+				float s = (highpass >= 0.999) ? march_beam(uv)
+						: (highpass <= 0.001) ? march_scatter(uv)
+						: mix(march_scatter(uv), march_beam(uv), highpass);
+				scatter = s * exposure * sun_gate * sun_cloud_gate() * reach;   // sun_cloud_gate: occ_mode-3-only no-op here
+			}
+		}
 	}
 	// ADDITIVE (blend_add): output ONLY the beam light. Non-beam pixels get vec3(0) → framebuffer unchanged.
 	vec3 outc = ray_tint * scatter;
@@ -238,7 +246,8 @@ void fragment() {
 		// isSky gate: green = sky (god rays allowed here), red = solid geometry (excluded). Confirms the
 		// depth gate correctly excludes terrain. (blend_add: output target−scene so scene+that = target.)
 		vec3 scene = texture(screen_tex, uv).rgb;
-		vec3 target = isSky ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+		float d_dbg = texture(depth_tex, uv).r;
+		vec3 target = (d_dbg < sky_depth_eps) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
 		outc = target - scene;
 	} else if (debug_mode == 5) {
 		// SCATTER VISUALIZER: the god-ray contribution alone (amplified) on black — shows where shafts land.

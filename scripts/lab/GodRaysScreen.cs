@@ -14,6 +14,7 @@ namespace WG16.Lab;
 /// No camera-parenting needed; just be in the tree + visible + draw last (high render_priority).
 public partial class GodRaysScreen : Node3D
 {
+    private const float SampleScale64To32 = 64f / 32f;
     private MeshInstance3D _quad = null!;
     private ShaderMaterial _mat = null!;
     private Camera3D? _cam;
@@ -111,7 +112,12 @@ public partial class GodRaysScreen : Node3D
     /// Beam length / reach: LOWER density = longer beams (shorter sample steps).
     public void SetDensity(float v) => _mat.SetShaderParameter("density", Mathf.Clamp(v, 0.05f, 1.0f));
     /// Per-step attenuation: →1 = longer shafts.
-    public void SetDecay(float v) => _mat.SetShaderParameter("decay", Mathf.Clamp(v, 0.5f, 1.0f));
+    public void SetDecay(float v)
+    {
+        float d = Mathf.Clamp(v, 0.5f, 1.0f);
+        _mat.SetShaderParameter("decay", d);
+        _mat.SetShaderParameter("decay_step", Mathf.Pow(d, SampleScale64To32));
+    }
     /// Cloud detection radius around the sun (UV): how far from the sun darkness counts as cloud.
     public void SetCloudRadius(float v) => _mat.SetShaderParameter("cloud_radius", Mathf.Clamp(v, 0.05f, 1.5f));
     /// Cloud luminance threshold: sky brighter than this = open (lit); darker = cloud occluder.

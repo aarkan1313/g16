@@ -117,6 +117,7 @@ public partial class TerrainLabUI : Control
             case "load_ring":       _terrain.SetLoadRing(Mathf.RoundToInt(v)); break;   // ARC B Task 1: CDLOD load-ring radius (1=3×3, 2=5×5)
             case "fog_depth_begin": _lighting.FogDepthBegin = v; ComposeLighting(); break;   // VIEW-DISTANCE: depth-fog start distance (clear nearer than this)
             case "cdlod_lookahead": _terrain.SetCdlodLookahead(v); break;   // ARC B Task 4: predictive-loading lookahead (s; 0=off)
+            case "cdlod_aabb_speed": _terrain.SetCdlodAabbSpeed(v); break;   // max speed that may run async AABB tightening
             case "sun_angle":       _sunAngle = v; OrientSun(sun); break;
             case "sun_azimuth":     _sunAzimuth = v; OrientSun(sun); break;
             case "time_of_day":     DriveTime(v); break;   // decoupled Time axis: sun arc + day color script

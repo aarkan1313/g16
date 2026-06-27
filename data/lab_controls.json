@@ -115,9 +115,9 @@
     { "id": "cloud_cirrus_scale", "label": "  cirrus: scale", "tab": "Clouds", "type": "cloudf", "cloud": "cirrus_scale", "min": 0.3, "max": 4.0, "default": 1.4, "rand": false },
     { "id": "cloud_cirrus_sharp", "label": "  cirrus: sharpness", "tab": "Clouds", "type": "cloudf", "cloud": "cirrus_sharpness", "min": 0.0, "max": 1.0, "default": 0.5, "rand": false },
     { "id": "cloud_cirrus_variety", "label": "  cirrus: variety", "tab": "Clouds", "type": "cloudf", "cloud": "cirrus_variety", "min": 0.0, "max": 1.0, "default": 0.7, "rand": false },
-    { "id": "cloud_edge", "label": "edge (soft↔crisp)", "tab": "Clouds", "type": "cloudf", "cloud": "edge", "min": 0.0, "max": 1.0, "default": 0.5, "rand": false },
-    { "id": "cloud_detail", "label": "detail amount", "tab": "Clouds", "type": "cloudf", "cloud": "detail", "min": 0.0, "max": 1.0, "default": 0.4, "rand": false },
-    { "id": "cloud_detail_size", "label": "detail size", "tab": "Clouds", "type": "cloudf", "cloud": "detail_size", "min": 0.3, "max": 4.0, "default": 1.0, "rand": false },
+    { "id": "cloud_edge", "label": "edge (soft↔crisp)", "tab": "Clouds", "type": "cloudf", "cloud": "edge", "min": 0.0, "max": 1.0, "default": 0.62, "rand": false },
+    { "id": "cloud_detail", "label": "detail amount", "tab": "Clouds", "type": "cloudf", "cloud": "detail", "min": 0.0, "max": 1.0, "default": 0.56, "rand": false },
+    { "id": "cloud_detail_size", "label": "detail size", "tab": "Clouds", "type": "cloudf", "cloud": "detail_size", "min": 0.3, "max": 4.0, "default": 0.85, "rand": false },
     { "id": "cloud_opacity", "label": "opacity (thin↔solid)", "tab": "Clouds", "type": "cloudf", "cloud": "opacity", "min": 0.2, "max": 4.0, "default": 1.25, "rand": false },
     { "id": "cloud_brightness", "label": "brightness", "tab": "Clouds", "type": "cloudf", "cloud": "brightness", "min": 0.2, "max": 3.0, "default": 1.0, "rand": false },
     { "id": "cloud_ambient", "label": "ambient fill", "tab": "Clouds", "type": "cloudf", "cloud": "ambient", "min": 0.0, "max": 2.0, "default": 0.7, "rand": false },
@@ -125,6 +125,7 @@
     { "id": "cloud_thickness", "label": "thickness m", "tab": "Clouds", "type": "cloudf", "cloud": "thickness_m", "min": 300.0, "max": 3000.0, "default": 1400.0, "rand": false },
     { "id": "cloud_drift_speed", "label": "drift speed m/s", "tab": "Clouds", "type": "cloudf", "cloud": "drift_speed", "min": 0.0, "max": 60.0, "default": 12.0, "rand": false },
     { "id": "cloud_drift_dir", "label": "drift dir", "tab": "Clouds", "type": "cloudf", "cloud": "drift_dir_deg", "min": 0.0, "max": 360.0, "default": 45.0, "rand": false },
+    { "id": "cloud_camera_parallax", "label": "camera parallax", "tab": "Clouds", "type": "cloudf", "cloud": "camera_parallax", "min": 0.0, "max": 1.0, "default": 0.4, "rand": false },
     { "id": "cloud_hg", "label": "silver lining (HG)", "tab": "Clouds", "type": "cloudf", "cloud": "hg_aniso", "min": 0.0, "max": 0.95, "default": 0.6, "rand": false },
     { "id": "cloud_powder", "label": "powder edges", "tab": "Clouds", "type": "cloudf", "cloud": "powder", "min": 0.0, "max": 2.0, "default": 1.0, "rand": false },
     { "id": "cloud_sun_absorb", "label": "sun absorption", "tab": "Clouds", "type": "cloudf", "cloud": "sun_absorption", "min": 0.1, "max": 2.0, "default": 0.75, "rand": false },
@@ -140,7 +141,7 @@
     { "id": "cloud_godray_backlit", "label": "god ray backlit (sun behind cloud)", "tab": "Clouds", "type": "cloud", "cloud": "godray_backlit", "default": false, "rand": false },
     { "id": "cloud_deckdbg", "label": "deck-ID overlay (debug)", "tab": "Clouds", "type": "cloud", "cloud": "deck_debug", "default": false, "rand": false },
     { "id": "cloud_steps", "label": "raymarch steps (perf)", "tab": "Clouds", "type": "cloudi", "cloud": "raymarch_steps", "min": 16, "max": 160, "default": 128, "rand": false },
-    { "id": "cloud_temporal", "label": "temporal frames (perf, 1=off)", "tab": "Clouds", "type": "cloudi", "cloud": "temporal_frames", "min": 1, "max": 16, "default": 1, "rand": false },
+    { "id": "cloud_temporal", "label": "temporal frames (perf, 1=off)", "tab": "Clouds", "type": "cloudi", "cloud": "temporal_frames", "min": 1, "max": 16, "default": 2, "rand": false },
 
     { "id": "dbg_normalmap", "label": "normal maps", "tab": "Debug", "type": "toggle",
       "param": "dbg_use_normalmap", "default": true, "rand": false },
@@ -157,6 +158,8 @@
     { "id": "fog_depth_begin", "label": "fog start distance (m; clear nearer than this)", "tab": "Debug", "type": "scenef",
       "scene": "fog_depth_begin", "min": 0.0, "max": 90000.0, "step": 1000.0, "default": 55000.0, "rand": false },
     { "id": "cdlod_lookahead", "label": "predictive load (s, 0=off; off avoids tap-thrash)", "tab": "Debug", "type": "scenef",
-      "scene": "cdlod_lookahead", "min": 0.0, "max": 8.0, "default": 0.0, "rand": false }
+      "scene": "cdlod_lookahead", "min": 0.0, "max": 8.0, "default": 0.0, "rand": false },
+    { "id": "cdlod_aabb_speed", "label": "AABB tighten max speed (m/s; 0=idle only)", "tab": "Debug", "type": "scenef",
+      "scene": "cdlod_aabb_speed", "min": 0.0, "max": 2000.0, "step": 25.0, "default": 250.0, "rand": false }
   ]
 }

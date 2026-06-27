@@ -86,7 +86,7 @@ public sealed partial class CdlodTerrain : Node3D
     public int LoadRing = 8;          // full horizon ring (near + far shell); --loadring=N overrides
     public int ActiveRing = 4;        // near/far boundary — sub-root chunks (near CDLOD) vs root chunks (horizon shell)
     public float ShadowCasterRadius = 5500f;         // camera-centered CSM caster ring; kept beyond shadow_dist so it cannot visibly pop
-    public float AabbTightenMaxSpeed = 1800f;         // skip render-thread AABB readbacks during fast traversal; catch up when motion settles
+    public float AabbTightenMaxSpeed = 250f;          // skip render-thread AABB readbacks during fast traversal; catch up when motion settles
     private Vector2 _shadowCenterXZ;                 // current camera XZ for ring tests; set once per Tick()
     public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
                                              // center-cell boundary before the loaded window re-centers (anti-thrash near a seam).
@@ -232,8 +232,8 @@ public sealed partial class CdlodTerrain : Node3D
         float maxBias = _regionSize * 1.5f;
         if (bias.Length() > maxBias) { bias = bias.Normalized() * maxBias; }
         Vector2 centerOrigin = ComputeCenterOrigin(camPos + bias);   // Task 2 hysteresis on the (Task 4) predicted point
-        List<CdlodChunk> leaves = _qt.SelectRoaming(camPos, centerOrigin);   // S3: roaming root → infinite streaming
-        _lastLeaves = leaves;   // S2b: expose to the test-path report (count + along-path invariant)
+        _qt.SelectRoamingInto(camPos, centerOrigin, _lastLeaves);   // S3: roaming root → infinite streaming
+        List<CdlodChunk> leaves = _lastLeaves;   // S2b: expose to the test-path report (count + along-path invariant)
         // Live A/B toggles (lodviz / tighten) force a one-frame full re-apply of existing chunks.
         if (_aabbReset) { _tightened.Clear(); foreach (var kv in _active) { kv.Value.Tightened = false; } _aabbReset = false; }
         bool force = _forceReapply; _forceReapply = false;

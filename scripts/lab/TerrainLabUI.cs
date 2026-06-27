@@ -198,6 +198,7 @@ public partial class TerrainLabUI : Control, ILabControls
         if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
         if (_temporalCli > 0) { _cloud.SetKnobInt("temporal_frames", _temporalCli); }   // roadmap #4 amortization
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
+        if (_cloudParallaxCli >= 0f) { _cloud.SetKnob("camera_parallax", _cloudParallaxCli); }
         if (_perDeckCli >= 0f) { _cloud.SetPerDeck(_perDeckCli); }
         if (_cloudProfileCli.Length > 0)   // --cloudprofile=b,t,a → enable CO-1 vertical profile + set values
         {
@@ -305,6 +306,7 @@ public partial class TerrainLabUI : Control, ILabControls
         if (_celestialCli >= 0) { ApplyCelestialPreset(_celestialCli); } else { ApplyActiveCelestialPreset(); }
         if (_fantasyCli >= 0) { ApplyFantasyPreset(_fantasyCli); }   // ST4-2 exotic sky override at launch
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }   // --coverage still overrides the preset
+        if (_cloudParallaxCli >= 0f) { _cloud.SetKnob("camera_parallax", _cloudParallaxCli); }   // --cloudparallax still overrides the preset
         PushSunToCloud(GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
         // --godrays drives the screen-space beam layer (GodRaysScreen reads the sun per-frame).
         if (_godraysOnCli >= 0) { _godraysScreen?.SetEnabled(_godraysOnCli == 1); }

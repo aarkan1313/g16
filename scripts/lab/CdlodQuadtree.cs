@@ -34,9 +34,15 @@ public sealed class CdlodQuadtree
     public List<CdlodChunk> Select(Vector3 camPos)
     {
         var leaves = new List<CdlodChunk>();
+        SelectInto(camPos, leaves);
+        return leaves;
+    }
+
+    public void SelectInto(Vector3 camPos, List<CdlodChunk> leaves)
+    {
+        leaves.Clear();
         Recurse(_rootX, _rootZ, _rootSize, 0, camPos, leaves);
         FillStitchMasks(leaves, camPos);
-        return leaves;
     }
 
     /// Fill each leaf's 4-bit edge-stitch mask (bit0=-X bit1=+X bit2=-Z bit3=+Z): a bit is set iff the
@@ -78,16 +84,22 @@ public sealed class CdlodQuadtree
     /// CdlodTerrain computes it from the hysteretic + velocity-biased center cell. camPos still drives LOD.
     public List<CdlodChunk> SelectRoaming(Vector3 camPos, Vector2 centerCellOrigin)
     {
+        var leaves = new List<CdlodChunk>();
+        SelectRoamingInto(camPos, centerCellOrigin, leaves);
+        return leaves;
+    }
+
+    public void SelectRoamingInto(Vector3 camPos, Vector2 centerCellOrigin, List<CdlodChunk> leaves)
+    {
+        leaves.Clear();
         float cx = centerCellOrigin.X, cz = centerCellOrigin.Y;
         int r = Mathf.Max(0, Ring);
-        var leaves = new List<CdlodChunk>();
         for (int dz = -r; dz <= r; dz++)
         for (int dx = -r; dx <= r; dx++)   // (2r+1)² cells → camera never near a window edge
         {
             Recurse(cx + dx * _rootSize, cz + dz * _rootSize, _rootSize, 0, camPos, leaves);
         }
         FillStitchMasks(leaves, camPos);
-        return leaves;
     }
 
     /// Size (m) of the leaf that would contain world point (px,pz) under the current split rule, or 0 if

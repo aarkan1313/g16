@@ -11,12 +11,13 @@
   "powder": 1.0,
   "sun_absorption": 0.75,
   "size": 1.0,
-  "detail": 0.4,
-  "detail_size": 1.0,
-  "edge": 0.5,
+  "detail": 0.56,
+  "detail_size": 0.85,
+  "edge": 0.62,
   "opacity": 1.25,
   "brightness": 1.0,
   "ambient": 0.7,
+  "camera_parallax": 0.4,
   "raymarch_steps": 128,
-  "temporal_frames": 1
+  "temporal_frames": 2
 }

@@ -97,12 +97,15 @@ float layer_density(vec3 p, float baseR, float topR, vec2 windOff,
     if (shape <= 0.0) return 0.0;
 
     if (ldetail > 0.0){
+        float baseShape = shape;
         float dScale = DETAIL_SCALE / max(ldetsize, 0.01);
         vec3 duv = lp * dScale + vec3(wDetail.x, h, wDetail.y) * dScale;
         float det = texture(detail_tex, duv).r;
-        float edgeBoost = mix(1.6, 0.7, shape);
+        float edgeBand = clamp(baseShape * (1.0 - baseShape) * 4.0, 0.0, 1.0);
+        float contour = (0.5 - det) * edgeBand * (0.12 + 0.08 * ledge) * ldetail * (1.0 - 0.55 * shapeMode);
+        float edgeBoost = mix(1.6, 0.7, baseShape);
         float erodeAmt = mix(0.35, 0.85, h) * ldetail * edgeBoost * (1.0 - 0.7 * shapeMode);   // stratus: smoother (less cauliflower)
-        shape = clamp(remap(shape, det * erodeAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
+        shape = clamp(remap(baseShape, det * erodeAmt, 1.0, 0.0, 1.0) + contour, 0.0, 1.0);
     }
     return shape * ldens * densBias;
 }

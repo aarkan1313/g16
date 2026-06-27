@@ -32,6 +32,7 @@ public record CloudParams(
     float Opacity,         // extinction (translucent ↔ solid)
     float Brightness,      // overall cloud lightness
     float Ambient,         // sky-fill on shadowed sides
+    float CameraParallax,  // visible sky-cloud response to camera XZ motion; 1 = world locked
     // perf (read by CloudVolume)
     int RaymarchSteps,     // view-ray steps through the cloud shell
     int TemporalFrames)    // temporal amortization stride (1 = update every texel every frame)
@@ -50,12 +51,13 @@ public record CloudParams(
         Powder: 1.0f,
         SunAbsorption: 0.75f,
         Size: 1.0f,
-        Detail: 0.4f,
-        DetailSize: 1.0f,
-        Edge: 0.5f,
+        Detail: 0.56f,
+        DetailSize: 0.85f,
+        Edge: 0.62f,
         Opacity: 1.25f,
         Brightness: 1.0f,
         Ambient: 0.7f,
+        CameraParallax: 0.4f,
         RaymarchSteps: 128,
         TemporalFrames: 2);     // PERF: 2-frame amortization. Converged image pixel-identical to stride 1
                                 // (verified 2026-06-21); ~-0.5ms + stable frame time; far clouds drift slowly
@@ -77,6 +79,7 @@ public record CloudParams(
             F("hg_aniso", d.HgAniso), F("powder", d.Powder), F("sun_absorption", d.SunAbsorption),
             F("size", d.Size), F("detail", d.Detail), F("detail_size", d.DetailSize),
             F("edge", d.Edge), F("opacity", d.Opacity), F("brightness", d.Brightness), F("ambient", d.Ambient),
+            F("camera_parallax", d.CameraParallax),
             I("raymarch_steps", d.RaymarchSteps),
             I("temporal_frames", d.TemporalFrames));
     }

@@ -629,7 +629,10 @@ void sky(){
                + texture(cloud_rd_tex, uv + vec2(-tx.x,  tx.y)) * 0.15
                + texture(cloud_rd_tex, uv + vec2( tx.x, -tx.y)) * 0.15
                + texture(cloud_rd_tex, uv + vec2(-tx.x, -tx.y)) * 0.15;
-        if (cloud_debug == 1){ outColor = c.rgb; }
+        if (cloud_debug == 1){
+            vec3 rawCloud = c.rgb / max(c.a, 0.001);
+            outColor = mix(bg * 0.35, rawCloud, clamp(c.a, 0.0, 1.0));
+        }
         // PREMULTIPLIED over-composite. The raymarch accumulates `scattered` front-to-back
         // (scattered += T*lum*(1-beer)) so c.rgb is ALREADY weighted by coverage/transmittance.
         // The old `mix(bg, c.rgb, c.a)` multiplied it by alpha a SECOND time → clouds ~2x too

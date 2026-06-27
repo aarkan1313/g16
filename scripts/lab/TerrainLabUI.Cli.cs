@@ -22,6 +22,7 @@ public partial class TerrainLabUI : Control
     private float _probeRoughFloor = -1f, _probeMixStr = -1f;
 
     private float _covOverride = -1f;
+    private float _cloudParallaxCli = -1f;   // --cloudparallax=0..1: visible sky-cloud response to camera XZ motion
     private float _perDeckCli = -1f;   // --perdeck=0/1: A/B per-deck lighting (-1 = leave default ON)
     private string _cloudProfileCli = "";   // --cloudprofile=b,t,a: enable CO-1 vertical profile + set bottom/top/anvil
     private float _stratusCli = -1f;         // --stratus[=v]: CO-2 stratus shape-mode (0..1); bare flag = 1
@@ -97,6 +98,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--cloudsteps=")) { int.TryParse(a.Substring("--cloudsteps=".Length), out _cloudSteps); }
             else if (a.StartsWith("--clouds=")) { _cloudsOn = a.Substring("--clouds=".Length) == "1" ? 1 : 0; }
             else if (a.StartsWith("--coverage=")) { float.TryParse(a.Substring("--coverage=".Length), out _covOverride); }
+            else if (a.StartsWith("--cloudparallax=")) { float.TryParse(a.Substring("--cloudparallax=".Length), out _cloudParallaxCli); }
             else if (a.StartsWith("--perdeck=")) { if (float.TryParse(a.Substring("--perdeck=".Length), out float pd)) _perDeckCli = pd; }
             else if (a.StartsWith("--cloudprofile=")) { _cloudProfileCli = a.Substring("--cloudprofile=".Length); }
             else if (a.StartsWith("--stratus")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; if (float.TryParse(s, out float sv)) { _stratusCli = sv; } }

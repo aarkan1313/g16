@@ -36,7 +36,7 @@ public static class CloudLayers
         => new CloudLayer(
             F("altitude", 1800f), F("thickness", 1400f), F("size", 1f), F("cell_scale", 1.6f),
             F("coverage_weight", 1f), F("density", 1f), F("opacity", 1f), F("type", 0.6f),
-            F("edge", 0.5f), F("detail", 0.4f), F("detail_size", 1f),
+            F("edge", 0.62f), F("detail", 0.56f), F("detail_size", 0.85f),
             F("phase_g", 0.8f), F("phase_iso", 0.2f), F("albedo", 1f), F("sun_absorb", 1f),
             F("tint_r", 1f), F("tint_g", 1f), F("tint_b", 1f),
             F("profile_bottom", 0f), F("profile_top", 1f), F("anvil", 0f), F("shape_mode", 0f), F("anti_repeat", 0f),
