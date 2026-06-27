@@ -371,7 +371,6 @@ float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
     if (hlen < 1e-4) { return 1.0; }
     hdir /= hlen;
 
-    FieldP fp = ground_fieldp();
     float tan_sun = sun_up / hlen;
     float max_angle = -1e9;
     int count = int(hz_steps);
@@ -381,7 +380,12 @@ float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
         float t = count <= 1 ? 0.5 : float(i) / denom;
         float dist = mix(hz_stride0, hz_maxdist, pow(t, hz_growth));
         if (dist > hz_maxdist) { break; }
-        float h = field_macro_height(surf_xz + hdir * dist, uint(analytic_seed), fp);
+        // Sample the BAKED region heightmap (one cheap texture fetch) instead of EVALUATING the procedural
+        // field (continent+uplift FBM ~27ms/12 steps — the perf collapse). The region covers world XZ in
+        // [-region/2, region/2]; outside it clamps (repeat_disable) so far-from-origin shadows fade to flat
+        // (acceptable for the near-origin eye-gate; the roaming clipmap is the infinite-world follow-up).
+        vec2 suv = (surf_xz + hdir * dist + vec2(region_size * 0.5)) / region_size;
+        float h = texture(heightmap, suv).r;
         max_angle = max(max_angle, (h - surf_h) / dist);
     }
 

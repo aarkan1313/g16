@@ -190,15 +190,15 @@ public sealed class LabReviewController
                 // the camera. First press = ON (so it's visible immediately); press 4 again to compare OFF.
                 _shadowReviewOn = _lastPreset == 4 ? !ControlBool("hz_on") : true;
                 _sky.ApplyMood(5);
-                Set("cloud_enabled", false);
+                Set("cloud_enabled", false);     // clouds OFF (their own shadows would confound the read)
                 Set("cloud_godrays", false);
                 Set("cloud_godray_backlit", false);
                 Set("aerial_on", false);
                 Set("volfog_on", false);
-                Set("sun_surface_on", false);
-                Set("sun_corona_energy", 0f);
-                Set("sun_halo_energy", 0f);
-                Set("atmosphere_on", false);
+                Set("sun_surface_on", true);     // SHOW the sun + sky so you can orient (shadows point away from it)
+                Set("sun_corona_energy", 1.0f);
+                Set("sun_halo_energy", 1.0f);
+                Set("atmosphere_on", true);
                 Set("time_of_day", 17f);         // low sun = long ridge shadows (the regime Slice 1 targets)
                 _setTimeRunning(false);          // freeze the clock, else the sun climbs past hz_sun_gate and the
                                                  // shadow fades — a TIME confound that masquerades as a yaw bug.
