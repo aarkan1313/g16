@@ -19,7 +19,6 @@ public interface ILightingHost
     TerrainLab? Terrain { get; }       // terrain material target for the analytic indirect-fill uniforms (relight #1)
     void OrientSun(DirectionalLight3D sun);   // orient + push sun to cloud/atmosphere (shared with the sun-angle sliders)
     void SyncLightControlsToScene();          // reflect the composed state back into the Light-tab sliders (UI)
-    bool WantsSunShadow { get; }              // shadow registry owns sun.ShadowEnabled (near-CSM phase)
 }
 
 /// The decoupled lighting COMPOSER (Stage 2 → C3). `Compose()` is the ONE place that writes the scene's
@@ -212,8 +211,9 @@ public sealed class LightingComposer
             psky.SkyHorizonColor = tHor; psky.GroundHorizonColor = tHor;
             psky.GroundBottomColor = tGnd;
         }
-        // ── SUN DISC (Stage-1 appearance). The ShadowRegistry owns sun shadow (near-CSM phase). ──
-        sun.ShadowEnabled = _host.WantsSunShadow;
+        // ── SUN DISC (Stage-1 appearance). Terrain shadows are world-anchored (shader march), NOT engine
+        // shadow maps — the sun never casts an engine shadow. A future objects-only CSM owner re-enables this. ──
+        sun.ShadowEnabled = false;
         if (!_occlusionPolicyPushed)
         {
             // SSAO/SSIL DISABLED: scene files and legacy plans drifted here; force the review baseline

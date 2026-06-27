@@ -78,10 +78,6 @@ public sealed partial class CdlodTerrain : Node3D
     public int GridN = 65;            // verts/side per chunk (64 quads)
     public int MaxDepth = 6;          // finest LOD depth; tunable
     public float SplitFactor = 2.5f;  // subdivide when camDist < size*splitFactor; tunable
-    private int _shadowCasterMinLevel = 99;   // leaves with Level >= this cast engine shadows; 99 = none (default)
-    /// Gate engine-shadow casting to the finest near leaves (Level 0=coarse/far .. MaxDepth=fine/near). The
-    /// near-CSM owner sets this so caster-LOD == visible-LOD (the WG1-15 graveyard mismatch can't occur).
-    public void SetShadowCasterMinLevel(int min) { _shadowCasterMinLevel = min; _forceReapply = true; }
     public int MaxChunkOps = 24;      // near chunk births/frame (priority budget); --chunkops overrides
     public int FarChunkOps = 4;       // far/horizon root chunk births/frame (background budget; they fill lazily)
     public int MaxChunkOpsCeil = 256; // DISABLED — kept as diagnostic reference only, not used in default path
@@ -369,9 +365,7 @@ public sealed partial class CdlodTerrain : Node3D
             mi.Position = new Vector3(c.OriginXZ.X + half - _renderOrigin.X, 0f, c.OriginXZ.Y + half - _renderOrigin.Z);
             mi.Scale = new Vector3(c.Size, 1f, c.Size);    // X/Z = chunk size; Y = 1 (world-unit height)
             slot.OriginXZ = c.OriginXZ; slot.Size = c.Size; slot.Level = c.Level;
-            mi.CastShadow = c.Level >= _shadowCasterMinLevel
-                ? GeometryInstance3D.ShadowCastingSetting.On
-                : GeometryInstance3D.ShadowCastingSetting.Off;
+            mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
             mi.SetInstanceShaderParameter("lod_viz", _lodViz ? (float)c.Level : -1.0f);
             mi.SetInstanceShaderParameter("chunk_slot", (float)slot.CacheSlot);     // field-cache texture-array layer
             mi.SetInstanceShaderParameter("cache_ready", slot.CacheReady ? 1.0f : 0.0f);
