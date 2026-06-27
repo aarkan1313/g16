@@ -183,7 +183,12 @@ public sealed class LabReviewController
                 }
                 break;
             case 4:
-                _shadowReviewOn = _lastPreset == 4 ? !ControlBool("hz_on") : false;
+                // SLICE-1 FAR-RIDGE SHADOW A/B. A low-sun, neutral-lit, decontaminated terrain frame where
+                // pressing 4 flips ONLY the terrain horizon (self-)shadow on↔off. Lighting is held CONSTANT
+                // across the toggle, so the ONLY thing that changes is the CAST shadow — that is how you tell
+                // a real cast shadow from N·L slope shading (the recurring confound). Toggle the SHADOW, not
+                // the camera. First press = ON (so it's visible immediately); press 4 again to compare OFF.
+                _shadowReviewOn = _lastPreset == 4 ? !ControlBool("hz_on") : true;
                 _sky.ApplyMood(5);
                 Set("cloud_enabled", false);
                 Set("cloud_godrays", false);
@@ -194,38 +199,37 @@ public sealed class LabReviewController
                 Set("sun_corona_energy", 0f);
                 Set("sun_halo_energy", 0f);
                 Set("atmosphere_on", false);
-                Set("time_of_day", 17f);
-                _setTimeRunning(false);          // FIX: freeze the day/night clock. Without this the sun keeps
-                                                 // rising past hz_sun_gate (0.35), horizon_shadow() returns 1.0
-                                                 // everywhere, and shadows "vanish when you move the view" — a
-                                                 // time confound, not a yaw bug. (Keys 2 and 3 already do this.)
-                Set("extra_suns", 0f);           // review hygiene: clear leftover C3 luminaries so no stray
-                Set("extra_moons", 0f);          // directional fill light contaminates the shadow read.
+                Set("time_of_day", 17f);         // low sun = long ridge shadows (the regime Slice 1 targets)
+                _setTimeRunning(false);          // freeze the clock, else the sun climbs past hz_sun_gate and the
+                                                 // shadow fades — a TIME confound that masquerades as a yaw bug.
+                Set("extra_suns", 0f);           // clear stray C3 luminaries so no extra directional fill
+                Set("extra_moons", 0f);          // contaminates the shadow read.
                 Set("dbg_fog", false);
-                Set("dbg_sun", _shadowReviewOn);
-                Set("sun_energy", _shadowReviewOn ? 1.2f : 0f);
-                Set("ambient_e", _shadowReviewOn ? 0.5f : 1.0f);
-                Set("dbg_fullrough", true);
+                Set("dbg_sun", false);
+                Set("sun_energy", 1.2f);         // lighting held CONSTANT in both A/B states
+                Set("ambient_e", 0.5f);
+                Set("dbg_fullrough", true);      // matte: no specular flicker confounding the read
                 Set("dbg_normalmap", false);
-                Set("hz_strength", 0.18f);
-                Set("hz_steps", 1f);
-                Set("hz_maxdist", 9000f);
-                Set("hz_stride0", 40f);
+                _terrain.SetBool("dbg_unlit", false);   // KEEP terrain lit in BOTH states (constant lighting)
+                // Slice 1 far-ridge defaults (strong + full-vista so the cast shadow clearly reads):
+                Set("hz_strength", 0.70f);
+                Set("hz_steps", 32f);
+                Set("hz_maxdist", 12000f);
+                Set("hz_stride0", 30f);
                 Set("hz_growth", 1.45f);
-                Set("hz_softness", 0.28f);
-                Set("hz_sun_gate", 0.35f);
-                Set("hz_full_dist", 1000f);
-                Set("hz_fade_dist", 4000f);
+                Set("hz_softness", 0.20f);
+                Set("hz_sun_gate", 0.50f);
+                Set("hz_full_dist", 500f);
+                Set("hz_fade_dist", 16000f);
                 Set("hz_on", _shadowReviewOn);
                 _terrain.SetBool("hz_on", _shadowReviewOn);
-                _terrain.SetBool("dbg_unlit", !_shadowReviewOn);
                 title = _shadowReviewOn
-                    ? "4 - Shadows A/B - terrain horizon ON  (press 4 -> OFF)"
-                    : "4 - Shadows A/B - unlit/no shadows  (press 4 -> ON)";
+                    ? "4 · Far-ridge shadows: terrain horizon ON  (press 4 → OFF)"
+                    : "4 · Far-ridge shadows: OFF — same lit frame  (press 4 → ON)";
                 judge = _shadowReviewOn
-                    ? "Same low-sun terrain frame with only the terrain horizon shader owner enabled. Judge soft landform darkening, no chunk/LOD popping, no black blobs, and no engine shadow artifacts."
-                    : "Full isolation baseline: terrain is self-lit, so sun light, horizon shadow, fog, god rays, sun glow, specular, normal maps, and ambient directionality cannot contribute. Press 4 again to turn the low-sun horizon-shadow review back on.";
-                GD.Print($"[review-shadow] key4 hz_on={_shadowReviewOn} sun={_shadowReviewOn} unlit={!_shadowReviewOn} matte=on normalmaps=off sunOverlay=off");
+                    ? "Low sun, lit terrain. The ONLY change from OFF is the cast shadow. JUDGE (in motion): ridges throw long shadows across valleys/onto each other; a shadow stays GLUED to its caster as you fly + yaw (world-locked, doesn't swim); NO chunk/LOD popping, flicker, or black blobs while moving. Tune 'horizon shadow *' on the Light tab. Watch fps once warmed."
+                    : "Same lit low-sun frame, horizon shadow OFF. Any darkness you see HERE is slope shading (N·L), not a cast shadow. Press 4 to flip the cast shadow back ON and compare — the difference is the new far-ridge shadow.";
+                GD.Print($"[review-shadow] key4 far-ridge hz_on={_shadowReviewOn}");
                 break;
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle.
                 if (_lastPreset != 6)
