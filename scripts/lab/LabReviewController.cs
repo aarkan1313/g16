@@ -388,8 +388,8 @@ public sealed class LabReviewController
         if (cam == null || sun == null) { return; }
         Vector3 toSun = sun.GlobalTransform.Basis.Z.Normalized();
         Vector3 backHoriz = new Vector3(-toSun.X, 0f, -toSun.Z).Normalized();   // away from the sun, level
-        cam.Position = backHoriz * 1200f + new Vector3(0f, 600f, 0f);           // mid vantage: sun + near-bubble terrain in frame
-        cam.LookAt(cam.GlobalPosition + toSun, Vector3.Up);                     // aim straight at the disc
+        cam.Position = backHoriz * 700f + new Vector3(0f, 520f, 0f);            // clean high vantage (clears terrain); near-mid band inside the ~800m CSM bubble shows shadows
+        cam.LookAt(cam.GlobalPosition + toSun * 0.7f + new Vector3(0f, -0.18f, 0f), Vector3.Up);  // sun upper frame, lit+shadowed terrain lower frame
     }
 
     private void BuildReviewLabel()

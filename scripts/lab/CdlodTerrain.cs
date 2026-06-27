@@ -17,6 +17,16 @@ public sealed partial class CdlodTerrain : Node3D
     private float _minH, _maxH, _regionSize;
     private float[] _heights = System.Array.Empty<float>();   // baked heightmap (row-major, res²), for per-chunk AABB
     private int _hRes;
+    // Phase 1 (standard Forward+ stack): every chunk casts into the engine directional shadow map. caster ==
+    // visible by construction (the SAME mesh that renders also casts), so the WG1-15 caster≠visible LOD-pop
+    // can't occur; the Sun's small DirectionalShadowMaxDistance (~250m) culls all but the near finest chunks.
+    private GeometryInstance3D.ShadowCastingSetting _casterSetting = GeometryInstance3D.ShadowCastingSetting.On;
+    /// A/B the terrain shadow casters (default ON). Re-applies to all live + pooled instances immediately.
+    public void SetCastShadows(bool on)
+    {
+        _casterSetting = on ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off;
+        foreach (var ch in GetChildren()) { if (ch is MeshInstance3D mi) { mi.CastShadow = _casterSetting; } }
+    }
     // S3.6: CHUNK-IDENTITY-KEYED pool. The instance for a chunk is keyed by its world address (level,x,z),
     // NOT by list index — so a chunk that's still visible keeps its instance and is NOT re-pushed to the
     // rendering server every frame. Only genuine births/deaths/state-changes touch the BVH. This is what kills
@@ -365,7 +375,7 @@ public sealed partial class CdlodTerrain : Node3D
             mi.Position = new Vector3(c.OriginXZ.X + half - _renderOrigin.X, 0f, c.OriginXZ.Y + half - _renderOrigin.Z);
             mi.Scale = new Vector3(c.Size, 1f, c.Size);    // X/Z = chunk size; Y = 1 (world-unit height)
             slot.OriginXZ = c.OriginXZ; slot.Size = c.Size; slot.Level = c.Level;
-            mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+            mi.CastShadow = _casterSetting;
             mi.SetInstanceShaderParameter("lod_viz", _lodViz ? (float)c.Level : -1.0f);
             mi.SetInstanceShaderParameter("chunk_slot", (float)slot.CacheSlot);     // field-cache texture-array layer
             mi.SetInstanceShaderParameter("cache_ready", slot.CacheReady ? 1.0f : 0.0f);
@@ -412,8 +422,8 @@ public sealed partial class CdlodTerrain : Node3D
     {
         MeshInstance3D mi;
         if (_free.Count > 0) { mi = _free.Pop(); }
-        else { mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off }; AddChild(mi); _instanceCount++; }
-        mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        else { mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat, CastShadow = _casterSetting }; AddChild(mi); _instanceCount++; }
+        mi.CastShadow = _casterSetting;
         return new ChunkSlot { Mi = mi, Mask = -1, Tightened = false, Level = -1 };
     }
 

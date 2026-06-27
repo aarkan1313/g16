@@ -211,9 +211,9 @@ public sealed class LightingComposer
             psky.SkyHorizonColor = tHor; psky.GroundHorizonColor = tHor;
             psky.GroundBottomColor = tGnd;
         }
-        // ── SUN DISC (Stage-1 appearance). Terrain shadows are world-anchored (shader march), NOT engine
-        // shadow maps — the sun never casts an engine shadow. A future objects-only CSM owner re-enables this. ──
-        sun.ShadowEnabled = false;
+        // ── SUN SHADOW (standard Forward+ stack, Phase 1). The Sun casts engine CSM; ShadowEnabled is owned by
+        // the scene default + review key-4 toggle now, and by the day/night one-caster crossfade in Phase 5.
+        // Do NOT force it here (the old hardcoded `= false` blocked the whole stack). ──
         if (!_occlusionPolicyPushed)
         {
             // SSAO/SSIL DISABLED: scene files and legacy plans drifted here; force the review baseline
