@@ -53,7 +53,7 @@ public sealed class CloudPresets
     public void Apply(int idx, float jitter = 0f)
     {
         if (idx < 0 || idx >= _presets.Count) { return; }
-        // Presets are self-contained: a prior shadow/review preset can turn the volume off, while cirrus used
+        // Presets are self-contained: a prior review preset can turn the volume off, while cirrus used
         // to keep rendering independently. Force the master cloud gate back on unless randomize locks it.
         if (_reg.TryGet("cloud_enabled", out var enabled) && !(jitter > 0f && enabled.Locked)) { _reg.SetValue(enabled, true); }
         if (_reg.TryGet("cloud_profile_on", out var profile) && !(jitter > 0f && profile.Locked)) { _reg.SetValue(profile, true); }
@@ -67,7 +67,7 @@ public sealed class CloudPresets
             if (!_reg.TryGet(id, out LabControl c)) { continue; }
             if (jitter > 0f && c.Locked) { continue; }   // randomize respects locks; explicit pick doesn't
             Variant v = CoercePresetValue(c, values[key]);
-            // Coherent surprise-me: jitter visible cloud appearance, but leave perf/debug/shadow/god-ray switches stable.
+            // Coherent surprise-me: jitter visible cloud appearance, but leave perf/debug/god-ray switches stable.
             if (jitter > 0f && ShouldJitter(c))
             {
                 float f = v.AsSingle();
@@ -96,7 +96,7 @@ public sealed class CloudPresets
     {
         if (c.Tab != "Clouds" || c.Type != "cloudf") { return false; }
         string id = c.Id;
-        return !(id.Contains("shadow") || id.Contains("godray") || id.Contains("debug")
+        return !(id.Contains("godray") || id.Contains("debug")
             || id == "cloud_perdeck" || id == "cloud_overcast");
     }
 

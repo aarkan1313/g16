@@ -1,18 +1,15 @@
 // cloud_density.gdshaderinc — SHARED cloud density PRIMITIVES (ONE source of truth).
 // RD-GLSL has no #include (Godot proposal #9592), so the three cloud computes string-splice this
 // fragment in via `// @@INCLUDE cloud_density` before SPIR-V compile (same mechanism as
-// field_math + FieldCompute): cloud_raymarch.glsl (sky), cloud_shadow.glsl (shadow map),
-// cloud_shadow_check.glsl (the --shadowcheck validator).
+// field_math + FieldCompute): cloud_raymarch.glsl (sky).
 //
 // PURE MATH ONLY — no buffer / sampler / P.* references — so it compiles identically in all three.
 // These are the parts that were previously hand-duplicated with "byte-identical" comments. The
-// most important is height_profile: it is DENSITY-AFFECTING, so any drift between the sky march and
-// the shadow march silently desyncs the ground shadow from the cloud overhead. Single-sourcing it
-// here makes that whole bug class impossible.
+// most important is height_profile: it is DENSITY-AFFECTING, so any drift in the sky march
+// changes the visible cloud body. Single-sourcing it keeps that path easy to audit.
 //
-// NOT here: per-deck layer_density and density_all. Their detail-erosion and signatures legitimately
-// DIFFER per consumer (sky = 2-octave crisp silhouettes; shadow/check = cheaper 1-octave), so they
-// stay local and are now documented honestly rather than falsely claimed identical.
+// NOT here: per-deck layer_density and density_all. Their detail-erosion and signatures stay local
+// to the sky shader.
 
 const float PLANET_R = 200000.0;
 

@@ -82,7 +82,7 @@ public sealed class LabReviewController
             case 1:
                 _terrain.SetCdlod(true); _terrain.SetCdlodViz(false); _terrain.ConfigureCdlodAabb(false, 0, 0);
                 title = "TERRAIN  [T]  2/4 · CDLOD, tighten OFF (generous AABB)";
-                judge = "A/B the async shadow tightening: far-out shadows go slightly loose vs mode 1. Press T to continue.";
+                judge = "A/B async culling-AABB tightening: far-out chunks keep generous bounds vs mode 1. Press T to continue.";
                 break;
             case 2:
                 _terrain.SetCdlod(true); _terrain.ConfigureCdlodAabb(true, 0, 0); _terrain.SetCdlodViz(true);
@@ -96,8 +96,8 @@ public sealed class LabReviewController
                 break;
             default:
                 _terrain.SetCdlod(true); _terrain.SetCdlodViz(false); _terrain.ConfigureCdlodAabb(true, 0, 0);
-                title = "TERRAIN  [T]  1/4 · CDLOD + async tight shadows (DEFAULT)";
-                judge = "The shipping S3 look: infinite streaming, tight shadows. Fly a minute + teleport far out — no edge/hitch/shimmer/jitter. Press T to cycle A/B views.";
+                title = "TERRAIN  [T]  1/4 · CDLOD + async tight AABBs (DEFAULT)";
+                judge = "The shipping S3 look: infinite streaming with tight culling bounds. Fly a minute + teleport far out — no edge/hitch/shimmer/jitter. Press T to cycle A/B views.";
                 break;
         }
         _reviewLabel!.Text = $"{title}\n{judge}";
@@ -185,7 +185,7 @@ public sealed class LabReviewController
                 Set("cloud_enabled", false);
                 Set("time_of_day", 13f);
                 title = "4 · Shadowless lighting baseline";
-                judge = "Current review baseline: terrain, sun, moon, inspection light, and material board are shadowless. Use this view to judge terrain color, LOD, fog, and lighting without stale CSM or horizon-shadow artifacts.";
+                judge = "Current review baseline: terrain, sun, moon, inspection light, and material board are shadowless. Use this view to judge terrain color, LOD, fog, and lighting without stale CSM artifacts.";
                 break;
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle.
                 if (_lastPreset != 6)

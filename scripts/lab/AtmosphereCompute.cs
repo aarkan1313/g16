@@ -294,8 +294,8 @@ public partial class AtmosphereCompute : Node
 
     private static float Half(byte[] d, int o) => (float)BitConverter.ToHalf(d, o);
 
-    // Numeric proof (analog of --shadowcheck): readback the LUTs, assert finite/non-negative,
-    // and print transmittance range + skyview zenith-vs-horizon luma. Run via --atmoscheck.
+    // Numeric proof: readback the LUTs, assert finite/non-negative, and print transmittance
+    // range + skyview zenith-vs-horizon luma. Run via --atmoscheck.
     private bool DumpCheck()
     {
         byte[] t = _rd.TextureGetData(_transTex, 0);   // rgba16f

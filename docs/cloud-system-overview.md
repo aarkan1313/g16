@@ -1,7 +1,7 @@
 # WG16 Cloud System — Overview (architecture · features · how to test)
 
-Status: 2026-06-18, after the cloud-polish session. This is the map for reviewing the cloud
-system **feature by feature**. Every feature is behind a toggle defaulting to the validated look.
+Status: 2026-06-27, after the shadow-system deletion pass. This is the map for reviewing the
+cloud system **feature by feature**. Every feature is behind a toggle defaulting to the validated look.
 
 ## Modules (separation of concerns — one job each, one-direction data flow)
 
@@ -19,29 +19,26 @@ ORCHESTRATION
   CloudVolume.cs      — owns RD resources + render-thread dispatch (CallOnRenderThread),
                         builds param buffers (Std430Writer), the public knob interface
                         (UI → here ONLY), the active layer stack (SetLayers/SetLayerWeight),
-                        the sky + shadow Texture2Drd, the overcast CPU proxy
+                        the sky Texture2Drd, the overcast CPU proxy
         │
         ▼
 SHADERS (consume buffers; produce textures)
   cloud_noise_3d.glsl — bakes the volumes (value + gradient noise, Worley FBM)
   cloud_raymarch.glsl — camera-anchored curved-shell march → lat-long dome texture
-  cloud_shadow.glsl   — same density field, top-down sun march → 2D ground shadow map
   cloud_sky.gdshader  — samples the dome by EYEDIR, premultiplied over-composite, sun disc
         │
         ▼
-CONSUMERS  — sky composite (dome) · terrain light() (shadow map) · overcast dim/aerial
+CONSUMERS  — sky composite (dome) · overcast dim/aerial · god-ray screen-space occlusion
 
 DIAGNOSTICS (numeric, windowed — prove with math, not eyeballing)
-  CloudShadowCheck.cs (--shadowcheck) · CloudLightCheck.cs (--lightcheck) · cloudstats readback
+  CloudLightCheck.cs (--lightcheck) · cloudstats readback
 ```
 
-**The coupling guarantee:** `cloud_raymarch.glsl`, `cloud_shadow.glsl`, and `cloud_shadow_check.glsl`
-must compute the per-deck density **byte-identically** (same `layer_density`, same SHAPE_SCALE /
-cellScale / DETAIL_SCALE consts, same `LF(i,f)` stride). The shadow on the ground only matches the
-visible cloud if these stay in lock-step. Any density-affecting edit MUST keep all three identical
-and re-run `--shadowcheck` (PASS = Pearson r > 0.6 of vertical-density vs ground-darkness).
-The lighting fields (per-deck phase/albedo/tint, layer fields 12–18) are raymarch-only — the shadow
-shader ignores them, so lighting changes never touch coupling.
+**The cloud-data guarantee:** `CloudLayers.Pack`, `CloudVolume.BuildParams`, `cloud_density.gdshaderinc`,
+and `cloud_raymarch.glsl` must agree on the per-layer layout. Density-affecting edits should be
+verified with build/import plus visible review, `--cloudstats`, and `--lightcheck` when lighting fields
+are involved. The former ground-shadow map and `--shadowcheck` validator were removed in the
+2026-06-27 shadow deletion pass.
 
 ## Feature inventory + how to test each
 
@@ -61,7 +58,7 @@ All toggles default to the validated look (so the base is stable); flip one at a
 | Dome resolution | `--cloudtex=H` (launch only) | **1024×256** | + softened 5-tap sky sample → clean in motion (512×128 was pixelly at zenith) |
 | Raymarch steps | `cloud_steps` / `--cloudsteps=` | 128 | perf vs quality |
 
-Diagnostics: `--shadowcheck` (coupling), `--lightcheck` (per-deck lighting delta),
+Diagnostics: `--lightcheck` (per-deck lighting delta),
 `--cloudstats` (dome readback: skyCovered%, meanAlpha, meanCloudLuma — NOTE dome-averaged, so
 divide by coverage for per-cloud values), `--profile=secs` (avg/worst fps), `--cam=x,y,z,pitch,yaw`
 + `--auto-shot=PATH` (capture a frame).
@@ -94,8 +91,8 @@ light-march (see performance.md backlog).
 
 ## Lighting model (don't re-litigate — clarified during review)
 
-Clouds make the **ground darker** (overcast dim in `UpdateOvercast` + the cloud shadow map cut
-direct sun), and make the **sky LOOK brighter** only because white cloud out-luminates blue sky.
+Clouds make the **ground darker** through overcast dimming in `UpdateOvercast`, and make the
+**sky LOOK brighter** only because white cloud out-luminates blue sky.
 So a clear blue sky is genuinely lower-luminance than a cloud-filled one — "Clear darker than
 Scattered" is correct/physical, not a bug. Sky color is mood-driven (`lighting_moods.json`),
 shared across cloud presets; overcast greys it toward flat grey at high coverage.

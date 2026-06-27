@@ -151,7 +151,6 @@ public partial class TerrainLabUI : Control
             else if (a == "--meteordebug") { _meteorDebugCli = true; }
             else if (a == "--profmove") { _cliSeq.EnableProfMove(); }
             else if (a.StartsWith("--profspeed=")) { if (float.TryParse(a.Substring("--profspeed=".Length), System.Globalization.CultureInfo.InvariantCulture, out float ps)) _cliSeq.SetProfSpeed(ps); }
-            else if (a == "--shadowcheck") { _shadowCheckCli = true; }
             else if (a == "--fieldcheck") { _fieldCheckCli = true; }
             else if (a == "--lightcheck") { _lightCheckCli = true; }
             else if (a == "--cloudstats") { _cloudStatsCli = true; }
@@ -280,7 +279,6 @@ public partial class TerrainLabUI : Control
     // sets _checkRan + ANDs its pass into _checkPass; AttachClouds then Quit(_checkPass?0:1) so CI can gate.
     private bool _checkRan;
     private bool _checkPass = true;
-    private bool _shadowCheckCli;     // --shadowcheck → numeric correlation test, PASS/FAIL to console
     private bool _fieldCheckCli;      // --fieldcheck → one-shot field determinism/parity self-check (S1)
     private bool _cdlodCheckCli;      // --cdlodcheck → quadtree neighbor-invariant + stats self-check (S2a)
     private bool _morphCheckCli;      // --morphcheck → S2b geomorph pop-free numeric backstop (PASS/FAIL)

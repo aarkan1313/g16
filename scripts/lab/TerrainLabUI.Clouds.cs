@@ -39,7 +39,6 @@ public partial class TerrainLabUI : Control
         }
         if (knob.StartsWith("cirrus_")) { _cloud?.SetCirrus(knob, v); return; }   // CO-2 cirrus sky-layer uniforms
         _cloud?.SetKnob(knob, v);
-        if (knob == "altitude_m") { _godraysScreen?.SetCloudAltitude(_terrain.MidHeight + v); }
     }
     private void ApplyCloudInt(string knob, int v) => _cloud?.SetKnobInt(knob, v);
     private void ApplyCloudBool(string knob, bool on)

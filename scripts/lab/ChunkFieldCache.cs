@@ -131,7 +131,7 @@ public sealed class ChunkFieldCache
             BakeChunk(r.Slot, r.OriginXZ, r.Size);
             // FIRE-AND-FORGET: NO BufferGetData/fence. The compute (with its ComputeListEnd barrier) writes the
             // layer this frame; the game thread flips cache_ready a few frames later (TryTake → CacheReadyDelay),
-            // so sampling never races the write. The shadow AABB is the SEPARATE cheap ChunkAabbProvider 7×7 probe
+            // so sampling never races the write. The culling AABB is the SEPARATE cheap ChunkAabbProvider 7x7 probe
             // — reading min/max back off THIS 67² bake forced it synchronous (~11 ms render-thread stall/batch).
             lock (_doneLock) { _done.Add(new Done { Key = r.Key, Slot = r.Slot }); }
         }

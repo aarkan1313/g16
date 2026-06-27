@@ -25,9 +25,7 @@ public partial class GodRaysScreen : Node3D
     {
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/godray_screen.gdshader") };
         _mat.RenderPriority = 127;   // draw after the scene's transparent objects
-        // occ_mode 2 = LUMINANCE occlusion (on-screen cloud silhouettes) — gives crisp crepuscular BEAMS.
-        // occ_mode 3 (cloud shadow map) was tried for mood-independence but reads as a soft "filter", not
-        // beams (soft top-down transmittance has no sharp edges) — kept as a dormant option, NOT default.
+        // occ_mode 2 = luminance occlusion from on-screen cloud silhouettes.
         _mat.SetShaderParameter("occ_mode", 2);
         _quad = new MeshInstance3D
         {
@@ -76,31 +74,12 @@ public partial class GodRaysScreen : Node3D
         _mat.SetShaderParameter("sun_screen_uv", uv);
         _mat.SetShaderParameter("sun_gate", gate);
 
-        // depth→world reconstruction needs inverse(projection*view); cam_world is the sky view-ray origin.
-        Projection proj = _cam.GetCameraProjection();
-        Transform3D camXf = _cam.GlobalTransform;
-        Projection viewProj = proj * new Projection(camXf.AffineInverse());
-        _mat.SetShaderParameter("inv_view_proj", viewProj.Inverse());
-        _mat.SetShaderParameter("cam_world", _cam.GlobalPosition);
-
         // Aspect for the high-pass: the reference rays rotate around the sun in screen space, so they
         // must be aspect-corrected or the rotation stretches on a wide viewport (anisotropic = uneven
         // wash removal). Cheap to push each frame; tolerant of window resizes.
         Vector2 vpSize = _cam.GetViewport().GetVisibleRect().Size;
         _mat.SetShaderParameter("aspect", vpSize.Y > 0f ? vpSize.X / vpSize.Y : 1.7778f);
     }
-
-    /// Bind the cloud shadow map (Texture2Drd) + its world footprint (CloudVolume.ShadowTexture/RegionSize).
-    public void SetShadowTexture(Texture2D? tex, float region)
-    {
-        if (tex != null) { _mat.SetShaderParameter("cloud_shadow_tex", tex); }
-        _mat.SetShaderParameter("cloud_shadow_region", region);
-    }
-    /// Enable cloud-field sampling only when the shadow Texture2Drd RID is live and the cloud-shadow
-    /// map is intentionally being dispatched. Mirrors the terrain's cloud_shadow_on gate.
-    public void SetCloudOcclusionReady(bool ready) => _mat.SetShaderParameter("cloud_shadow_on", ready);
-    /// Cloud-deck altitude (world Y) that sky view-rays project to for the shadow-map lookup.
-    public void SetCloudAltitude(float y) => _mat.SetShaderParameter("cloud_altitude", y);
 
     public void SetEnabled(bool on) { _on = on; _quad.Visible = on; }
     public bool On => _on;

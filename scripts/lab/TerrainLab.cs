@@ -6,17 +6,17 @@ namespace WG16.Lab;
 /// Terrain presenter: builds the base field into a displaced PlaneMesh and renders it with the
 /// MINIMAL placeholder ground shader (height/slope color). The full per-pixel material system was
 /// stripped 2026-06-21 (the reset); CDLOD / infinite terrain is the next arc. Keeps the GI
-/// proxy hook (future experiments) and the generic shader-param passthroughs the cloud/sky lane uses
-/// (cloud_shadow_*, cam_world). The base field geometry ("the bones") is untouched.
+/// proxy hook (future experiments) and the generic shader-param passthroughs the cloud/sky lane uses.
+/// The base field geometry ("the bones") is untouched.
 public partial class TerrainLab : MeshInstance3D
 {
     private ShaderMaterial _mat = null!;
     private float _regionSize;
     private float _minBase, _maxBase;
-    public float MidHeight => (_minBase + _maxBase) * 0.5f;   // for cloud-shadow march origin
+    public float MidHeight => (_minBase + _maxBase) * 0.5f;
     private const float AabbMarginM = 8f;
 
-    private MeshInstance3D? _giProxy;   // coarse GI proxy, shadow casting parked
+    private MeshInstance3D? _giProxy;   // coarse GI proxy, inert by default
     public bool UseGiProxy = false;     // default OFF
     public int ProxyRes = 511;          // proxy subdivision (~512²); --proxyres=N
 
@@ -78,9 +78,9 @@ public partial class TerrainLab : MeshInstance3D
 
         LoadGroundMaterials();   // minimal surfacing slice: bind the textured-path materials (path itself off by default)
 
-        // --- GI/shadow PROXY (perf): a coarse copy of the SAME heightfield. The render mesh has
-        // ~4M verts for displacement detail, but SDFGI + shadow casting are low-frequency — a coarse
-        // proxy can feed them ~60× cheaper. Created inert; SetGiProxy(true) flips the roles. Reuses
+        // --- GI PROXY (perf): a coarse copy of the SAME heightfield. The render mesh has
+        // ~4M verts for displacement detail, but SDFGI is low-frequency, so a coarse
+        // proxy can feed it much cheaper. Created inert; SetGiProxy(true) flips the roles. Reuses
         // _mat so it displaces by the same heightmap. Default OFF = detail mesh feeds both.
         if (_giProxy == null)
         {
@@ -102,10 +102,10 @@ public partial class TerrainLab : MeshInstance3D
         _minBase = float.MaxValue; _maxBase = float.MinValue;
         for (int i = 0; i < heights.Length; i++) { _minBase = Mathf.Min(_minBase, heights[i]); _maxBase = Mathf.Max(_maxBase, heights[i]); }
         // GLOBAL fallback envelope for streamed CDLOD chunks (NOT the single-mesh AABB / MidHeight, which stay
-        // the central region). The per-chunk shadow AABB is born GENEROUS (this range ± margin) and tightened a
+        // the central region). The per-chunk culling AABB is born GENEROUS (this range +/- margin) and tightened a
         // few frames later when the field-cache min/max lands. The continent/uplift field varies REGIONALLY, so
-        // the central region (0,0) min/max is NOT a safe bound far from origin — a far chunk in a high-uplift belt
-        // can exceed it and gets frustum/shadow-CULLED until its tighten lands (the "chunks vanish far out" bug).
+        // the central region (0,0) min/max is NOT a safe bound far from origin - a far chunk in a high-uplift belt
+        // can exceed it and gets frustum-culled until its tighten lands (the "chunks vanish far out" bug).
         // Union a WIDE, coarse field sample (±~100 km) so the fallback brackets the macro envelope everywhere it
         // matters during that brief birth→tighten window. One extra page at load.
         float cdlodMinH = _minBase, cdlodMaxH = _maxBase;
@@ -192,8 +192,6 @@ public partial class TerrainLab : MeshInstance3D
     public void SetFieldCache(bool on) { if (_cdlod != null) { _cdlod.FieldCache = on; } }   // per-chunk field cache A/B
     public void SetBakeReq(int n) { _cdlod?.SetBakeReq(n); }   // field-cache bake throttle
     public void SetChunkOps(int n) { if (_cdlod != null) { _cdlod.MaxChunkOps = Mathf.Max(1, n); } }   // per-frame birth cap (unthrottle = high)
-    public void SetShadowRing(float meters) { if (_cdlod != null) { _cdlod.ShadowCasterRadius = Mathf.Max(0f, meters); } }   // dormant while terrain shadows are parked
-    public float ShadowRing => _cdlod?.ShadowCasterRadius ?? 0f;
     public int LoadRing => _cdlod?.LoadRing ?? 5;
     public void CdlodTick(Vector3 camPos, Vector3 velXZ = default) { _cdlod?.Tick(camPos, velXZ); }   // ARC B Task 4: vel for predictive loading
     public void SetCdlodLookahead(float seconds) { if (_cdlod != null) { _cdlod.PredictLookahead = Mathf.Max(0f, seconds); } }
@@ -217,7 +215,7 @@ public partial class TerrainLab : MeshInstance3D
     public void TickTestPath(double delta) => _testPaths?.Tick(delta);
     public bool TestPathRunning => _testPaths?.Running ?? false;
 
-    /// Toggle the GI proxy. Shadows are parked; the proxy only affects any future GI experiment.
+    /// Toggle the GI proxy. It only affects any future GI experiment.
     public void SetGiProxy(bool on)
     {
         UseGiProxy = on;
@@ -236,7 +234,7 @@ public partial class TerrainLab : MeshInstance3D
             _giProxy.GIMode = GeometryInstance3D.GIModeEnum.Disabled;
             _giProxy.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
         }
-        GD.Print($"TerrainLab: GI proxy {(on ? "ON" : "off")} (shadows parked)");
+        GD.Print($"TerrainLab: GI proxy {(on ? "ON" : "off")}");
     }
 
     /// Rebuild the proxy mesh at a new subdivision.
@@ -255,9 +253,8 @@ public partial class TerrainLab : MeshInstance3D
         }
     }
 
-    // Generic shader-param passthroughs to the ground material. The cloud/sky lane uses these for
-    // cloud_shadow_tex / cloud_shadow_region / cloud_shadow_on / cam_world; harmless if the minimal
-    // placeholder doesn't declare a given uniform (Godot just stores it).
+    // Generic shader-param passthroughs to the ground material. Harmless if the minimal placeholder
+    // doesn't declare a given uniform (Godot just stores it).
     public void SetFloat(string param, float v) => _mat.SetShaderParameter(param, v);
     public void SetInt(string param, int v) => _mat.SetShaderParameter(param, v);
     public void SetBool(string param, bool v) => _mat.SetShaderParameter(param, v);

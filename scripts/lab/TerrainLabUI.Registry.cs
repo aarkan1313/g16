@@ -119,7 +119,7 @@ public partial class TerrainLabUI : Control
                     foreach (var b in _lighting.EditableLuminaries) { seed.Add(DictFromLuminary(b)); }
                     if (seed.Count == 0)   // composer had no data (file missing) — seed one sun so the editor isn't empty
                     {
-                        seed.Add(new Godot.Collections.Dictionary { { "kind", 0 }, { "color", new Color(1f, 0.95f, 0.86f) }, { "size", 0.6f }, { "phase", 1f }, { "az_offset", 0f }, { "decl_scale", 1f }, { "energy", 1.3f }, { "casts_shadow", true }, { "atmosphere", true }, { "priority", 100f } });
+                        seed.Add(new Godot.Collections.Dictionary { { "kind", 0 }, { "color", new Color(1f, 0.95f, 0.86f) }, { "size", 0.6f }, { "phase", 1f }, { "az_offset", 0f }, { "decl_scale", 1f }, { "energy", 1.3f }, { "atmosphere", true }, { "priority", 100f } });
                     }
                     olc.Init(lumLc.Label, lumSchema, seed, lumLc.MinItems, lumLc.MaxItems,
                         (f, initial, onChanged) => LabWidgetFactory.Build(

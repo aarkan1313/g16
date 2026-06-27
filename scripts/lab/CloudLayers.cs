@@ -5,11 +5,9 @@ using System.Text.Json;
 namespace WG16.Lab;
 
 /// One cloud deck. Data only — no marching/scene knowledge (separation of concerns).
-/// Fields 0-11 are DENSITY (must stay byte-identical between raymarch & shadow shaders);
-/// fields 19-21 are the VERTICAL PROFILE (CO-1) — ALSO density-affecting, so they too are
-/// read + applied byte-identically by BOTH shaders (height_profile). PhaseG..TintB are
-/// per-deck LIGHTING (raymarch only — shadow ignores them) so cumulus vs cirrus read as
-/// different cloud kinds (roadmap #1).
+/// Fields 0-11 are DENSITY; fields 19-21 are the VERTICAL PROFILE (CO-1) and are
+/// also density-affecting. PhaseG..TintB are per-deck LIGHTING so cumulus vs cirrus
+/// read as different cloud kinds (roadmap #1).
 public readonly record struct CloudLayer(
     float Altitude, float Thickness, float Size, float CellScale,
     float CoverageWeight, float Density, float Opacity, float Type,

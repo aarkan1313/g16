@@ -5,7 +5,7 @@ using WG16.Field;
 
 namespace WG16.Lab;
 
-/// S3 Task 5 — async GPU per-chunk height-range (min/max) for tightening a streamed chunk's shadow AABB,
+/// S3 Task 5 — async GPU per-chunk height-range (min/max) for tightening a streamed chunk's culling AABB,
 /// WITHOUT stalling the game thread. Self-contained + tunable; the streaming core does not depend on its
 /// result (chunks render with a generous AABB until a tighten lands), so a GPU-threading problem can't break
 /// the infinite world — it only IMPROVES the AABB.

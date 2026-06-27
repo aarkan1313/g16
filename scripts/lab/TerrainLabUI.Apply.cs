@@ -86,7 +86,6 @@ public partial class TerrainLabUI : Control
             case "meteors_on": _stars.MeteorsOn = on; ComposeLighting(); break;
             case "planets_on":      _stars.PlanetsOn = on; ComposeLighting(); break;        // C2 planets
             case "bright_stars_on": _stars.BrightStarsOn = on; ComposeLighting(); break;    // C2 landmark stars
-            case "shadow": UiSun.ShadowEnabled = false; break;
             case "sun":    UiSun.Visible = on; break;
             case "sdfgi":  UiEnv.Environment.SdfgiEnabled = false; break;
             case "volfog": _volumetricFogOn = on; UiEnv.Environment.VolumetricFogEnabled = on; break;

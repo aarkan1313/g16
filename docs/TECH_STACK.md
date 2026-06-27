@@ -75,9 +75,8 @@ The active workbench. A **data-driven** art-direction tool.
   heightfield. Mirrors FieldCompute's local-RD + readback → ImageTexture pattern.
 - `shaders/terrain_lab.gdshader` — the terrain shader: 7 zones, splat dom+secondary
   mixing, height-blend transitions, triplanar + anti-tiling (IQ default; hex caused
-  tile-seam squares), macro color, contact/crevice shading. Custom `light()` (re-added
-  2026-06-17) samples the cloud-shadow map to attenuate the sun (inert when off).
-- **Cloud unit (volumetric clouds + matched shadows, 2026-06-17).** Modular, additive:
+  tile-seam squares), macro color, contact/crevice shading.
+- **Cloud unit (volumetric clouds, 2026-06-17; shadow-map path deleted 2026-06-27).** Modular, additive:
   - `scripts/lab/CloudNoiseCompute.cs` + `shaders/cloud_noise_3d.glsl` — bake tileable
     3D Perlin-Worley shape + Worley detail volumes (local-RD, once at load).
   - `scripts/lab/CloudWeather.cs` — 2D coverage/type field (CPU FBM).
@@ -94,15 +93,11 @@ The active workbench. A **data-driven** art-direction tool.
   - `scripts/lab/Std430Writer.cs` — **std430 alignment-correct param-buffer writer** (vec2→8B,
     vec4/array→16B). Hand-packing these buffers as a flat float run drifted offsets on every
     vec2/vec4 → scrambled GPU data ("no clouds" 3×); all cloud param writers go through this.
-  - `scripts/lab/CloudShadowCheck.cs` + `shaders/cloud_shadow_check.glsl` — **numeric shadow
-    self-check** (`--shadowcheck`, windowed): correlates the shadow value vs cloud density
-    along the sun ray → PASS/FAIL + decoded-layer dump. Proves coupling without eyeballing.
   - `scripts/lab/CloudVolume.cs` — owns it all; drives the per-frame raymarch +
-    shadow-map compute on the RENDER THREAD via `RenderingServer.CallOnRenderThread`
-    (NOT a CompositorEffect — that raced the Texture2Drd RID). Exposes both as
+    render-thread compute via `RenderingServer.CallOnRenderThread`
+    (NOT a CompositorEffect — that raced the Texture2Drd RID). Exposes the sky
     `Texture2Drd`. Public knob setters are the only UI surface.
   - `shaders/cloud_raymarch.glsl` — sky raymarch → lat-long radiance/alpha texture.
-  - `shaders/cloud_shadow.glsl` — same density field, top-down sun-march → 2D shadow map.
   - `shaders/cloud_sky.gdshader` — sky shader, samples the cloud texture by EYEDIR.
   - `data/cloud_presets.json` — named sky looks (Clear…Stormy).
   - **Cloud PRESENCE (clouds affect the scene, 2026-06-17):** `CloudWeather.Mean` +
@@ -110,8 +105,7 @@ The active workbench. A **data-driven** art-direction tool.
     sun/ambient dimming + aerial-perspective fog tint (in `TerrainLabUI.UpdateOvercast`);
     mood sky colors feed cloud scatter + sky gradient (`CloudVolume.SetSkyColors`); clouds
     reach reflections/GI via the sky radiance cubemap (`roughness_layers=7`); god rays via
-    `shaders/cloud_godray_fog.gdshader` on a `FogVolume` gated by the cloud-shadow map
-    (default OFF, needs live tuning).
+    the screen-space `GodRaysScreen` path.
 - `scenes/terrain_lab.tscn` — the look lab scene: WorldEnvironment (AgX tonemap,
   SDFGI/SSIL, SSAO, aerial+height fog, color grade), soft-shadow Sun, fly camera.
   (Cloud sky + shadow are installed at runtime by CloudVolume, not baked into the .tscn.)

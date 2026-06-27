@@ -20,10 +20,10 @@ public static class LuminaryPresetCheck
         // A representative edited set: 2 suns (one companion) + 2 moons, distinct in every field.
         var original = new List<Luminary>
         {
-            new() { Kind = LuminaryKind.Sun,  Color = new Color(1.0f, 0.95f, 0.86f), Size = 0.6f, Phase = 1.0f, AzOffset = 0f,   DeclScale = 1.0f,  LightEnergy = 1.3f, CastsShadow = true,  ContributesToAtmosphere = true,  Priority = 100f },
-            new() { Kind = LuminaryKind.Sun,  Color = new Color(0.62f, 0.78f, 1.0f), Size = 0.9f, Phase = 0.5f, AzOffset = 60f,  DeclScale = 0.88f, LightEnergy = 1.1f, CastsShadow = false, ContributesToAtmosphere = true,  Priority = 80f  },
-            new() { Kind = LuminaryKind.Moon, Color = new Color(0.85f, 0.88f, 1.0f), Size = 1.2f, Phase = 1.0f, AzOffset = 35f,  DeclScale = 0.72f, LightEnergy = 0.5f, CastsShadow = true,  ContributesToAtmosphere = false, Priority = 10f  },
-            new() { Kind = LuminaryKind.Moon, Color = new Color(1.0f, 0.82f, 0.86f), Size = 0.8f, Phase = 0.85f,AzOffset = -40f, DeclScale = 0.6f,  LightEnergy = 0.3f, CastsShadow = false, ContributesToAtmosphere = false, Priority = 5f   },
+            new() { Kind = LuminaryKind.Sun,  Color = new Color(1.0f, 0.95f, 0.86f), Size = 0.6f, Phase = 1.0f, AzOffset = 0f,   DeclScale = 1.0f,  LightEnergy = 1.3f, ContributesToAtmosphere = true,  Priority = 100f },
+            new() { Kind = LuminaryKind.Sun,  Color = new Color(0.62f, 0.78f, 1.0f), Size = 0.9f, Phase = 0.5f, AzOffset = 60f,  DeclScale = 0.88f, LightEnergy = 1.1f, ContributesToAtmosphere = true,  Priority = 80f  },
+            new() { Kind = LuminaryKind.Moon, Color = new Color(0.85f, 0.88f, 1.0f), Size = 1.2f, Phase = 1.0f, AzOffset = 35f,  DeclScale = 0.72f, LightEnergy = 0.5f, ContributesToAtmosphere = false, Priority = 10f  },
+            new() { Kind = LuminaryKind.Moon, Color = new Color(1.0f, 0.82f, 0.86f), Size = 0.8f, Phase = 0.85f,AzOffset = -40f, DeclScale = 0.6f,  LightEnergy = 0.3f, ContributesToAtmosphere = false, Priority = 5f   },
         };
 
         // SAVE path (== SavePreset): Luminary -> dict -> storable (Color->[r,g,b]) -> Array -> Json string.
@@ -52,7 +52,6 @@ public static class LuminaryPresetCheck
             Check(Mathf.IsEqualApprox(a.AzOffset, b.AzOffset), $"[{i}] az");
             Check(Mathf.IsEqualApprox(a.DeclScale, b.DeclScale), $"[{i}] decl");
             Check(Mathf.IsEqualApprox(a.LightEnergy, b.LightEnergy), $"[{i}] energy");
-            Check(a.CastsShadow == b.CastsShadow, $"[{i}] shadow");
             Check(a.ContributesToAtmosphere == b.ContributesToAtmosphere, $"[{i}] atmosphere");
             Check(Mathf.IsEqualApprox(a.Priority, b.Priority), $"[{i}] priority");
         }

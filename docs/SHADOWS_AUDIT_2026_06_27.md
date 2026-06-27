@@ -14,9 +14,9 @@
 | Engine sun CSM | `scenes/review.tscn`, `scenes/terrain_lab.tscn`, `scripts/lab/LightingComposer.cs`, `scripts/lab/TerrainLabUI.*` | Scene default was off, but UI/CLI/hotkeys could re-enable it. Composer still tuned atlas/splits. | Runtime now forces `Sun.ShadowEnabled=false`; UI/CLI/hotkeys removed. |
 | CDLOD terrain shadow casters | `scripts/lab/CdlodTerrain.cs`, `scripts/lab/TerrainLab.cs` | Camera-centered caster ring decided per chunk, causing separate shadow LOD/caster state from visible terrain LOD. | `TerrainShadowsEnabled=false`; terrain meshes and GI proxy never cast. |
 | Heightfield horizon shadows | `shaders/ground.gdshader`, `data/lab_controls.json`, `scripts/lab/TerrainLabUI.Process.cs` | `hz_on=true` despite the original plan requiring default-off until eye/perf gates. | Default returned to `false`; controls and `P` hotkey removed. |
-| Cloud ground shadows | `scripts/lab/CloudVolume.cs`, `scripts/lab/TerrainLabUI.cs`, `shaders/ground.gdshader` | Compute map existed, terrain receive/debug could be armed, and controls exposed ground shadow strength. | Terrain receiver/debug path removed from UI/runtime; cloud shadow compute/check code preserved for cloud math validation. |
+| Cloud ground shadows | `scripts/lab/CloudVolume.cs`, `scripts/lab/TerrainLabUI.cs`, `shaders/ground.gdshader`, `shaders/cloud_shadow*.glsl` | Compute map existed, terrain receive/debug could be armed, and controls exposed ground shadow strength. | Terrain receiver/debug, compute map, and numeric `--shadowcheck` path removed. |
 | Cloud self-lighting/shadowing | `shaders/cloud_raymarch.glsl`, `scripts/lab/CloudVolume.cs` | Part of cloud volume shape and contouring, not the bad terrain shadow system. | Preserved. |
-| God-ray occlusion | `scripts/lab/GodRaysScreen.cs`, `shaders/godray_screen.gdshader` | Default screen-luminance mode; dormant cloud-shadow mode exists but is not active. | Preserved; shadow-map input remains parked. |
+| God-ray occlusion | `scripts/lab/GodRaysScreen.cs`, `shaders/godray_screen.gdshader` | Default screen-luminance mode; dormant cloud-shadow mode existed but was not active. | Preserved screen-luminance path; deleted shadow-map input/fallback. |
 | SSAO/SSIL/SDFGI/GI proxy | `scenes/*.tscn`, `scripts/lab/LightingComposer.cs`, `scripts/lab/TerrainLabUI.*` | Scene defaults off, but UI/CLI/hotkeys could re-enable SSIL/SDFGI and proxy shadow behavior. | Composer keeps occlusion parked; UI/CLI/hotkeys/proxy shadow casting removed. |
 | Moon/inspection/material board lights | `scripts/lab/LightingComposer.cs`, `scripts/lab/TerrainLabUI.Process.cs`, `scenes/material_board.tscn` | Moonlight and inspect light could cast; material board light had shadows on. | All are now non-shadowing. |
 | Review scene key 4 | `scripts/lab/LabReviewController.cs` | Stale "Shadow tuning" preset still referenced removed knobs. | Replaced with a shadowless lighting baseline. |
@@ -38,12 +38,12 @@ Recommended rebuild:
 2. Add a single shadow registry/state object before adding new effects. It should expose active owners, cost counters, and a hard invariant: only one ground-shadow owner can affect terrain at a time.
 3. Rebuild near contact shadows first, only for close hero objects or future dense local geometry. Keep terrain chunks out of engine CSM until terrain surfacing/mesh density is high enough. If Godot CSM is used, cap it to a near-only band and never use it for far CDLOD terrain.
 4. For terrain self-shadowing, build a world-anchored heightfield/clipmap shadow cache rather than relying on visible CDLOD meshes as shadow casters. It should behave like terrain LOD: same answer far away, more detail near the player, no lit/unlit ownership pop.
-5. For clouds, keep the cloud transmittance map world-anchored and use it for cloud/god-ray math first. Terrain receive should return only behind a temporal/visual gate.
+5. For clouds, leave terrain receive deleted until a separate cloud-shadow spec exists. If it returns, it should be a world-anchored transmittance cache with an explicit visual/perf gate, not hidden coupling to the sky raymarch.
 6. Keep SSAO/SSIL/SDFGI out of the default landscape pass. Reintroduce only as small-radius contact/cavity support after terrain material detail exists.
 
 ## Current Validation
 
-- `data/lab_controls.json` parses.
+- Edited JSON files parse (`lab_controls`, `lighting_moods`, `luminaries`, `item_schemas`, `cloud_presets`, `cloud_layers`, `cloud_params`).
 - `dotnet build WG16.csproj` succeeds with existing warnings.
-- Active shadow scan found no `ShadowEnabled=true`, no `shadow_enabled=true`, no `CastShadow.On`, no SSIL/SDFGI/SSAO enable path, and no terrain cloud-shadow true path. The only matching runtime shadow uniform is `cloud_shadow_on=false` in the god-ray shader.
-- Short review profile (`tools/profile_review.ps1 -Duration 1 -StationaryOnly`) reports `shadow draws=0 objects=0 prim=0` and `PROFILE-CDLOD ... shadowCasters=0`. The same run still prints Vulkan/texture/RID errors in this environment; those were not resolved as part of the shadow removal pass because the shadow pass itself is inactive.
+- Active-code scan found no old terrain/cloud/horizon shadow APIs or controls and no `ShadowEnabled=true`, `shadow_enabled=true`, `CastShadow.On`, `SSAO`, `SSIL`, or `SDFGI` enable path.
+- Runtime FPS/profile data from this shell is not authoritative right now: HKCU still sets `VK_INSTANCE_LAYERS=VK_LAYER_NV_nomad`, `vulkaninfo --summary` fails to detect a valid GPU, and Godot can fall back to Microsoft Basic Render Driver even though Windows sees the Intel and RTX adapters.

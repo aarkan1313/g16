@@ -41,8 +41,7 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
     vec4 tail;
     // 8 layers × 24 floats = 6 vec4 PER LAYER (48 vec4). vec4[] (not float[]) so the stride
     // is tight 16B and matches CloudLayers.Pack's contiguous float run.
-    // fields 0-11 = density (byte-identical to cloud_shadow.glsl); 12-18 = per-deck lighting;
-    // 19-21 = vertical profile (CO-1, also byte-identical to the shadow shader).
+    // fields 0-11 = density; 12-18 = per-deck lighting; 19-21 = vertical profile (CO-1).
     vec4 layers[48];
     // AT-3 physical cloud lighting: 3 sun-dependent colors read back from the atmosphere LUTs (CPU, on
     // sun change) and pushed as params — NOT sampled cross-node in this compute (that hazards the GPU; the
@@ -69,10 +68,9 @@ layout(set = 0, binding = 4, std430) restrict buffer ParamsBuf {
 const float PI = 3.14159265;
 
 // ===== PER-LAYER DENSITY. The SHARED shape (weather/coverage/cellularity/type_gradient/
-// height_profile + scale consts) comes from cloud_density.gdshaderinc and is identical across the
-// sky / shadow / check computes. The DETAIL-EROSION below is deliberately the CRISP variant (two
-// octaves, harder edge erosion) — the sky needs fine cauliflower silhouettes. cloud_shadow.glsl
-// uses a cheaper 1-octave variant; that divergence is intentional, NOT drift.
+// height_profile + scale consts) comes from cloud_density.gdshaderinc. The DETAIL-EROSION below
+// is deliberately the CRISP variant (two octaves, harder edge erosion) because the sky needs
+// fine cauliflower silhouettes.
 // One cloud deck's density at local shell point p. worldXZ is the visible sky-cloud
 // footprint for weather/noise; camera_parallax=1 makes it the true camera-world path.
 // baseR/topR = this deck's shell radii; all shape params come from the LAYER args
@@ -212,8 +210,7 @@ float light_optical_depth(vec3 p, vec2 worldXZ, vec3 L, vec2 windOff){
     // drove od to ~10-30, so exp(-od)≈0 EVERYWHERE: direct sun never reached the cloud and
     // it was lit by ambient ONLY (measured meanCloudLuma 0.187 = dim grey mush). Recalibrated
     // to 0.0045 so sunward faces land at od~0.5-2 (bright) while cores stay od~5-8 (dark) —
-    // bright white clouds WITH 3D self-shadow form. (Raymarch self-lighting only; the ground
-    // shadow map is a separate shader → cloud↔shadow coupling/shadowcheck unaffected.)
+    // bright white clouds WITH 3D self-shadow form. Raymarch self-lighting only.
     return d * P.sun_absorb * 0.0035;
 }
 

@@ -139,8 +139,7 @@ float field_height(vec2 world_xz, uint seed, float spacing, FieldP fp) {
 }
 
 // Large-scale macro height ONLY (continent + uplift base) — NO hills/ridges. This is field_height's `base`
-// term in isolation: ~3-5x cheaper than a full field_height, used by the per-pixel horizon-shadow march
-// (long shadows come from big relief, so the macro shape suffices). Shared so there is ONE macro definition.
+// term in isolation: ~3-5x cheaper than a full field_height. Shared so there is ONE macro definition.
 float field_macro_height(vec2 world_xz, uint seed, FieldP fp) {
     float cont = continent(world_xz, seed, fp.spacing, fp);
     Uplift up = uplift(world_xz, seed, fp);

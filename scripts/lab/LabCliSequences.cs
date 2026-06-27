@@ -178,7 +178,7 @@ public sealed class LabCliSequences
     /// (zero snaps, zero window shifts) and badly understated flying. This path:
     ///   • forward translation (X = spd·t) → a renderOrigin SNAP every 8192 m + continuous leading-edge births;
     ///   • lateral serpentine (Z, amplitude > one region) → crosses Z region/chunk borders, shifts the window in Z;
-    ///   • altitude oscillation → varies LOD selection / chunk count / shadow coverage;
+    ///   • altitude oscillation → varies LOD selection / chunk count;
     ///   • camera faces the direction of travel (samples the path slightly ahead) → the real player view, with
     ///     terrain resolving toward the camera (where pop/stream artifacts actually show).
     /// Use a longer window (e.g. --profile=8) so several borders are crossed inside the measured interval.
@@ -198,7 +198,7 @@ public sealed class LabCliSequences
         float t = (float)_profileT;
         Vector3 PathAt(float tt) => new Vector3(
             _profSpeed * tt,                       // forward → region snaps every 8192 m + leading-edge births
-            900f + 180f * Mathf.Sin(tt * 0.27f),   // altitude 720..1080 m (clears the 639 m peaks) → LOD/chunk/shadow churn
+            900f + 180f * Mathf.Sin(tt * 0.27f),   // altitude 720..1080 m (clears the 639 m peaks) → LOD/chunk churn
             8500f * Mathf.Sin(tt * 0.35f));        // lateral serpentine (>1 region) → Z border crossings + window shifts
         ProfTruePos = PathAt(t);
         ProfLookTarget = PathAt(t + 0.15f);        // look in the direction of travel (terrain rushes toward view)

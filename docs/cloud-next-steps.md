@@ -67,7 +67,7 @@ detail at the horizon (→ blockiness) and the whole dome is origin-ish anchored
 and **march in VIEW SPACE at half-resolution + TAA**. Why it's better: cloud detail tracks the
 screen (no horizon compression), and half-res + temporal reconstruction keeps it cheap. Why it's
 deferred: it's a real architectural change (new pass shape, TAA history/motion-vectors, integrate
-with the existing premultiplied composite + the shadow map which stays world-XZ), and its
+with the existing premultiplied composite), and its
 correctness is **artifact-driven** (ghosting, disocclusion, TAA smearing) — only judgeable in
 motion. The original cloud-polish prompt explicitly said "discuss before that big a change."
 
@@ -79,8 +79,9 @@ is sufficient and view-space is YAGNI for now.
 
 What a view-space implementation touches (for scoping): a half-res screen-space raymarch target;
 reprojection + TAA resolve (history buffer, motion from camera + cloud drift, disocclusion reject);
-upscale/composite; keep `cloud_shadow.glsl` world-XZ (the ground shadow is unaffected); the
-density field + lighting stay identical (reuse). Coupling guarantee unchanged (shadow is separate).
+upscale/composite; the density field + lighting stay identical (reuse). Ground cloud shadows were
+deleted in the 2026-06-27 shadow cleanup, so a future view-space pass does not need to preserve a
+cloud-shadow map.
 
 ---
 
@@ -129,12 +130,10 @@ Candidate levers (cheap; mostly shape, empty-skip absorbs the wider span — NOT
 4. **Vertical-development clouds** — a deck with large thickness + strong type→height so towers punch up.
 5. Possibly a richer taxonomy: the 3 tiers × types as authored deck presets.
 Approach when picked up: a short research pass (deep-research skill or meteorology refs) → brainstorm
-→ spec, since it touches the density model in all 3 coupled shaders (keep `--shadowcheck` PASS).
+→ spec, since it touches the density model and the cloud raymarch layout.
 
 ## D. Health / regression guards (run after any density-affecting change)
 
-- `--shadowcheck --coverage=0.5` → must PASS (Pearson r>0.6); proves the 3 density shaders stay
-  byte-identical (the coupling guarantee). SATURATED at very high coverage is expected, not a fail.
 - `--cloudstats` → dome coverage/alpha/luminance sanity (dome-averaged — divide by coverage for
   per-cloud values).
 - `--lightcheck` → per-deck lighting still distinct after deck-param edits.

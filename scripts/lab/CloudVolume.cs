@@ -80,12 +80,9 @@ public partial class CloudVolume : Node
     // render-thread compute resources (created in InitCompute on the render thread)
     private RenderingDevice _rd = null!;
     private Rid _shader, _pipeline, _outTex, _shapeTex, _detailTex, _weatherTex, _sampler, _paramBuf;
-    // cloud-shadow map (Stage 5): a second compute writes a top-down sun-transmittance
-    // map over the terrain; the terrain light() samples it to attenuate the sun.
-    private Rid _shadowShader, _shadowPipeline, _shadowTex, _shadowParamBuf;
     // Cached uniform sets, built once and reused every frame (the bound RIDs are stable; only
     // buffer contents change via BufferUpdate). Avoids per-frame UniformSetCreate/FreeRid churn.
-    private Rid _cloudSet, _shadowSet;
+    private Rid _cloudSet;
     private bool _setsBuilt;
     // AT-3 physical cloud lighting: 3 sun-dependent colors read back from the atmosphere LUTs (by
     // AtmosphereCompute, CPU, on sun change) + a strength gain, pushed as params. NOT cross-node GPU
@@ -103,9 +100,6 @@ public partial class CloudVolume : Node
     }
     public void SetCloudAtmoLight(float strength) { _atmoCloudStrength = Mathf.Max(0f, strength); }
     public void SetCloudAtmoColors(Vector3 zenith, Vector3 horizon, Vector3 sunTrans) { _atmoZenith = zenith; _atmoHorizon = horizon; _atmoSunTrans = sunTrans; }
-    private Texture2Drd? _shadowRd;
-    private float _shadowStrength = 0.25f;   // opt-in terrain receive; keep it subtle when enabled
-    private bool _shadowMapWanted;           // default view does not consume the 512² cloud-shadow map
     private bool _computeReady;
     private int _frame;
     private float _lastTime;          // for CPU drift integration (dt)
@@ -118,10 +112,6 @@ public partial class CloudVolume : Node
     // sample (cloud_sky.gdshader) reads clean in motion. Ship can dial down (--cloudtex=128) +
     // lean on temporal amortization for the mid-range budget. MUST be set before InitCompute.
     public static int TexW = 1024, TexH = 256;
-    public const int ShadowRes = 512;   // cloud-shadow map (feeds god rays; terrain-receive deferred to the new terrain shader)
-    // L1 fix: set from FieldParams.RegionSizeM at Attach so the shadow map + god-ray
-    // UV stay locked to the actual terrain footprint (was hardcoded 8192, desynced
-    // silently if field_params.json changed).
     private float RegionM = 8192f;
 
     private float _cellScale = 1.6f;   // clump-scale knob: higher = smaller/more clumps (anti-slab). >1 = tighter than the old fixed look.
@@ -146,7 +136,7 @@ public partial class CloudVolume : Node
         if (_layers.Count == 0) { _layers.Add(default); }   // ensure at least layer 0 (filled from knobs)
         SetCameraWorld(cam.GlobalPosition);
         _env = env;
-        RegionM = regionSizeM;   // lock cloud shadow/god-ray footprint to the terrain
+        RegionM = regionSizeM;   // lock cloud/god-ray footprint to the terrain
         _origSky = env.Sky;
         BakeResources();
         BuildSkyMaterial();
@@ -188,7 +178,6 @@ public partial class CloudVolume : Node
     private void BuildSkyMaterial()
     {
         _cloudTex = new Texture2Drd();   // empty RID now; filled on the render thread before any dispatch
-        _shadowRd = new Texture2Drd();   // shadow map, bound to the terrain material (Stage 5b)
         _skyMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/cloud_sky.gdshader") };
         _skyMat.SetShaderParameter("cloud_rd_tex", _cloudTex);
         _skyMat.SetShaderParameter("cloud_enabled", _enabled);
@@ -231,7 +220,7 @@ public partial class CloudVolume : Node
 
         // RD-GLSL has no #include (Godot proposal #9592): splice the shared cloud density math
         // (height_profile/type_gradient/remap/ray_sphere + scale consts) into each compute. Same
-        // mechanism as FieldCompute's field_math splice. ONE source → no silent shadow-match drift.
+        // mechanism as FieldCompute's field_math splice. ONE source for the render density field.
         string densitySrc = System.IO.File.ReadAllText(
             ProjectSettings.GlobalizePath("res://shaders/cloud_density.gdshaderinc"));
 
@@ -265,30 +254,10 @@ public partial class CloudVolume : Node
         // size the buffer from an actual packed sample (Std430Writer determines the layout).
         _paramBuf = _rd.StorageBufferCreate((uint)BuildParams(_p, 0f, 0, 1).Length);
 
-        // --- cloud-shadow map compute (Stage 5) ---
-        string spath = ProjectSettings.GlobalizePath("res://shaders/cloud_shadow.glsl");
-        string ssrc = System.IO.File.ReadAllText(spath)
-            .Replace("// @@INCLUDE cloud_density", densitySrc)
-            .Replace("#[compute]\r\n", string.Empty).Replace("#[compute]\n", string.Empty);
-        var ssource = new RDShaderSource { Language = RenderingDevice.ShaderLanguage.Glsl, SourceCompute = ssrc };
-        RDShaderSpirV sspirv = _rd.ShaderCompileSpirVFromSource(ssource, false);
-        if (!string.IsNullOrEmpty(sspirv.CompileErrorCompute)) { GD.PrintErr("cloud_shadow.glsl: " + sspirv.CompileErrorCompute); return; }
-        _shadowShader = _rd.ShaderCreateFromSpirV(sspirv, "cloud_shadow");
-        _shadowPipeline = _rd.ComputePipelineCreate(_shadowShader);
-        var sf = new RDTextureFormat
-        {
-            Width = ShadowRes, Height = ShadowRes, Format = RenderingDevice.DataFormat.R16Sfloat,
-            UsageBits = RenderingDevice.TextureUsageBits.StorageBit | RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanUpdateBit | RenderingDevice.TextureUsageBits.CanCopyToBit,
-        };
-        _shadowTex = _rd.TextureCreate(sf, new RDTextureView());
-        _rd.TextureClear(_shadowTex, new Color(1, 1, 1, 1), 0, 1, 0, 1);   // full sun until first dispatch
-        _shadowParamBuf = _rd.StorageBufferCreate((uint)BuildShadowParams(_p, 0f).Length);
-
         // assign RIDs ONCE, before any dispatch or material sampling
         if (_cloudTex != null) { _cloudTex.TextureRdRid = _outTex; }
-        if (_shadowRd != null) { _shadowRd.TextureRdRid = _shadowTex; }
         _computeReady = true;
-        GD.Print("CloudVolume: compute initialized on render thread (clouds + shadow map)");
+        GD.Print("CloudVolume: compute initialized on render thread");
     }
 
     // Noise/weather volumes are [0,1]-ish — 16-bit half is ample (10-bit mantissa) and HALVES
@@ -332,7 +301,7 @@ public partial class CloudVolume : Node
         return rid;
     }
 
-    // Build the two compute uniform sets once (lazy, after InitCompute made the RIDs live).
+    // Build the compute uniform set once (lazy, after InitCompute made the RIDs live).
     private void EnsureUniformSets()
     {
         if (_setsBuilt) { return; }
@@ -343,12 +312,6 @@ public partial class CloudVolume : Node
         var uParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; uParam.AddId(_paramBuf);
         _cloudSet = _rd.UniformSetCreate(new Array<RDUniform> { uOut, uShape, uDetail, uWeather, uParam }, _shader, 0);
 
-        var sOut = new RDUniform { UniformType = RenderingDevice.UniformType.Image, Binding = 0 }; sOut.AddId(_shadowTex);
-        var sShape = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 1 }; sShape.AddId(_sampler); sShape.AddId(_shapeTex);
-        var sDetail = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 2 }; sDetail.AddId(_sampler); sDetail.AddId(_detailTex);
-        var sWeather = new RDUniform { UniformType = RenderingDevice.UniformType.SamplerWithTexture, Binding = 3 }; sWeather.AddId(_sampler); sWeather.AddId(_weatherTex);
-        var sParam = new RDUniform { UniformType = RenderingDevice.UniformType.StorageBuffer, Binding = 4 }; sParam.AddId(_shadowParamBuf);
-        _shadowSet = _rd.UniformSetCreate(new Array<RDUniform> { sOut, sShape, sDetail, sWeather, sParam }, _shadowShader, 0);
         _setsBuilt = true;
     }
 
@@ -383,10 +346,9 @@ public partial class CloudVolume : Node
         byte[] pb = BuildParams(p, now, offset, stride);
         _rd.BufferUpdate(_paramBuf, 0, (uint)pb.Length, pb);
 
-        // Build the two uniform sets ONCE and reuse them: all bound RIDs (textures, sampler,
+        // Build the uniform set ONCE and reuse it: all bound RIDs (textures, sampler,
         // param buffers) are stable after InitCompute — only the buffer CONTENTS change, via the
-        // in-place BufferUpdate above. Recreating the sets every frame (the old code) churned 10
-        // RDUniform + 2 Array allocations + UniformSetCreate/FreeRid per frame for no reason.
+        // in-place BufferUpdate above.
         EnsureUniformSets();
 
         long list = _rd.ComputeListBegin();
@@ -394,20 +356,6 @@ public partial class CloudVolume : Node
         _rd.ComputeListBindUniformSet(list, _cloudSet, 0);
         _rd.ComputeListDispatch(list, (uint)((TexW + 7) / 8), (uint)((TexH + 7) / 8), 1);
         _rd.ComputeListEnd();
-
-        // --- cloud-shadow map dispatch (same density field, top-down toward sun) ---
-        // The default review look does not consume this texture: terrain cloud shadows are opt-in and the
-        // god-ray layer defaults to screen luminance occlusion. Skip the dispatch unless a consumer asks for it.
-        if (_shadowMapWanted)
-        {
-            byte[] spb = BuildShadowParams(p, now);
-            _rd.BufferUpdate(_shadowParamBuf, 0, (uint)spb.Length, spb);
-            long slist = _rd.ComputeListBegin();
-            _rd.ComputeListBindComputePipeline(slist, _shadowPipeline);
-            _rd.ComputeListBindUniformSet(slist, _shadowSet, 0);
-            _rd.ComputeListDispatch(slist, (uint)((ShadowRes + 7) / 8), (uint)((ShadowRes + 7) / 8), 1);
-            _rd.ComputeListEnd();
-        }
 
         if (_statsCountdown > 0 && --_statsCountdown == 0) { DumpDomeStats(p); }
     }
@@ -440,28 +388,6 @@ public partial class CloudVolume : Node
                  "Low covered = SPARSE; high covered + low luma = WASHED-OUT/too dark.");
     }
 
-    // Field order MUST match cloud_shadow.glsl's ParamsBuf; Std430Writer handles alignment.
-    private byte[] BuildShadowParams(CloudParams p, float time)
-    {
-        float[] layerData = GetPackedLayers(out _layerCount);
-        return new Std430Writer()
-            .Vec4(_sunDir, 0f)                          // sun_dir
-            .Vec2(ShadowRes, ShadowRes)                 // tex_size
-            .Vec2(RegionM, 16f)                         // region (size, march steps)
-            .F(time)
-            .F(p.Coverage).F(p.Density).F(p.CloudType)
-            .F(p.AltitudeM).F(p.ThicknessM)
-            .F(p.DriftSpeed).F(p.DriftDirDeg)
-            .F(p.Size).F(p.Detail).F(p.DetailSize).F(p.Edge)
-            .F(_shadowStrength)
-            .F(_groundHeight)                           // terrain mid-elevation
-            .Vec4(_windOffset.X, _windOffset.Y, _cellScale, _layerCount)   // tail
-            .Vec4Array(layerData)                       // layers[48] (6 vec4/layer; shadow uses density 0-11 + profile/shape/anti 19-23)
-            .ToArray();
-    }
-    private float _groundHeight = 250f;   // terrain mid-elevation (set at Attach)
-    public void SetGroundHeight(float h) { _groundHeight = h; }
-
     /// Swap the active deck stack (roadmap #2: presets author a layer stack). Layer 0 stays
     /// knob-driven (see PackLayers) so the legacy UI + single-layer regression hold; the stack
     /// defines decks 1+ and the per-deck mix. Console-logs the result so the swap is verifiable
@@ -486,7 +412,7 @@ public partial class CloudVolume : Node
     }
 
     /// The exact packed layer buffer production renders (layer-0 override incl. profile/shape/anti-repeat
-    /// applied). Used by CloudShadowCheck so the diagnostic tests the ACTIVE config, not a rebuilt neutral one.
+    /// applied). Used by diagnostics so checks can test the ACTIVE config, not a rebuilt neutral one.
     public float[] PackedLayers(out int count)
     {
         float[] packed = GetPackedLayers(out count);
@@ -750,8 +676,7 @@ public partial class CloudVolume : Node
 
     public CloudParams Params => _p;
     public bool Enabled => _enabled;
-    public bool ComputeReady => _computeReady;     // shadow Texture2Drd RID is live
-    public void SetShadowMapWanted(bool wanted) => _shadowMapWanted = wanted;
+    public bool ComputeReady => _computeReady;
     public Color SkyHorizonColor => _skyHorizon;   // for aerial-perspective tinting
 
     // ---- public knob interface (UI → here only). Knobs mutate _p; RenderProcess
@@ -811,7 +736,6 @@ public partial class CloudVolume : Node
                 _lastCloudCameraWorld = _camWorld;
                 _hasVisualCloudOrigin = true;
                 break;
-            case "shadow_strength": _shadowStrength = v; break;   // ground-shadow darkness (Stage 5)
             case "cell_scale":      _cellScale = v; MarkLayersDirty(); break;        // clump scale (anti-slab; higher = smaller clumps)
             case "perdeck":         _perDeck = Mathf.Clamp(v, 0f, 1f); break;   // 0=global lighting, 1=per-deck
             case "overcast_strength": _overcastStrength = Mathf.Max(0f, v); _skyUniformsDirty = true; break;   // overcast gloom dial
@@ -824,10 +748,6 @@ public partial class CloudVolume : Node
         }
     }
 
-    /// The cloud-shadow map (sun transmittance over the terrain), for the terrain
-    /// material's light() to sample. Valid after InitCompute (cleared to full-sun
-    /// before then). Null until BuildSkyMaterial runs.
-    public Texture2Drd? ShadowTexture => _shadowRd;
     public float RegionSize => RegionM;
 
     // NOTE: a benign 3-line "Texture (binding 1/34) not valid" burst can print at app QUIT only:
@@ -843,12 +763,10 @@ public partial class CloudVolume : Node
         {
             RenderingServer.CallOnRenderThread(Callable.From(() =>
             {
-                if (_setsBuilt) { _rd.FreeRid(_cloudSet); _rd.FreeRid(_shadowSet); }
+                if (_setsBuilt) { _rd.FreeRid(_cloudSet); }
                 _rd.FreeRid(_sampler); _rd.FreeRid(_paramBuf);
                 _rd.FreeRid(_outTex); _rd.FreeRid(_shapeTex); _rd.FreeRid(_detailTex); _rd.FreeRid(_weatherTex);
                 _rd.FreeRid(_pipeline); _rd.FreeRid(_shader);
-                _rd.FreeRid(_shadowParamBuf); _rd.FreeRid(_shadowTex);
-                _rd.FreeRid(_shadowPipeline); _rd.FreeRid(_shadowShader);
             }));
         }
         // Texture2Drd wrappers are RefCounted (freed when refs drop). No FogVolume to

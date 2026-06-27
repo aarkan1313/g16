@@ -26,8 +26,8 @@ ROUTING (registry → setter, the ONLY UI→effect path)
 ORCHESTRATION (per-frame, no math)
   GodRaysScreen.cs (Node3D) — owns the fullscreen quad + ShaderMaterial, the public setter interface,
                              and per-frame: projects the sun to screen UV (gated by IsPositionBehind +
-                             view-align with a smooth edge fade), pushes inv_view_proj / cam_world /
-                             aspect. Attach(camera, sun); SetEnabled(on). occ_mode 2 (luminance) default.
+                             view-align with a smooth edge fade), pushes aspect. Attach(camera, sun);
+                             SetEnabled(on). occ_mode 2 (luminance) default.
         │
         ▼
 SHADER (the look)
@@ -68,9 +68,6 @@ DIAGNOSTICS (windowed)
 
 - **2 = luminance (default, real scene):** sharp on-screen cloud silhouettes near the sun → crisp
   beams. Polarity set by `cloud_invert`. The chosen production path.
-- **3 = cloud shadow map (dormant):** samples the mood-independent top-down transmittance the cloud
-  system already bakes. No sky-glow veil, but the soft 512² map gives shafts too weak/soft to read,
-  even with the `cloud_sharpen_lo/hi` contrast curve. Kept as a documented fallback, not default.
 - **0 = depth only:** the synthetic `godray_test.tscn` harness.
 
 ## Beam shaping (the radial march)
@@ -116,6 +113,6 @@ Godot ... --path C:/Wg16/wg-16-project res://scenes/terrain_lab.tscn -- \
 
 ## Do-not-retry (failed approaches, see memory `godray-emission-vs-albedo-rootcause`)
 
-Froxel/volumetric fog (3× — washy fog, not beams); occ_mode 3 as default (too soft); the angular-mean
+Froxel/volumetric fog (3× — washy fog, not beams); cloud-shadow-map occlusion as default (too soft, now deleted); the angular-mean
 high-pass (5× cost + residual fog); the structure-gate multiplier (rim-lit cloud edges); opaque
 `scene + rays` blend (double-processes the frame).

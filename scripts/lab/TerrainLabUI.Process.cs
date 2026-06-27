@@ -272,8 +272,7 @@ public partial class TerrainLabUI : Control
             if (_byId.TryGetValue("time_of_day", out var tc)) { SetWidgetValueSilent(tc, h); }
         }
         // push camera world pos for the ground anti-repetition distance LOD (Unit 1)
-        // AND the world-space cloud raymarch (rays start at the camera so clouds + the
-        // ground shadow map share one world frame — fixes the dome-vs-world mismatch).
+        // AND the world-space cloud raymarch (rays start at the camera so clouds stay world-anchored).
         if (_ready)
         {
             var camN = GetNode<Camera3D>("/root/TerrainLabRoot/Camera");
@@ -287,7 +286,7 @@ public partial class TerrainLabUI : Control
             //     geometry shift by the SAME −Δorigin in lockstep → no relative jump → no pop. FlyCamera's
             //     Position += delta integrator is frame-agnostic, so navigation is unaffected.
             //   • EVERY world-space consumer (sky/clouds/atmosphere/quadtree/popmeter) gets the TRUE pos so the
-            //     sky-lane's world-anchored cloud/shadow/aerial math is unchanged.
+            //     sky-lane's world-anchored cloud/aerial math is unchanged.
             // When CDLOD is off (single full mesh at true origin), renderOrigin stays 0 → this is a no-op.
             Vector3 renderOrigin = _terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero;
             // --profmove drives a TRUE-world traverse: take its position directly (NOT camN.Position+renderOrigin,

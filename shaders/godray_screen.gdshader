@@ -14,27 +14,15 @@ render_mode unshaded, cull_disabled, depth_test_disabled, depth_draw_never, blen
 // quad reads the rendered frame + DEPTH and radial-blurs an OCCLUSION buffer outward from the sun's
 // screen position, adding the bright fan of crepuscular beams back.
 //
-// OCCLUSION = DEPTH-based (the standard, robust choice — confirmed against SIsilicon's plugin + the
-// cross-check 2026-06-19). Sky sits at the FAR plane; under Godot 4.3+ Reverse-Z the far plane is
-// depth ≈ 0.0, near = 1.0. So "light reaches this pixel" = depth ≈ 0 (sky); near geometry = occluder.
-// (Earlier we masked by luminance, which is the WRONG choice for a scene with clouds in the sky:
-// bright clouds became fake light sources and dark cloud undersides became occluders — backwards.
-// occ_mode lets us A/B: 0 = depth, 1 = luminance.)
+// OCCLUSION = depth gates out terrain, then occ_mode 2 uses on-screen cloud luminance near the sun.
+// Sky sits at the FAR plane; under Godot 4.3+ Reverse-Z the far plane is depth near 0.0, near = 1.0.
+// So depth first answers "is this sky"; the luminance split then answers "is this sky pixel cloud or gap."
 //
 // DITHER: a per-pixel random offset on the first sample breaks the banding that a fixed-step radial
 // blur produces at low sample counts (also from the cross-check / SIsilicon).
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform sampler2D depth_tex  : hint_depth_texture;
-
-// Cloud occlusion from the REAL cloud field (mood-independent): sample the cloud shadow map
-// (top-down sun transmittance over world XZ) at this pixel's world position. occ_mode==3.
-uniform sampler2D cloud_shadow_tex : filter_linear, repeat_disable, hint_default_white;
-uniform float cloud_shadow_region = 8192.0;   // CloudVolume.RegionSize
-uniform bool  cloud_shadow_on = false;         // true only when the cloud shadow map is requested and its RID is live
-uniform mat4  inv_view_proj;                    // inverse(projection*view), for depth→world reconstruction
-uniform vec3  cam_world = vec3(0.0);            // camera world pos (for the sky view-ray origin)
-uniform float cloud_altitude = 1850.0;          // cloud-deck height to project sky view-rays to (world Y)
 
 // Sky vs geometry threshold (Reverse-Z): the sky clears to depth EXACTLY 0.0; ALL geometry is > 0. Under
 // reverse-Z even distant terrain (mountains km away) has a TINY depth (~1e-6..1e-4) — the old 0.0005 cutoff
@@ -67,13 +55,6 @@ uniform float dither    : hint_range(0.0, 1.0) = 1.0;  // sample-start jitter to
 uniform float highpass : hint_range(0.0, 1.0) = 1.0;
 uniform float gate_width : hint_range(0.004, 0.08) = 0.02;    // tangential offset of the high-pass mean (UV); ~half a shaft width
 uniform float aspect = 1.7777778;   // viewport width/height — keeps the tangential step isotropic on a wide screen
-// SUN-CLOUD GATE (the AAA fix for the open-sky veil/blast): radial scatter over a CLEAR sky is a large
-// uniform "DC" term (~0.86 additive at exposure 0.6) → a milky veil over the scene + a central blast,
-// with NO beam structure (beams are the scatter's spatial VARIATION, which needs cloud crossing the sun).
-// Physically, god rays ARE cloud-shadows across the sun: no cloud over the sun ⇒ no rays, just the real
-// sun disc. So scale the whole effect by how much cloud sits over/around the sun (from the SAME cloud
-// shadow map as occ_mode 3). Clear sun → ~0 (no veil/blast); broken cloud → full beams. Mood-independent.
-uniform float cloud_gate_soft : hint_range(0.05, 1.0) = 0.5;  // cloud-presence needed for full-strength rays
 // occ_mode: 0 = depth only (terrain/solid geometry; used by the synthetic test scene),
 //           2 = HYBRID (real scene): depth (terrain) OR cloud. Clouds are drawn in the sky at
 //               far-plane depth so depth can't see them; instead, a sky pixel that is DARKER than the
@@ -85,8 +66,6 @@ uniform float cloud_lum : hint_range(0.0, 2.0) = 0.78;   // sky brighter than th
 uniform float cloud_radius : hint_range(0.05, 1.5) = 0.6; // only treat darkness as cloud within this UV radius of the sun
 uniform float radius_soft : hint_range(0.05, 0.8) = 0.4;   // reach falloff width (WIDE = gradual vignette, no visible edge)
 uniform float cloud_soft  : hint_range(0.02, 0.5) = 0.18;  // cloud/sky luminance softness (wider = smoother, less patchy)
-uniform float cloud_sharpen_lo : hint_range(0.0, 1.0) = 0.45;  // occ_mode 3: transmittance below this → full cloud (occluder)
-uniform float cloud_sharpen_hi : hint_range(0.0, 1.0) = 0.75;  // occ_mode 3: transmittance above this → full open sky
 uniform bool  cloud_invert = false;   // occ_mode 2: false = bright cloud is the occluder (daylit, default); true = dark cloud (backlit)
 uniform int   debug_mode = 0;          // 0 = normal; 1 = show occlusion mask; 2 = mark sun_screen_uv + gate
 
@@ -99,34 +78,12 @@ void vertex() {
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
 }
 
-// Reconstruct world position from a screen UV + its depth (Reverse-Z: far/sky ≈ 0.0).
-vec3 world_from_depth(vec2 uv, float depth) {
-	vec4 ndc = vec4(uv * 2.0 - 1.0, depth, 1.0);
-	vec4 wp = inv_view_proj * ndc;
-	return wp.xyz / wp.w;
-}
-
 // 1.0 = light reaches here (open sky), 0.0 = occluder (terrain, or cloud).
 float occlusion(vec2 uv) {
 	float d = texture(depth_tex, uv).r;
 	bool isSky = d < sky_depth_eps;     // Reverse-Z: sky clears to EXACTLY 0.0; any geometry is > eps
 	if (!isSky) { return 0.0; }         // solid geometry in front of the sky = hard occluder
 	if (occ_mode == 0) { return 1.0; }  // depth-only (test scene): open sky = light
-
-	if (occ_mode == 3 && cloud_shadow_on) {
-		// CLOUD FIELD occlusion: find this sky pixel's world-XZ on the cloud deck (where its view ray
-		// pierces cloud_altitude), sample the shadow map's sun transmittance there. 1=open gap, 0=cloud.
-		vec3 dir = normalize(world_from_depth(uv, 0.5) - cam_world);   // view dir for this pixel
-		float t = (dir.y > 1e-3) ? (cloud_altitude - cam_world.y) / dir.y : -1.0;
-		if (t <= 0.0) { return 1.0; }   // ray doesn't reach the deck (looking down/parallel) → open
-		vec2 hitXz = (cam_world + dir * t).xz;
-		vec2 suv = hitXz / cloud_shadow_region + 0.5;
-		if (any(lessThan(suv, vec2(0.0))) || any(greaterThan(suv, vec2(1.0)))) { return 1.0; } // off-map → open
-		// SHARPEN the soft top-down transmittance into crisper open/cloud edges so the high-pass produces
-		// defined shafts (not a faint smear). cloud_sharpen_lo/hi bracket the transmittance contrast curve.
-		float trans = texture(cloud_shadow_tex, suv).r;
-		return smoothstep(cloud_sharpen_lo, cloud_sharpen_hi, trans);
-	}
 
 	// occ_mode == 2: luminance heuristic near the sun. CRITICAL: in a DAYLIT scene the clouds are BRIGHTER
 	// than the blue sky, so the OCCLUDER is the BRIGHT pixel (cloud blocks the sun) and the clear sky is
@@ -192,20 +149,6 @@ float march_beam(vec2 start_uv) {
 	return s;
 }
 
-// How much cloud sits over/around the sun → the god-ray master gate. 1 = sun well behind broken cloud
-// (full beams), 0 = clear sun (no rays, just the natural disc — kills the open-sky veil/blast). Averages
-// the cloud-shadow transmittance in a small ring around the sun so a single gap doesn't flicker it off.
-// Only active for the real-scene cloud path (occ_mode 3); the test scene / luminance fallback isn't gated.
-float sun_cloud_gate() {
-	if (occ_mode != 3 || !cloud_shadow_on) { return 1.0; }
-	const float r = 0.05;   // sample ring radius (UV) around the sun
-	float open = occlusion(sun_screen_uv)
-		+ occlusion(sun_screen_uv + vec2( r, 0.0)) + occlusion(sun_screen_uv + vec2(-r, 0.0))
-		+ occlusion(sun_screen_uv + vec2(0.0, r)) + occlusion(sun_screen_uv + vec2(0.0, -r));
-	open *= 0.2;            // mean transmittance near the sun (1 = all open sky)
-	return smoothstep(0.0, cloud_gate_soft, 1.0 - open);   // cloud presence → ray strength
-}
-
 void fragment() {
 	vec2 uv = SCREEN_UV;
 
@@ -224,7 +167,7 @@ void fragment() {
 				float s = (highpass >= 0.999) ? march_beam(uv)
 						: (highpass <= 0.001) ? march_scatter(uv)
 						: mix(march_scatter(uv), march_beam(uv), highpass);
-				scatter = s * exposure * sun_gate * sun_cloud_gate() * reach;   // sun_cloud_gate: occ_mode-3-only no-op here
+				scatter = s * exposure * sun_gate * reach;
 			}
 		}
 	}

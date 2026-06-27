@@ -44,21 +44,10 @@ public sealed class TimeKey
     public float Ambient = 0.65f, AmbientSky = 0.95f;
 }
 
-/// CELESTIAL sun appearance (Stage-1 disc + shadow softness). Orthogonal to the Time physics; bound to
-/// the cloud_sky.gdshader sun + the DirectionalLight shadow. Becomes part of the Celestial layer (Stage 3).
+/// CELESTIAL sun appearance. Orthogonal to the Time physics; bound to the cloud_sky.gdshader sun.
 public sealed class SunDiscState
 {
     public string Name = "";
-    public float ShadowSoft = 1.0f, DiscAngular = 0.55f;   // sun.ShadowBlur, sun.LightAngularDistance — ~0.53deg = the real sun's angular size (physically-correct penumbra; pillars)
-    // SHADOW casting params — routed through ComposeLighting (the one writer) so lab sliders survive the
-    // per-frame re-assert. Defaults == the previously hard-coded values, so behaviour is unchanged at first.
-    // Bias is the acne<->peter-panning lever (was never set = Godot default 1.0/2.0); MaxDist/splits were
-    // literals in ComposeLighting. Tunable so the terrain lane can re-dial shadows as the geometry evolves.
-    public float ShadowNormalBias = 3.0f;    // sun.ShadowNormalBias — raise to kill acne, lower if shadows detach or float
-    public float ShadowMaxDist = 3500f;      // sun.DirectionalShadowMaxDistance (m) — near/detail contact shadows only.
-                                             // Broad far-terrain occlusion belongs to horizon shadows; keeping CSM
-                                             // short avoids coarse CDLOD chunks casting blocky shifting shadows.
-    public float ShadowSplit1 = 0.06f, ShadowSplit2 = 0.20f, ShadowSplit3 = 0.50f;   // more near-focused split distribution
     public float Size = 0.6f, Limb = 0.55f;
     public float CoronaSize = 1200f, CoronaEnergy = 2.0f, HaloSize = 90f, HaloEnergy = 0.4f;
     public float Redden = 1.0f, ReddenOnset = 0.25f, HorizonGrow = 0.6f, CloudRedden = 0.8f;

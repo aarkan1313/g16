@@ -94,7 +94,7 @@ public sealed class LuminaryCheckRunner
             int maxC = MaxDiff(_a!, Grab());
             // D: append an extra Sun (the added-body path) via the data path, then recompose.
             var edited2 = DefaultLuminaryDicts();
-            edited2.Add(new Godot.Collections.Dictionary { { "kind", 0 }, { "color", new Color(0.62f, 0.78f, 1.0f) }, { "size", 0.9f }, { "phase", 1f }, { "az_offset", 60f }, { "decl_scale", 0.88f }, { "energy", 1.3f }, { "casts_shadow", false }, { "atmosphere", true }, { "priority", 80f } });
+            edited2.Add(new Godot.Collections.Dictionary { { "kind", 0 }, { "color", new Color(0.62f, 0.78f, 1.0f) }, { "size", 0.9f }, { "phase", 1f }, { "az_offset", 60f }, { "decl_scale", 0.88f }, { "energy", 1.3f }, { "atmosphere", true }, { "priority", 80f } });
             _applyLuminaries(edited2);
             _diffC = maxC;
             _stage = 4; _framesD = 0;
@@ -119,8 +119,8 @@ public sealed class LuminaryCheckRunner
     /// The default body list (sun + moon), as objectlist dicts — matches data/luminaries.json.
     private static List<Godot.Collections.Dictionary> DefaultLuminaryDicts() => new()
     {
-        new() { { "kind", 0 }, { "color", new Color(1.0f, 0.95f, 0.86f) }, { "size", 0.6f }, { "phase", 1f }, { "az_offset", 0f }, { "decl_scale", 1f }, { "energy", 1.3f }, { "casts_shadow", true }, { "atmosphere", true }, { "priority", 100f } },
-        new() { { "kind", 1 }, { "color", new Color(0.85f, 0.88f, 1.0f) }, { "size", 1.2f }, { "phase", 1f }, { "az_offset", 35f }, { "decl_scale", 0.72f }, { "energy", 0.5f }, { "casts_shadow", true }, { "atmosphere", false }, { "priority", 10f } },
+        new() { { "kind", 0 }, { "color", new Color(1.0f, 0.95f, 0.86f) }, { "size", 0.6f }, { "phase", 1f }, { "az_offset", 0f }, { "decl_scale", 1f }, { "energy", 1.3f }, { "atmosphere", true }, { "priority", 100f } },
+        new() { { "kind", 1 }, { "color", new Color(0.85f, 0.88f, 1.0f) }, { "size", 1.2f }, { "phase", 1f }, { "az_offset", 35f }, { "decl_scale", 0.72f }, { "energy", 0.5f }, { "atmosphere", false }, { "priority", 10f } },
     };
 
     /// Max absolute per-byte difference between two equal-length RGBA8 buffers (0 = identical).

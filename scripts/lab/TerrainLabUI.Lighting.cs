@@ -67,7 +67,6 @@ public partial class TerrainLabUI : Control, ILightingHost
     private static Luminary LuminaryFromJson(System.Text.Json.JsonElement e)
     {
         float G(string k, float fb) => e.TryGetProperty(k, out var v) ? v.GetSingle() : fb;
-        bool B(string k, bool fb) => e.TryGetProperty(k, out var v) ? v.GetBoolean() : fb;
         Color C(string k, Color fb)
         {
             if (e.TryGetProperty(k, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Array)
@@ -85,7 +84,7 @@ public partial class TerrainLabUI : Control, ILightingHost
             Color = C("color", new Color(1f, 0.95f, 0.86f)),
             Size = G("size", 0.6f), Phase = G("phase", 1.0f), AzOffset = G("az_offset", 0f),
             DeclScale = G("decl_scale", 1.0f), LightEnergy = G("energy", 1.3f),
-            CastsShadow = B("casts_shadow", true), ContributesToAtmosphere = B("atmosphere", true),
+            ContributesToAtmosphere = e.TryGetProperty("atmosphere", out var av) ? av.GetBoolean() : true,
             Priority = G("priority", 50f),
         };
     }
@@ -111,7 +110,7 @@ public partial class TerrainLabUI : Control, ILightingHost
             Color = C("color", new Color(1f, 0.95f, 0.86f)),
             Size = G("size", 0.6f), Phase = G("phase", 1.0f), AzOffset = G("az_offset", 0f),
             DeclScale = G("decl_scale", 1.0f), LightEnergy = G("energy", 1.3f),
-            CastsShadow = B("casts_shadow", true), ContributesToAtmosphere = B("atmosphere", true),
+            ContributesToAtmosphere = B("atmosphere", true),
             Priority = G("priority", 50f),
         };
     }
@@ -122,7 +121,7 @@ public partial class TerrainLabUI : Control, ILightingHost
         { "kind", b.Kind == LuminaryKind.Moon ? 1 : 0 },
         { "color", b.Color }, { "size", b.Size }, { "phase", b.Phase },
         { "az_offset", b.AzOffset }, { "decl_scale", b.DeclScale }, { "energy", b.LightEnergy },
-        { "casts_shadow", b.CastsShadow }, { "atmosphere", b.ContributesToAtmosphere },
+        { "atmosphere", b.ContributesToAtmosphere },
         { "priority", b.Priority },
     };
 
@@ -138,8 +137,6 @@ public partial class TerrainLabUI : Control, ILightingHost
     // off (finite single mesh) so the composer keeps the plain mood fog. FogViewScale dials the coupled baseline.
     public float CdlodViewDistance => _terrain.CdlodActive ? _terrain.LoadRing * _params.RegionSizeM : 0f;
     public float FogViewScale { get; set; } = 1.0f;
-    // ARC A.1: directional shadow atlas size (px). 8192 default; 6144/4096 = the in-motion shadow-spike dial-down.
-    public int ShadowAtlasSize { get; set; } = 8192;
     // OrientSun + SyncLightControlsToScene are defined in TerrainLabUI.Apply.cs (now public to satisfy the
     // interface) — they stay there because they're shared with the sun-angle sliders + other callers.
 }

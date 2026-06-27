@@ -100,29 +100,6 @@ uniform float cliff_hi = 0.72;
 uniform float ground_rough = 0.92;
 
 
-// ── Heightfield HORIZON SHADOWS (long-range terrain self-shadow) ─────────────────────────────
-// Per-pixel macro-height march toward the sun: where the terrain rises above the sun ray, occlude the
-// DIRECT light via AO + AO_LIGHT_AFFECT=1 (no light()/BRDF rewrite). hz_on=false => byte-identical. Cheap:
-// marches field_macro_height (macro only), increasing stride, gated OFF at high sun (no long shadows there).
-// Parked OFF: the current broad terrain shadowing path was visually unstable in the review scene.
-uniform bool  hz_on = false;
-uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);               // unit dir TOWARD the sun (pushed by LightingComposer each Compose)
-uniform float hz_steps    : hint_range(4.0, 48.0)   = 10.0;    // march steps
-uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 9000.0; // horizontal reach (m)
-uniform float hz_stride0  : hint_range(4.0, 200.0)  = 40.0;    // first step length (m)
-uniform float hz_growth   : hint_range(1.0, 2.0)    = 1.45;    // stride multiplier per step
-uniform float hz_softness : hint_range(0.005, 0.30) = 0.28;    // wider penumbra = softer macro shadow
-uniform float hz_strength : hint_range(0.0, 1.0)    = 0.18;    // gentle accent; avoids stacking a second hard shadow
-uniform float hz_sun_gate : hint_range(0.05, 1.0)   = 0.35;    // only at low sun (sin elev < 0.35 ≈ 20 deg)
-
-// Cloud ground shadows: the CloudVolume compute pass bakes sun transmittance into this map.
-// The value already includes the Clouds-tab shadow_strength knob; sample it here and feed
-// it through AO_LIGHT_AFFECT so it attenuates direct light without darkening the material.
-uniform sampler2D cloud_shadow_tex : filter_linear, repeat_disable, hint_default_white;
-uniform float cloud_shadow_region = 8192.0;
-uniform bool  cloud_shadow_on = false;
-uniform bool  cloud_shadow_debug = false;
-
 // S2b: the ONE shared distance-fade curve future surface detail (textures/parallax) must ride, so all
 // detail transitions share a single soft band (no quality-pop / no stacked rings). UNUSED today — the
 // placeholder ground has no distance-varying detail yet. Reserved seam for the surfacing arc.
@@ -360,41 +337,6 @@ float toksvig_rough_floor(float gloss) {
     return sqrt(clamp(1.0 - gloss, 0.0, 1.0));         // normal variance → minimum roughness
 }
 
-// HORIZON SHADOW: returns sun VISIBILITY [0,1] (1 = full sun, 0 = fully occluded by distant terrain along
-// the sun ray). Marches the cheap macro height (field_macro_height) toward the sun with an increasing stride;
-// soft penumbra from the running-max occluder angle. Gated: free when the sun is below the horizon or high in
-// the sky (no long shadows there). World-locked + LOD-independent (reads the analytic field, not the mesh).
-float horizon_shadow(vec2 surf_xz, float surf_h, vec3 sdir) {
-    float sunUp = sdir.y;                             // sin(elevation)
-    if (sunUp <= 0.02 || sunUp >= hz_sun_gate) { return 1.0; }   // below horizon / high sun → skip (free)
-    vec2 hdir = sdir.xz;
-    float hlen = length(hdir);
-    if (hlen < 1e-4) { return 1.0; }
-    hdir /= hlen;
-    float tanSun = sunUp / hlen;                      // sun ray rise per horizontal metre (tan of elevation)
-    float maxAng = -1e9;                              // running max occluder angle (rise/run) above surf
-    float dist = hz_stride0;
-    float stride = hz_stride0;
-    int n = int(hz_steps);
-    for (int i = 0; i < n; i++) {
-        if (dist > hz_maxdist) { break; }
-        vec2 p = surf_xz + hdir * dist;
-        float h = field_macro_height(p, uint(analytic_seed), ground_fieldp());
-        maxAng = max(maxAng, (h - surf_h) / dist);    // angle this occluder subtends above the surface point
-        stride *= hz_growth;
-        dist += stride;
-    }
-    // occluded where the tallest occluder angle exceeds the sun ray angle; soft over hz_softness band.
-    float occ = smoothstep(0.0, hz_softness, maxAng - tanSun);   // 0 = lit, 1 = fully occluded
-    return clamp(1.0 - occ * hz_strength, 0.0, 1.0);
-}
-
-float cloud_shadow_visibility(vec2 surf_xz) {
-    vec2 uv = surf_xz / cloud_shadow_region + vec2(0.5);
-    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) { return 1.0; }
-    return clamp(texture(cloud_shadow_tex, uv).r, 0.0, 1.0);
-}
-
 void fragment() {
     if (debug_field > 0.5) {   // erosion-lab false-colour overlay (water/sediment/flow), region-UV sampled
         vec2 ruv = v_surf_xz / region_size + vec2(0.5);
@@ -499,26 +441,4 @@ void fragment() {
         ROUGHNESS = ground_rough;
     }
 
-    float direct_vis = 1.0;
-    bool direct_shadow = false;
-    if (cloud_shadow_on) {
-        float cv = cloud_shadow_visibility(v_surf_xz);
-        direct_vis *= cv;
-        direct_shadow = true;
-        if (cloud_shadow_debug) {
-            ALBEDO = vec3(cv);
-            ROUGHNESS = 1.0;
-        }
-    }
-
-    // Heightfield horizon shadow → occlude DIRECT light (AO_LIGHT_AFFECT=1 makes AO multiply direct light).
-    // Sky/bounce fill is unaffected by AO, so a shadowed point still gets its sky fill.
-    if (hz_on) {
-        direct_vis *= horizon_shadow(v_surf_xz, v_h, sun_dir_to);
-        direct_shadow = true;
-    }
-    if (direct_shadow) {
-        AO = direct_vis;
-        AO_LIGHT_AFFECT = 1.0;
-    }
 }

@@ -35,8 +35,7 @@ public sealed partial class CdlodTerrain : Node3D
         public int SeenFrame = -1;     // last Tick frame this slot was in the visible set (vs _frame → retire)
         public int CacheSlot = -1;     // field-cache texture-array layer for this chunk (-1 = none → live-eval path)
         public bool CacheReady;        // the chunk's bake has landed → vertex shader samples the cache, not the field
-        public bool IsFar;             // horizon shell chunk: no field cache, no AABB, no shadow casting
-        public bool CastsShadow;       // last pushed CastShadow state (shadow-ring membership changes as camera moves)
+        public bool IsFar;             // horizon shell chunk: no field cache, no AABB
     }
     private int _frame;   // monotonic Tick counter for the seen-this-frame test (no per-slot Variant churn)
     private bool _forceReapply;   // one-shot: re-push lod_viz + AABB to ALL live slots next Tick (live toggle A/B)
@@ -85,10 +84,7 @@ public sealed partial class CdlodTerrain : Node3D
     public float ChunkOpsPerSpeed = 0.01f;   // DISABLED — kept as diagnostic reference only, not used in default path
     public int LoadRing = 8;          // full horizon ring (near + far shell); --loadring=N overrides
     public int ActiveRing = 4;        // near/far boundary — sub-root chunks (near CDLOD) vs root chunks (horizon shell)
-    public float ShadowCasterRadius = 5500f;         // dormant camera-centered CSM caster ring
-    public bool TerrainShadowsEnabled = false;       // current review baseline: terrain chunks never cast engine shadows
     public float AabbTightenMaxSpeed = 250f;          // skip render-thread AABB readbacks during fast traversal; catch up when motion settles
-    private Vector2 _shadowCenterXZ;                 // current camera XZ for ring tests; set once per Tick()
     public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
                                              // center-cell boundary before the loaded window re-centers (anti-thrash near a seam).
                                              // Widened 0.15→0.35: light taps near a cell seam were re-centering the window and
@@ -114,7 +110,6 @@ public sealed partial class CdlodTerrain : Node3D
         {
             ChunkSlot s = kv.Value;
             if (s.IsFar) { far++; } else { near++; }
-            if (s.CastsShadow) { shadowCasters++; }
             if (s.CacheReady) { cacheReady++; }
         }
     }
@@ -154,12 +149,8 @@ public sealed partial class CdlodTerrain : Node3D
     }
 
     /// Generous vertical bound from the field's global height envelope. S3: works for a streamed chunk
-    /// ANYWHERE (no baked region needed) — born with this loose-but-safe AABB so it renders + shadows with no
-    /// pop-in; the async ChunkAabbProvider (Task 5) tightens it a few frames later for cascade precision.
-    /// A TIGHT per-chunk vertical AABB matters: Godot fits the directional shadow cascade's depth range to
-    /// caster AABBs, so a full-region-tall AABB on every small chunk inflates the shadow-map depth range and
-    /// destroys precision → soft self-shadow blobs. Until Task 5 tightens, this generous-but-safe outer bound
-    /// keeps chunks rendering+shadowing everywhere with no pop-in (slightly loose far-out).
+    /// ANYWHERE (no baked region needed) - born with this loose-but-safe AABB so it renders with no
+    /// pop-in; the async ChunkAabbProvider tightens it a few frames later for culling precision.
     private (float lo, float hi) ChunkHeightRange(Vector2 originXZ, float size)
     {
         return (_minH - 200f, _maxH + 200f);   // + safety margin for far-out amplitude beyond the sampled region
@@ -222,7 +213,6 @@ public sealed partial class CdlodTerrain : Node3D
         bool snapped = _renderOrigin.X != _lastRenderOrigin.X || _renderOrigin.Z != _lastRenderOrigin.Z;
         _lastRenderOrigin = _renderOrigin;
         if (snapped) { TotalSnaps++; }   // perf instrumentation: real renderOrigin snaps (8192 m crossings, pre-force)
-        _shadowCenterXZ = new Vector2(camPos.X, camPos.Z);
         float speedXZ = new Vector2(velXZ.X, velXZ.Z).Length();
         bool allowAabbTighten = TightenAabb && speedXZ <= AabbTightenMaxSpeed;
 
@@ -380,14 +370,6 @@ public sealed partial class CdlodTerrain : Node3D
             mi.SetInstanceShaderParameter("cache_ready", slot.CacheReady ? 1.0f : 0.0f);
             mi.Visible = true;
         }
-        bool wantsShadow = CastsCsmShadow(c, slot);
-        if (isNew || slot.CastsShadow != wantsShadow)
-        {
-            mi.CastShadow = wantsShadow
-                ? GeometryInstance3D.ShadowCastingSetting.On
-                : GeometryInstance3D.ShadowCastingSetting.Off;
-            slot.CastsShadow = wantsShadow;
-        }
         // AABB: born GENEROUS (no pop-in); tightened in place once the async height-range lands. Re-set only
         // when new, on a snap (position changed), or when a tighten newly lands for this key.
         bool hasTight = _tightened.TryGetValue(key, out var tr);   // unconditional so `tr` is always assigned
@@ -399,17 +381,16 @@ public sealed partial class CdlodTerrain : Node3D
             if (tightAvail) { lo = tr.lo; hi = tr.hi; slot.Tightened = true; }
             else { (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size); }
             // Margin scaled to the chunk's vertex spacing (the geomorph displacement bound) with an 8 m floor:
-            // too tight → CSM cascade misses displaced verts → grid-aligned shadow acne; too loose → inflated
-            // cascade depth → soft blobs (memory cdlod-chunk-shadow-aabb).
+            // too tight -> displaced verts get culled; too loose -> excess visible bounds.
             float m = Mathf.Max(8f, c.Size / (GridN - 1) * 1.5f);
             // S3.5 cull-pop fix: a TIGHTENED range comes from the coarse ProbeRes×ProbeRes height probe, whose
             // samples are spaced size/(ProbeRes-1) apart — far wider than the mesh's verts on big chunks (e.g.
             // an 8192 m chunk: ~1365 m probe vs 128 m mesh). The probe can MISS a real peak/valley the mesh
             // renders, so its lo/hi can be too short → when the tighten lands a few frames after birth, Godot
-            // frustum/shadow-culls the chunk while its true geometry is still on screen → it DISAPPEARS, then
+            // frustum-culls the chunk while its true geometry is still on screen → it DISAPPEARS, then
             // reappears on the next re-eval (the intermittent "vanishing chunk"). Pad the margin by half the
             // probe spacing so the tightened AABB can never be shorter than the mesh between probe samples. This
-            // scales with chunk size, so far/big chunks (coarsest probe, least shadow-precision need) get a
+            // scales with chunk size, so far/big chunks get a
             // looser-but-safe box while near/small chunks (fine probe) stay tight.
             if (fromProbe) { m = Mathf.Max(m, c.Size / Mathf.Max(1, _aabbProvider.ProbeRes - 1) * 0.5f); }
             mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f), new Vector3(1f, (hi - lo) + 2f * m, 1f));
@@ -424,31 +405,15 @@ public sealed partial class CdlodTerrain : Node3D
         }
     }
 
-    private bool CastsCsmShadow(CdlodChunk c, ChunkSlot slot)
-    {
-        if (!TerrainShadowsEnabled) { return false; }
-        if (slot.IsFar) { return false; }
-        if (ShadowCasterRadius <= 0f) { return true; }   // diagnostic: all near CDLOD chunks cast
-
-        // Test square-vs-circle overlap against an expanded ring. This includes coarse chunks before their
-        // terrain LOD splits, so shadows already exist and only gain detail as the viewer approaches.
-        float half = c.Size * 0.5f;
-        float centerX = c.OriginXZ.X + half;
-        float centerZ = c.OriginXZ.Y + half;
-        float dx = Mathf.Abs(centerX - _shadowCenterXZ.X);
-        float dz = Mathf.Abs(centerZ - _shadowCenterXZ.Y);
-        float expanded = ShadowCasterRadius + half * 1.4142136f;   // chunk half-diagonal
-        return (dx * dx + dz * dz) <= expanded * expanded;
-    }
-
     /// Get an instance for a new chunk: reuse a retired one from the free-list, else create one (bounded by the
     /// churn budget at the call site). Marked Level=-1 so ApplyChunk does a full first push.
     private ChunkSlot AcquireSlot()
     {
         MeshInstance3D mi;
         if (_free.Count > 0) { mi = _free.Pop(); }
-        else { mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat }; AddChild(mi); _instanceCount++; }
-        return new ChunkSlot { Mi = mi, Mask = -1, Tightened = false, Level = -1, CastsShadow = false };
+        else { mi = new MeshInstance3D { Mesh = _grid, MaterialOverride = _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off }; AddChild(mi); _instanceCount++; }
+        mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        return new ChunkSlot { Mi = mi, Mask = -1, Tightened = false, Level = -1 };
     }
 
     /// S3.5: drain async height-ranges that have landed and cache them by key. The keyed pool's ApplyChunk
@@ -485,7 +450,7 @@ public sealed partial class CdlodTerrain : Node3D
             {
                 // STALE-BAKE GUARD: only honor a landed bake if the chunk is still live AND still owns this slot
                 // (a fast retire→rebirth can reassign the layer before the bake lands). Stale landings are dropped
-                // — the slot's current owner has its own bake queued. (The shadow AABB is the separate 7×7 probe.)
+                // — the slot's current owner has its own bake queued.
                 if (!_active.TryGetValue(ckey, out ChunkSlot owner) || owner.CacheSlot != cslot) { continue; }
                 _cachePending.Add((ckey, cslot, _frame));   // landed → flip to sampling after CacheReadyDelay Ticks
             }

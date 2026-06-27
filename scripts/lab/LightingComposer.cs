@@ -15,7 +15,6 @@ public interface ILightingHost
     bool VolumetricFogOn { get; }      // optional legacy volumetric fog; default off
     float CdlodViewDistance { get; }   // ARC B Task 3: LoadRing·rootSize (load boundary), or 0 if CDLOD off → no fog coupling
     float FogViewScale { get; }        // ARC B Task 3: user multiplier on the radius-coupled fog baseline (0 = coupling off)
-    int ShadowAtlasSize { get; }       // dormant while engine shadows are parked
     AtmosphereCompute? Atmosphere { get; }   // C3 Unit 5: push extra suns to the sky-scatter LUTs
     TerrainLab? Terrain { get; }       // terrain material target for the analytic indirect-fill uniforms (relight #1)
     void OrientSun(DirectionalLight3D sun);   // orient + push sun to cloud/atmosphere (shared with the sun-angle sliders)
@@ -67,10 +66,10 @@ public sealed class LightingComposer
     public LuminaryAllocation? Allocation { get; private set; }
     private int _lastLumCount = -1;
 
-    // ── C3 Unit 4: EXTRA SUNS (visible). ExtraSunCount (set by --suns=N → N-1 extras) drives a shadowless
+    // ── C3 Unit 4: EXTRA SUNS (visible). ExtraSunCount (set by --suns=N → N-1 extras) drives a non-shadowing
     // DirectionalLight pool (terrain light) + the disc arrays pushed to cloud_sky. 0 = single-sun (no-op,
-    // shader never touched). Each extra rides its own offset arc; shadow stays on the primary only (the
-    // budgeter caps shadow casters), so N suns don't multiply the costliest pass — the "3 suns ≈ today" rule.
+    // shader never touched). Each extra rides its own offset arc, so N suns add direct lighting without
+    // enabling scene shadows.
     public int ExtraSunCount = 0;
     private const int MaxExtraSuns = 3;   // matches MAX_EXTRA_SUNS in cloud_sky.gdshader
     private readonly List<DirectionalLight3D> _extraSunLights = new();
@@ -168,8 +167,6 @@ public sealed class LightingComposer
         Time.SkyHorizon = m.ContainsKey("sky_horizon") ? Col(m["sky_horizon"]) : new Color(0.68f, 0.74f, 0.80f);
         Time.SkyGround = m.ContainsKey("sky_ground") ? Col(m["sky_ground"]) : new Color(0.22f, 0.26f, 0.22f);
 
-        SunDisc.ShadowSoft = F(m, "shadow_soft", 1.0f); SunDisc.DiscAngular = F(m, "sun_disc", 0.6f);
-        SunDisc.ShadowNormalBias = F(m, "shadow_bias", 1.0f); SunDisc.ShadowMaxDist = F(m, "shadow_dist", 3500f);
         SunDisc.Size = F(m, "sun_size", 0.6f); SunDisc.Limb = F(m, "sun_limb", 0.70f);   // polish: more spherical default
         SunDisc.CoronaSize = F(m, "sun_corona_size", 1200f); SunDisc.CoronaEnergy = F(m, "sun_corona_energy", 2.0f);
         SunDisc.HaloSize = F(m, "sun_halo_size", 90f); SunDisc.HaloEnergy = F(m, "sun_halo_energy", 0.4f);
@@ -214,41 +211,24 @@ public sealed class LightingComposer
             psky.SkyHorizonColor = tHor; psky.GroundHorizonColor = tHor;
             psky.GroundBottomColor = tGnd;
         }
-        // ── SUN DISC (Stage-1 appearance) + shadow softness ──
+        // ── SUN DISC (Stage-1 appearance). Scene shadows are disabled in this baseline. ──
         sun.ShadowEnabled = false;
-        sun.ShadowBlur = SunDisc.ShadowSoft;
-        sun.LightAngularDistance = SunDisc.DiscAngular;
-        // #5 SHADOW PASS (code-side, no scene/project edits → no conflict with the terrain chat). The blocky
-        // far-cascade self-shadow + closer/farther quality jump were the directional shadow under-resolved at
-        // distance: default 4096 atlas (~0.6 m/texel near → ~7.8 m far). Double the atlas + flatten the splits
-        // + cross-fade cascades so far texel density isn't starved.
         if (!_occlusionPolicyPushed)
         {
-            RenderingServer.DirectionalShadowAtlasSetSize(_host.ShadowAtlasSize, true);   // ARC A.1: tunable (8192 default; 6144/4096 dial-down — the in-motion shadow-spike lever)
-            RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftHigh);   // PCF blur → dissolves texel "squares" cheaply
-
             // SSAO/SSIL DISABLED: scene files and legacy plans drifted here; force the review baseline
-            // from code so shadow tuning is not contaminated by screen-space AO.
+            // from code so the terrain baseline is not contaminated by screen-space AO.
             env.SsaoEnabled = false;
 
             // SSIL DISABLED (2026-06-23): measured ssil ON vs OFF auto-shot diff = 97% of pixels changed, mean
             // shift 52/255 (vs the sun shadow's 0.22) — screen-space indirect light was CRUSHING the whole terrain
             // into dark mud, and because it is screen-space the darkening shifted with view angle. That was the
-            // long-hunted "anti-sun darkness / shadow that grows when you look down": SSIL, not shadows/SSAO/aerial.
+            // long-hunted "anti-sun darkness / darkening that grows when you look down": SSIL, not SSAO/aerial.
             // Net-negative on large dune relief (steep depth gradients → false occlusion). Off until a tamed,
             // terrain-aware pass is justified. Toggle live with key N to A/B.
             env.SsilEnabled = false;
             env.SdfgiEnabled = false;
             _occlusionPolicyPushed = true;
         }
-        sun.DirectionalShadowBlendSplits = true;                        // cross-fade cascade seams
-        // Shadow caster params from SunDisc (lab-tunable; defaults == the former literals). Routed through
-        // this one-writer so a slider edit survives the next recompose instead of being overwritten.
-        sun.ShadowNormalBias = SunDisc.ShadowNormalBias;                // acne<->peter-panning lever (was unset)
-        sun.DirectionalShadowMaxDistance = SunDisc.ShadowMaxDist;       // shadow draw distance (was 6000 literal)
-        sun.DirectionalShadowSplit1 = SunDisc.ShadowSplit1;             // flatter split distribution
-        sun.DirectionalShadowSplit2 = SunDisc.ShadowSplit2;
-        sun.DirectionalShadowSplit3 = SunDisc.ShadowSplit3;
         var cloud = _host.Cloud;
         if (cloud != null)
         {
@@ -292,16 +272,16 @@ public sealed class LightingComposer
             cloud.SetMoonAppearance(Moon.Phase, Moon.Size, Moon.Limb, Moon.HaloSize, Moon.HaloEnergy);
             cloud.SetMoonSurface(Moon.SurfCells, Moon.SurfContrast, Moon.SurfSpots, Moon.SurfChurn);
 
-            // ── MOONLIGHT (Stage 3c): the same directional casts cool light, gated to night × moon-up ×
+            // ── MOONLIGHT (Stage 3c): the same directional adds cool light, gated to night × moon-up ×
             //    phase. Cross-fades with the sun automatically (sun energy → 0 at night via the day script
-            //    while this ramps in by nightFactor). Shadow-casting; off (invisible) in daylight. ──
+            //    while this ramps in by nightFactor). Non-shadowing; off (invisible) in daylight. ──
             float moonUp = Mathf.Clamp((moonDir.Y + 0.05f) / 0.15f, 0f, 1f);   // ramps in as the moon clears the horizon
             float mAngle = (1f - Moon.Phase) * Mathf.Pi;
             float mIllum = 0.5f + 0.5f * Mathf.Cos(mAngle);                     // 0 new · 1 full
             float mEnergy = Moon.LightEnergy * _nightFactor * moonUp * mIllum;
             _moonLight.LightColor = Moon.LightColor;
             _moonLight.LightEnergy = mEnergy;
-            _moonLight.Visible = mEnergy > 0.001f;                              // invisible = no shadow/cost in day
+            _moonLight.Visible = mEnergy > 0.001f;
             // Night moonlight on CLOUDS (raymarch 2nd light): same phase·presence·night gating as the
             // directional, scaled by the user knob. 0 in day / new-moon → the raymarch skips the moon march.
             cloud.SetCloudMoon(moonDir, Moon.LightColor, mIllum * moonUp * _nightFactor * Moon.MoonCloudLight);
@@ -357,9 +337,6 @@ public sealed class LightingComposer
         env.GlowIntensity = Grade.Glow * 0.35f;
         env.SetGlowLevel(4, 0.0f); env.SetGlowLevel(5, 0.0f); env.SetGlowLevel(6, 0.0f);
 
-        // Push sun direction to terrain for horizon shadow march.
-        var terr = _host.Terrain;
-        if (terr != null) { terr.SetVector3("sun_dir_to", SunNode.GlobalTransform.Basis.Z.Normalized()); }
         ApplyOvercastScaling();           // sun energy + ambient + fog color (overcast-scaled) — the one writer of these
         _host.SyncLightControlsToScene(); // Light-tab sliders reflect the composed state
 
@@ -368,7 +345,7 @@ public sealed class LightingComposer
         RebuildAndBudget();               // C3: keep the luminary list + allocation current
     }
 
-    /// C3 Unit 4: orient each extra sun on its own offset arc, drive its (shadowless) terrain light, and
+    /// C3 Unit 4: orient each extra sun on its own offset arc, drive its non-shadowing terrain light, and
     /// push the disc arrays to cloud_sky. No-op when ExtraSunCount==0 (the shader's extra_sun_count stays 0,
     /// never written → byte-identical single-sun sky). Each extra shares the primary's time but offsets its
     /// azimuth + lowers its declination so the suns read as distinct bodies across the sky.
@@ -447,7 +424,7 @@ public sealed class LightingComposer
         _host.Cloud?.SetExtraMoons(n, _exMoonDirs, _exMoonCols, _exMoonSizes, _exMoonPhases);
     }
 
-    /// Lazily build + deferred-add the extra-sun DirectionalLights (shadowless; the primary owns the shadow).
+    /// Lazily build + deferred-add the non-shadowing extra-sun DirectionalLights.
     /// Deferred-add mirrors EnsureMoonLight (Compose first runs while the tree is busy in _Ready).
     private void EnsureExtraSunLights(int count)
     {
@@ -485,11 +462,11 @@ public sealed class LightingComposer
         {
             Id = "sun_primary", Kind = LuminaryKind.Sun,
             Color = Time.SunColor, Size = SunDisc.Size, Limb = SunDisc.Limb, DiscEnergy = sun_disc_ref(),
-            IsPhysicalLight = true, CastsShadow = true, ContributesToAtmosphere = true,
+            IsPhysicalLight = true, ContributesToAtmosphere = true,
             Priority = 100f, LightColor = Time.SunColor, LightEnergy = BaseSunEnergy,
         });
         weights.Add(100f * sunVis);
-        // C3 Unit 4: extra suns (shadowless — the primary owns the shadow atlas; budgeter enforces this).
+        // C3 Unit 4: extra suns (non-shadowing).
         int en = Mathf.Clamp(ExtraSunCount, 0, MaxExtraSuns);
         for (int i = 0; i < en; i++)
         {
@@ -498,7 +475,7 @@ public sealed class LightingComposer
             {
                 Id = $"sun_extra{i}", Kind = LuminaryKind.Sun,
                 Size = SunDisc.Size, DiscEnergy = 1.3f,
-                IsPhysicalLight = true, CastsShadow = false, ContributesToAtmosphere = true,
+                IsPhysicalLight = true, ContributesToAtmosphere = true,
                 Priority = 80f - i, LightColor = ExtraSunColors[i % ExtraSunColors.Length], LightEnergy = BaseSunEnergy * 0.7f,
             });
             weights.Add((80f - i) * eUp);
@@ -507,7 +484,7 @@ public sealed class LightingComposer
         {
             Id = "moon", Kind = LuminaryKind.Moon, Phase = Moon.Phase,
             Color = Moon.Color, Size = Moon.Size, Limb = Moon.Limb, DiscEnergy = Moon.DiscEnergy,
-            IsPhysicalLight = true, CastsShadow = true, ContributesToAtmosphere = false,
+            IsPhysicalLight = true, ContributesToAtmosphere = false,
             Priority = 10f, LightColor = Moon.LightColor, LightEnergy = Moon.LightEnergy,
         });
         weights.Add(10f * moonVis);
@@ -586,7 +563,7 @@ public sealed class LightingComposer
         return authored.Lerp(bright, Mathf.Clamp(nd - 1f, 0f, 1f));                                     // 1→authored, 2→bright
     }
 
-    /// Lazily create the Stage-3c moonlight directional (parented to the scene root, no shadow casting).
+    /// Lazily create the Stage-3c moonlight directional (parented to the scene root, non-shadowing).
     /// Separate from the scene Sun so the sky shader's LIGHT0 stays the sun; this only lights terrain.
     private bool _moonLightQueued;
     private void EnsureMoonLight()
