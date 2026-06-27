@@ -14,7 +14,7 @@ public sealed class HorizonMarchOwner : IShadowOwner
 
     public string Name => "horizon-march";
     public ShadowSlot Slot => ShadowSlot.FarCast;
-    public string DiagId => "terrain:horizon";
+    public System.Collections.Generic.IReadOnlyList<string> DiagIds => new[] { "terrain:horizon" };
 
     public bool Enabled
     {

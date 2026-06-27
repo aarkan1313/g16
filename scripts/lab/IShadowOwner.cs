@@ -20,6 +20,6 @@ public interface IShadowOwner
     ShadowSlot Slot { get; }      // the single slot this owner occupies
     bool Enabled { get; set; }    // user/registry intent
     bool IsActive { get; }        // Enabled AND actually contributing this frame
-    string DiagId { get; }        // prefix of the ShadowDiagnostics owner tag, e.g. "terrain:horizon"
+    System.Collections.Generic.IReadOnlyList<string> DiagIds { get; }   // prefixes of the ShadowDiagnostics owner tags this owner accounts for
     void Tick(double delta);      // per-frame hook (Phase 0 owners may no-op)
 }

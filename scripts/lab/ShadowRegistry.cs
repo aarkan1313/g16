@@ -46,7 +46,7 @@ public sealed class ShadowRegistry
 
     /// DiagId prefixes of currently-active owners — what ShadowDiagnostics SHOULD attribute to the registry.
     public HashSet<string> ActiveDiagIds()
-        => _owners.Where(o => o.IsActive).Select(o => o.DiagId).ToHashSet();
+        => _owners.Where(o => o.IsActive).SelectMany(o => o.DiagIds).ToHashSet();
 
     /// True when an enabled owner occupies the NearCast slot — i.e. the sun must cast an engine shadow.
     /// The lighting composer reads this (via ILightingHost) so it, not a hardcoded false, sets sun.ShadowEnabled.
