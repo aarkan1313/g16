@@ -46,4 +46,5 @@ Recommended rebuild:
 - Edited JSON files parse (`lab_controls`, `lighting_moods`, `luminaries`, `item_schemas`, `cloud_presets`, `cloud_layers`, `cloud_params`).
 - `dotnet build WG16.csproj` succeeds with existing warnings.
 - Active-code scan found no old terrain/cloud/horizon shadow APIs or controls and no `ShadowEnabled=true`, `shadow_enabled=true`, `CastShadow.On`, `SSAO`, `SSIL`, or `SDFGI` enable path.
+- `ShadowDiagnostics` now reports actual active shadow lights, geometry casters, CDLOD shadow casters, SSAO/SSIL/SDFGI flags, and Godot shadow render counters through `PROFILE-SHADOWS` and `LIVEPROFILE-SHADOWS`.
 - Runtime FPS/profile data from this already-running Codex shell is not authoritative right now: the stale HKCU `VK_INSTANCE_LAYERS=VK_LAYER_NV_nomad` / `VK_LAYER_PATH` values were cleared after diagnosis, but this process still inherits the old values unless cleared per child. Even with those cleared, `vulkaninfo --summary` still fails to detect a valid GPU/ICD in this session while Windows sees the Intel and RTX adapters, so Godot can fall back to Microsoft Basic Render Driver here.

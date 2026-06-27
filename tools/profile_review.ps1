@@ -9,6 +9,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
+. "$PSScriptRoot\godot_vulkan_env.ps1"
 
 function Stop-Godot {
     Get-Process -Name "Godot*" -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -27,11 +28,12 @@ function Invoke-ReviewProfile {
     $out = & $Godot @engineArgs 2>&1
     $nativeExitCode = $LASTEXITCODE
     $ErrorActionPreference = $oldErrorActionPreference
-    $out | Select-String -Pattern "PROFILE:|PROFILE-PERCENTILES|PROFILE-RENDER|PROFILE-SPIKE|PROFILE-STREAM|PROFILE-CDLOD|ERROR:|SCRIPT ERROR:"
+    $out | Select-String -Pattern "PROFILE:|PROFILE-PERCENTILES|PROFILE-RENDER|PROFILE-SHADOWS|PROFILE-SPIKE|PROFILE-STREAM|PROFILE-CDLOD|ERROR:|SCRIPT ERROR:"
     if ($nativeExitCode -ne 0) { throw "Godot profile failed for '$Name' with exit code $nativeExitCode" }
 }
 
 Stop-Godot
+Clear-GodotVulkanCaptureEnv
 
 $baseProfile = "--profile=$Duration"
 $moveProfile = @($baseProfile, "--profmove", "--profspeed=$Speed")

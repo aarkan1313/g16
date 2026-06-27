@@ -151,6 +151,7 @@ public partial class TerrainLabUI : Control
             $"LIVEPROFILE-PERCENTILES: p50 {FpsFromMs(p50):0} fps ({p50:0.0} ms) p95 {FpsFromMs(p95):0} fps ({p95:0.0} ms) p99 {FpsFromMs(p99):0} fps ({p99:0.0} ms)",
             $"LIVEPROFILE-RENDER-AVG: visible draws={visDrawSum / frames} objects={visObjSum / frames} prim={visPrimSum / frames} | shadow draws={shDrawSum / frames} objects={shObjSum / frames} prim={shPrimSum / frames}",
             $"LIVEPROFILE-RENDER-MAX: visible draws={visDrawMax} objects={visObjMax} prim={visPrimMax} | shadow draws={shDrawMax} objects={shObjMax} prim={shPrimMax}",
+            ShadowDiagnostics.Capture(this).ToProfileLine("LIVEPROFILE-SHADOWS"),
             $"LIVEPROFILE-STREAM-DELTA: snaps={last.Snaps - first.Snaps} births={last.Births - first.Births} rebirths={last.Rebirths - first.Rebirths} active={last.Active}"
         };
         var cd = _terrain.Cdlod;

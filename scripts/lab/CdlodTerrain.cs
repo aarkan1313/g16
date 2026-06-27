@@ -35,7 +35,7 @@ public sealed partial class CdlodTerrain : Node3D
         public int SeenFrame = -1;     // last Tick frame this slot was in the visible set (vs _frame → retire)
         public int CacheSlot = -1;     // field-cache texture-array layer for this chunk (-1 = none → live-eval path)
         public bool CacheReady;        // the chunk's bake has landed → vertex shader samples the cache, not the field
-        public bool IsFar;             // horizon shell chunk: no field cache, no AABB
+        public bool IsFar;             // horizon shell chunk: no field cache/tightening, still gets a generous AABB
     }
     private int _frame;   // monotonic Tick counter for the seen-this-frame test (no per-slot Variant churn)
     private bool _forceReapply;   // one-shot: re-push lod_viz + AABB to ALL live slots next Tick (live toggle A/B)
@@ -251,7 +251,7 @@ public sealed partial class CdlodTerrain : Node3D
             }
             else
             {
-                // Root-size chunks are far horizon shell — separate lazy budget, no cache, no AABB.
+                // Root-size chunks are far horizon shell — separate lazy budget, no cache/tightening.
                 bool isFar = c.Size >= _regionSize;
                 if (isFar)  { if (farBirths  >= FarChunkOps)  { continue; } farBirths++;  }
                 else        { if (nearBirths >= MaxChunkOps)   { continue; } nearBirths++; }
@@ -380,20 +380,20 @@ public sealed partial class CdlodTerrain : Node3D
             bool fromProbe = tightAvail;
             if (tightAvail) { lo = tr.lo; hi = tr.hi; slot.Tightened = true; }
             else { (lo, hi) = ChunkHeightRange(c.OriginXZ, c.Size); }
-            // Margin scaled to the chunk's vertex spacing (the geomorph displacement bound) with an 8 m floor:
-            // too tight -> displaced verts get culled; too loose -> excess visible bounds.
+            // Margin scaled to the chunk's vertex spacing: too tight -> displaced verts get culled; too loose ->
+            // excess visible bounds. Tightened ranges come from a coarse ProbeRes×ProbeRes sample, so give them a
+            // full-probe-spacing apron plus a small world-space floor. The probe is a culling hint, not ground
+            // truth; a false positive here is the hard-edged hole seen when the view pitch changes.
             float m = Mathf.Max(8f, c.Size / (GridN - 1) * 1.5f);
-            // S3.5 cull-pop fix: a TIGHTENED range comes from the coarse ProbeRes×ProbeRes height probe, whose
-            // samples are spaced size/(ProbeRes-1) apart — far wider than the mesh's verts on big chunks (e.g.
-            // an 8192 m chunk: ~1365 m probe vs 128 m mesh). The probe can MISS a real peak/valley the mesh
-            // renders, so its lo/hi can be too short → when the tighten lands a few frames after birth, Godot
-            // frustum-culls the chunk while its true geometry is still on screen → it DISAPPEARS, then
-            // reappears on the next re-eval (the intermittent "vanishing chunk"). Pad the margin by half the
-            // probe spacing so the tightened AABB can never be shorter than the mesh between probe samples. This
-            // scales with chunk size, so far/big chunks get a
-            // looser-but-safe box while near/small chunks (fine probe) stay tight.
-            if (fromProbe) { m = Mathf.Max(m, c.Size / Mathf.Max(1, _aabbProvider.ProbeRes - 1) * 0.5f); }
-            mi.CustomAabb = new Aabb(new Vector3(-0.5f, lo - m, -0.5f), new Vector3(1f, (hi - lo) + 2f * m, 1f));
+            if (fromProbe)
+            {
+                float probeSpacing = c.Size / Mathf.Max(1, _aabbProvider.ProbeRes - 1);
+                m = Mathf.Max(m, Mathf.Max(64f, probeSpacing));
+            }
+            float xzPad = Mathf.Min(0.02f, Mathf.Max(0f, (c.Size / (GridN - 1)) / c.Size));
+            mi.CustomAabb = new Aabb(
+                new Vector3(-0.5f - xzPad, lo - m, -0.5f - xzPad),
+                new Vector3(1f + 2f * xzPad, (hi - lo) + 2f * m, 1f + 2f * xzPad));
         }
         // S2d: edge-stitch variant — reassign the mesh ONLY when this chunk's mask changed (avoids per-frame
         // mesh re-upload). The stitch mask CAN change frame-to-frame as neighbors split/merge, even when the

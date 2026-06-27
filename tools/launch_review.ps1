@@ -7,8 +7,10 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 if ($null -eq $SceneArgs) { $SceneArgs = @() }
+. "$PSScriptRoot\godot_vulkan_env.ps1"
 
 Get-Process -Name "Godot*" -ErrorAction SilentlyContinue | Stop-Process -Force
 
 $engineArgs = @("--path", $Root, "--rendering-driver", "vulkan", "scenes/review.tscn", "--") + $SceneArgs
+Clear-GodotVulkanCaptureEnv
 Start-Process -FilePath $Godot -ArgumentList $engineArgs -WorkingDirectory $Root

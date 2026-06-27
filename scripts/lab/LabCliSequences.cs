@@ -155,6 +155,7 @@ public sealed class LabCliSequences
         long frames = Math.Max(_profFrames, 1);
         GD.Print($"PROFILE-RENDER-AVG: visible draws={_visDrawSum / frames} objects={_visObjSum / frames} prim={_visPrimSum / frames} | shadow draws={_shDrawSum / frames} objects={_shObjSum / frames} prim={_shPrimSum / frames}");
         GD.Print($"PROFILE-RENDER-MAX: visible draws={_visDrawMax} objects={_visObjMax} prim={_visPrimMax} | shadow draws={_shDrawMax} objects={_shObjMax} prim={_shPrimMax}");
+        GD.Print(ShadowDiagnostics.Capture(_host).ToProfileLine("PROFILE-SHADOWS"));
 
         for (int i = 0; i < _profSpikes.Count; i++)
         {
