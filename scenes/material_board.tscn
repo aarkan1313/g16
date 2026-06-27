@@ -35,7 +35,7 @@ InitialSpeed = 5.0
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.87, -0.25, 0.42, 0, 0.86, 0.51, -0.49, -0.44, 0.75, 0, 0, 0)
 light_energy = 1.4
-shadow_enabled = true
+shadow_enabled = false
 
 [node name="Env" type="WorldEnvironment" parent="."]
 environment = SubResource("env")

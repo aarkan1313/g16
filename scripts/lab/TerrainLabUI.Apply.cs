@@ -44,7 +44,6 @@ public partial class TerrainLabUI : Control
                 break;
             case "toggle":
                 if (c.Field != null) { SetTerrainBoolField(c.Field, c.Value.AsBool()); }
-                else if (c.Param == "hz_on") { SetHorizonShadowsEnabled(c.Value.AsBool()); }
                 else if (c.Param != null) { _terrain.SetBool(c.Param, c.Value.AsBool()); }
                 break;
             case "enum":
@@ -87,9 +86,9 @@ public partial class TerrainLabUI : Control
             case "meteors_on": _stars.MeteorsOn = on; ComposeLighting(); break;
             case "planets_on":      _stars.PlanetsOn = on; ComposeLighting(); break;        // C2 planets
             case "bright_stars_on": _stars.BrightStarsOn = on; ComposeLighting(); break;    // C2 landmark stars
-            case "shadow": UiSun.ShadowEnabled = on; break;
+            case "shadow": UiSun.ShadowEnabled = false; break;
             case "sun":    UiSun.Visible = on; break;
-            case "sdfgi":  UiEnv.Environment.SdfgiEnabled = on; break;
+            case "sdfgi":  UiEnv.Environment.SdfgiEnabled = false; break;
             case "volfog": _volumetricFogOn = on; UiEnv.Environment.VolumetricFogEnabled = on; break;
             case "sun_surface_on": _cloud?.SetSunSurfaceOn(on); break;   // sun-disc surface (cloud_sky material)
             case "time_running":   _timeRunning = on; break;             // ST4-1 auto day/night cycle play/pause
@@ -107,14 +106,6 @@ public partial class TerrainLabUI : Control
             // sun energy + ambient go through ApplyOvercastScaling (the one writer of the overcast-scaled
             // fields) so they stay overcast-correct and never fight UpdateOvercast.
             case "sun_energy":      _baseSunEnergy = v; ApplyOvercastScaling(); PushSunToCloud(sun); break;
-            // Shadow knobs: write the _sunDisc STATE (not just the Sun) so the value survives the next
-            // ComposeLighting recompose (which re-asserts from _sunDisc) instead of snapping back. The
-            // immediate Sun write makes the slider feel live; ComposeLighting keeps it.
-            case "sun_soft":        _sunDisc.ShadowSoft = v; sun.ShadowBlur = v; break;   // shadow softness
-            case "sun_disc":        _sunDisc.DiscAngular = v; sun.LightAngularDistance = v; break;   // PCSS penumbra width (+ disc size)
-            case "shadow_bias":     _sunDisc.ShadowNormalBias = v; sun.ShadowNormalBias = v; break;   // acne<->peter-panning
-            case "shadow_dist":     _sunDisc.ShadowMaxDist = v; sun.DirectionalShadowMaxDistance = v; break;   // shadow draw distance
-            case "shadow_ring":     _terrain.SetShadowRing(v); break;
             case "load_ring":       _terrain.SetLoadRing(Mathf.RoundToInt(v)); break;   // ARC B Task 1: CDLOD load-ring radius (1=3×3, 2=5×5)
             case "fog_depth_begin": _lighting.FogDepthBegin = v; ComposeLighting(); break;   // VIEW-DISTANCE: depth-fog start distance (clear nearer than this)
             case "cdlod_lookahead": _terrain.SetCdlodLookahead(v); break;   // ARC B Task 4: predictive-loading lookahead (s; 0=off)
@@ -208,8 +199,7 @@ public partial class TerrainLabUI : Control
         var sun = UiSun;
         void Set(string id, float v) { if (_byId.TryGetValue(id, out var c)) { SetWidgetValueSilent(c, v); } }
         Set("sun_energy", sun.LightEnergy); Set("sun_angle", _sunAngle); Set("sun_azimuth", _sunAzimuth);
-        Set("sun_soft", sun.ShadowBlur); Set("sun_disc", sun.LightAngularDistance); Set("ambient_e", env.AmbientLightEnergy);
-        Set("shadow_bias", sun.ShadowNormalBias); Set("shadow_dist", sun.DirectionalShadowMaxDistance); Set("shadow_ring", _terrain.ShadowRing);
+        Set("ambient_e", env.AmbientLightEnergy);
         Set("fog_d", env.FogDensity); Set("fog_aerial", env.FogAerialPerspective);
         Set("fog_heightd", env.FogHeightDensity); Set("exposure", env.TonemapExposure);
         // Sync the 10 sun disc/optical sliders from the CloudVolume backing fields

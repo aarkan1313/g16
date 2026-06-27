@@ -15,7 +15,7 @@ public interface ILightingHost
     bool VolumetricFogOn { get; }      // optional legacy volumetric fog; default off
     float CdlodViewDistance { get; }   // ARC B Task 3: LoadRing·rootSize (load boundary), or 0 if CDLOD off → no fog coupling
     float FogViewScale { get; }        // ARC B Task 3: user multiplier on the radius-coupled fog baseline (0 = coupling off)
-    int ShadowAtlasSize { get; }       // ARC A.1: directional shadow atlas px (8192 default; 6144/4096 = perf dial-down)
+    int ShadowAtlasSize { get; }       // dormant while engine shadows are parked
     AtmosphereCompute? Atmosphere { get; }   // C3 Unit 5: push extra suns to the sky-scatter LUTs
     TerrainLab? Terrain { get; }       // terrain material target for the analytic indirect-fill uniforms (relight #1)
     void OrientSun(DirectionalLight3D sun);   // orient + push sun to cloud/atmosphere (shared with the sun-angle sliders)
@@ -141,7 +141,7 @@ public sealed class LightingComposer
         for (int i = 0; i < MaxExtraMoons; i++) { _extraMoonData[i] = (i + 1 < moons.Count) ? moons[i + 1] : null; }
     }
 
-    private bool _shadowTuned = false;             // #5: directional shadow atlas size set once (RenderingServer global)
+    private bool _occlusionPolicyPushed = false;   // review baseline: screen-space/GI occlusion stays parked
     private DirectionalLight3D? _moonLight;        // Stage 3c moonlight (created lazily, parented to root)
     private float _nightFactor = 0f;               // 0 = sun up (day), 1 = sun well below horizon (deep night). Set by DriveTime.
 
@@ -215,13 +215,14 @@ public sealed class LightingComposer
             psky.GroundBottomColor = tGnd;
         }
         // ── SUN DISC (Stage-1 appearance) + shadow softness ──
+        sun.ShadowEnabled = false;
         sun.ShadowBlur = SunDisc.ShadowSoft;
         sun.LightAngularDistance = SunDisc.DiscAngular;
         // #5 SHADOW PASS (code-side, no scene/project edits → no conflict with the terrain chat). The blocky
         // far-cascade self-shadow + closer/farther quality jump were the directional shadow under-resolved at
         // distance: default 4096 atlas (~0.6 m/texel near → ~7.8 m far). Double the atlas + flatten the splits
         // + cross-fade cascades so far texel density isn't starved.
-        if (!_shadowTuned)
+        if (!_occlusionPolicyPushed)
         {
             RenderingServer.DirectionalShadowAtlasSetSize(_host.ShadowAtlasSize, true);   // ARC A.1: tunable (8192 default; 6144/4096 dial-down — the in-motion shadow-spike lever)
             RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftHigh);   // PCF blur → dissolves texel "squares" cheaply
@@ -237,7 +238,8 @@ public sealed class LightingComposer
             // Net-negative on large dune relief (steep depth gradients → false occlusion). Off until a tamed,
             // terrain-aware pass is justified. Toggle live with key N to A/B.
             env.SsilEnabled = false;
-            _shadowTuned = true;
+            env.SdfgiEnabled = false;
+            _occlusionPolicyPushed = true;
         }
         sun.DirectionalShadowBlendSplits = true;                        // cross-fade cascade seams
         // Shadow caster params from SunDisc (lab-tunable; defaults == the former literals). Routed through
@@ -584,12 +586,12 @@ public sealed class LightingComposer
         return authored.Lerp(bright, Mathf.Clamp(nd - 1f, 0f, 1f));                                     // 1→authored, 2→bright
     }
 
-    /// Lazily create the Stage-3c moonlight directional (parented to the scene root, shadow-casting).
+    /// Lazily create the Stage-3c moonlight directional (parented to the scene root, no shadow casting).
     /// Separate from the scene Sun so the sky shader's LIGHT0 stays the sun; this only lights terrain.
     private bool _moonLightQueued;
     private void EnsureMoonLight()
     {
-        _moonLight ??= new DirectionalLight3D { Name = "MoonLight", ShadowEnabled = true, LightEnergy = 0f, Visible = false };
+        _moonLight ??= new DirectionalLight3D { Name = "MoonLight", ShadowEnabled = false, LightEnergy = 0f, Visible = false };
         if (_moonLight.IsInsideTree() || _moonLightQueued) { return; }
         // DEFERRED add: Compose first runs during _Ready while the tree is "busy setting up children",
         // so a direct AddChild errors. Queue it once; it lands next idle frame.

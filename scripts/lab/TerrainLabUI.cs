@@ -19,6 +19,7 @@ public partial class TerrainLabUI : Control, ILabControls
     private FieldCompute _fc = null!;
     private FieldParams _params = null!;
     private TerrainLab _terrain = null!;
+    private Texture2D? _parkedShadowTexture;
     private readonly List<string> _materials = new();
 
     private string[] _zoneNames = Array.Empty<string>();
@@ -140,6 +141,15 @@ public partial class TerrainLabUI : Control, ILabControls
         if (_popMeterLabel != null) { _popMeterLabel.Text = _popMeter.Hud; }
     }
 
+    private Texture2D ParkedShadowTexture()
+    {
+        if (_parkedShadowTexture != null) { return _parkedShadowTexture; }
+        var img = Image.CreateEmpty(1, 1, false, Image.Format.Rgba8);
+        img.SetPixel(0, 0, new Color(1f, 1f, 1f, 1f));
+        _parkedShadowTexture = ImageTexture.CreateFromImage(img);
+        return _parkedShadowTexture;
+    }
+
     /// Deferred cloud wiring (see _Ready). Adds the CloudVolume node to the scene
     /// root and attaches it to the Environment, now that tree setup has finished.
     private void AttachClouds()
@@ -148,17 +158,12 @@ public partial class TerrainLabUI : Control, ILabControls
         GetNode("/root/TerrainLabRoot").AddChild(_cloud);
         _cloud.Attach(GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env").Environment,
                       GetNode<Camera3D>("/root/TerrainLabRoot/Camera"), _params.RegionSizeM);
-        _cloud.SetGroundHeight(_terrain.MidHeight);   // M4: shadow march from terrain mid-elevation
-        // bind the cloud-shadow map to the terrain material so light() can sample it
-        if (_cloud.ShadowTexture != null)
-        {
-            _terrain.SetTexture("cloud_shadow_tex", _cloud.ShadowTexture);
-            _terrain.SetFloat("cloud_shadow_region", _cloud.RegionSize);
-            // L2 fix: keep shadow sampling OFF until the render-thread RID is live
-            // (avoids the terrain sampling an empty shadow Texture2Drd on frame 1).
-            // _Process turns it on once _cloud.ComputeReady.
-            _terrain.SetBool("cloud_shadow_on", false);
-        }
+        _cloud.SetGroundHeight(_terrain.MidHeight);   // cloud shadow/check math uses terrain mid-elevation
+        Texture2D parkedShadow = ParkedShadowTexture();
+        _terrain.SetTexture("cloud_shadow_tex", parkedShadow);
+        _terrain.SetFloat("cloud_shadow_region", _cloud.RegionSize);
+        _terrain.SetBool("cloud_shadow_on", false);   // terrain receive is parked for the shadowless baseline
+        _terrain.SetBool("cloud_shadow_debug", false);
         // GOD RAYS (2026-06-19): screen-space radial scatter (GPU Gems 3) is THE god-ray layer. The
         // froxel-fog approach was dropped — it read as a washy fog, not crisp beams (3 attempts).
         // Driven by the Clouds-tab "god rays" toggle + "god ray strength"; default OFF.
@@ -167,8 +172,8 @@ public partial class TerrainLabUI : Control, ILabControls
             GetNode("/root/TerrainLabRoot").AddChild(_godraysScreen);
             _godraysScreen.Attach(GetNode<Camera3D>("/root/TerrainLabRoot/Camera"),
                                   GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun"));
-            // cloud-field occlusion: same shadow map the terrain samples, projected to the cloud deck.
-            _godraysScreen.SetShadowTexture(_cloud.ShadowTexture, _cloud.RegionSize);
+            // Parked cloud-field occlusion input; default god rays use screen luminance, not terrain receive.
+            _godraysScreen.SetShadowTexture(parkedShadow, _cloud.RegionSize);
             _godraysScreen.SetCloudAltitude(_terrain.MidHeight + _cloud.Params.AltitudeM);
         }
         // AT-1 GPU atmosphere: render-thread LUT producer (Hillaire). Deferred-add like the cloud node.
@@ -195,7 +200,7 @@ public partial class TerrainLabUI : Control, ILabControls
         // cloud CLI overrides apply here (after attach, so _cloud is live)
         if (_cloudDbg >= 0) { _cloud.SetDebug(_cloudDbg); }
         if (_cloudSteps > 0) { _cloud.SetKnobInt("raymarch_steps", _cloudSteps); }
-        if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); SetTerrainCloudShadowEnabled(_terrainCloudShadowOn); }
+        if (_cloudsOn >= 0) { _cloud.SetKnobBool("enabled", _cloudsOn == 1); }
         if (_temporalCli > 0) { _cloud.SetKnobInt("temporal_frames", _temporalCli); }   // roadmap #4 amortization
         if (_covOverride >= 0f) { _cloud.SetKnob("coverage", _covOverride); }
         if (_cloudParallaxCli >= 0f) { _cloud.SetKnob("camera_parallax", _cloudParallaxCli); }
@@ -215,7 +220,6 @@ public partial class TerrainLabUI : Control, ILabControls
         if (_autoTimeCli >= 0f) { _timeSpeed = _autoTimeCli; _timeRunning = true; GD.Print($"[autotime] day/night cycle ON, {_autoTimeCli} h/s"); }
         if (_deckDbgCli == 1) { _cloud.SetDeckDebug(true); }
         if (_cloudStatsCli) { _cloud.RequestStats(); }
-        if (_shadowDbgCli == 1) { SetTerrainCloudShadowEnabled(true); _terrain.SetBool("cloud_shadow_debug", true); }   // proof: shadow map on ground
         if (_shadowCheckCli)   // numeric proof: correlate shadow vs cloud-overhead, print PASS/FAIL
         {
             var sunNode = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");

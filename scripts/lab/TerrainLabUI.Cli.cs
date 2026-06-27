@@ -15,10 +15,7 @@ public partial class TerrainLabUI : Control
     private int _overrideSplat = -1, _overrideSplatDebug = -1;
     private string? _camArg;
     private float _texScale = -1f;
-    private int _probeShadow = -1, _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
-    private int _probeSsil = -1;   // --ssil=0/1 isolation probe (screen-space indirect light)
-    private float _shadowDistCli = -1f;   // --shadowdist=N → directional shadow max distance (m) A/B (far coverage vs near texel density)
-    private int _probeSdfgi = -1;   // --sdfgi=0/1: isolate the real-time GI cost (perf pass)
+    private int _probeHb = -1, _probeMood = -1;   // lighting/splat isolation
     private float _probeRoughFloor = -1f, _probeMixStr = -1f;
 
     private float _covOverride = -1f;
@@ -86,10 +83,6 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--splatdebug=")) { int.TryParse(a.Substring("--splatdebug=".Length), out _overrideSplatDebug); }
             else if (a.StartsWith("--cam=")) { _camArg = a.Substring("--cam=".Length); }
             else if (a.StartsWith("--texscale=")) { if (float.TryParse(a.Substring("--texscale=".Length), out float ts)) _texScale = ts; }
-            else if (a.StartsWith("--ssil=")) { _probeSsil = a.Substring("--ssil=".Length) == "1" ? 1 : 0; }
-            else if (a.StartsWith("--sdfgi=")) { _probeSdfgi = a.Substring("--sdfgi=".Length) == "1" ? 1 : 0; }
-            else if (a.StartsWith("--shadow=")) { _probeShadow = a.Substring("--shadow=".Length) == "1" ? 1 : 0; }
-            else if (a.StartsWith("--shadowdist=")) { float.TryParse(a.Substring("--shadowdist=".Length), out _shadowDistCli); }   // directional shadow max distance (m) A/B
             else if (a.StartsWith("--roughfloor=")) { if (float.TryParse(a.Substring("--roughfloor=".Length), out float rf)) _probeRoughFloor = rf; }
             else if (a.StartsWith("--mixstr=")) { if (float.TryParse(a.Substring("--mixstr=".Length), out float ms)) _probeMixStr = ms; }
             else if (a.StartsWith("--hb=")) { _probeHb = a.Substring("--hb=".Length) == "1" ? 1 : 0; }
@@ -144,14 +137,11 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--chunkops=")) { int.TryParse(a.Substring("--chunkops=".Length), out _chunkOpsCli); }   // per-frame chunk-birth cap (unthrottle = high)
             else if (a.StartsWith("--fogviewscale=")) { float.TryParse(a.Substring("--fogviewscale=".Length), System.Globalization.CultureInfo.InvariantCulture, out _fogViewScaleCli); _fogViewScaleSet = true; }   // ARC B Task 3
             else if (a.StartsWith("--lookahead=")) { float.TryParse(a.Substring("--lookahead=".Length), System.Globalization.CultureInfo.InvariantCulture, out _lookaheadCli); _lookaheadSet = true; }   // ARC B Task 4
-            else if (a.StartsWith("--shadowatlas=")) { int.TryParse(a.Substring("--shadowatlas=".Length), out _shadowAtlasCli); }   // ARC A.1 shadow atlas px
-            else if (a.StartsWith("--shadowring=")) { float.TryParse(a.Substring("--shadowring=".Length), System.Globalization.CultureInfo.InvariantCulture, out _shadowRingCli); }
             else if (MatchFlag(a, "--cdlod")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _cdlodCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--lodviz")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _lodVizCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--testpath=")) { int.TryParse(a.Substring("--testpath=".Length), out _testPathCli); }   // S2b: run LOD-crossing test path N, print report, quit
             else if (a.StartsWith("--analytic")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _analyticCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--textures")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _texturesCli = (s == "1") ? 1 : 0; }   // minimal surfacing slice on/off
-            else if (a.StartsWith("--shadowdbg=")) { _shadowDbgCli = a.Substring("--shadowdbg=".Length) == "1" ? 1 : 0; }
             else if (MatchFlag(a, "--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
             else if (a == "--atmoscheck") { _atmoCheckCli = true; }
             else if (a.StartsWith("--cloudlightstr=")) { float.TryParse(a.Substring("--cloudlightstr=".Length), out _cloudLightStrCli); }
@@ -215,22 +205,6 @@ public partial class TerrainLabUI : Control
             }
         }
         // Lighting isolation probes (fuzz hunt).
-        if (_probeSsil >= 0)
-        {
-            var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
-            env.Environment.SsilEnabled = _probeSsil == 1;
-        }
-        if (_probeShadow >= 0)
-        {
-            var sun = GetNode<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
-            sun.ShadowEnabled = _probeShadow == 1;
-        }
-        if (_shadowDistCli > 0f) { _sunDisc.ShadowMaxDist = _shadowDistCli; ComposeLighting(); }   // shadow-range A/B (re-asserted by Compose)
-        if (_probeSdfgi >= 0)
-        {
-            var env = GetNode<WorldEnvironment>("/root/TerrainLabRoot/Env");
-            env.Environment.SdfgiEnabled = _probeSdfgi == 1;
-        }
         if (_probeRoughFloor >= 0f) { _terrain.SetFloat("rough_floor", _probeRoughFloor); }
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
@@ -249,8 +223,6 @@ public partial class TerrainLabUI : Control
         if (_fogViewScaleSet) { FogViewScale = _fogViewScaleCli; ComposeLighting(); }   // ARC B Task 3: fog↔radius coupling scale
         if (_lookaheadSet) { _terrain.SetCdlodLookahead(_lookaheadCli); }   // ARC B Task 4: predictive-loading lookahead
         if (_aabbSpeedSet) { _terrain.SetCdlodAabbSpeed(_aabbSpeedCli); }
-        if (_shadowRingCli >= 0f) { _terrain.SetShadowRing(_shadowRingCli); }
-        if (_shadowAtlasCli > 0) { ShadowAtlasSize = _shadowAtlasCli; RenderingServer.DirectionalShadowAtlasSetSize(_shadowAtlasCli, true); }   // ARC A.1: apply now (composer once-guard may have run)
         if (_lodVizCli >= 0) { _terrain.SetCdlodViz(_lodVizCli == 1); }
         // S3.5: async AABB tighten tunables (--notighten / --aabbres= / --aabbreq=). Only meaningful with CDLOD on.
         if (cdlodWant == 1 && (_noTightenCli || _aabbResCli > 0 || _aabbReqCli > 0))
@@ -308,7 +280,6 @@ public partial class TerrainLabUI : Control
     // sets _checkRan + ANDs its pass into _checkPass; AttachClouds then Quit(_checkPass?0:1) so CI can gate.
     private bool _checkRan;
     private bool _checkPass = true;
-    private int _shadowDbgCli = -1;   // --shadowdbg=1 → paint the cloud-shadow map as terrain albedo (proof)
     private bool _shadowCheckCli;     // --shadowcheck → numeric correlation test, PASS/FAIL to console
     private bool _fieldCheckCli;      // --fieldcheck → one-shot field determinism/parity self-check (S1)
     private bool _cdlodCheckCli;      // --cdlodcheck → quadtree neighbor-invariant + stats self-check (S2a)
@@ -334,10 +305,8 @@ public partial class TerrainLabUI : Control
     private bool _fogViewScaleSet;
     private float _lookaheadCli;      // --lookahead=F → ARC B Task 4 PredictLookahead seconds (gated by _lookaheadSet)
     private bool _lookaheadSet;
-    private int _shadowAtlasCli;      // --shadowatlas=N → ARC A.1 directional shadow atlas px (0 = leave default 8192)
     private float _aabbSpeedCli;      // --aabbspeed=N -> max camera m/s that may run AABB readback probes
     private bool _aabbSpeedSet;
-    private float _shadowRingCli = -1f; // --shadowring=N -> CSM caster ring radius; 0 = all near CDLOD chunks
     private int _cloudDbg = -1;
     private int _cloudSteps = -1;
     private int _cloudsOn = -1;

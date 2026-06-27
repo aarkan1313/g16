@@ -36,7 +36,7 @@ public partial class TerrainLabUI : Control
     private bool _lastKey5Down, _lastKey6Down, _lastKey7Down;   // S2b: debounce for the test-path keys (5/6/7)
     // Debug isolation bank (F1..F6): live-flip the screen-space effects that produce camera-locked stipple/ring
     // artifacts, so a "dots in a shifting ring" report can be pinned to ONE system in the running window.
-    private bool _lastF2, _lastF3, _lastF4, _lastF5, _lastF6, _lastF7, _lastF8, _lastF9;
+    private bool _lastF6, _lastF7, _lastF8, _lastF9;
     private bool _lastG;        // G toggles the anti-moiré detail-fade live
     private bool _lastWaterH;   // H toggles the water debug overlay live
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
@@ -44,10 +44,7 @@ public partial class TerrainLabUI : Control
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private bool _lastLiveProfileDump; // B dumps the last rolling profile window to console + artifacts/
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
-    private bool _lastHzKey;    // P A/Bs horizon shadows (hz_on)
-    private bool _hzOn = true;  // mirror of hz_on; MUST match the shader/JSON default or the first P-press no-ops
     private bool _lodVizLive;   // V toggles the LOD-band tint live
-    private bool _terrainCloudShadowOn = false;  // opt-in terrain receive for cloud shadows; . flips it once the cloud RID is live
     private bool _godraysOn = false;              // mirror of cloud_godrays; MUST match JSON/default OFF
     private bool _analyticOn = true;        // ground source: live field (default) vs baked; toggled by key 1
     private float _inspectEnergy = 1.0f;   // L-light brightness (Night tab 'inspect light')
@@ -71,27 +68,10 @@ public partial class TerrainLabUI : Control
         }
     }
 
-    private bool TerrainCloudShadowActive => _terrainCloudShadowOn && (_cloud?.Enabled ?? true);
-
-    private void SetTerrainCloudShadowEnabled(bool on)
-    {
-        _terrainCloudShadowOn = on;
-        bool active = TerrainCloudShadowActive;
-        _cloud?.SetShadowMapWanted(active);
-        _terrain.SetBool("cloud_shadow_on", active);
-        _godraysScreen?.SetCloudOcclusionReady(active && (_cloud?.ComputeReady ?? false));
-    }
-
     private void SetGodRaysEnabled(bool on)
     {
         _godraysOn = on;
         _godraysScreen?.SetEnabled(on);
-    }
-
-    private void SetHorizonShadowsEnabled(bool on)
-    {
-        _hzOn = on;
-        _terrain.SetBool("hz_on", on);
     }
 
     private void RecordLiveProfile(double delta)
@@ -196,7 +176,7 @@ public partial class TerrainLabUI : Control
         GD.Print($"LIVEPROFILE-WROTE: {path}");
     }
 
-    /// Toggle the inspection light (press L). Lazily creates a fixed-angle shadow-casting directional
+    /// Toggle the inspection light (press L). Lazily creates a fixed-angle non-shadowing directional
     /// ("studio key light") that lights the whole scene, so you can check how surfaces read regardless of
     /// time of day (e.g. a dark night before real moonlight lands in 3c). NOT the sun/moon — a debug aid.
     private void ToggleInspectLight()
@@ -207,7 +187,7 @@ public partial class TerrainLabUI : Control
             {
                 LightEnergy = _inspectEnergy,
                 LightColor = new Color(1f, 0.97f, 0.92f),
-                ShadowEnabled = true,
+                ShadowEnabled = false,
                 RotationDegrees = new Vector3(-55f, 40f, 0f),   // 3/4 studio angle
             };
             GetNode<Node3D>("/root/TerrainLabRoot").AddChild(_inspectLight);
@@ -230,7 +210,6 @@ public partial class TerrainLabUI : Control
         ApplyOvercastScaling();
     }
 
-    private bool _shadowEnabledOnce;
     public override void _Process(double delta)
     {
         // The --objectlistcheck / --lumpresetcheck flags early-return from _Ready (before the extracted
@@ -357,24 +336,10 @@ public partial class TerrainLabUI : Control
             if (lDown && !_lastLDown) { ToggleInspectLight(); }
             _lastLDown = lDown;
 
-            // --- Debug isolation bank (N M , . /) ----------------------------------------------------------
+            // --- Debug isolation bank (/ O K V G H J) -----------------------------------------------------
             // Live-flip each camera-locked screen-space effect to pin a "dots in a shifting ring" artifact to
-            // its source. Each prints its new state. (Moved off F-keys: those get grabbed by the OS/IDE and
-            // never reach the game window.) N SSIL, M SDFGI, , sun shadows, . cloud-shadow, / god rays.
+            // its source. Each prints its new state. Shadow/GI toggles are intentionally parked.
             {
-                var env = UiEnv.Environment;
-                bool kN = Input.IsKeyPressed(Key.N);
-                if (kN && !_lastF2) { env.SsilEnabled = !env.SsilEnabled; GD.Print($"[dbg] (N) SSIL = {env.SsilEnabled}"); }
-                _lastF2 = kN;
-                bool kM = Input.IsKeyPressed(Key.M);
-                if (kM && !_lastF3) { env.SdfgiEnabled = !env.SdfgiEnabled; GD.Print($"[dbg] (M) SDFGI = {env.SdfgiEnabled}"); }
-                _lastF3 = kM;
-                bool kComma = Input.IsKeyPressed(Key.Comma);
-                if (kComma && !_lastF4) { UiSun.ShadowEnabled = !UiSun.ShadowEnabled; GD.Print($"[dbg] (,) Sun shadows = {UiSun.ShadowEnabled}"); }
-                _lastF4 = kComma;
-                bool kPeriod = Input.IsKeyPressed(Key.Period);
-                if (kPeriod && !_lastF5) { SetTerrainCloudShadowEnabled(!_terrainCloudShadowOn); GD.Print($"[dbg] (.) Cloud shadow on terrain = {_terrainCloudShadowOn}"); }
-                _lastF5 = kPeriod;
                 bool kSlash = Input.IsKeyPressed(Key.Slash);
                 if (kSlash && !_lastF6) { SetGodRaysEnabled(!_godraysOn); GD.Print($"[dbg] (/) God rays = {_godraysOn}"); }
                 _lastF6 = kSlash;
@@ -388,10 +353,6 @@ public partial class TerrainLabUI : Control
                 bool kK = Input.IsKeyPressed(Key.K);
                 if (kK && !_lastF8) { _aerialV2On = !_aerialV2On; _atmosphere?.SetAerialEnabled(_aerialV2On); _aerialV2?.SetEnabled(_aerialV2On); _aerialV2Activated = false; GD.Print($"[dbg] (K) Aerial AT-2 v2 = {_aerialV2On}"); }
                 _lastF8 = kK;
-                // P: A/B horizon shadows (long-range terrain self-shadow). Best seen at a LOW sun.
-                bool kP = Input.IsKeyPressed(Key.P);
-                if (kP && !_lastHzKey) { SetHorizonShadowsEnabled(!_hzOn); GD.Print($"[dbg] (P) Horizon shadows = {_hzOn}"); }
-                _lastHzKey = kP;
                 // V: live LOD-band tint toggle — flip on to see if the dot-rings line up with LOD boundaries.
                 bool kV = Input.IsKeyPressed(Key.V);
                 if (kV && !_lastF9) { _lodVizLive = !_lodVizLive; _terrain.SetCdlodViz(_lodVizLive); GD.Print($"[dbg] (V) LOD-band tint = {_lodVizLive}"); }
@@ -451,13 +412,6 @@ public partial class TerrainLabUI : Control
             }
         }
         if (_ready) { RecordLiveProfile(delta); }
-        // L2: once the cloud shadow Texture2Drd RID is live, enable only the opt-in cloud-shadow receivers.
-        if (!_shadowEnabledOnce && _cloud != null && _cloud.ComputeReady && _cloud.Enabled)
-        {
-            SetTerrainCloudShadowEnabled(_terrainCloudShadowOn);
-            _shadowEnabledOnce = true;
-        }
-
         // FPS / frame-time HUD (top-right). Cheap; updated ~4×/sec. The perf gate
         // needs a number, not a feeling — this is it.
         if (_fpsLabel != null)

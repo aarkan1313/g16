@@ -5,8 +5,8 @@ namespace WG16.Lab;
 
 /// Terrain presenter: builds the base field into a displaced PlaneMesh and renders it with the
 /// MINIMAL placeholder ground shader (height/slope color). The full per-pixel material system was
-/// stripped 2026-06-21 (the reset); CDLOD / infinite terrain is the next arc. Keeps the GI/shadow
-/// proxy (geometry perf) and the generic shader-param passthroughs the cloud/sky lane uses
+/// stripped 2026-06-21 (the reset); CDLOD / infinite terrain is the next arc. Keeps the GI
+/// proxy hook (future experiments) and the generic shader-param passthroughs the cloud/sky lane uses
 /// (cloud_shadow_*, cam_world). The base field geometry ("the bones") is untouched.
 public partial class TerrainLab : MeshInstance3D
 {
@@ -16,8 +16,8 @@ public partial class TerrainLab : MeshInstance3D
     public float MidHeight => (_minBase + _maxBase) * 0.5f;   // for cloud-shadow march origin
     private const float AabbMarginM = 8f;
 
-    private MeshInstance3D? _giProxy;   // coarse GI/shadow proxy (perf)
-    public bool UseGiProxy = false;     // default OFF: detail mesh casts sharp shadows + feeds GI
+    private MeshInstance3D? _giProxy;   // coarse GI proxy, shadow casting parked
+    public bool UseGiProxy = false;     // default OFF
     public int ProxyRes = 511;          // proxy subdivision (~512²); --proxyres=N
 
     public void Build(FieldCompute fc, FieldParams p)
@@ -192,7 +192,7 @@ public partial class TerrainLab : MeshInstance3D
     public void SetFieldCache(bool on) { if (_cdlod != null) { _cdlod.FieldCache = on; } }   // per-chunk field cache A/B
     public void SetBakeReq(int n) { _cdlod?.SetBakeReq(n); }   // field-cache bake throttle
     public void SetChunkOps(int n) { if (_cdlod != null) { _cdlod.MaxChunkOps = Mathf.Max(1, n); } }   // per-frame birth cap (unthrottle = high)
-    public void SetShadowRing(float meters) { if (_cdlod != null) { _cdlod.ShadowCasterRadius = Mathf.Max(0f, meters); } }   // CSM caster radius around camera
+    public void SetShadowRing(float meters) { if (_cdlod != null) { _cdlod.ShadowCasterRadius = Mathf.Max(0f, meters); } }   // dormant while terrain shadows are parked
     public float ShadowRing => _cdlod?.ShadowCasterRadius ?? 0f;
     public int LoadRing => _cdlod?.LoadRing ?? 5;
     public void CdlodTick(Vector3 camPos, Vector3 velXZ = default) { _cdlod?.Tick(camPos, velXZ); }   // ARC B Task 4: vel for predictive loading
@@ -217,8 +217,7 @@ public partial class TerrainLab : MeshInstance3D
     public void TickTestPath(double delta) => _testPaths?.Tick(delta);
     public bool TestPathRunning => _testPaths?.Running ?? false;
 
-    /// Toggle the GI/shadow proxy. ON: the coarse proxy feeds SDFGI + casts shadows; the detail mesh
-    /// renders the view only. OFF: detail mesh feeds both; proxy inert.
+    /// Toggle the GI proxy. Shadows are parked; the proxy only affects any future GI experiment.
     public void SetGiProxy(bool on)
     {
         UseGiProxy = on;
@@ -228,16 +227,16 @@ public partial class TerrainLab : MeshInstance3D
             GIMode = GeometryInstance3D.GIModeEnum.Disabled;
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
             _giProxy.GIMode = GeometryInstance3D.GIModeEnum.Static;
-            _giProxy.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+            _giProxy.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
         }
         else
         {
             GIMode = GeometryInstance3D.GIModeEnum.Static;
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
             _giProxy.GIMode = GeometryInstance3D.GIModeEnum.Disabled;
             _giProxy.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
         }
-        GD.Print($"TerrainLab: GI/shadow proxy {(on ? "ON" : "off")}");
+        GD.Print($"TerrainLab: GI proxy {(on ? "ON" : "off")} (shadows parked)");
     }
 
     /// Rebuild the proxy mesh at a new subdivision.

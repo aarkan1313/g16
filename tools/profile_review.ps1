@@ -49,12 +49,12 @@ if ($MoveOnly) {
 if ($FeatureSweep) {
     Invoke-ReviewProfile "stationary default" @($baseProfile)
     Invoke-ReviewProfile "stationary clouds off" @($baseProfile, "--clouds=0")
-    Invoke-ReviewProfile "stationary shadow on" @($baseProfile, "--shadow=1")
-    Invoke-ReviewProfile "stationary shadow on + clouds off" @($baseProfile, "--shadow=1", "--clouds=0")
+    Invoke-ReviewProfile "stationary god rays on" @($baseProfile, "--godrays=1")
+    Invoke-ReviewProfile "stationary god rays on + clouds off" @($baseProfile, "--godrays=1", "--clouds=0")
     Invoke-ReviewProfile "$Speed m/s default" $moveProfile
     Invoke-ReviewProfile "$Speed m/s clouds off" ($moveProfile + "--clouds=0")
-    Invoke-ReviewProfile "$Speed m/s shadow on" ($moveProfile + "--shadow=1")
-    Invoke-ReviewProfile "$Speed m/s shadow on + clouds off" ($moveProfile + @("--shadow=1", "--clouds=0"))
+    Invoke-ReviewProfile "$Speed m/s god rays on" ($moveProfile + "--godrays=1")
+    Invoke-ReviewProfile "$Speed m/s god rays on + clouds off" ($moveProfile + @("--godrays=1", "--clouds=0"))
     exit
 }
 

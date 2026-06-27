@@ -104,8 +104,8 @@ uniform float ground_rough = 0.92;
 // Per-pixel macro-height march toward the sun: where the terrain rises above the sun ray, occlude the
 // DIRECT light via AO + AO_LIGHT_AFFECT=1 (no light()/BRDF rewrite). hz_on=false => byte-identical. Cheap:
 // marches field_macro_height (macro only), increasing stride, gated OFF at high sun (no long shadows there).
-// Default ON: broad far-terrain occlusion lives here; CSM is reserved for near/detail contact shadows.
-uniform bool  hz_on = true;
+// Parked OFF: the current broad terrain shadowing path was visually unstable in the review scene.
+uniform bool  hz_on = false;
 uniform vec3  sun_dir_to = vec3(0.0, 1.0, 0.0);               // unit dir TOWARD the sun (pushed by LightingComposer each Compose)
 uniform float hz_steps    : hint_range(4.0, 48.0)   = 10.0;    // march steps
 uniform float hz_maxdist  : hint_range(500.0, 16000.0) = 9000.0; // horizontal reach (m)

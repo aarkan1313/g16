@@ -85,7 +85,8 @@ public sealed partial class CdlodTerrain : Node3D
     public float ChunkOpsPerSpeed = 0.01f;   // DISABLED — kept as diagnostic reference only, not used in default path
     public int LoadRing = 8;          // full horizon ring (near + far shell); --loadring=N overrides
     public int ActiveRing = 4;        // near/far boundary — sub-root chunks (near CDLOD) vs root chunks (horizon shell)
-    public float ShadowCasterRadius = 5500f;         // camera-centered CSM caster ring; kept beyond shadow_dist so it cannot visibly pop
+    public float ShadowCasterRadius = 5500f;         // dormant camera-centered CSM caster ring
+    public bool TerrainShadowsEnabled = false;       // current review baseline: terrain chunks never cast engine shadows
     public float AabbTightenMaxSpeed = 250f;          // skip render-thread AABB readbacks during fast traversal; catch up when motion settles
     private Vector2 _shadowCenterXZ;                 // current camera XZ for ring tests; set once per Tick()
     public float CenterHysteresis = 0.35f;   // ARC B Task 2: dead-band (× root size) the camera must travel PAST a
@@ -425,6 +426,7 @@ public sealed partial class CdlodTerrain : Node3D
 
     private bool CastsCsmShadow(CdlodChunk c, ChunkSlot slot)
     {
+        if (!TerrainShadowsEnabled) { return false; }
         if (slot.IsFar) { return false; }
         if (ShadowCasterRadius <= 0f) { return true; }   // diagnostic: all near CDLOD chunks cast
 

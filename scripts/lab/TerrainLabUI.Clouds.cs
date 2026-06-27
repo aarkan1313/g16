@@ -53,8 +53,6 @@ public partial class TerrainLabUI : Control
         if (knob == "deck_debug") { _cloud?.SetDeckDebug(on); return; }   // deck-ID overlay (debug)
         if (knob == "cirrus_on") { _cloud?.SetCirrusOn(on); return; }     // CO-2 cirrus sky-layer toggle
         _cloud?.SetKnobBool(knob, on);
-        // clouds-enabled is the master visual gate; terrain cloud shadows remain opt-in via the debug toggle.
-        if (knob == "enabled") { SetTerrainCloudShadowEnabled(_terrainCloudShadowOn); }
     }
 
     // ---- cloud PRESETS (named sky looks) — logic lives in CloudPresets.cs; picker UI + forwarders here ----

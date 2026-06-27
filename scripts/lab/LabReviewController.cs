@@ -31,7 +31,6 @@ public sealed class LabReviewController
     private int _co2Type;         // CO-2 type on review key 6: 0 cumulus · 1 stratus · 2 cirrus
     private int _fantasyIdx;      // ST4-2 fantasy preset on review key 7 (cycles)
     private int _atmoStep;        // AT-1 atmosphere time-of-day preset on review key 8
-    private int _shadowPresetIdx; // shadow tuning preset on review key 4
     private int _c3Idx;           // Celestial C3 multi-luminary on review key 5
     private int _terrainDebugMode; // S3: 0 default · 1 no-tighten · 2 lod-viz · 3 single mesh
     private List<Godot.Collections.Dictionary>? _nightStates;
@@ -181,25 +180,12 @@ public sealed class LabReviewController
                     judge = "Multiple moons: each its own size / color / PHASE on the clear night sky. Pan up/around to see them. Tune the ExtraMoon* constants in LightingComposer. Press 5 again to cycle back to the suns.";
                 }
                 break;
-            case 4: // SHADOW tuning — press 4 to cycle: physical → softer → softest.
-                if (_lastPreset != 4) { _sky.ApplyMood(5); Set("cloud_enabled", false); _shadowPresetIdx = 0; }
-                else { _shadowPresetIdx = (_shadowPresetIdx + 1) % 4; }
-                switch (_shadowPresetIdx)
-                {
-                    case 1: // SOFTER — mild over-soften (~0.9 deg)
-                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.9f); Set("sun_soft", 1.4f); Set("shadow_dist", 3500f);
-                        break;
-                    case 2: // SOFTEST (unphysical, A/B only)
-                        Set("shadow_bias", 1.5f); Set("sun_disc", 2.5f); Set("sun_soft", 3.5f); Set("shadow_dist", 3500f);
-                        break;
-                    default: // 0 — PHYSICAL: penumbra ~0.53 deg = real sun.
-                        Set("shadow_bias", 1.0f); Set("sun_disc", 0.55f); Set("sun_soft", 1.0f); Set("shadow_dist", 3500f);
-                        break;
-                }
-                _shadowPresetIdx %= 3;   // 3 presets now (physical / softer / softest)
-                string shName = _shadowPresetIdx switch { 1 => "SOFTER (~0.9deg)", 2 => "SOFTEST (unphysical A/B)", _ => "PHYSICAL (~0.53deg = real sun)" };
-                title = $"4 · Shadow tuning  [{shName}]  (press 4 to cycle)";
-                judge = "PHYSICAL = the real sun's penumbra (correct, cheap). The residual dotted stipple is PCF grain on COARSE geometry — the real fix is surfacing/denser mesh, NOT softer shadows. SOFTER/SOFTEST just show the masking tradeoff. Fly low across LOD bands + sunlit slopes.";
+            case 4:
+                _sky.ApplyMood(5);
+                Set("cloud_enabled", false);
+                Set("time_of_day", 13f);
+                title = "4 · Shadowless lighting baseline";
+                judge = "Current review baseline: terrain, sun, moon, inspection light, and material board are shadowless. Use this view to judge terrain color, LOD, fog, and lighting without stale CSM or horizon-shadow artifacts.";
                 break;
             case 6: // Clouds CO-1/CO-2 types — press 6 to cycle.
                 if (_lastPreset != 6)
