@@ -15,7 +15,12 @@ public partial class TerrainLabUI
     {
         _shadowRegistry = new ShadowRegistry(this);
         _shadowRegistry.Register(new HorizonMarchOwner(_terrain));
-        _shadowRegistry.Register(new CsmCastOwner(this) { Enabled = true });
+        // DESTROYED back to the clean shadowless baseline (2026-06-27): the near-CSM owner went default-on
+        // + UNVERIFIED + off its own "finest leaves only" safety rail (CasterTopLevels=7=all => graveyard
+        // acne, masked by cranked bias). Registered DISABLED so the scaffolding stays but nothing casts:
+        // WantsSunShadow=false => sun.ShadowEnabled=false, horizon hz_on default-off, all geometry CastShadow.Off.
+        // Re-enable ONLY behind a real eye-gate + graveyard motion test, one owner at a time, never default-on.
+        _shadowRegistry.Register(new CsmCastOwner(this) { Enabled = false });
     }
 
     private void TickShadows(double delta) => _shadowRegistry?.Tick(delta);
