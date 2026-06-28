@@ -117,7 +117,15 @@ uniform float detail_fp_hi = 3.0;
 // dissolve-to-mean METHOD is the wrong lever for it (use mip/aniso — present — + detail/macro blending or
 // texture-array LOD later). Toksvig (below) is INDEPENDENT of this and stays on: it solves a different,
 // real problem (normal-map specular AA). Key G still A/Bs the fade live.
-uniform float detail_fade_on = 0.0;   // live A/B (key G): 1 = anti-moiré detail-fade ON, 0 = OFF (default, raw detail)
+uniform float detail_fade_on = 0.0;   // live A/B (key G): 1 = legacy DISTANCE-driven anti-moiré fade ON, 0 = OFF
+// FOOTPRINT (fwidth) detail-fade — the fade the comment block below always INTENDED but never got (the code
+// drove it by raw distance, so a near grazing slope never faded → the directional placeholder textures kept
+// shimmering into "creeping" streaks). Driven by texture-tiles-per-pixel, so it auto-targets grazing angle AND
+// distance and keeps head-on near ground sharp. Default ON; modular A/B via --footprintfade=0.
+uniform bool footprint_fade = true;
+uniform float fp_fade_lo = 0.012;     // footprint (tiles/pixel) where detail starts dissolving to mean
+uniform float fp_fade_hi = 0.10;      // footprint where detail is fully mean
+uniform float fp_fade_max = 1.0;      // cap on dissolve amount (1 = can go fully flat-mean)
 
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)
@@ -158,6 +166,14 @@ uniform float debug_wxz = 0.0;   // DEBUG: 1.0 = output reconstructed world XZ (
 uniform float diag_mode = 0.0;   // RING HUNT: 0 normal, 1 grey base, 2 +albedo, 3 +roughness, 4 +normalmap (key H steps)
 uniform bool dbg_use_normalmap = true;
 uniform bool dbg_fullrough = false;
+// SURFACING FIX (2026-06-27): triplanar (world-projected) sampling for ALL ground materials, not just rock.
+// The planar top-down UV (v_surf_xz/mat_tiling) smears the texture into directional STREAKS on slopes — the
+// "creeping diagonal shadow that moves with you" the user sees on grass/dune faces. Triplanar removes the
+// slope stretch at the source (mat3 rock already used it). Gated so --triall=0 restores the old planar look
+// for a clean A/B. Default ON. See docs/handoffs/2026-06-27-terrain-surfacing-uv-stretch-HANDOFF.md.
+uniform bool tri_all = true;
+uniform float tri_sharp = 4.0;    // triplanar plane-blend exponent (higher = sharper plane selection; lower = side planes engage on gentler slopes)
+uniform float tri_ybias = 1.0;    // DEBUG/probe: <1 demotes the top-down (Y) plane so slopes sample the un-stretched side planes (0 = no top-down at all)
 uniform bool dbg_unlit = false;
 
 // --- HYDROLOGY carve. The region water texture: R=dist-to-river(m), G=bedDepth(m), B=flow, A=wet mask.
@@ -297,15 +313,89 @@ float texr_mean(sampler2D t) { return textureLod(t, vec2(0.5), 16.0).r; }
 // detail_fade() band so albedo/roughness/normal all dissolve together (no stacked rings).
 float detail_dissolve(float dist) { return 1.0 - detail_fade(dist); }
 
+// ---- STOCHASTIC ANTI-TILING (hash rotation + offset, bilinear-blended over 4 world cells) -------------
+// The placeholder ground albedos are strongly DIRECTIONAL (vertical grass-stalks / mud streaks); tiled on a
+// slope they line up into the "creeping corduroy" streaks. Per-cell random ROTATION decorrelates that grain
+// (each cell points a different way); a soft bilinear blend across the 4 nearest cells hides the cell seams;
+// textureGrad keeps mips correct under each cell's rotation (no extra blur/alias). Continuous rotation was
+// rejected — it swirls within view. Cost: up to 4 fetches/plane (gated; default off until perf-measured).
+uniform bool  antitile_on   = false;
+uniform float antitile_rot   = 1.0;    // rotation spread (×π); 1 = full ±180° per cell
+uniform float antitile_cell  = 3.0;    // cell size in TILE units (world m = ×mat_tiling); bigger = coarser variation
+uniform float antitile_blend = 0.28;   // half-width of the cross-cell blend band (smaller = sharper, less ghost)
+vec4 hash4(vec2 p) {
+    vec4 q = vec4(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)),
+                  dot(p, vec2(419.2, 371.9)), dot(p, vec2(57.7, 201.4)));
+    return fract(sin(q) * 43758.5453);
+}
+vec3 stoch_fetch(sampler2D t, vec2 uv) {
+    vec2 dx = dFdx(uv), dy = dFdy(uv);
+    vec2 g = uv / max(antitile_cell, 0.25);
+    vec2 i = floor(g);
+    vec2 f = fract(g);
+    vec2 w = smoothstep(0.5 - antitile_blend, 0.5 + antitile_blend, f);
+    vec3 acc = vec3(0.0); float tw = 0.0;
+    for (int yy = 0; yy < 2; yy++) {
+        for (int xx = 0; xx < 2; xx++) {
+            vec2 cell = i + vec2(float(xx), float(yy));
+            vec4 h = hash4(cell);
+            float ang = (h.x - 0.5) * 6.2831853 * antitile_rot;
+            float s = sin(ang), c = cos(ang);
+            mat2 R = mat2(vec2(c, -s), vec2(s, c));
+            vec2 uvr = R * uv + h.yz * 17.0;     // rotate + per-cell phase offset
+            float bw = (xx == 0 ? 1.0 - w.x : w.x) * (yy == 0 ? 1.0 - w.y : w.y);
+            acc += textureGrad(t, uvr, R * dx, R * dy).rgb * bw;
+            tw += bw;
+        }
+    }
+    return acc / max(tw, 1e-4);
+}
+float stoch_fetch_r(sampler2D t, vec2 uv) {
+    vec2 dx = dFdx(uv), dy = dFdy(uv);
+    vec2 g = uv / max(antitile_cell, 0.25);
+    vec2 i = floor(g);
+    vec2 f = fract(g);
+    vec2 w = smoothstep(0.5 - antitile_blend, 0.5 + antitile_blend, f);
+    float acc = 0.0; float tw = 0.0;
+    for (int yy = 0; yy < 2; yy++) {
+        for (int xx = 0; xx < 2; xx++) {
+            vec2 cell = i + vec2(float(xx), float(yy));
+            vec4 h = hash4(cell);
+            float ang = (h.x - 0.5) * 6.2831853 * antitile_rot;
+            float s = sin(ang), c = cos(ang);
+            mat2 R = mat2(vec2(c, -s), vec2(s, c));
+            vec2 uvr = R * uv + h.yz * 17.0;
+            float bw = (xx == 0 ? 1.0 - w.x : w.x) * (yy == 0 ? 1.0 - w.y : w.y);
+            acc += textureGrad(t, uvr, R * dx, R * dy).r * bw;
+            tw += bw;
+        }
+    }
+    return acc / max(tw, 1e-4);
+}
+vec3 plane_alb(sampler2D t, vec2 uv) { return antitile_on ? stoch_fetch(t, uv) : texture(t, uv).rgb; }
+float plane_rgh(sampler2D t, vec2 uv) { return antitile_on ? stoch_fetch_r(t, uv) : texture(t, uv).r; }
+
 // Triplanar albedo/scalar sample by world position (no UV needed) — kills cliff stretching on steep faces.
 // `dissolve` (0..1) blends each plane's sample toward the texture mean so far faces lose their speckle.
 vec3 tri_sample(sampler2D t, vec3 wpos, vec3 wn, float scale, float dissolve) {
-    vec3 bw = pow(abs(wn), vec3(4.0));
+    vec3 bw = pow(abs(wn), vec3(tri_sharp));
+    bw.y *= tri_ybias;   // DEBUG: tri_ybias<1 demotes the top-down plane so slopes use the (un-stretched) side planes
     bw /= max(bw.x + bw.y + bw.z, 1e-4);
     vec3 mean = tex_mean(t);
-    vec3 cx = mix(texture(t, wpos.zy / scale).rgb, mean, dissolve);
-    vec3 cy = mix(texture(t, wpos.xz / scale).rgb, mean, dissolve);
-    vec3 cz = mix(texture(t, wpos.xy / scale).rgb, mean, dissolve);
+    vec3 cx = mix(plane_alb(t, wpos.zy / scale), mean, dissolve);
+    vec3 cy = mix(plane_alb(t, wpos.xz / scale), mean, dissolve);
+    vec3 cz = mix(plane_alb(t, wpos.xy / scale), mean, dissolve);
+    return cx * bw.x + cy * bw.y + cz * bw.z;
+}
+// Scalar (roughness) twin of tri_sample — same world-projection blend, single channel.
+float tri_sample_r(sampler2D t, vec3 wpos, vec3 wn, float scale, float dissolve) {
+    vec3 bw = pow(abs(wn), vec3(tri_sharp));
+    bw.y *= tri_ybias;
+    bw /= max(bw.x + bw.y + bw.z, 1e-4);
+    float mean = texr_mean(t);
+    float cx = mix(plane_rgh(t, wpos.zy / scale), mean, dissolve);
+    float cy = mix(plane_rgh(t, wpos.xz / scale), mean, dissolve);
+    float cz = mix(plane_rgh(t, wpos.xy / scale), mean, dissolve);
     return cx * bw.x + cy * bw.y + cz * bw.z;
 }
 // Perturb a world normal by a tangent-space normal map sampled on the dominant (XZ) plane (used by the diag stepper).
@@ -377,19 +467,39 @@ void fragment() {
         // remove the high frequencies at the source. Driving the fade by fwidth(uv) (texels/pixel) — not raw
         // distance — auto-targets BOTH distance and grazing angle, and keeps head-on near ground fully sharp.
         float dist = distance(cam_world, wpos);
-        float dis = detail_dissolve(dist) * detail_fade_on;    // 0 near .. 1 far (gated by the live G toggle)
+        // Footprint = texture tiles per screen-pixel (fwidth of the surface UV). Large where the texture
+        // minifies hard — far AND/OR grazing slope — which is exactly where the directional placeholder
+        // textures shimmer into the "creeping line that moves with you". Fade detail→mean here.
+        vec2 uv_fp = v_surf_xz / mat_tiling;
+        float footprint = length(fwidth(uv_fp));
+        float dis_fp = footprint_fade ? smoothstep(fp_fade_lo, fp_fade_hi, footprint) * fp_fade_max : 0.0;
+        float dis = max(detail_dissolve(dist) * detail_fade_on, dis_fp);    // 0 near sharp .. 1 far/grazing mean
         // rock (mat3) uses triplanar (steep faces); others use planar world-XZ uv (cheaper, they're flat-ish).
-        vec3 a0 = mix(texture(mat0_alb, uv).rgb, tex_mean(mat0_alb), dis);
-        vec3 a1 = mix(texture(mat1_alb, uv).rgb, tex_mean(mat1_alb), dis);
-        vec3 a2 = mix(texture(mat2_alb, uv).rgb, tex_mean(mat2_alb), dis);
+        // mat3 (rock) is ALWAYS triplanar. With tri_all (default ON) the other four go triplanar too — this is
+        // what removes the slope STREAK. tri_all=0 (A/B) restores the legacy planar `texture(matN, uv)` look.
+        vec3 a0, a1, a2, a4; float r0, r1, r2, r4;
+        if (tri_all) {
+            a0 = tri_sample(mat0_alb, wpos, v_normal, mat_tiling, dis);
+            a1 = tri_sample(mat1_alb, wpos, v_normal, mat_tiling, dis);
+            a2 = tri_sample(mat2_alb, wpos, v_normal, mat_tiling, dis);
+            a4 = tri_sample(mat4_alb, wpos, v_normal, mat_tiling, dis);
+            r0 = tri_sample_r(mat0_rgh, wpos, v_normal, mat_tiling, dis);
+            r1 = tri_sample_r(mat1_rgh, wpos, v_normal, mat_tiling, dis);
+            r2 = tri_sample_r(mat2_rgh, wpos, v_normal, mat_tiling, dis);
+            r4 = tri_sample_r(mat4_rgh, wpos, v_normal, mat_tiling, dis);
+        } else {
+            a0 = mix(texture(mat0_alb, uv).rgb, tex_mean(mat0_alb), dis);
+            a1 = mix(texture(mat1_alb, uv).rgb, tex_mean(mat1_alb), dis);
+            a2 = mix(texture(mat2_alb, uv).rgb, tex_mean(mat2_alb), dis);
+            a4 = mix(texture(mat4_alb, uv).rgb, tex_mean(mat4_alb), dis);
+            r0 = mix(texture(mat0_rgh, uv).r, texr_mean(mat0_rgh), dis);
+            r1 = mix(texture(mat1_rgh, uv).r, texr_mean(mat1_rgh), dis);
+            r2 = mix(texture(mat2_rgh, uv).r, texr_mean(mat2_rgh), dis);
+            r4 = mix(texture(mat4_rgh, uv).r, texr_mean(mat4_rgh), dis);
+        }
         vec3 a3 = tri_sample(mat3_alb, wpos, v_normal, mat_tiling, dis);
-        vec3 a4 = mix(texture(mat4_alb, uv).rgb, tex_mean(mat4_alb), dis);
+        float r3 = tri_sample_r(mat3_rgh, wpos, v_normal, mat_tiling, dis);
         vec3 alb = (w0 * a0 + w1 * a1 + w2 * a2 + w3 * a3 + w4 * a4) / sum;
-        float r0 = mix(texture(mat0_rgh, uv).r, texr_mean(mat0_rgh), dis);
-        float r1 = mix(texture(mat1_rgh, uv).r, texr_mean(mat1_rgh), dis);
-        float r2 = mix(texture(mat2_rgh, uv).r, texr_mean(mat2_rgh), dis);
-        float r3 = mix(texture(mat3_rgh, uv).r, texr_mean(mat3_rgh), dis);
-        float r4 = mix(texture(mat4_rgh, uv).r, texr_mean(mat4_rgh), dis);
         float rgh = (w0 * r0 + w1 * r1 + w2 * r2 + w3 * r3 + w4 * r4) / sum;
         // Normal-map perturbation (restored, for the diag stepper). diag_mode controls which channel is live so
         // we can pin the ring source by adding ONE channel at a time onto the known-clean flat-grey base.

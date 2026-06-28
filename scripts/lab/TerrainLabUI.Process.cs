@@ -41,6 +41,8 @@ public partial class TerrainLabUI : Control
     private bool _lastWaterH;   // H toggles the water debug overlay live
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
     private bool _detailFadeOn = false;  // anti-moiré detail-fade default OFF (matches shader default; ring bug fixed at source, fade only washed far detail)
+    private bool _lastFpKey;    // T toggles the footprint(fwidth)-driven detail-fade live (the keeper grazing-shimmer fix)
+    private bool _footprintFadeLive = true;  // mirror of footprint_fade shader uniform (default ON)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private bool _lastLiveProfileDump; // B dumps the last rolling profile window to console + artifacts/
     private bool _lastShadowN;  // N toggles the Sun CSM shadow live (isolate "shadows crawl when I turn")
@@ -367,6 +369,13 @@ public partial class TerrainLabUI : Control
                 bool kG = Input.IsKeyPressed(Key.G);
                 if (kG && !_lastG) { _detailFadeOn = !_detailFadeOn; _terrain.SetFloat("detail_fade_on", _detailFadeOn ? 1f : 0f); GD.Print($"[dbg] (G) anti-moiré detail-fade = {_detailFadeOn}"); }
                 _lastG = kG;
+                // T: live A/B the FOOTPRINT(fwidth)-driven detail-fade — the keeper grazing-shimmer fix. Unlike G
+                // (raw distance, washes far detail), this fades to texture-mean only where the texel footprint
+                // exceeds the pixel (the grazing minification that makes streaks "crawl with you"). Flip OFF to
+                // see the streak shimmer return on slopes; ON to see it settle.
+                bool kT = Input.IsKeyPressed(Key.T);
+                if (kT && !_lastFpKey) { _footprintFadeLive = !_footprintFadeLive; _terrain.SetBool("footprint_fade", _footprintFadeLive); GD.Print($"[dbg] (T) footprint detail-fade = {_footprintFadeLive}"); }
+                _lastFpKey = kT;
                 // H: live WATER debug overlay — paint wet pixels cyan / carve band blue so the rivers/lakes
                 // + the carve are visible right on the terrain (the carve groove alone is subtle from altitude).
                 bool kH = Input.IsKeyPressed(Key.H);

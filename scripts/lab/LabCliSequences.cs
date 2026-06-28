@@ -19,6 +19,8 @@ public sealed class LabCliSequences
     private string? _autoShotPath; private double _autoShotT = -1.0;
     private string? _godrayAbPath; private double _godrayAbT = -1.0; private int _godrayAbStage; private int _godrayAbFrames;
     private string? _yawAbPath; private double _yawAbT = -1.0; private int _yawAbStage; private int _yawAbFrames; private float _yawAbDeg = 25f;
+    private string? _timeAbPath; private double _timeAbT = -1.0; private int _timeAbStage; private double _timeAbGap = 4.0;
+    private string? _pitchAbPath; private double _pitchAbT = -1.0; private int _pitchAbStage; private int _pitchAbFrames; private float _pitchAbDeg = -45f;
     private double _profileT = -1.0, _profileDur = 3.0, _profAccum, _profWorst;
     private int _profFrames;
     private bool _profCollecting;
@@ -41,6 +43,8 @@ public sealed class LabCliSequences
     public void ArmAutoShot(string path) { _autoShotPath = path; _autoShotT = 0.0; }
     public void ArmGodrayAb(string path) { _godrayAbPath = path; _godrayAbT = 0.0; }
     public void ArmYawAb(string path) { _yawAbPath = path; _yawAbT = 0.0; }
+    public void ArmTimeAb(string path) { _timeAbPath = path; _timeAbT = 0.0; }
+    public void ArmPitchAb(string path) { _pitchAbPath = path; _pitchAbT = 0.0; }
     public void EnableProfMove() => _profMove = true;
     public void SetProfSpeed(float mps) { if (mps > 0f) { _profSpeed = mps; } }
     public void ArmProfile(double? dur)
@@ -269,6 +273,61 @@ public sealed class LabCliSequences
                     _host.GetViewport().GetTexture().GetImage().SavePng(_yawAbPath + "_b.png");
                     GD.Print($"TerrainLab: yaw A/B -> {_yawAbPath}_a.png / _b.png (+{_yawAbDeg:0}deg yaw, frozen)");
                     _yawAbT = -1.0;
+                    _host.GetTree().Quit();
+                }
+            }
+        }
+
+        // --timeab=<path>: the MIRROR of --yawab. Hold the camera PERFECTLY STILL (no yaw, NO freeze) and let
+        // real time advance between the two captures: clouds drift, cloud shadows sweep, and the sun moves IF the
+        // day/night clock runs (--autotime). capture _a, wait ~4 real seconds, capture _b, quit. If the terrain
+        // differs between _a and _b with a frozen camera, the shading change is TIME-driven (drifting clouds /
+        // moving sun) — NOT camera-driven. This is the fundamental difference from erosion-lab (static sun, no
+        // clouds): there, nothing moves, so the ground never changes regardless of how you look or fly.
+        if (_timeAbT >= 0.0 && _timeAbPath != null)
+        {
+            _timeAbT += delta;
+            if (_timeAbStage == 0 && _timeAbT > 1.5)
+            {
+                _host.GetViewport().GetTexture().GetImage().SavePng(_timeAbPath + "_a.png");
+                _timeAbStage = 1;
+            }
+            else if (_timeAbStage == 1 && _timeAbT > 1.5 + _timeAbGap)
+            {
+                _host.GetViewport().GetTexture().GetImage().SavePng(_timeAbPath + "_b.png");
+                GD.Print($"TerrainLab: time A/B -> {_timeAbPath}_a.png / _b.png (camera STILL, +{_timeAbGap:0}s real time)");
+                _timeAbT = -1.0;
+                _host.GetTree().Quit();
+            }
+        }
+
+        // --pitchab=<path>: the PITCH twin of --yawab — the user's exact symptom is "ground dims as I move the
+        // mouse UP/DOWN" (pitch), which --yawab never exercised. FREEZE time+sun (TimeScale=0), capture _a at the
+        // current pitch, pitch the camera DOWN by _pitchAbDeg, capture _b. Same position + frozen sun ⇒ the ONLY
+        // change is the look direction. Prints the SUN's RotationDegrees at BOTH captures: if they are identical
+        // (they will be), the sun is provably NOT coupled to the camera/mouse — any ground change is a
+        // screen-space POST term (god rays / atmosphere aerial / fog) recomputing for the new view direction.
+        if (_pitchAbT >= 0.0 && _pitchAbPath != null)
+        {
+            _pitchAbT += delta;
+            var cam = _host.GetNodeOrNull<Camera3D>("/root/TerrainLabRoot/Camera");
+            var sun = _host.GetNodeOrNull<DirectionalLight3D>("/root/TerrainLabRoot/Sun");
+            if (_pitchAbStage == 0 && _pitchAbT > 1.5)
+            {
+                Engine.TimeScale = 0.0;   // freeze: sun + clouds stop, only the camera pitch differs A->B
+                _host.GetViewport().GetTexture().GetImage().SavePng(_pitchAbPath + "_a.png");
+                GD.Print($"PITCHAB A: cam.rot={cam?.RotationDegrees} sun.rot={sun?.RotationDegrees}");
+                if (cam != null) { Vector3 r = cam.RotationDegrees; cam.RotationDegrees = new Vector3(Mathf.Clamp(r.X + _pitchAbDeg, -89f, 89f), r.Y, r.Z); }
+                _pitchAbStage = 1; _pitchAbFrames = 0;
+            }
+            else if (_pitchAbStage == 1)
+            {
+                if (++_pitchAbFrames >= 2)
+                {
+                    _host.GetViewport().GetTexture().GetImage().SavePng(_pitchAbPath + "_b.png");
+                    GD.Print($"PITCHAB B: cam.rot={cam?.RotationDegrees} sun.rot={sun?.RotationDegrees}");
+                    GD.Print($"TerrainLab: pitch A/B -> {_pitchAbPath}_a.png / _b.png ({_pitchAbDeg:0}deg pitch, frozen sun). Sun.rot IDENTICAL above ⇒ sun NOT camera-coupled.");
+                    _pitchAbT = -1.0;
                     _host.GetTree().Quit();
                 }
             }

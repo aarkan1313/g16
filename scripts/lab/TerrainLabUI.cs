@@ -324,7 +324,7 @@ public partial class TerrainLabUI : Control, ILabControls
     private void ApplyTerrainStripOverrides()
     {
         if (_fullroughCli >= 0) { _terrain.SetBool("dbg_fullrough", _fullroughCli == 1); }
-        if (_normalmapCli >= 0) { _terrain.SetBool("dbg_normalmap", _normalmapCli == 1); }
+        if (_normalmapCli >= 0) { _terrain.SetBool("dbg_use_normalmap", _normalmapCli == 1); }   // FIXED: shader uniform is dbg_use_normalmap, not dbg_normalmap (was a silent no-op)
         if (_unlitCli >= 0) { _terrain.SetBool("dbg_unlit", _unlitCli == 1); }
         if (_fullroughCli >= 0 || _normalmapCli >= 0 || _unlitCli >= 0)
         {

@@ -105,6 +105,8 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--godrayhp=")) { float.TryParse(a.Substring("--godrayhp=".Length), out _godrayHpCli); }
             else if (a.StartsWith("--godrayab=")) { _cliSeq.ArmGodrayAb(a.Substring("--godrayab=".Length)); }
             else if (a.StartsWith("--yawab=")) { _cliSeq.ArmYawAb(a.Substring("--yawab=".Length)); }
+            else if (a.StartsWith("--timeab=")) { _cliSeq.ArmTimeAb(a.Substring("--timeab=".Length)); }
+            else if (a.StartsWith("--pitchab=")) { _cliSeq.ArmPitchAb(a.Substring("--pitchab=".Length)); }
             else if (a.StartsWith("--glow=")) { _glowCli = a.Substring("--glow=".Length) == "1" ? 1 : 0; }
             else if (a == "--lookatsun") { _lookAtSunCli = true; }
             else if (a == "--lookatmoon") { _lookAtMoonCli = true; }
@@ -112,6 +114,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--orbit=")) { _orbitCli = a.Substring("--orbit=".Length); }   // cx,cy,cz,dist,elevDeg,azDeg → LookAt camera (same-patch two-angle view-dependence probe)
             else if (MatchFlag(a, "--fullrough")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _fullroughCli = (s == "1") ? 1 : 0; }   // dbg_fullrough (kill specular)
             else if (MatchFlag(a, "--normalmap")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _normalmapCli = (s == "1") ? 1 : 0; }   // dbg_normalmap
+            else if (MatchFlag(a, "--triall")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _triAllCli = (s == "1") ? 1 : 0; }   // tri_all: triplanar for ALL materials (slope-stretch fix) A/B
             else if (MatchFlag(a, "--unlit")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _unlitCli = (s == "1") ? 1 : 0; }   // dbg_unlit (albedo via EMISSION)
             else if (a.StartsWith("--sunshadow=")) { _sunShadowCli = a.Substring("--sunshadow=".Length) == "1" ? 1 : 0; }   // force Sun.ShadowEnabled (isolate CSM vs SSAO)
             else if (a.StartsWith("--shadowdist=")) { float.TryParse(a.Substring("--shadowdist=".Length), System.Globalization.CultureInfo.InvariantCulture, out _shadowDistCli); }   // DirectionalShadowMaxDistance (bubble size A/B)
@@ -152,6 +155,14 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--testpath=")) { int.TryParse(a.Substring("--testpath=".Length), out _testPathCli); }   // S2b: run LOD-crossing test path N, print report, quit
             else if (a.StartsWith("--analytic")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _analyticCli = (s == "1") ? 1 : 0; }
             else if (a.StartsWith("--textures")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _texturesCli = (s == "1") ? 1 : 0; }   // minimal surfacing slice on/off
+            else if (a.StartsWith("--diag=")) { float.TryParse(a.Substring("--diag=".Length), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _diagCli); _diagCliSet = true; }   // diag_mode: 1 grey base, 2 +albedo, 3 +roughness, 4 +normalmap (channel isolation)
+            else if (a.StartsWith("--detailfade")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _detailFadeCli = (s == "1") ? 1 : 0; }   // detail_fade_on: anti-moiré albedo→mean fade (default OFF)
+            else if (a.StartsWith("--triybias=")) { float.TryParse(a.Substring("--triybias=".Length), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _triYBiasCli); _triYBiasCliSet = true; }   // triplanar top-down plane bias (<1 demotes Y plane on slopes)
+            else if (a.StartsWith("--trisharp=")) { float.TryParse(a.Substring("--trisharp=".Length), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _triSharpCli); _triSharpCliSet = true; }   // triplanar blend exponent
+            else if (a.StartsWith("--footprintfade")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _footprintFadeCli = (s == "1") ? 1 : 0; }   // footprint(fwidth) detail-fade A/B (default ON)
+            else if (a.StartsWith("--antitile")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _antitileCli = (s == "1") ? 1 : 0; }   // stochastic anti-tiling A/B (default OFF, perf-gated)
+            else if (a.StartsWith("--anticell=")) { float.TryParse(a.Substring("--anticell=".Length), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _antiCellCli); _antiCellCliSet = true; }   // anti-tile cell size (tile units)
+            else if (a.StartsWith("--antirot=")) { float.TryParse(a.Substring("--antirot=".Length), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _antiRotCli); _antiRotCliSet = true; }   // anti-tile rotation spread (×π)
             else if (MatchFlag(a, "--atmosphere")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _atmosphereCli = (s == "1") ? 1 : 0; }
             else if (a == "--atmoscheck") { _atmoCheckCli = true; }
             else if (a.StartsWith("--cloudlightstr=")) { float.TryParse(a.Substring("--cloudlightstr=".Length), out _cloudLightStrCli); }
@@ -217,6 +228,15 @@ public partial class TerrainLabUI : Control
         if (_probeRoughFloor >= 0f) { _terrain.SetFloat("rough_floor", _probeRoughFloor); }
         if (_probeMixStr >= 0f) { _terrain.SetFloat("mix_strength", _probeMixStr); }
         if (_probeHb >= 0) { _terrain.SetBool("heightblend_on", _probeHb == 1); }
+        if (_triAllCli >= 0) { _terrain.SetBool("tri_all", _triAllCli == 1); }   // triplanar-all A/B (slope-stretch fix)
+        if (_diagCliSet) { _terrain.SetFloat("diag_mode", _diagCli); }   // channel isolation: 1 grey base, 2 +albedo, 3 +roughness, 4 +normalmap
+        if (_detailFadeCli >= 0) { _terrain.SetFloat("detail_fade_on", _detailFadeCli); }   // anti-moiré albedo→mean fade A/B
+        if (_triYBiasCliSet) { _terrain.SetFloat("tri_ybias", _triYBiasCli); }   // triplanar top-down plane demotion probe
+        if (_triSharpCliSet) { _terrain.SetFloat("tri_sharp", _triSharpCli); }   // triplanar blend exponent
+        if (_footprintFadeCli >= 0) { _terrain.SetBool("footprint_fade", _footprintFadeCli == 1); }   // footprint(fwidth) detail-fade A/B
+        if (_antitileCli >= 0) { _terrain.SetBool("antitile_on", _antitileCli == 1); }   // stochastic anti-tiling A/B
+        if (_antiCellCliSet) { _terrain.SetFloat("antitile_cell", _antiCellCli); }
+        if (_antiRotCliSet) { _terrain.SetFloat("antitile_rot", _antiRotCli); }
         if (_proxyResCli >= 0) { _terrain.SetProxyRes(_proxyResCli); }
         if (_giProxyCli >= 0) { _terrain.SetGiProxy(_giProxyCli == 1); }
         if (_analyticCli >= 0) { _analyticOn = _analyticCli == 1; _terrain.SetAnalytic(_analyticOn); }   // keep key-1 toggle in sync with the CLI default
@@ -322,6 +342,15 @@ public partial class TerrainLabUI : Control
     private string _orbitCli = "";    // --orbit=cx,cy,cz,dist,elev,az → LookAt camera for the same-patch two-angle view-dependence probe
     private int _fullroughCli = -1;   // --fullrough[=1] → dbg_fullrough (ROUGHNESS=1, SPECULAR=0): strip the specular suspect
     private int _normalmapCli = -1;   // --normalmap[=0] → dbg_normalmap
+    private int _triAllCli = -1;      // --triall[=0] → tri_all (triplanar all materials; slope-stretch fix, default ON)
+    private float _diagCli = 0f; private bool _diagCliSet = false;   // --diag=N → diag_mode channel isolation (1 grey/2 alb/3 rgh/4 nrm)
+    private int _detailFadeCli = -1;  // --detailfade[=0] → detail_fade_on (anti-moiré albedo→mean fade)
+    private float _triYBiasCli = 1f; private bool _triYBiasCliSet = false;   // --triybias=N → tri_ybias
+    private float _triSharpCli = 4f; private bool _triSharpCliSet = false;   // --trisharp=N → tri_sharp
+    private int _footprintFadeCli = -1;  // --footprintfade[=0] → footprint_fade (fwidth detail-fade)
+    private int _antitileCli = -1;       // --antitile[=0] → antitile_on (stochastic anti-tiling)
+    private float _antiCellCli = 3f; private bool _antiCellCliSet = false;   // --anticell=N → antitile_cell
+    private float _antiRotCli = 1f; private bool _antiRotCliSet = false;     // --antirot=N → antitile_rot
     private int _unlitCli = -1;       // --unlit[=1] → dbg_unlit (albedo straight to EMISSION, no lighting)
     private int _sunShadowCli = -1;   // --sunshadow=0/1 → force Sun.ShadowEnabled (isolate CSM cast shadow vs SSAO crawl)
     private float _shadowDistCli = -1f; // --shadowdist=N → DirectionalShadowMaxDistance (bubble-size A/B: 800 vs erosion-lab's 8000)
