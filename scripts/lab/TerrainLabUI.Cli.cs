@@ -184,6 +184,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--breachdepth=")) { float.TryParse(a.Substring("--breachdepth=".Length), out _breachDepthCli); }
             else if (a.StartsWith("--breachlen=")) { int.TryParse(a.Substring("--breachlen=".Length), out _breachLenCli); }
             else if (a.StartsWith("--minlake=")) { int.TryParse(a.Substring("--minlake=".Length), out _minLakeCli); }
+            else if (MatchFlag(a, "--watercarve")) { _waterCarveCli = true; }
             else if (MatchFlag(a, "--waterdiag")) { _waterDiagCli = true; }
             else if (MatchFlag(a, "--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
             else if (MatchFlag(a, "--profile")) { double? dur = (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=') + 1), out double d)) ? d : (double?)null; _cliSeq.ArmProfile(dur); }
@@ -191,6 +192,7 @@ public partial class TerrainLabUI : Control
     }
     private int _waterCli = -1;     // --water[=1] → Phase 2A: solve region (0,0) + debug PNG
     private bool _waterDiagCli = false; // --waterdiag → flooding-cause probe (raw vs eroded hydrology)
+    private bool _waterCarveCli = false; // --watercarve → 2B: bind the terrain delta (rivers in real valleys)
     private float _breachDepthCli = float.NaN; // --breachdepth=N → override MaxBreachDepth (tuning)
     private int _breachLenCli = -1;            // --breachlen=N   → override MaxBreachLength (tuning)
     private int _minLakeCli = -1;              // --minlake=N     → override MinLakeArea (tuning)
@@ -249,10 +251,9 @@ public partial class TerrainLabUI : Control
         {
             _terrain.ConfigureCdlodAabb(!_noTightenCli, _aabbResCli, _aabbReqCli);
         }
-        if (_waterCli == 1 || _waterDiagCli)
+        if (_waterCli == 1 || _waterDiagCli || _waterCarveCli)
         {
-            // Phase 2A: solve region (0,0) with the lab pipeline (Erosion.Core) from WG16's own field,
-            // print stats + dump a top-down drainage PNG. No carve/mesh yet (2B/2C).
+            // Phase 2A/2B: solve region (0,0) with the lab pipeline (Erosion.Core) from WG16's own field.
             var wp = WG16.Water.RegionWaterSolver.DefaultWater();
             if (!float.IsNaN(_breachDepthCli)) wp = wp with { MaxBreachDepth = _breachDepthCli };
             if (_breachLenCli >= 0) wp = wp with { MaxBreachLength = _breachLenCli };
@@ -267,11 +268,24 @@ public partial class TerrainLabUI : Control
                 GetTree().Quit();
                 return;
             }
-            var wd = solver.GetOrSolve(0, 0);
-            GD.Print($"[water] region(0,0) {WG16.Water.RegionDebugViz.Stats(wd)}");
-            string outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wg16_region00_water.png");
-            WG16.Water.RegionDebugViz.DumpPng(wd, outPath);
-            GD.Print($"[water] debug PNG: {outPath}");
+            if (_waterCarveCli)
+            {
+                // 2B: build the terrain height-delta texture and bind it so the rendered CDLOD terrain
+                // becomes the solved surface (rivers in real valleys). Default-off until this flag.
+                var win = solver.RegionWindow(0, 0);
+                var delta = solver.BuildDelta(0, 0);
+                var tex = WG16.Water.WaterDeltaTexture.Build(delta, win.Grid);
+                _terrain.Cdlod?.SetWaterDelta(tex, new Vector2(win.OriginX, win.OriginZ), win.SizeM, true);
+                GD.Print($"[water] 2B delta bound: region origin=({win.OriginX},{win.OriginZ}) size={win.SizeM}m grid={win.Grid} breachDepth={wp.MaxBreachDepth}m");
+            }
+            else
+            {
+                var wd = solver.GetOrSolve(0, 0);
+                GD.Print($"[water] region(0,0) {WG16.Water.RegionDebugViz.Stats(wd)}");
+                string outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wg16_region00_water.png");
+                WG16.Water.RegionDebugViz.DumpPng(wd, outPath);
+                GD.Print($"[water] debug PNG: {outPath}");
+            }
         }
         if (_streamDbgCli) { var c = _terrain.Cdlod; if (c != null) { c.DebugStream = true; } }   // streaming-state log
         if (_popMeterCli) { BuildPopMeterHud(); }   // S3 live pop meter — HUD line; the meter inits lazily on first tick

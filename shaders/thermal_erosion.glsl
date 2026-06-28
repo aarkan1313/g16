@@ -22,7 +22,9 @@ const int dys[8] = int[8](-1, -1, -1, 0, 0, 1, 1, 1);
 float getH(int x, int y) { return float(heights[y * width + x]) / scale; }
 
 void main() {
-    uint id = gl_GlobalInvocationID.x;
+    // 2D dispatch remap: the grid is dispatched as (groupsX, groupsY) so n/64 can exceed Vulkan's
+    // 65535 single-dimension group limit (needed at native 4 m). Linearise back to the cell index.
+    uint id = gl_GlobalInvocationID.y * (gl_NumWorkGroups.x * gl_WorkGroupSize.x) + gl_GlobalInvocationID.x;
     if (id >= uint(width * height)) return;
 
     if (phase == 1) { heights[id] += delta[id]; delta[id] = 0; return; }

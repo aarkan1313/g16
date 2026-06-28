@@ -18,15 +18,41 @@ public sealed class RegionWaterSolver
     readonly Dictionary<(int, int), WaterData> _cache = new();
     readonly LinkedList<(int, int)> _lru = new();
 
+    // Droplet density (droplets per cell) tuned at the 8 m solve (3M over the 1536² grid ≈ 1.27/cell);
+    // preserved across resolution so erosion intensity is the same at native 4 m (GpuErosion thermal
+    // now dispatches 2D, so the finer grid no longer hits Vulkan's 65535 group limit).
+    const double DropletDensity = 3_000_000.0 / (1536.0 * 1536.0);
+
     public RegionWaterSolver(FieldCompute fc, FieldParams fp, WaterParams wp, IEroder eroder, ErosionParams ep)
     {
         _fc = fc; _fp = fp; _wp = wp; _eroder = eroder; _ep = ep;
         _regionM = fp.RegionSizeM;
-        // 2A: solve at 2× the field spacing (≈8 m) so n/64 stays under the 65535 compute-group
-        // dispatch limit (the 4 m grid hits ~102k groups). Finer res needs GpuErosion's 1D dispatch
-        // reworked to 2D — deferred to 2B/2E.
-        _spacing = fp.Spacing * 2f;
+        _spacing = fp.Spacing;                  // 2B: native 4 m solve (2D thermal dispatch lifts the limit)
         _interior = (int)System.MathF.Round(_regionM / _spacing);
+    }
+
+    // Erosion adapted to the solve resolution (ErosionParams is a mutable class, not a record —
+    // clone field-by-field). Droplet count scaled to keep per-cell intensity constant; thermal
+    // strength scaled by (spacing/8)² because the explicit talus-slump scheme is diffusion-like —
+    // its stable step ∝ cellSize², so the 8 m-tuned 0.6 strength diverges at finer grids.
+    const float ThermalRefSpacingM = 8f; // spacing the 8 m thermal strength was tuned/stable at
+    ErosionParams ScaledErosion(int gridN)
+    {
+        // Stable thermal step ∝ cellSize², so cut per-iteration strength by (spacing/8)² to avoid the
+        // explicit-scheme divergence at finer grids. (Iterations kept constant — scaling them up 4×
+        // didn't change drainage, since thermal is mass-conserving, and quadrupled the solve time.)
+        float clamp = System.MathF.Min(1f, (_spacing / ThermalRefSpacingM) * (_spacing / ThermalRefSpacingM));
+        return new ErosionParams
+        {
+            DropletCount = (int)(DropletDensity * gridN * (long)gridN),
+            MaxLifetime = _ep.MaxLifetime, Inertia = _ep.Inertia, CapacityFactor = _ep.CapacityFactor,
+            MinSlope = _ep.MinSlope, ErosionRate = _ep.ErosionRate, DepositionRate = _ep.DepositionRate,
+            Evaporation = _ep.Evaporation, Gravity = _ep.Gravity, InitialWater = _ep.InitialWater,
+            InitialSpeed = _ep.InitialSpeed, ErosionRadius = _ep.ErosionRadius, Seed = _ep.Seed,
+            TalusAngleDeg = _ep.TalusAngleDeg,
+            ThermalStrength = _ep.ThermalStrength * clamp,
+            ThermalIterations = _ep.ThermalIterations,
+        };
     }
 
     public WaterData GetOrSolve(int rx, int rz)
@@ -49,10 +75,44 @@ public sealed class RegionWaterSolver
         // Erosion's thermal/smoothing re-dams some notches, so breach AGAIN on the eroded surface
         // — that POST pass is the one that guarantees the surface Hydrology.Compute floods drains.
         var pre = Hydrology.Condition(hf, _wp.MaxBreachDepth, _wp.MaxBreachLength);
-        var eroded = _eroder.Erode(pre, _ep);
+        var eroded = _eroder.Erode(pre, ScaledErosion(gridN));
         var conditioned = Hydrology.Condition(eroded, _wp.MaxBreachDepth, _wp.MaxBreachLength);
         var wm = Hydrology.Compute(conditioned);
         return WaterPipeline.Build(wm, conditioned, _wp);
+    }
+
+    // The world window the region solve covers (interior + halo), so a delta texture sampled at
+    // true world XZ normalises correctly: uv = (wxz - Origin) / SizeM over the full baked grid.
+    public (float OriginX, float OriginZ, float SizeM, int Grid) RegionWindow(int rx, int rz)
+    {
+        int gridN = _interior + 2 * HaloCells;
+        return (rx * _regionM - HaloCells * _spacing, rz * _regionM - HaloCells * _spacing, gridN * _spacing, gridN);
+    }
+
+    // Per-cell rendered height delta = solved(Carved) - rawField, row-major over the full baked grid.
+    // This is the FULL coupled delta (erosion + breach + carve); the rendered terrain becomes the
+    // solved surface so rivers sit in real valleys. Edges feathered to 0 over the halo (no boundary cliff).
+    public float[] BuildDelta(int rx, int rz)
+    {
+        var wd = GetOrSolve(rx, rz);
+        var win = RegionWindow(rx, rz);
+        var raw = FieldHeightSource.Bake(_fc, _fp, win.OriginX, win.OriginZ, _spacing, win.Grid);
+        int g = win.Grid; var delta = new float[g * g];
+        for (int i = 0; i < delta.Length; i++) delta[i] = wd.Carved.Data[i] - raw.Data[i];
+        FeatherEdges(delta, g, HaloCells / 2); // ramp to 0 across half the halo so the region edge has no cliff
+        return delta;
+    }
+
+    static void FeatherEdges(float[] d, int g, int band)
+    {
+        if (band <= 0) return;
+        for (int y = 0; y < g; y++)
+        for (int x = 0; x < g; x++)
+        {
+            int edge = System.Math.Min(System.Math.Min(x, y), System.Math.Min(g - 1 - x, g - 1 - y));
+            if (edge >= band) continue;
+            d[y * g + x] *= edge / (float)band;
+        }
     }
 
     // Flooding-cause probe: bakes once, then runs hydrology on the RAW field vs the ERODED
@@ -66,7 +126,7 @@ public sealed class RegionWaterSolver
         var hf = FieldHeightSource.Bake(_fc, _fp, originX, originZ, _spacing, gridN);
         var rawWm = Hydrology.Compute(hf);
         var pre = Hydrology.Condition(hf, _wp.MaxBreachDepth, _wp.MaxBreachLength);
-        var eroded = _eroder.Erode(pre, _ep);
+        var eroded = _eroder.Erode(pre, ScaledErosion(gridN));
         var eroWm = Hydrology.Compute(eroded);
         var conditioned = Hydrology.Condition(eroded, _wp.MaxBreachDepth, _wp.MaxBreachLength);
         var finalWm = Hydrology.Compute(conditioned);
@@ -83,10 +143,10 @@ public sealed class RegionWaterSolver
         TalusAngleDeg = 40f, ThermalStrength = 0.6f, ThermalIterations = 70,
     };
 
-    // Water params tuned for WG16's closed-basin field (eye-gated on the --water PNG 2026-06-28):
-    // breach basins up to 80 m deep and search up to 800 cells (~6.4 km at 8 m) for an outlet —
-    // the LENGTH bound was decisive (big basins drain far away: 200→800 cut lake area 18.7%→7.7%).
-    // Deeper/landlocked basins stay lakes (the lake district); sub-64-cell puddles culled.
+    // Water params for WG16's closed-basin field, expressed for the native 4 m grid. The 8 m eye-gate
+    // (PNG 2026-06-28) found the breach LENGTH bound decisive (basins drain far away, ~6.4 km); at 4 m
+    // that reach is 1600 cells (was 800 at 8 m), and the 4096 m² lake-cull is 256 cells (was 64).
+    // Breach basins up to 80 m deep (depth is metres, resolution-independent); deeper stay lakes.
     public static WaterParams DefaultWater() => new WaterParams(
-        MaxBreachDepth: 80f, MaxBreachLength: 800, MinLakeArea: 64);
+        MaxBreachDepth: 90f, MaxBreachLength: 1600, MinLakeArea: 256);
 }

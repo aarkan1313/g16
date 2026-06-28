@@ -66,14 +66,17 @@ public static class GpuErosion
             Dispatch(rd, dropletPipe, dropletSet, dGroups);
         }
 
-        // thermal iterations (phase 0 accumulate, phase 1 apply)
-        uint tGroups = (uint)((n + 63) / 64);
+        // thermal iterations (phase 0 accumulate, phase 1 apply). 2D group grid so n/64 can exceed
+        // Vulkan's 65535 single-dim group limit (the shader linearises gid.xy back to the cell index).
+        uint tTotal = (uint)((n + 63) / 64);
+        uint tgx = System.Math.Min(tTotal, 32768u);
+        uint tgy = (tTotal + tgx - 1) / tgx;
         for (int it = 0; it < p.ThermalIterations; it++)
         {
             rd.BufferUpdate(thermalParamBuf, 8, 4, BitConverter.GetBytes(0));
-            Dispatch(rd, thermalPipe, thermalSet, tGroups);
+            Dispatch2D(rd, thermalPipe, thermalSet, tgx, tgy);
             rd.BufferUpdate(thermalParamBuf, 8, 4, BitConverter.GetBytes(1));
-            Dispatch(rd, thermalPipe, thermalSet, tGroups);
+            Dispatch2D(rd, thermalPipe, thermalSet, tgx, tgy);
         }
 
         var outBytes = rd.BufferGetData(heightsBuf);
@@ -98,11 +101,14 @@ public static class GpuErosion
     }
 
     static void Dispatch(RenderingDevice rd, Rid pipe, Rid set, uint groups)
+        => Dispatch2D(rd, pipe, set, groups, 1);
+
+    static void Dispatch2D(RenderingDevice rd, Rid pipe, Rid set, uint groupsX, uint groupsY)
     {
         long cl = rd.ComputeListBegin();
         rd.ComputeListBindComputePipeline(cl, pipe);
         rd.ComputeListBindUniformSet(cl, set, 0);
-        rd.ComputeListDispatch(cl, groups, 1, 1);
+        rd.ComputeListDispatch(cl, groupsX, groupsY, 1);
         rd.ComputeListEnd();
         rd.Submit();
         rd.Sync();

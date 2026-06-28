@@ -196,39 +196,35 @@ uniform float tri_sharp = 4.0;    // triplanar plane-blend exponent (higher = sh
 uniform float tri_ybias = 1.0;    // DEBUG/probe: <1 demotes the top-down (Y) plane so slopes sample the un-stretched side planes (0 = no top-down at all)
 uniform bool dbg_unlit = false;
 
-// --- HYDROLOGY carve. The region water texture: R=dist-to-river(m), G=bedDepth(m), B=flow, A=wet mask.
-// Carve = subtract a compact-support groove where wet. Default OFF (no texture bound) so the base field
-// is byte-identical until water is explicitly enabled (--fieldcheck 0m). ---
-uniform sampler2D water_tex : filter_linear;
+// --- 2B TERRAIN DELTA. Per-region single-channel float texture: r = (solved Carved - raw field) in
+// metres, the FULL coupled water+erosion+breach delta. The rendered terrain becomes the solved
+// surface so rivers sit in real valleys. Sampled at TRUE world XZ → seam-free across LOD/origin-snap.
+// Default OFF (no texture bound) so the base field is byte-identical until enabled (--fieldcheck 0m). ---
+uniform sampler2D water_tex : filter_linear;   // .r = height delta (m), Carved - raw
 uniform vec2  water_region_origin = vec2(0.0);
 uniform float water_region_m = 8192.0;
-uniform float carve_width_m = 36.0;
-uniform float carve_depth_scale = 1.0;
-uniform float carve_profile_exp = 2.0;
 uniform bool  water_carve_on = false;
 
-uniform bool water_debug = false;   // DEBUG (key H): paint wet pixels cyan / banks blue so the carve is visible
+uniform bool water_debug = false;   // DEBUG (key H): tint carved-down terrain blue so the delta is visible
 
-// Debug overlay: tint by the water texture — bright cyan where wet (river/lake), blue in the carve band.
+float delta_sample(vec2 wxz) {
+    vec2 uv = (wxz - water_region_origin) / water_region_m;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;  // outside the bound region
+    return texture(water_tex, uv).r;                                       // metres, signed
+}
+
+// Debug overlay: tint terrain that the delta lowered, by carve depth.
 vec3 water_debug_tint(vec3 base, vec2 wxz) {
     if (!water_debug || !water_carve_on) return base;
-    vec2 uv = (wxz - water_region_origin) / water_region_m;
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return base;
-    vec4 w = texture(water_tex, uv);
-    if (w.a > 0.5) return vec3(0.0, 0.9, 1.0);                       // wet channel/lake → bright cyan
-    if (w.r < carve_width_m) return mix(base, vec3(0.1, 0.3, 0.8), 0.6); // carve band → blue
+    float d = delta_sample(wxz);
+    if (d < -1.0) return mix(base, vec3(0.1, 0.3, 0.8), clamp(-d / 20.0, 0.2, 0.85));
     return base;
 }
 
+// Value SUBTRACTED from the base height: h = base - carve_offset = base + delta (delta is signed).
 float carve_offset(vec2 wxz) {
     if (!water_carve_on) return 0.0;
-    vec2 uv = (wxz - water_region_origin) / water_region_m;
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;  // outside the bound region
-    vec4 w = texture(water_tex, uv);
-    if (w.a < 0.001 && w.r >= carve_width_m) return 0.0;
-    float t = clamp(w.r / carve_width_m, 0.0, 1.0);     // 0 at channel centre .. 1 at bank
-    float profile = pow(1.0 - t * t, carve_profile_exp); // compact support, 0 at bank (C1)
-    return w.g * carve_depth_scale * profile;            // metres to subtract
+    return -delta_sample(wxz);
 }
 
 float height_at(vec2 uv) { return texture(heightmap, uv).r; }
@@ -279,7 +275,18 @@ void vertex() {
         if (cache_ready > 0.5) {
             vec4 hn = textureLod(chunk_cache, cuv(u_morph, chunk_slot), 0.0);
             h0 = hn.r - carve_offset(wxz);
-            v_normal = normalize(hn.gba);
+            // The baked normal hn.gba = normalize(vec3(-dBase/dx, 1, -dBase/dz)). When the delta is on,
+            // tilt it by the delta's gradient so lighting matches the displaced (carved) surface.
+            if (water_carve_on) {
+                float ns = max(analytic_spacing, 1.0);
+                float dDdx = (delta_sample(wxz + vec2(ns, 0.0)) - delta_sample(wxz - vec2(ns, 0.0))) / (2.0 * ns);
+                float dDdz = (delta_sample(wxz + vec2(0.0, ns)) - delta_sample(wxz - vec2(0.0, ns))) / (2.0 * ns);
+                vec3 nb = hn.gba;
+                float iy = 1.0 / max(nb.y, 1e-3);
+                v_normal = normalize(vec3(nb.x * iy - dDdx, 1.0, nb.z * iy - dDdz));
+            } else {
+                v_normal = normalize(hn.gba);
+            }
         } else {
             h0 = analytic_h(wxz) - carve_offset(wxz);
             float ns = max(analytic_spacing, 1.0);             // fixed FD step (m), LOD-independent
