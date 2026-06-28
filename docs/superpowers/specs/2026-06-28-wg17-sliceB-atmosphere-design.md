@@ -8,6 +8,13 @@
 **Scope:** AtmosphereCompute (Hillaire physical-sky LUTs) + AerialPerspective (screen-space depth haze).
 Clouds/godrays are out of scope.
 
+> **⚠ APPROACH CHANGE (2026-06-28): REWRITE, not port.** WG16's atmosphere was built + default-on but never
+> hard eye-gated, and **AT-2 (aerial perspective) was visibly broken — a blue band / full-screen blue filter**
+> (the classic aerial-applied-to-the-whole-frame / missing depth+sky gate bug). User decision: **rewrite all of
+> AT-1/AT-2/AT-3 fresh from the Hillaire model**, referencing WG16 ONLY for the GPU plumbing (CallOnRenderThread,
+> Texture2Drd assign-once, buffer packing). The Hillaire technique itself is sound (designed to avoid
+> banding/washout); the WG16 *implementation* was not validated. See §5 (rewrite) and §6 (the anti-band gate).
+
 ---
 
 ## 1. What It Should Do
@@ -103,26 +110,62 @@ the procedural fallback is bypassed via an `atmosphere_on` uniform branch — NO
 
 ---
 
-## 5. Fix-on-Port Notes
+## 5. Rewrite Approach (AT-1/2/3 fresh from the Hillaire model)
 
-The atmosphere code itself was sound in WG16 (the cloud bugs live in Slice C). Port faithfully. The only
-discipline changes:
-- **Assign-once `Texture2Drd`** made explicit + asserted (see §6) — WG16 already did this; we now guard it.
-- **Subscribe to `ILuminaryFeed`** instead of WG16's `host.Atmosphere`-style push from the UI god-class.
-- **No CompositorEffect** for the aerial pass — keep it a screen-space quad with `render_priority`, the proven
-  non-racing path (bug #118292).
+This is a **rewrite from the model**, not a port. Reference WG16 ONLY for the GPU plumbing
+(CallOnRenderThread dispatch, Texture2Drd assign-once, std430 buffer packing) and the `ILuminaryFeed` wiring.
+The scattering math is rebuilt from Hillaire's "Scalable and Production Ready Sky and Atmosphere" (EGSR 2020),
+which is specifically designed to avoid the banding/washout of older LUT methods.
+
+**The four LUTs (Hillaire structure, researched):**
+1. **Transmittance LUT** — small 2D, parameterized by (altitude, sun-zenith angle). Computed ONCE per
+   atmosphere (constant for a planet). Stores colored transmittance.
+2. **Multiple-scattering LUT** — small 2D, parameterized by (altitude, sun-zenith). Computed ONCE.
+3. **Sky-View LUT** — 2D, parameterized by view (azimuth, zenith), lat/long mapping. Recomputed when the sun
+   (or camera altitude) changes. This colors the sky dome.
+4. **Aerial-Perspective LUT** — 3D froxel volume, **64×64×32**, indexed by screen (x,y) + a depth slice mapped
+   along the camera frustum over a fixed near→far range (e.g. ~32 km). Each froxel stores rgb inscattered
+   luminance + grayscale transmittance reaching the camera.
+
+**AT-2 (aerial) — the rewrite's critical correctness rule (this is what was broken in WG16):**
+- Aerial perspective is applied to **scene geometry ONLY, gated by scene depth.** A fragment's depth selects
+  the froxel Z-slice; the froxel's (inscatter, transmittance) blends the geometry color:
+  `color = geometry.rgb * froxel.transmittance + froxel.inscatter`.
+- **The sky/background MUST be excluded.** Background pixels (max depth / no geometry) get the sky-view LUT
+  color directly and are NOT run through the aerial froxel. Applying aerial to the whole frame — or with a
+  missing/incorrect depth-and-sky gate — produces a flat **full-screen blue band/wash**, which is exactly the
+  WG16 AT-2 failure. The screen-space aerial quad must read the depth buffer and early-out on background.
+- Near-plane froxels contribute ~zero inscatter (close geometry isn't hazed), so foreground is unaffected;
+  haze grows with distance toward the far slice. If everything looks tinted regardless of distance, the depth
+  mapping is wrong — STOP.
+
+**AT-3 (cloud-light colors)** — derive the three `IAtmosphereFeed` colors (zenith / horizon-sun / sun-trans)
+by sampling the sky-view + transmittance LUTs at the relevant directions. Validate numerically (§6).
+
+**Discipline (carry from A):**
+- **Assign-once `Texture2Drd`** for every LUT bound to a material — asserted (§6); contents update, RID never
+  reassigned per frame (bug #118292).
+- **Subscribe to `ILuminaryFeed`** for the sun — no host callback, no UI.
+- **No CompositorEffect** for the aerial pass — screen-space quad with `render_priority`, the non-racing path.
 
 ---
 
 ## 6. Testing & Eye-Gate
 
-- **`AtmosphereCheck`** (ported, `--atmoscheck`) — numeric LUT readback: transmittance at known sun angles
-  matches expected ranges; sky-view LUT non-degenerate. PLUS a new assertion: the sky material's LUT
-  `Texture2Drd` RID is identical before/after a recompute (assign-once invariant — contents change, RID doesn't).
-  Prints `ATMOSPHERE PASS ... rid-stable=YES`.
+- **`AtmosphereCheck`** (new, `--atmoscheck`) — numeric LUT readback: transmittance at known sun angles
+  matches expected ranges; sky-view LUT non-degenerate. PLUS the assign-once assertion: the LUT `Texture2Drd`
+  RIDs are identical before/after a recompute (contents change, RID doesn't). Prints `ATMOSPHERE PASS ... rid-stable=YES`.
+- **`AerialDepthCheck`** (NEW — guards the AT-2 blue-band bug specifically): render a frame with NO scene
+  geometry (camera facing open sky only) and read back the framebuffer; assert the aerial pass changed
+  background pixels by ~0 (sky is excluded from aerial). Then render with a near object + far terrain and assert
+  the FAR pixels are hazed MORE than the NEAR ones (haze is depth-graded, not uniform). Prints
+  `AERIAL-DEPTH PASS sky-untinted=YES depth-graded=YES` — a FAIL here IS the WG16 blue-band regression.
 - **Eye-gate (manual, in motion):** enable atmosphere on the lit terrain, run `--autotime`:
   - Sky gradient reads physical across dawn→noon→dusk; distant terrain hazes into the sky (aerial), not a flat
     fog wall.
+  - **THE AT-2 gate:** point the camera at open sky with no terrain in frame — the sky must show the physical
+    gradient with **NO flat blue band/filter over it.** Then frame near + far terrain — only the *distant*
+    terrain hazes; the foreground is clear. (This is the exact WG16 failure; it must not reproduce.)
   - **Yaw/pitch at fixed time** — sky color/lighting unchanged (only framing changes). HUD shows the carried
     `lighting-view-locked=YES` plus an `atmosphere: on rid-stable=YES` line.
 - Record frame ms with atmosphere on vs off (LUT cost is amortized; the per-frame cost is the aerial quad).
