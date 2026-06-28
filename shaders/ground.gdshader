@@ -126,6 +126,11 @@ uniform bool footprint_fade = false;  // DEFAULT OFF (2026-06-27 eye-gate): it w
 uniform float fp_fade_lo = 0.012;     // footprint (tiles/pixel) where detail starts dissolving to mean
 uniform float fp_fade_hi = 0.10;      // footprint where detail is fully mean
 uniform float fp_fade_max = 1.0;      // cap on dissolve amount (1 = can go fully flat-mean)
+// NORMAL-MAP footprint rolloff — DECOUPLED from the albedo footprint_fade above. The tiled normal map is what
+// aliases into the grazing/distance MOIRÉ ripples, so it must ALWAYS fade out with footprint (even when albedo
+// stays sharp). These mirror the old fp_fade thresholds (the normal rolloff that had NO moiré when fade was on).
+uniform float nrm_fade_lo = 0.012;    // footprint where the normal map starts rolling off
+uniform float nrm_fade_hi = 0.10;     // footprint where the normal map is fully gone (kills the moiré)
 
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)
@@ -430,6 +435,42 @@ float toksvig_rough_floor(float gloss) {
     return sqrt(clamp(1.0 - gloss, 0.0, 1.0));         // normal variance → minimum roughness
 }
 
+// ---- QUICK SURFACING-DETAIL PROOF (key X, default OFF) ------------------------------------------------
+// The I-test proved the bare albedo is nearly flat → almost all "ground definition" is sun+geometry, the
+// texture carries ~nothing. This block adds PROCEDURAL meso+fine RELIEF (a detail normal) so the existing
+// sun catches micro-shadows → instant definition. It's a PROOF that the missing ingredient is surface
+// detail (the surfacing arc), not lighting. Gated, distance-faded, reversible. NOT the ship path — a demo.
+uniform bool  detail_demo        = false;
+uniform float detail_demo_amp    = 0.7;     // detail-normal perturb strength
+uniform float detail_demo_meso   = 0.10;    // meso relief frequency (cycles/m)
+uniform float detail_demo_fine   = 0.85;    // fine relief frequency (cycles/m)
+uniform float detail_demo_albvar = 0.20;    // albedo break-up amount
+uniform float detail_demo_fade   = 350.0;   // metres: detail fully faded out beyond this (anti-alias)
+float dd_hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float dd_vnoise(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = dd_hash(i), b = dd_hash(i + vec2(1.0, 0.0));
+    float c = dd_hash(i + vec2(0.0, 1.0)), d = dd_hash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float dd_fbm(vec2 p) {
+    float s = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++) { s += a * dd_vnoise(p); p *= 2.02; a *= 0.5; }
+    return s;
+}
+float dd_height(vec2 wxz) {   // combined meso+fine relief height at world XZ
+    return dd_fbm(wxz * detail_demo_meso) * 0.6 + dd_fbm(wxz * detail_demo_fine) * 0.4;
+}
+vec3 dd_perturb(vec3 geo_n, vec2 wxz, float strength) {   // tilt normal by the relief gradient (finite diff)
+    float e = 0.5;   // metres
+    float h  = dd_height(wxz);
+    float hx = dd_height(wxz + vec2(e, 0.0));
+    float hz = dd_height(wxz + vec2(0.0, e));
+    vec3 grad = vec3((hx - h) / e, 0.0, (hz - h) / e);
+    return normalize(geo_n - grad * strength);
+}
+
 void fragment() {
     if (debug_field > 0.5) {   // erosion-lab false-colour overlay (water/sediment/flow), region-UV sampled
         vec2 ruv = v_surf_xz / region_size + vec2(0.5);
@@ -505,7 +546,11 @@ void fragment() {
         // we can pin the ring source by adding ONE channel at a time onto the known-clean flat-grey base.
         // Normal-map perturbation, rolled OFF with distance (nfade: 1 near .. 0 far) so far normals collapse to
         // the smooth geometric normal (belt-and-suspenders with Toksvig). Proper tangent-space basis.
-        float nfade = dbg_use_normalmap ? (1.0 - dis) : 0.0;
+        // Normal map ALWAYS rolls off with footprint, decoupled from the albedo footprint_fade toggle: the
+        // tiled normal map is what aliases into the grazing/distance MOIRÉ ripples, so fade it there even when
+        // albedo stays sharp — we keep ground-colour DEFINITION but the relief flattens out before it moirés.
+        float nrm_fp = smoothstep(nrm_fade_lo, nrm_fade_hi, footprint);
+        float nfade = dbg_use_normalmap ? (1.0 - max(dis, nrm_fp)) : 0.0;
         vec3 nrm_pert = v_normal;
         nrm_pert = apply_nrm_tangent(nrm_pert, mat1_nrm, uv, (w1 + w2) / sum * nfade);
         nrm_pert = apply_nrm_tangent(nrm_pert, mat0_nrm, uv, w0 / sum * nfade);
@@ -515,6 +560,17 @@ void fragment() {
         float tk = toksvig_rough_floor(toksvig_gloss(mat1_nrm, uv, toksvig_k)) * ((w1 + w2) / sum)
                  + toksvig_rough_floor(toksvig_gloss(mat0_nrm, uv, toksvig_k)) * (w0 / sum);
         float rgh_aa = max(clamp(rgh, 0.04, 1.0), tk);
+
+        // QUICK PROOF (key X): procedural relief so the sun reveals surface definition. Distance-faded so it
+        // doesn't alias far out. Modifies alb + nrm_pert in place → visible in dm==0 (normal render).
+        if (detail_demo) {
+            float ddfade = 1.0 - smoothstep(detail_demo_fade * 0.4, detail_demo_fade, dist);
+            if (ddfade > 0.001) {
+                nrm_pert = dd_perturb(normalize(nrm_pert), wpos.xz, detail_demo_amp * ddfade);
+                float av = dd_height(wpos.xz) - 0.5;
+                alb *= (1.0 + av * detail_demo_albvar * ddfade);
+            }
+        }
 
         // diag_mode: 0 = normal render (all channels). 1 = flat grey base (no textures). 2 = +albedo only.
         // 3 = +roughness only. 4 = +normal-map only. Each builds on the grey base so exactly one channel varies.

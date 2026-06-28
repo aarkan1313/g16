@@ -47,6 +47,8 @@ public partial class TerrainLabUI : Control
     private bool _unlitLive;    // mirror of dbg_unlit (default OFF)
     private bool _lastFullroughKey; // F toggles dbg_fullrough (ROUGHNESS=1, SPECULAR=0) — isolates view-dependent specular sheen
     private bool _fullroughLive;    // mirror of dbg_fullrough (default OFF)
+    private bool _lastDetailKey;    // X toggles the procedural surfacing-detail PROOF (relief so the sun reveals definition)
+    private bool _detailDemoLive;   // mirror of detail_demo (default OFF)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private bool _lastLiveProfileDump; // B dumps the last rolling profile window to console + artifacts/
     private bool _lastShadowN;  // N toggles the Sun CSM shadow live (isolate "shadows crawl when I turn")
@@ -393,6 +395,13 @@ public partial class TerrainLabUI : Control
                 bool kF = Input.IsKeyPressed(Key.F);
                 if (kF && !_lastFullroughKey) { _fullroughLive = !_fullroughLive; _terrain.SetBool("dbg_fullrough", _fullroughLive); GD.Print($"[isolate] (F) FULL-ROUGH (specular off) = {_fullroughLive}"); }
                 _lastFullroughKey = kF;
+                // X: QUICK PROOF — toggle procedural surfacing RELIEF. The I-test showed the bare texture is
+                // nearly flat; this adds a detail normal so the sun catches micro-shadows. If turning it ON
+                // gives the ground real "definition", that proves the missing ingredient is surfacing detail
+                // (the surfacing arc), not lighting/geometry. Demo only, not the ship path.
+                bool kX = Input.IsKeyPressed(Key.X);
+                if (kX && !_lastDetailKey) { _detailDemoLive = !_detailDemoLive; _terrain.SetBool("detail_demo", _detailDemoLive); GD.Print($"[proof] (X) procedural surfacing detail = {_detailDemoLive}"); }
+                _lastDetailKey = kX;
                 // H: live WATER debug overlay — paint wet pixels cyan / carve band blue so the rivers/lakes
                 // + the carve are visible right on the terrain (the carve groove alone is subtle from altitude).
                 bool kH = Input.IsKeyPressed(Key.H);
