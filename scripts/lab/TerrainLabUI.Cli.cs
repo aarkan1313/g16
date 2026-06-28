@@ -194,7 +194,7 @@ public partial class TerrainLabUI : Control
     private int _waterCli = -1;     // --water[=1] → Phase 2A: solve region (0,0) + debug PNG
     private bool _waterDiagCli = false; // --waterdiag → flooding-cause probe (raw vs eroded hydrology)
     private bool _waterCarveCli = false; // --watercarve → 2B: bind the terrain delta (rivers in real valleys)
-    private int _deltaBlurCli = 4;       // --deltablur=N → box-blur radius (cells) widening breach notches into valleys
+    private int _deltaBlurCli = 2;       // --deltablur=N → box-blur radius (cells); light de-staircase (ChannelCarve already smooth)
     private float _breachDepthCli = float.NaN; // --breachdepth=N → override MaxBreachDepth (tuning)
     private int _breachLenCli = -1;            // --breachlen=N   → override MaxBreachLength (tuning)
     private int _minLakeCli = -1;              // --minlake=N     → override MinLakeArea (tuning)

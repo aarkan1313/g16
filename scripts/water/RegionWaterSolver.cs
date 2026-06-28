@@ -78,7 +78,11 @@ public sealed class RegionWaterSolver
         var eroded = _eroder.Erode(pre, ScaledErosion(gridN));
         var conditioned = Hydrology.Condition(eroded, _wp.MaxBreachDepth, _wp.MaxBreachLength);
         var wm = Hydrology.Compute(conditioned);
-        return WaterPipeline.Build(wm, conditioned, _wp);
+        // Carve into the ERODED surface, NOT the conditioned one: the breach's 1-cell descent notches
+        // are a drainage device for hydrology (wm), but rendered literally they read as jagged slot
+        // canyons. ChannelCarve re-cuts the river network into the clean eroded surface toward the
+        // monotonic Filled bed with discharge-scaled width — wide valleys for trunks, small for streams.
+        return WaterPipeline.Build(wm, eroded, _wp);
     }
 
     // The world window the region solve covers (interior + halo), so a delta texture sampled at
