@@ -300,4 +300,47 @@ just call the module's setters directly** — only replicate the registry if you
 
 ---
 
+## 9. WG17 Slice 1 Outcome — Base Geometry (Field + CDLOD) — 2026-06-28
+
+**Status: COMPLETE.** Ported into `C:\Wg16\WG17\terrainengine-10k` (clean git history, commits
+`1475074`..`17f7733`). All seven plan tasks landed; all six self-checks PASS; eye-gates confirmed.
+
+**Profile (RTX 5090 Laptop, D3D12 Forward+, shadowless):**
+- Empty-frame baseline: 4.3 ms.
+- Single displaced mesh (~4.2M-vert PlaneMesh): 25.7 ms.
+- **CDLOD flying (field cache on): ~4.2 ms avg, ~4.5 ms worst** steady-state — ~6× the single mesh,
+  and **~1.7× faster than WG16's post-field-cache 7.2 ms.** Well under the 8 ms budget.
+- Field-cache A/B @ realistic 0.15 cells/s: on 4.17/4.55 ms vs off 4.88/6.06 ms (−15% + tighter envelope).
+  Cache win is SPEED-dependent (chunks must persist to pay off) — profile at realistic speeds, not the
+  pathological default `--fly` speed.
+- Lone startup spike ~120 ms at frame ~35 = one-time first-DRAW shader/PSO compile of `ground.gdshader`
+  (engine cost; reproduces with cache off, tighten off, static cam — NOT a CDLOD hotspot). Not masked.
+
+**Checks (the test suite; ported to a minimal CLI driver `CheckRunner`, run windowed):**
+FieldCheck (std430+splice, maxAbsDiff=0m), StreamCheck, MorphCheck, StitchCheck, SnapDiff, PopCheck —
+all PASS, 0 errors. Flags: `--fieldcheck/--streamcheck/--morphcheck/--stitchcheck/--snapdiff/--popcheck`,
+`--profile`, `--fly [--flyspeed=N]`, A/B `--fieldcache=0 --notighten --pinorigin --lodviz --streamdbg`,
+shadow opt-in `--shadow --cast`.
+
+**Deviations / decisions (vs the verbatim port):**
+1. `FieldCompute` ctor now takes `FieldParams` + `Configure()`; the `IHeightSource.ProducePage` overload
+   forwards to stored params (the interface has no params arg). std430 packer unchanged.
+2. `ChunkFieldCache` ctor takes `IHeightSource` (the seam) + `FieldParams`; it bakes via `field_bake.glsl`
+   on the render thread and uses `FieldCompute.PackParamsBytes` statically — it never calls `ProducePage`
+   (that would force the CPU readback the cache exists to avoid). Honest seam, no cargo-cult abstraction.
+3. **SHIPPED SHADOWLESS** (0 shadow owners). WG16's scene had `shadow_enabled=true` + chunk casters On;
+   carrying that over caused the user-reported "moving black spots on hilltops" = CSM self-shadow acne on
+   peaks. Lighting/shadows are out of scope here and owned by the later **Lighting slice's ShadowRegistry**
+   (≤1 owner/band) — see `2026-06-28-wg17-sliceA-lighting-design.md`. Sun `shadow_enabled=false`, casters Off.
+4. Fixed a `Texture2DArrayRD` teardown race (detach RID before free + `_disposed` guard) → 0 quit-time errors.
+
+**Layering held:** `RenderingDevice`/`RenderingServer`/`CallOnRenderThread` live ONLY in `FieldCompute`,
+`ChunkFieldCache`, `ChunkAabbProvider`. `CdlodQuadtree` is pure (math types only). `Terrain` is the sole
+scene-graph toucher. Height consumers depend on `IHeightSource`. No `Node3D`/`MeshInstance3D` interfaces.
+
+**Next:** Water/Erosion reuses the same `IHeightSource` with zero seam rework. Lighting slice (Slice A) is
+spec'd + kicked off separately and introduces the ShadowRegistry that will re-enable shadows correctly.
+
+---
+
 *Generated from a deep multi-agent audit pass. Companion source-of-truth for the new-repo migration effort.*
