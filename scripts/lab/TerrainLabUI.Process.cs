@@ -328,9 +328,7 @@ public partial class TerrainLabUI : Control
                 Vector3 look = _cliSeq.ProfLookTarget - newOrigin2;
                 if ((look - camN.Position).LengthSquared() > 0.001f) { camN.LookAt(look, Vector3.Up); }
             }
-            // Water meshes are authored in TRUE world XZ; shift the node by −renderOrigin so they line up with
-            // the render-relative terrain (same floating-origin frame as the CDLOD chunks).
-            _waterRenderer?.SetRenderOrigin(_terrain.CdlodActive ? _terrain.CdlodRenderOrigin : Vector3.Zero);
+            // (Old water-renderer render-origin shift removed in Phase 2A; per-chunk water meshes are 2C.)
             _cloud?.SetCameraWorld(camPos);
             // AT-2 v2: push camera in the SAME render-relative frame as inv_view_proj.
             // Clouds/terrain still need TRUE-world camPos above; the aerial LUT only needs

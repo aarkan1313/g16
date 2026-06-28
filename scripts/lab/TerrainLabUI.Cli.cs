@@ -181,31 +181,14 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--fantasy=")) { int.TryParse(a.Substring("--fantasy=".Length), out _fantasyCli); }
             else if (a.StartsWith("--cloudtex=")) { if (int.TryParse(a.Substring("--cloudtex=".Length), out int th) && th >= 64) { CloudVolume.TexH = th; CloudVolume.TexW = th * 4; } }
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
-            else if (a.StartsWith("--watercheck=")) { _waterCheck = a.Substring("--watercheck=".Length); }
             else if (MatchFlag(a, "--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
             else if (MatchFlag(a, "--profile")) { double? dur = (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=') + 1), out double d)) ? d : (double?)null; _cliSeq.ArmProfile(dur); }
         }
     }
-    private string? _waterCheck;   // --watercheck=<name> → run a HydrologyChecks self-check then quit
-    private int _waterCli = -1;     // --water[=1] → bind region (0,0)'s water texture + carve for eye-gate
-    private WG16.Hydrology.WorldWaterRegion? _waterRegion;   // kept for Task 7 mesh spawn
-    private WG16.Hydrology.WaterParams? _waterParams;        // kept for Task 7/8
-    private Material? _waterMat;                             // kept for Task 7/8
-    private WG16.Hydrology.WaterRenderer? _waterRenderer;    // river ribbon + lake surface meshes
-
-    // Deferred from ApplyCliOverrides (--water=1): attach the water renderer + build region (0,0)'s meshes
-    // once the scene tree is no longer mid-setup.
-    private void SpawnWaterRenderer()
-    {
-        if (_waterRegion == null || _waterParams == null || _waterMat == null) return;
-        _waterRenderer = new WG16.Hydrology.WaterRenderer();
-        GetNode("/root/TerrainLabRoot").AddChild(_waterRenderer);
-        _waterRenderer.BuildForRegion(_waterRegion, _waterParams, _waterMat);
-    }
+    private int _waterCli = -1;     // --water[=1] → Phase 2A: solve region (0,0) + debug PNG
 
     private void ApplyCliOverrides()
     {
-        if (_waterCheck != null) { bool ok = WG16.Hydrology.HydrologyChecks.Run(_waterCheck); GetTree().Quit(ok ? 0 : 1); return; }
         if (_overrideMask >= 0) { OverrideEnum("mask_mode", _overrideMask); }
         if (_overrideBlend >= 0) { OverrideEnum("blend_mode", _overrideBlend); }
         if (_overrideTile >= 0) { OverrideEnum("tile_mode", _overrideTile); }
@@ -260,24 +243,16 @@ public partial class TerrainLabUI : Control
         }
         if (_waterCli == 1)
         {
-            _waterParams = WG16.Hydrology.WaterParams.Load();
-            // Pass the shared FieldCompute → water meshes drape on the EXACT field height the terrain uses.
-            _waterRegion = new WG16.Hydrology.WorldWaterRegion(_params, _waterParams, 0, 0, _fc);
-            _terrain.BindWaterRegion(_waterRegion, _waterParams);   // Task 6: carve
-            // Task 7: flowing water MESHES. Build the modular water-surface material + spawn the renderer.
-            var sh = GD.Load<Shader>("res://shaders/water_surface.gdshader");
-            var wmat = new ShaderMaterial { Shader = sh };
-            wmat.SetShaderParameter("shallow_color", _waterParams.WaterShallowColor);
-            wmat.SetShaderParameter("deep_color", _waterParams.WaterDeepColor);
-            wmat.SetShaderParameter("flow_speed", _waterParams.FlowSpeed);
-            wmat.SetShaderParameter("wave_scale", _waterParams.WaveScale);
-            wmat.SetShaderParameter("foam_width_m", _waterParams.FoamWidthM);
-            _waterMat = wmat;
-            // Defer the node attach + mesh build: ApplyCliOverrides runs during _Ready (parent busy setting up
-            // children → a direct AddChild fails, the known CDLOD deferred-add gotcha).
-            CallDeferred(nameof(SpawnWaterRenderer));
-            GD.Print($"[water] region(0,0) rivers={_waterRegion.Rivers.Count} lakes={_waterRegion.Lakes.Count} " +
-                     $"— MESHES on, carve ON, overlay OFF (key H toggles debug tint). Fly near world origin (0..8192).");
+            // Phase 2A: solve region (0,0) with the lab pipeline (Erosion.Core) from WG16's own field,
+            // print stats + dump a top-down drainage PNG. No carve/mesh yet (2B/2C).
+            var solver = new WG16.Water.RegionWaterSolver(
+                _fc, _params, new Erosion.Core.WaterParams(),
+                new WG16.Water.GpuEroder(), WG16.Water.RegionWaterSolver.DefaultErosion());
+            var wd = solver.GetOrSolve(0, 0);
+            GD.Print($"[water] region(0,0) {WG16.Water.RegionDebugViz.Stats(wd)}");
+            string outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wg16_region00_water.png");
+            WG16.Water.RegionDebugViz.DumpPng(wd, outPath);
+            GD.Print($"[water] debug PNG: {outPath}");
         }
         if (_streamDbgCli) { var c = _terrain.Cdlod; if (c != null) { c.DebugStream = true; } }   // streaming-state log
         if (_popMeterCli) { BuildPopMeterHud(); }   // S3 live pop meter — HUD line; the meter inits lazily on first tick
