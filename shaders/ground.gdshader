@@ -122,7 +122,7 @@ uniform float detail_fade_on = 0.0;   // live A/B (key G): 1 = legacy DISTANCE-d
 // drove it by raw distance, so a near grazing slope never faded → the directional placeholder textures kept
 // shimmering into "creeping" streaks). Driven by texture-tiles-per-pixel, so it auto-targets grazing angle AND
 // distance and keeps head-on near ground sharp. Default ON; modular A/B via --footprintfade=0.
-uniform bool footprint_fade = true;
+uniform bool footprint_fade = false;  // DEFAULT OFF (2026-06-27 eye-gate): it washed ground DEFINITION to flat mean past the near foreground — user values the detail over the grazing-shimmer it masked. Opt-in via key T / --footprintfade=1. Real shimmer fix = surfacing arc, not detail removal.
 uniform float fp_fade_lo = 0.012;     // footprint (tiles/pixel) where detail starts dissolving to mean
 uniform float fp_fade_hi = 0.10;      // footprint where detail is fully mean
 uniform float fp_fade_max = 1.0;      // cap on dissolve amount (1 = can go fully flat-mean)

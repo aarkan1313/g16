@@ -42,7 +42,11 @@ public partial class TerrainLabUI : Control
     private bool _waterDebugOn; // water debug overlay state (paints rivers/lakes cyan)
     private bool _detailFadeOn = false;  // anti-moiré detail-fade default OFF (matches shader default; ring bug fixed at source, fade only washed far detail)
     private bool _lastFpKey;    // T toggles the footprint(fwidth)-driven detail-fade live (the keeper grazing-shimmer fix)
-    private bool _footprintFadeLive = true;  // mirror of footprint_fade shader uniform (default ON)
+    private bool _footprintFadeLive = false;  // mirror of footprint_fade shader uniform (DEFAULT OFF — washed ground definition; T re-enables)
+    private bool _lastUnlitKey; // I toggles dbg_unlit (lighting OFF → pure albedo) — THE test for "is the turn-around difference lighting?"
+    private bool _unlitLive;    // mirror of dbg_unlit (default OFF)
+    private bool _lastFullroughKey; // F toggles dbg_fullrough (ROUGHNESS=1, SPECULAR=0) — isolates view-dependent specular sheen
+    private bool _fullroughLive;    // mirror of dbg_fullrough (default OFF)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private bool _lastLiveProfileDump; // B dumps the last rolling profile window to console + artifacts/
     private bool _lastShadowN;  // N toggles the Sun CSM shadow live (isolate "shadows crawl when I turn")
@@ -376,6 +380,19 @@ public partial class TerrainLabUI : Control
                 bool kT = Input.IsKeyPressed(Key.T);
                 if (kT && !_lastFpKey) { _footprintFadeLive = !_footprintFadeLive; _terrain.SetBool("footprint_fade", _footprintFadeLive); GD.Print($"[dbg] (T) footprint detail-fade = {_footprintFadeLive}"); }
                 _lastFpKey = kT;
+                // I: ILLUMINATION off (dbg_unlit) — THE test for "is the turn-around difference a LIGHT thing?".
+                // Unlit shows pure albedo as EMISSION (no sun, no shading, no specular, AO off). Stand still,
+                // turn toward vs away from the sun: if the look STOPS changing with I on → the difference WAS
+                // lighting (you were seeing lit vs shaded hill faces). If it STILL changes → it is NOT lighting.
+                bool kI = Input.IsKeyPressed(Key.I);
+                if (kI && !_lastUnlitKey) { _unlitLive = !_unlitLive; _terrain.SetBool("dbg_unlit", _unlitLive); GD.Print($"[isolate] (I) UNLIT (lighting off) = {_unlitLive}"); }
+                _lastUnlitKey = kI;
+                // F: FULL-ROUGH (dbg_fullrough) — ROUGHNESS=1, SPECULAR=0. Kills view-dependent specular sheen
+                // (the shiny GGX highlight that slides as you move) while keeping diffuse sun shading. A/B to see
+                // whether the moving sheen in shinier spots is specular.
+                bool kF = Input.IsKeyPressed(Key.F);
+                if (kF && !_lastFullroughKey) { _fullroughLive = !_fullroughLive; _terrain.SetBool("dbg_fullrough", _fullroughLive); GD.Print($"[isolate] (F) FULL-ROUGH (specular off) = {_fullroughLive}"); }
+                _lastFullroughKey = kF;
                 // H: live WATER debug overlay — paint wet pixels cyan / carve band blue so the rivers/lakes
                 // + the carve are visible right on the terrain (the carve groove alone is subtle from altitude).
                 bool kH = Input.IsKeyPressed(Key.H);
