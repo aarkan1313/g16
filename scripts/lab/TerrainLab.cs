@@ -282,8 +282,13 @@ public partial class TerrainLab : MeshInstance3D
     // the kept work. Roles: 0 low/sand, 1 valley grass, 2 mid earth/scree, 3 slope rock, 4 peak snow.
     private static readonly string[] _matRoles =
     {
-        "03_coarse_sand", "01_tussock_grass", "02_muddy_with_stones",
-        "01_weathered_grey_bedrock", "01_fresh_powder",
+        // PROOF SWAP (2026-06-28): the shader was hardcoded to materials the user's own rating
+        // exercise (data/material_verdicts.json) marked FAIL — 03_coarse_sand, 01_tussock_grass,
+        // 02_muddy_with_stones — while good sets sat unused. Now using the independent audit's
+        // VERIFIED-AAA isotropic sets where they exist: biome_grassland (real top-down grass, kills
+        // the corduroy) + rock035 (photogrammetry-grade rock). (Proper fix = drive from verdicts/palette.)
+        "02_rippled_dunes", "biome_grassland", "16_glacial_till",
+        "rock035", "01_fresh_powder",
     };
     public void LoadGroundMaterials()
     {
@@ -293,9 +298,11 @@ public partial class TerrainLab : MeshInstance3D
             var alb = GD.Load<Texture2D>(b + "albedo.png");
             var nrm = GD.Load<Texture2D>(b + "normal.png");
             var rgh = GD.Load<Texture2D>(b + "roughness.png");
+            var ao  = GD.Load<Texture2D>(b + "ao.png");   // was never loaded; shader now consumes mat{i}_ao
             if (alb != null) { _mat.SetShaderParameter($"mat{i}_alb", alb); }
             if (nrm != null) { _mat.SetShaderParameter($"mat{i}_nrm", nrm); }
             if (rgh != null) { _mat.SetShaderParameter($"mat{i}_rgh", rgh); }
+            if (ao  != null) { _mat.SetShaderParameter($"mat{i}_ao",  ao);  }
         }
         GD.Print($"TerrainLab: ground materials loaded ({_matRoles.Length} roles)");
     }

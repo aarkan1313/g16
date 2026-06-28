@@ -163,6 +163,13 @@ uniform sampler2D mat3_rgh : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D mat4_alb : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D mat4_nrm : filter_linear_mipmap_anisotropic, repeat_enable, hint_normal;
 uniform sampler2D mat4_rgh : filter_linear_mipmap_anisotropic, repeat_enable;
+// Ambient-occlusion channel (every material dir ships ao.png; was previously NEVER bound/used). AO gives
+// free contact-shadow "definition" in crevices — exactly the depth the flat-reading ground was missing.
+uniform sampler2D mat0_ao : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat1_ao : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat2_ao : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat3_ao : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D mat4_ao : filter_linear_mipmap_anisotropic, repeat_enable;
 // Erosion-lab debug overlay: false-colour a scalar field (water/sediment/flow) by region UV. 0 = off.
 // Zero-impact on the terrain (default off); only the erosion lab sets it.
 uniform float debug_field = 0.0;
@@ -542,6 +549,14 @@ void fragment() {
         float r3 = tri_sample_r(mat3_rgh, wpos, v_normal, mat_tiling, dis);
         vec3 alb = (w0 * a0 + w1 * a1 + w2 * a2 + w3 * a3 + w4 * a4) / sum;
         float rgh = (w0 * r0 + w1 * r1 + w2 * r2 + w3 * r3 + w4 * r4) / sum;
+        // AMBIENT OCCLUSION (was never bound): sample + blend like roughness, written to AO below for free
+        // contact-shadow depth in crevices — the cheapest "definition" win, using ao.png that already ships.
+        float ao0 = tri_sample_r(mat0_ao, wpos, v_normal, mat_tiling, dis);
+        float ao1 = tri_sample_r(mat1_ao, wpos, v_normal, mat_tiling, dis);
+        float ao2 = tri_sample_r(mat2_ao, wpos, v_normal, mat_tiling, dis);
+        float ao3 = tri_sample_r(mat3_ao, wpos, v_normal, mat_tiling, dis);
+        float ao4 = tri_sample_r(mat4_ao, wpos, v_normal, mat_tiling, dis);
+        float ao_blend = clamp((w0 * ao0 + w1 * ao1 + w2 * ao2 + w3 * ao3 + w4 * ao4) / sum, 0.0, 1.0);
         // Normal-map perturbation (restored, for the diag stepper). diag_mode controls which channel is live so
         // we can pin the ring source by adding ONE channel at a time onto the known-clean flat-grey base.
         // Normal-map perturbation, rolled OFF with distance (nfade: 1 near .. 0 far) so far normals collapse to
@@ -552,8 +567,14 @@ void fragment() {
         float nrm_fp = smoothstep(nrm_fade_lo, nrm_fade_hi, footprint);
         float nfade = dbg_use_normalmap ? (1.0 - max(dis, nrm_fp)) : 0.0;
         vec3 nrm_pert = v_normal;
-        nrm_pert = apply_nrm_tangent(nrm_pert, mat1_nrm, uv, (w1 + w2) / sum * nfade);
+        // Apply ALL FIVE material normals, each weighted by its own normalized weight (was only mat0+mat1,
+        // so rock/snow rendered perfectly smooth). nfade still rolls relief off at grazing/distance to avoid
+        // the moiré, but near-ground now gets every material's real relief → the missing 3D "definition".
         nrm_pert = apply_nrm_tangent(nrm_pert, mat0_nrm, uv, w0 / sum * nfade);
+        nrm_pert = apply_nrm_tangent(nrm_pert, mat1_nrm, uv, w1 / sum * nfade);
+        nrm_pert = apply_nrm_tangent(nrm_pert, mat2_nrm, uv, w2 / sum * nfade);
+        nrm_pert = apply_nrm_tangent(nrm_pert, mat3_nrm, uv, w3 / sum * nfade);
+        nrm_pert = apply_nrm_tangent(nrm_pert, mat4_nrm, uv, w4 / sum * nfade);
 
         // TOKSVIG roughness floor from the ground normal maps (mat0/mat1), weighted like the perturbation.
         // Raises roughness where sub-pixel normal variance is high → kills the normal-map specular/shading rings.
@@ -579,7 +600,7 @@ void fragment() {
         int dm = int(diag_mode + 0.5);
         if (dm == 0) {
             // LIVE render (the shipping look): faded albedo + Toksvig roughness + tangent normal rolled off far.
-            ALBEDO = water_debug_tint(alb, v_surf_xz); ROUGHNESS = rgh_aa; NORMAL = normalize(nrm_pert);
+            ALBEDO = water_debug_tint(alb, v_surf_xz); ROUGHNESS = rgh_aa; NORMAL = normalize(nrm_pert); AO = ao_blend; AO_LIGHT_AFFECT = 1.0;
         } else if (dm == 1) {
             ALBEDO = vec3(0.40, 0.12, 0.12); ROUGHNESS = 1.0; NORMAL = normalize(v_normal);    // RED: clean base (no textures)
         } else if (dm == 2) {
