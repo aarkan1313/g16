@@ -18,7 +18,7 @@
 |---|---|---|---|---|---|
 | 1 | **Base geometry** (Field + CDLOD) | [spec](01-terrain-base-geometry.md) | ✅ | 🟢 **SHIPPED** | flying 4.2ms (WG16 7.2), 6 checks PASS, shadowless by design |
 | A | **Lighting** (composer + ShadowRegistry) | [spec](02-lighting.md) | ✅ | 🟢 **SHIPPED** | day/night cohesive, view-locked, 0 shadow owners, 4.18ms |
-| B | **Atmosphere** (Hillaire — REWRITE) | [spec](03-atmosphere.md) | ✅ | 🟡 staged | — |
+| B | **Atmosphere** (Hillaire — PORT, validated) | [spec](03-atmosphere.md) | ✅ | 🟢 **SHIPPED** | physical sky + aerial, --atmoscheck PASS, view-locked, 4.18ms (free at steady state) |
 | C | **Clouds** (port + 3 fixes) | [spec](04-clouds.md) | ✅ | 🟡 staged | — |
 | D | **Godrays** (port) | [spec](05-godrays.md) | ✅ | 🟡 staged | — |
 | S | **Terrain surfacing** (PBR materials) | [spec](06-surfacing.md) | ✅ | 🟡 staged | — |
@@ -70,7 +70,7 @@ failures:
    Water/Erosion ──► reuses IHeightSource (same primitive the field cache uses)
 ```
 
-- **Built:** Field+CDLOD, Lighting. **Order for the rest:** B → C → D (sky stack, each reads the prior);
+- **Built:** Field+CDLOD, Lighting, **Atmosphere (B)**. **Order for the rest:** C → D (sky stack, each reads the prior);
   Surfacing any time; Control surface integrates whatever exists (and supersedes "minimal driver per module").
 - **Graceful degradation:** each downstream slice works (uglier) if an upstream one isn't merged — so order is
   flexible, not rigid.
@@ -101,7 +101,7 @@ compute runs windowed (local RD), not `--headless`.
 
 - [01 — Base geometry (Field + CDLOD)](01-terrain-base-geometry.md) 🟢
 - [02 — Lighting](02-lighting.md) 🟢
-- [03 — Atmosphere (rewrite)](03-atmosphere.md) 🟡
+- [03 — Atmosphere (port, validated)](03-atmosphere.md) 🟢
 - [04 — Clouds](04-clouds.md) 🟡
 - [05 — Godrays](05-godrays.md) 🟡
 - [06 — Terrain surfacing](06-surfacing.md) 🟡
