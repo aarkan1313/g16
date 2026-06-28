@@ -379,3 +379,48 @@ All 6 self-checks still PASS, 0 errors. `ActiveRing` is declared-but-unused (LOD
 ---
 
 *Generated from a deep multi-agent audit pass. Companion source-of-truth for the new-repo migration effort.*
+
+---
+
+## WG17 Slice A (Lighting) — Outcome (2026-06-28)
+
+**Status: SHIPPED.** Built in `C:\Wg16\WG17\terrainengine-10k`, lighting the already-merged terrain (not a
+placeholder). Executed Plans 1→2→3 task-by-task (subagent-driven), build green at every step.
+
+**What landed (src/lighting + src/app):**
+- Data core (ported, namespace `Te10k.Lighting`): `LightingState` (Time/Weather/Grade + celestial axes),
+  `Luminary` (+ 4-light-cap budgeter), `LuminaryPresetCheck` (round-trip; harness converters inlined).
+- **Preset layer REDESIGNED, not ported.** WG16 `SkyPresets` was registry-bound (`ILabControls`) + a
+  flat-dict→`MoodToStates` shim. User flagged the old preset/weather system as "smushed / never fully
+  linked → needs redesign". Built a modular axes-native `LightingPreset` overlay (any subset of the 4
+  axes; null = don't touch) + `LightingPresetLibrary.LoadMoods()`. Sun/celestial/fantasy LIBRARIES +
+  real weather authoring **deferred** (slots reserved on `LightingPreset`; logged, not dropped).
+- Behavior core: one-way `ILightingTarget`/`ILuminaryFeed` seams (replace bidirectional `ILightingHost`);
+  `ShadowRegistry` single-owner invariant (Register throws on 2nd owner, 0 owners this slice);
+  `LightingComposer` — the SOLE writer, `Compose()` takes **no camera** → view-independent by construction;
+  camera-free `SunArc` + `DayScriptSample` helpers ported from WG16 DriveTime math.
+- `LightingDriver` host: `ILightingTarget` on INJECTED Sun/Env (exported NodePaths, no `/root/...`),
+  day/night clock, CLI check flags (kept module-local, not folded into terrain's CheckRunner), HUD.
+
+**Fixed-on-port (confirmed):** no EMISSION ambient fill, no hardcoded `0.12f` ambient (floor is axis-driven
+`NightAmbientFloor`), no `MoodToStates` shim.
+
+**Eye-gate bug caught + fixed (the "no sun, dark scene" report):** `DirectionalLight3D` was oriented
+BACKWARDS — `LookAtFromPosition(..., useModelFront:true)` aims +Z at the target, but the light emits along
+−Z, so it lit the terrain from the wrong side AND placed the ProceduralSky sun disc below the horizon
+(invisible). Fix: drop `useModelFront`. Also tonemap was AgX (`tonemap_mode=4`); intended Filmic → set `=2`.
+After the fix: sun visible, terrain correctly lit, scene reads as a coherent sunlit ~10am alpine view.
+
+**Gates:** `--luminarycheck` / `--shadowcheck` / `--composercheck` all PASS (exit 0). **User eye-gate PASS** —
+camera yaw/pitch keeps the lit world LOCKED (sun fixed, only visible faces change); the headline thing WG16
+kept getting wrong. **No cast shadows is BY DESIGN** (ShadowRegistry owners=0; shadows are a future
+single-owner slice). Profile **4.18ms avg / 239fps / 0 spikes>16ms** (lighting compose cost trivial; matches
+terrain baseline 4.2ms).
+
+**Deviations from the written plans:** (1) Plan 1 Task 1 csproj already existed (terrain slice) — skipped.
+(2) Plan 3 used the real terrain scene (Task 2), not the placeholder probe (Task 3), since terrain was merged.
+(3) SkyPresets redesigned per the user's "modular spirit, we'll want engine presets" steer. (4) One real
+bug (sun direction) + one look fix (Filmic) beyond the plan, surfaced by the eye-gate.
+
+**NEXT in the sky stack:** Slice B (Atmosphere) → C (Clouds, where the real sun-disc/sky visual lives) →
+D (Godrays). Shadows are their own later slice, registering ONE owner through the `ShadowRegistry`.
