@@ -15,6 +15,31 @@ public static class RegionDebugViz
                $"wet={100f * wet / n:F1}% lakeCells={100f * lake / n:F1}% grid={wd.Width}x{wd.Height}";
     }
 
+    // Vertical relief of a baked field — tells whether the source terrain is flat/bumpy
+    // (many shallow basins → flood) vs has real large-scale slope (drains to edges).
+    public static string Relief(HeightField hf)
+    {
+        int n = hf.Width * hf.Height; float lo = float.MaxValue, hi = float.MinValue; double sum = 0;
+        for (int i = 0; i < n; i++) { float v = hf.Data[i]; if (v < lo) lo = v; if (v > hi) hi = v; sum += v; }
+        return $"min={lo:F1} max={hi:F1} mean={sum / n:F1} range={hi - lo:F1}m";
+    }
+
+    // Pit-fill stats on a WaterMap: how much of the surface is a >minDepth basin, how deep,
+    // and how many cells exceed the river accumulation threshold. Isolates the flooding cause.
+    public static string HydroStats(WaterMap wm, float minDepth, float riverThreshold)
+    {
+        int n = wm.Terrain.Width * wm.Terrain.Height, lake = 0, river = 0;
+        double depthSum = 0; float maxDepth = 0;
+        for (int i = 0; i < n; i++)
+        {
+            float d = wm.Filled[i] - wm.Terrain.Data[i];
+            if (d > minDepth) { lake++; depthSum += d; if (d > maxDepth) maxDepth = d; }
+            if (wm.Accum[i] > riverThreshold) river++;
+        }
+        return $"lakeCells={100f * lake / n:F1}% meanDepth={(lake > 0 ? depthSum / lake : 0):F2}m " +
+               $"maxDepth={maxDepth:F1}m riverCells={100f * river / n:F2}%";
+    }
+
     public static void DumpPng(WaterData wd, string osPath)
     {
         int w = wd.Width, h = wd.Height;

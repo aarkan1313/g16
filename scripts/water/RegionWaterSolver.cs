@@ -50,6 +50,23 @@ public sealed class RegionWaterSolver
         return WaterPipeline.Build(wm, eroded, _wp);
     }
 
+    // Flooding-cause probe: bakes once, then runs hydrology on the RAW field vs the ERODED
+    // field so we can see whether the basins come from the source terrain or from erosion,
+    // plus the field relief and lake-depth distribution. Returns a multi-line report.
+    public string Diagnose(int rx, int rz)
+    {
+        int gridN = _interior + 2 * HaloCells;
+        float originX = rx * _regionM - HaloCells * _spacing;
+        float originZ = rz * _regionM - HaloCells * _spacing;
+        var hf = FieldHeightSource.Bake(_fc, _fp, originX, originZ, _spacing, gridN);
+        var rawWm = Hydrology.Compute(hf);
+        var eroded = _eroder.Erode(hf, _ep);
+        var eroWm = Hydrology.Compute(eroded);
+        return $"[diag] spacing={_spacing}m grid={gridN} relief({RegionDebugViz.Relief(hf)})\n" +
+               $"[diag] RAW    {RegionDebugViz.HydroStats(rawWm, _wp.MinDepth, _wp.RiverThreshold)}\n" +
+               $"[diag] ERODED {RegionDebugViz.HydroStats(eroWm, _wp.MinDepth, _wp.RiverThreshold)}";
+    }
+
     public static ErosionParams DefaultErosion() => new ErosionParams
     {
         DropletCount = 3_000_000, Seed = 1, ErosionRate = 0.35f, DepositionRate = 0.06f,

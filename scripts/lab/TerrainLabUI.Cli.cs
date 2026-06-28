@@ -181,11 +181,13 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--fantasy=")) { int.TryParse(a.Substring("--fantasy=".Length), out _fantasyCli); }
             else if (a.StartsWith("--cloudtex=")) { if (int.TryParse(a.Substring("--cloudtex=".Length), out int th) && th >= 64) { CloudVolume.TexH = th; CloudVolume.TexW = th * 4; } }
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
+            else if (MatchFlag(a, "--waterdiag")) { _waterDiagCli = true; }
             else if (MatchFlag(a, "--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
             else if (MatchFlag(a, "--profile")) { double? dur = (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=') + 1), out double d)) ? d : (double?)null; _cliSeq.ArmProfile(dur); }
         }
     }
     private int _waterCli = -1;     // --water[=1] → Phase 2A: solve region (0,0) + debug PNG
+    private bool _waterDiagCli = false; // --waterdiag → flooding-cause probe (raw vs eroded hydrology)
 
     private void ApplyCliOverrides()
     {
@@ -241,13 +243,20 @@ public partial class TerrainLabUI : Control
         {
             _terrain.ConfigureCdlodAabb(!_noTightenCli, _aabbResCli, _aabbReqCli);
         }
-        if (_waterCli == 1)
+        if (_waterCli == 1 || _waterDiagCli)
         {
             // Phase 2A: solve region (0,0) with the lab pipeline (Erosion.Core) from WG16's own field,
             // print stats + dump a top-down drainage PNG. No carve/mesh yet (2B/2C).
             var solver = new WG16.Water.RegionWaterSolver(
                 _fc, _params, new Erosion.Core.WaterParams(),
                 new WG16.Water.GpuEroder(), WG16.Water.RegionWaterSolver.DefaultErosion());
+            if (_waterDiagCli)
+            {
+                // Flooding-cause probe: raw-field vs eroded-field hydrology + relief (no PNG/mesh).
+                GD.Print(solver.Diagnose(0, 0));
+                GetTree().Quit();
+                return;
+            }
             var wd = solver.GetOrSolve(0, 0);
             GD.Print($"[water] region(0,0) {WG16.Water.RegionDebugViz.Stats(wd)}");
             string outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wg16_region00_water.png");
