@@ -184,6 +184,7 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--breachdepth=")) { float.TryParse(a.Substring("--breachdepth=".Length), out _breachDepthCli); }
             else if (a.StartsWith("--breachlen=")) { int.TryParse(a.Substring("--breachlen=".Length), out _breachLenCli); }
             else if (a.StartsWith("--minlake=")) { int.TryParse(a.Substring("--minlake=".Length), out _minLakeCli); }
+            else if (a.StartsWith("--deltablur=")) { int.TryParse(a.Substring("--deltablur=".Length), out _deltaBlurCli); }
             else if (MatchFlag(a, "--watercarve")) { _waterCarveCli = true; }
             else if (MatchFlag(a, "--waterdiag")) { _waterDiagCli = true; }
             else if (MatchFlag(a, "--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
@@ -193,6 +194,7 @@ public partial class TerrainLabUI : Control
     private int _waterCli = -1;     // --water[=1] → Phase 2A: solve region (0,0) + debug PNG
     private bool _waterDiagCli = false; // --waterdiag → flooding-cause probe (raw vs eroded hydrology)
     private bool _waterCarveCli = false; // --watercarve → 2B: bind the terrain delta (rivers in real valleys)
+    private int _deltaBlurCli = 4;       // --deltablur=N → box-blur radius (cells) widening breach notches into valleys
     private float _breachDepthCli = float.NaN; // --breachdepth=N → override MaxBreachDepth (tuning)
     private int _breachLenCli = -1;            // --breachlen=N   → override MaxBreachLength (tuning)
     private int _minLakeCli = -1;              // --minlake=N     → override MinLakeArea (tuning)
@@ -273,10 +275,10 @@ public partial class TerrainLabUI : Control
                 // 2B: build the terrain height-delta texture and bind it so the rendered CDLOD terrain
                 // becomes the solved surface (rivers in real valleys). Default-off until this flag.
                 var win = solver.RegionWindow(0, 0);
-                var delta = solver.BuildDelta(0, 0);
+                var delta = solver.BuildDelta(0, 0, _deltaBlurCli);
                 var tex = WG16.Water.WaterDeltaTexture.Build(delta, win.Grid);
                 _terrain.Cdlod?.SetWaterDelta(tex, new Vector2(win.OriginX, win.OriginZ), win.SizeM, true);
-                GD.Print($"[water] 2B delta bound: region origin=({win.OriginX},{win.OriginZ}) size={win.SizeM}m grid={win.Grid} breachDepth={wp.MaxBreachDepth}m");
+                GD.Print($"[water] 2B delta bound: region origin=({win.OriginX},{win.OriginZ}) size={win.SizeM}m grid={win.Grid} breachDepth={wp.MaxBreachDepth}m blur={_deltaBlurCli}");
             }
             else
             {

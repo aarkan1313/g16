@@ -91,14 +91,24 @@ public sealed class RegionWaterSolver
 
     // Per-cell rendered height delta = solved(Carved) - rawField, row-major over the full baked grid.
     // This is the FULL coupled delta (erosion + breach + carve); the rendered terrain becomes the
-    // solved surface so rivers sit in real valleys. Edges feathered to 0 over the halo (no boundary cliff).
-    public float[] BuildDelta(int rx, int rz)
+    // solved surface so rivers sit in real valleys. The raw breach notch is a 1-cell-wide drainage
+    // device — rendered literally it reads as a jagged deep slot, so a box blur WIDENS + SHALLOWS +
+    // smooths it into a natural valley cross-section (volume spreads laterally → wide shallow trough,
+    // which is how real river valleys look). Edges feathered to 0 over the halo (no boundary cliff).
+    public float[] BuildDelta(int rx, int rz, int blurRadius)
     {
         var wd = GetOrSolve(rx, rz);
         var win = RegionWindow(rx, rz);
         var raw = FieldHeightSource.Bake(_fc, _fp, win.OriginX, win.OriginZ, _spacing, win.Grid);
         int g = win.Grid; var delta = new float[g * g];
         for (int i = 0; i < delta.Length; i++) delta[i] = wd.Carved.Data[i] - raw.Data[i];
+        if (blurRadius > 0)
+        {
+            var hf = new HeightField(g, g, _spacing);
+            System.Array.Copy(delta, hf.Data, delta.Length);
+            var sm = Smoothing.Box(hf, blurRadius, 1);
+            System.Array.Copy(sm.Data, delta, delta.Length);
+        }
         FeatherEdges(delta, g, HaloCells / 2); // ramp to 0 across half the halo so the region edge has no cliff
         return delta;
     }
