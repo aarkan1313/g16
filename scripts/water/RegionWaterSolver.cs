@@ -42,7 +42,7 @@ public sealed class RegionWaterSolver
         float originZ = rz * _regionM - HaloCells * _spacing;
         var hf = FieldHeightSource.Bake(_fc, _fp, originX, originZ, _spacing, gridN);
         var eroded = _eroder.Erode(hf, _ep);
-        var wm = Hydrology.Compute(eroded);
+        var wm = Erosion.Core.Hydrology.Compute(eroded);   // fully-qualified: old WG16.Hydrology namespace shadows it (removed in T6)
         return WaterPipeline.Build(wm, eroded, _wp);
     }
 
