@@ -225,8 +225,11 @@ public sealed class LightingComposer
             // terrain reading as flat/floating. WG16 had it force-disabled; turn it on. radius/intensity mirror
             // erosion-lab (Main.tscn: ssao_radius=3, ssao_intensity=1).
             env.SsaoEnabled = true;
-            env.SsaoRadius = 3.0f;
-            env.SsaoIntensity = 1.0f;
+            // SSAO is screen-space → its darkening CRAWLS as the camera MOVES (the "floating darkening that
+            // follows the player"). A prior session had reduced it (~0.6) and it crept back to 1.0/r3. Restore
+            // a low value (2026-06-28 audit): keeps the contact grounding without the moving dark blob.
+            env.SsaoRadius = 2.0f;
+            env.SsaoIntensity = 0.5f;
 
             // SSIL DISABLED (2026-06-23): measured ssil ON vs OFF auto-shot diff = 97% of pixels changed, mean
             // shift 52/255 (vs the sun shadow's 0.22) — screen-space indirect light was CRUSHING the whole terrain

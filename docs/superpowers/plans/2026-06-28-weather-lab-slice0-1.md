@@ -1023,7 +1023,7 @@ private Weather.Core.WeatherSim _sim = null!;
 private SkyCoupling _sky = null!;
 private float _weatherClock;
 private bool _weatherCheck;   // --weathercheck
-private int _checkFrames;
+private float _checkElapsed;  // accumulated dt for the check (NOT a frame count)
 
 // in _Ready(), AFTER the sky is wired:
 _sim = new Weather.Core.WeatherSim(1u, Weather.Core.WeatherState.Clear);
@@ -1032,18 +1032,20 @@ foreach (var a in OS.GetCmdlineUserArgs())
     if (a == "--weathercheck") _weatherCheck = true;
 
 // in _Process(delta), AFTER the sky tick:
-// --weathercheck: isolate the transition — tick ONCE toward Rain for 10 s, then
-// assert + exit. Early-return so the normal clock path does NOT also tick the sim
-// (double-tick would muddy the measurement). 10 s, not 4 s: at RCoverage=0.30 the
-// brain reaches 0.84 in 10 s but only ~0.46 in 4 s, so a >0.7 gate needs the 10 s window.
+// --weathercheck: isolate the transition — drive toward Rain for 10 s of ELAPSED time,
+// then assert + exit. Early-return so the normal clock path does NOT also tick the sim.
+// GATE ON ACCUMULATED dt, NOT FRAME COUNT: the scene runs well above 60 fps, so a
+// 600-frame gate is only ~3 s and under-eases coverage (verified: 600 frames → 0.47, FAIL).
+// 10 s elapsed → 0.95+(0.05-0.95)*2^(-0.30*10)=0.84 > 0.7 → PASS (matches the unit test).
 if (_weatherCheck)
 {
     _sim.Tick((float)delta, Weather.Core.WeatherState.Rain);
     _sky.Apply(_sim.State);
-    if (++_checkFrames > 600)   // ~10 s @ 60 fps
+    _checkElapsed += (float)delta;
+    if (_checkElapsed > 10f)
     {
         bool ok = _sim.State.CloudCoverage > 0.7f && _sim.State.PrecipType == Weather.Core.PrecipType.Rain;
-        GD.Print($"[weathercheck] coverage={_sim.State.CloudCoverage:F2} precip={_sim.State.PrecipType} -> {(ok ? "PASS" : "FAIL")}");
+        GD.Print($"[weathercheck] t={_checkElapsed:F1}s coverage={_sim.State.CloudCoverage:F2} precip={_sim.State.PrecipType} -> {(ok ? "PASS" : "FAIL")}");
         GetTree().Quit(ok ? 0 : 1);
     }
     return;

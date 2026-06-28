@@ -129,8 +129,9 @@ uniform float fp_fade_max = 1.0;      // cap on dissolve amount (1 = can go full
 // NORMAL-MAP footprint rolloff — DECOUPLED from the albedo footprint_fade above. The tiled normal map is what
 // aliases into the grazing/distance MOIRÉ ripples, so it must ALWAYS fade out with footprint (even when albedo
 // stays sharp). These mirror the old fp_fade thresholds (the normal rolloff that had NO moiré when fade was on).
-uniform float nrm_fade_lo = 0.012;    // footprint where the normal map starts rolling off
-uniform float nrm_fade_hi = 0.10;     // footprint where the normal map is fully gone (kills the moiré)
+uniform float nrm_fade_lo = 0.06;     // RAISED 2026-06-28 (audit): keep surface RELIEF through near/mid view
+uniform float nrm_fade_hi = 0.35;     // was 0.012/0.10 → relief vanished as you turned ("definition disappears,
+                                      // flat as unlit"). Now relief only fades at extreme grazing; aniso 16x handles moiré.
 
 varying vec3 v_normal;   // world-space geometric normal from neighbour height taps
 varying float v_h;       // height (m)

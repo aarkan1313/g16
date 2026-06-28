@@ -270,13 +270,15 @@ public partial class TerrainLab : MeshInstance3D
     // the kept work. Roles: 0 low/sand, 1 valley grass, 2 mid earth/scree, 3 slope rock, 4 peak snow.
     private static readonly string[] _matRoles =
     {
-        // PROOF SWAP (2026-06-28): the shader was hardcoded to materials the user's own rating
-        // exercise (data/material_verdicts.json) marked FAIL — 03_coarse_sand, 01_tussock_grass,
-        // 02_muddy_with_stones — while good sets sat unused. Now using the independent audit's
-        // VERIFIED-AAA isotropic sets where they exist: biome_grassland (real top-down grass, kills
-        // the corduroy) + rock035 (photogrammetry-grade rock). (Proper fix = drive from verdicts/palette.)
-        "02_rippled_dunes", "biome_grassland", "16_glacial_till",
-        "rock035", "01_fresh_powder",
+        // MATERIAL SET (2026-06-28, post outside-audit): my earlier swap wrongly used rock035 (rated
+        // DROPPED — a near-BLACK rock force-painted on every slope = "darker when I look down") and a
+        // directional sand. Fixed per the audit + material_verdicts.json: mat3 → 01_weathered_grey_bedrock
+        // (mid-grey value, strongest rock normal — gets the black off the slopes), mat2 → 13_sun_baked_clay
+        // (deep crack relief), mat0 → dirt (isotropic, not the directional dunes). biome_grassland kept
+        // (best grass content; its 'fail' was a tiling/contrast issue → macro tiling-break, not the asset).
+        // Proper long-term fix = drive _matRoles from ground_palette.json + the verdicts, not hardcode.
+        "dirt", "biome_grassland", "13_sun_baked_clay",
+        "01_weathered_grey_bedrock", "01_fresh_powder",
     };
     public void LoadGroundMaterials()
     {
