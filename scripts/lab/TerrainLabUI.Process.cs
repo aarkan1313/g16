@@ -47,6 +47,7 @@ public partial class TerrainLabUI : Control
     private bool _lastSsaoM;    // M toggles SSAO live (the other view-dependent suspect)
     private bool _lastTexU;     // U toggles terrain textures live (the surfacing = the real "moving shadows" suspect)
     private bool _texturesLive = true;   // live mirror of use_textures for the U toggle
+    private bool _lastTaaY;     // Y toggles TAA live (the AAA fix for normal-map specular shimmer in motion)
     private int _diagMode;      // 0 normal, 1 grey, 2 +albedo, 3 +roughness, 4 +normalmap
     private bool _lodVizLive;   // V toggles the LOD-band tint live
     private bool _godraysOn = false;              // mirror of cloud_godrays; MUST match JSON/default OFF
@@ -410,6 +411,11 @@ public partial class TerrainLabUI : Control
                 bool kU = Input.IsKeyPressed(Key.U);
                 if (kU && !_lastTexU) { _texturesLive = !_texturesLive; _terrain.SetTexturesOn(_texturesLive); GD.Print($"[isolate] (U) terrain textures = {_texturesLive}"); }
                 _lastTexU = kU;
+                // Y: TAA toggle. The AAA fix for specular/normal-map shimmer in MOTION (MSAA can't touch
+                // shading aliasing; TAA resolves it across frames). Fly with textures ON and A/B Y.
+                bool kY = Input.IsKeyPressed(Key.Y);
+                if (kY && !_lastTaaY) { var vp = GetViewport(); vp.UseTaa = !vp.UseTaa; GD.Print($"[isolate] (Y) TAA = {vp.UseTaa}"); }
+                _lastTaaY = kY;
             }
             // ----------------------------------------------------------------------------------------------
 
