@@ -424,3 +424,48 @@ bug (sun direction) + one look fix (Filmic) beyond the plan, surfaced by the eye
 
 **NEXT in the sky stack:** Slice B (Atmosphere) → C (Clouds, where the real sun-disc/sky visual lives) →
 D (Godrays). Shadows are their own later slice, registering ONE owner through the `ShadowRegistry`.
+
+---
+
+## WG17 Slice B (Atmosphere) — Outcome (2026-06-28)
+
+**Status: SHIPPED.** Port-clean rewrite of WG16's Hillaire physical atmosphere into WG17. Eye-gate PASS.
+
+**Discipline (user-directed): "just modular" — keep capability, seam the coupling.** NOT a strip-down, NOT
+a free-pass copy. Every WG16 capability kept (LUTs, aerial, extra-sun scattering, cloud-light extractor);
+the only thing rewritten is cross-module coupling → clean interfaces. The "free pass" worry was handled not
+by deleting code but by ensuring nothing reaches across a module boundary except through a seam.
+
+**What landed (src/atmosphere + src/app):**
+- `Std430Writer` (ported), the 5 `.glsl` + `aerial_screen_v2.gdshader` copied BYTE-EXACT (verified identical;
+  Hillaire math guarded by `--atmoscheck`, not waved through).
+- `AtmosphereCompute` (ported, full capability): transmittance/multiscatter/skyview LUTs on the MAIN RD via
+  `CallOnRenderThread` (dirty-flag amortized — rebuild only on sun-move), aerial froxel LUT, **extra-sun
+  scattering**, cloud-light extractor. Implements `IAtmosphereFeed` (out).
+- **Coupling modularized:** sun + extra-suns arrive via `ILuminaryFeed` (Slice A's seam — the `LuminaryBudget`
+  decides WHICH suns scatter, atmosphere SCATTERS them, the seam carries the list). The numeric check was
+  EXTRACTED from the compute class into `AtmosphereCheck`. No `GetNode`/`/root/`/host; GPU quarantined.
+- `AerialPerspectiveV2` (ported), `IAtmosphereFeed` (new outbound seam for Slice C clouds), a minimal
+  `atmosphere_sky.gdshader` (samples the sky-view LUT so the physical sky shows without clouds — Slice C's
+  cloud sky supersedes it), `AtmosphereDriver` (the seam host: `ILuminaryFeed` in, owns the nodes, pushes
+  camera, swaps the Sky material when enabled+Ready, restores Slice-A procedural sky on disable).
+
+**Bugs caught + fixed at the eye-gate (the numeric check couldn't see them):** sky shader redeclared the
+`PI` builtin and used an illegal early `return` in `sky()`; the aerial screen quad's `sampler3D` was
+validated unbound on tree-entry → flaky 0–2 "not a valid texture" startup errors. Fixed by deferring the
+aerial node's `AddChild` until its froxel-LUT RID is live (bind → add → show). 0 errors across repeated runs.
+
+**Gates:** `--atmoscheck` — transmittance ∈[0,1] PASS, skyview PASS (`horizonLuma 0.159 > zenith 0.017` =
+physical Rayleigh), `CLOUDLIGHTCHECK` PASS (`maxdiff=0.000000`). Slice A COMPOSER + SHADOW-OWNER unbroken.
+**User eye-gate PASS** — physical sky reads right dawn→dusk, aerial hazes distance, world-locked.
+
+**Profile:** 4.18ms with atmosphere+aerial ON vs 4.17ms baseline — **essentially free at steady state**
+(LUTs cached; rebuild amortized to sun-move; worst-frame 6.6ms = one-time first-sunset LUT build).
+
+**Deferred (capability present behind seams, consumer later — NOT cut):** the **real sun + moon DISCS** (limb
+darkening, corona, phase terminator, maria) live in the cloud sky shader → **Slice C**. The cloud-light
+extractor is exposed via `IAtmosphereFeed`, dormant until clouds read it. Extra-sun *discs* likewise draw in
+Slice C (the lighting + scattering of N bodies works today). Ground bloom = surfacing/material slice (separate).
+
+**NEXT:** Slice C (Clouds) — brings the real sun/moon discs, the volumetric cloud raymarch, and wires the
+cloud sky shader to consume `IAtmosphereFeed`. Seams already in place; no Slice-B rework expected.
