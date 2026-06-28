@@ -13,6 +13,7 @@ public static class WaterPipeline
         var edges = RiverNetwork.Extract(wm, ls, p.RiverThreshold);
         var carved = ChannelCarve.Apply(eroded, wm.Filled, edges, p.ChannelDepth, p.WidthScale, ls.LakeId);
         var (wet, fx, fz, foam) = FlowField.Compute(wm, ls, carved, p);
+        WaterBodies.CullSmall(ls, wet, p.MinLakeArea); // drop noise puddles the breach leaves behind
         return new WaterData
         {
             Width = eroded.Width, Height = eroded.Height, CellSizeM = eroded.CellSizeM,

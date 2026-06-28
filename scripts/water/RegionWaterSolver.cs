@@ -45,9 +45,14 @@ public sealed class RegionWaterSolver
         float originX = rx * _regionM - HaloCells * _spacing;
         float originZ = rz * _regionM - HaloCells * _spacing;
         var hf = FieldHeightSource.Bake(_fc, _fp, originX, originZ, _spacing, gridN);
-        var eroded = _eroder.Erode(hf, _ep);
-        var wm = Hydrology.Compute(eroded);
-        return WaterPipeline.Build(wm, eroded, _wp);
+        // Breach twice. PRE-erosion gives droplets exits so they carve real fluvial valleys.
+        // Erosion's thermal/smoothing re-dams some notches, so breach AGAIN on the eroded surface
+        // — that POST pass is the one that guarantees the surface Hydrology.Compute floods drains.
+        var pre = Hydrology.Condition(hf, _wp.MaxBreachDepth, _wp.MaxBreachLength);
+        var eroded = _eroder.Erode(pre, _ep);
+        var conditioned = Hydrology.Condition(eroded, _wp.MaxBreachDepth, _wp.MaxBreachLength);
+        var wm = Hydrology.Compute(conditioned);
+        return WaterPipeline.Build(wm, conditioned, _wp);
     }
 
     // Flooding-cause probe: bakes once, then runs hydrology on the RAW field vs the ERODED
@@ -60,11 +65,15 @@ public sealed class RegionWaterSolver
         float originZ = rz * _regionM - HaloCells * _spacing;
         var hf = FieldHeightSource.Bake(_fc, _fp, originX, originZ, _spacing, gridN);
         var rawWm = Hydrology.Compute(hf);
-        var eroded = _eroder.Erode(hf, _ep);
+        var pre = Hydrology.Condition(hf, _wp.MaxBreachDepth, _wp.MaxBreachLength);
+        var eroded = _eroder.Erode(pre, _ep);
         var eroWm = Hydrology.Compute(eroded);
-        return $"[diag] spacing={_spacing}m grid={gridN} relief({RegionDebugViz.Relief(hf)})\n" +
-               $"[diag] RAW    {RegionDebugViz.HydroStats(rawWm, _wp.MinDepth, _wp.RiverThreshold)}\n" +
-               $"[diag] ERODED {RegionDebugViz.HydroStats(eroWm, _wp.MinDepth, _wp.RiverThreshold)}";
+        var conditioned = Hydrology.Condition(eroded, _wp.MaxBreachDepth, _wp.MaxBreachLength);
+        var finalWm = Hydrology.Compute(conditioned);
+        return $"[diag] spacing={_spacing}m grid={gridN} breachDepth={_wp.MaxBreachDepth}m relief({RegionDebugViz.Relief(hf)})\n" +
+               $"[diag] RAW           {RegionDebugViz.HydroStats(rawWm, _wp.MinDepth, _wp.RiverThreshold)}\n" +
+               $"[diag] PRE+ERODE     {RegionDebugViz.HydroStats(eroWm, _wp.MinDepth, _wp.RiverThreshold)}\n" +
+               $"[diag] +POST(final)  {RegionDebugViz.HydroStats(finalWm, _wp.MinDepth, _wp.RiverThreshold)}";
     }
 
     public static ErosionParams DefaultErosion() => new ErosionParams
@@ -73,4 +82,11 @@ public sealed class RegionWaterSolver
         CapacityFactor = 3.5f, MaxLifetime = 96, ErosionRadius = 5,
         TalusAngleDeg = 40f, ThermalStrength = 0.6f, ThermalIterations = 70,
     };
+
+    // Water params tuned for WG16's closed-basin field (eye-gated on the --water PNG 2026-06-28):
+    // breach basins up to 80 m deep and search up to 800 cells (~6.4 km at 8 m) for an outlet —
+    // the LENGTH bound was decisive (big basins drain far away: 200→800 cut lake area 18.7%→7.7%).
+    // Deeper/landlocked basins stay lakes (the lake district); sub-64-cell puddles culled.
+    public static WaterParams DefaultWater() => new WaterParams(
+        MaxBreachDepth: 80f, MaxBreachLength: 800, MinLakeArea: 64);
 }

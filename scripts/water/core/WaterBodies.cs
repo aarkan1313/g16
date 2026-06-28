@@ -46,4 +46,29 @@ public static class WaterBodies
         }
         return new LakeSet { LakeId = id, Lakes = lakes.ToArray() };
     }
+
+    // Drop lakes below minArea cells (noise puddles the breach pass leaves behind): their cells
+    // revert to dry/un-flagged, surviving lakes are re-indexed. Mutates ls (LakeId + Lakes) and wet.
+    public static void CullSmall(LakeSet ls, bool[] wet, int minArea)
+    {
+        if (minArea <= 0) return;
+        var lakes = ls.Lakes;
+        var keep = new bool[lakes.Length];
+        var remap = new int[lakes.Length];
+        var survivors = new List<Lake>();
+        for (int i = 0; i < lakes.Length; i++)
+        {
+            if (lakes[i].CellCount >= minArea) { keep[i] = true; remap[i] = survivors.Count; survivors.Add(lakes[i]); }
+            else remap[i] = -1;
+        }
+        if (survivors.Count == lakes.Length) return; // nothing culled
+        var id = ls.LakeId;
+        for (int c = 0; c < id.Length; c++)
+        {
+            int lid = id[c]; if (lid < 0) continue;
+            if (keep[lid]) id[c] = remap[lid];
+            else { id[c] = -1; wet[c] = false; }
+        }
+        ls.Lakes = survivors.ToArray();
+    }
 }

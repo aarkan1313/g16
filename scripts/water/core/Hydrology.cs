@@ -28,6 +28,83 @@ public static class Hydrology
         return new WaterMap { Terrain = t, Filled = filled, Accum = accum, Down = down };
     }
 
+    const float BreachBedSlope = 0.02f; // per-cell descent (m) of a breach channel bed — keeps flow monotonic
+
+    // Bounded breach-then-fill conditioning (Lindsay 2016 hybrid). WG16's field is un-drained
+    // closed-basin mountain terrain; fill-only hydrology turns every basin into a deep lake.
+    // This carves an outlet notch from each closed-basin pit through its lowest rim saddle so
+    // the basin drains into a river. Basins too deep/long to breach within the bounds are left
+    // untouched — PriorityFlood (downstream) fills them, so they become the genuine lakes.
+    // Returns a NEW HeightField; the source field is not mutated. maxBreachDepth<=0 → no-op.
+    public static HeightField Condition(HeightField t, float maxBreachDepth, int maxBreachLength)
+    {
+        int w = t.Width, h = t.Height, n = w * h;
+        var z = new float[n]; Array.Copy(t.Data, z, n);
+        var conditioned = new HeightField(w, h, t.CellSizeM);
+        if (maxBreachDepth <= 0f) { Array.Copy(z, conditioned.Data, n); return conditioned; }
+
+        // Priority-flood from the edges, recording backlink[c] = the cell c was discovered from.
+        // Following backlink leads to a boundary with monotonically non-increasing spill level,
+        // crossing the basin's lowest rim saddle — exactly the route an outlet breach must take.
+        var done = new bool[n];
+        var backlink = new int[n]; for (int i = 0; i < n; i++) backlink[i] = -1;
+        var filled = new float[n];
+        var pq = new PriorityQueue<int, float>();
+        void Seed(int idx) { if (!done[idx]) { done[idx] = true; filled[idx] = z[idx]; pq.Enqueue(idx, filled[idx]); } }
+        for (int x = 0; x < w; x++) { Seed(x); Seed((h - 1) * w + x); }
+        for (int y = 0; y < h; y++) { Seed(y * w); Seed(y * w + w - 1); }
+        while (pq.Count > 0)
+        {
+            int c = pq.Dequeue(); int cx = c % w, cy = c / w;
+            for (int k = 0; k < 8; k++)
+            {
+                int nx = cx + dx[k], ny = cy + dy[k];
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                int ni = ny * w + nx; if (done[ni]) continue;
+                done[ni] = true; backlink[ni] = c;
+                filled[ni] = MathF.Max(z[ni], filled[c] + Epsilon);
+                pq.Enqueue(ni, filled[ni]);
+            }
+        }
+
+        // Pits = interior strict local minima on the raw surface (one per closed basin bottom).
+        // Breach the lowest first so deeper basins carve the trunk and shallower ones drain into it.
+        var pits = new List<int>();
+        for (int y = 1; y < h - 1; y++)
+        for (int x = 1; x < w - 1; x++)
+        {
+            int c = y * w + x; float zc = z[c]; bool isPit = true;
+            for (int k = 0; k < 8; k++) { if (z[(y + dy[k]) * w + (x + dx[k])] <= zc) { isPit = false; break; } }
+            if (isPit) pits.Add(c);
+        }
+        pits.Sort((a, b) => z[a].CompareTo(z[b]));
+
+        var path = new List<int>(maxBreachLength);
+        var carveLevel = new List<float>(maxBreachLength);
+        foreach (int pit in pits)
+        {
+            // Trace the spill route, simulating a descending channel bed, until we either reach
+            // natural ground already below the bed (outlet found) or violate a bound (abort).
+            path.Clear(); carveLevel.Clear();
+            float carve = z[pit]; int cur = pit; bool ok = false;
+            for (int step = 0; step < maxBreachLength; step++)
+            {
+                int nxt = backlink[cur];
+                if (nxt < 0) { ok = true; break; }     // drained to the map boundary
+                carve -= BreachBedSlope;
+                if (z[nxt] <= carve) { ok = true; break; } // ground already lower than our bed → outlet
+                if (z[nxt] - carve > maxBreachDepth) { ok = false; break; } // notch too deep → keep as lake
+                path.Add(nxt); carveLevel.Add(carve);
+                cur = nxt;
+            }
+            if (!ok) continue;
+            for (int i = 0; i < path.Count; i++) z[path[i]] = carveLevel[i]; // commit the notch
+        }
+
+        Array.Copy(z, conditioned.Data, n);
+        return conditioned;
+    }
+
     // Steepest-descent downstream neighbor on the (depression-free) filled surface.
     // Following Down always reaches an edge — no loops — so river tracing terminates.
     static int[] SteepestDown(float[] filled, int w, int h, float cell)

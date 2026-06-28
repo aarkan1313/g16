@@ -181,6 +181,9 @@ public partial class TerrainLabUI : Control
             else if (a.StartsWith("--fantasy=")) { int.TryParse(a.Substring("--fantasy=".Length), out _fantasyCli); }
             else if (a.StartsWith("--cloudtex=")) { if (int.TryParse(a.Substring("--cloudtex=".Length), out int th) && th >= 64) { CloudVolume.TexH = th; CloudVolume.TexW = th * 4; } }
             else if (a.StartsWith("--temporal=")) { int.TryParse(a.Substring("--temporal=".Length), out _temporalCli); }
+            else if (a.StartsWith("--breachdepth=")) { float.TryParse(a.Substring("--breachdepth=".Length), out _breachDepthCli); }
+            else if (a.StartsWith("--breachlen=")) { int.TryParse(a.Substring("--breachlen=".Length), out _breachLenCli); }
+            else if (a.StartsWith("--minlake=")) { int.TryParse(a.Substring("--minlake=".Length), out _minLakeCli); }
             else if (MatchFlag(a, "--waterdiag")) { _waterDiagCli = true; }
             else if (MatchFlag(a, "--water")) { var s = a.Contains("=") ? a.Substring(a.IndexOf('=') + 1) : "1"; _waterCli = (s == "1") ? 1 : 0; }
             else if (MatchFlag(a, "--profile")) { double? dur = (a.Contains("=") && double.TryParse(a.Substring(a.IndexOf('=') + 1), out double d)) ? d : (double?)null; _cliSeq.ArmProfile(dur); }
@@ -188,6 +191,9 @@ public partial class TerrainLabUI : Control
     }
     private int _waterCli = -1;     // --water[=1] → Phase 2A: solve region (0,0) + debug PNG
     private bool _waterDiagCli = false; // --waterdiag → flooding-cause probe (raw vs eroded hydrology)
+    private float _breachDepthCli = float.NaN; // --breachdepth=N → override MaxBreachDepth (tuning)
+    private int _breachLenCli = -1;            // --breachlen=N   → override MaxBreachLength (tuning)
+    private int _minLakeCli = -1;              // --minlake=N     → override MinLakeArea (tuning)
 
     private void ApplyCliOverrides()
     {
@@ -247,8 +253,12 @@ public partial class TerrainLabUI : Control
         {
             // Phase 2A: solve region (0,0) with the lab pipeline (Erosion.Core) from WG16's own field,
             // print stats + dump a top-down drainage PNG. No carve/mesh yet (2B/2C).
+            var wp = WG16.Water.RegionWaterSolver.DefaultWater();
+            if (!float.IsNaN(_breachDepthCli)) wp = wp with { MaxBreachDepth = _breachDepthCli };
+            if (_breachLenCli >= 0) wp = wp with { MaxBreachLength = _breachLenCli };
+            if (_minLakeCli >= 0) wp = wp with { MinLakeArea = _minLakeCli };
             var solver = new WG16.Water.RegionWaterSolver(
-                _fc, _params, new Erosion.Core.WaterParams(),
+                _fc, _params, wp,
                 new WG16.Water.GpuEroder(), WG16.Water.RegionWaterSolver.DefaultErosion());
             if (_waterDiagCli)
             {
