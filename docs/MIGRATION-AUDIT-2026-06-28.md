@@ -341,6 +341,41 @@ scene-graph toucher. Height consumers depend on `IHeightSource`. No `Node3D`/`Me
 **Next:** Water/Erosion reuses the same `IHeightSource` with zero seam rework. Lighting slice (Slice A) is
 spec'd + kicked off separately and introduces the ShadowRegistry that will re-enable shadows correctly.
 
+### 9.1 Post-review polish (same day, while flying it) — commits `1a145e3`, `c9f930b`, `5c2af23`
+
+The whole-branch review came back **ready-to-merge**; live flying then surfaced real issues, all fixed:
+
+- **Snap-pop (terrain changing height in flight) — FIXED.** This is WG16's own renderOrigin snap-pop
+  (WG16 commit `22408ed`): chunks render at `worldXZ − renderOrigin` but the camera was left in TRUE
+  world, so the whole patch jumps 8192 m at every snap. The fix (co-locate the camera in the chunks'
+  render frame each frame in `Terrain._Process`) was **present in WG16 but MISSED in the initial port**
+  — only the plumbing (`CdlodRenderOrigin`/`CdlodActive`) came over, not the Process-loop wiring.
+  User-confirmed fixed. The shader wxz reconstruction round-trips exactly (NOT the cause).
+- **View-distance pass (max distance / min fog north-star):** `LoadRing` 8→12 so the loaded edge
+  (12·8192 = 98 km) sits PAST the 90 km camera far-clip → the streaming frontier is never visible
+  (no edge pop-in) without leaning on heavy fog. `MaxChunkOps` 24→96, `FarChunkOps` 4→16, bake
+  throttle 16→48 (24 was outrun at fast flight → capped; free on this GPU). `GridN` 65→97 (2.25×
+  verts/chunk, finer terrain, ~0 cost). `InitialSpeed` 5000→1200 (5000 outran streaming → holes).
+  Depth fog 45–90 km, curve 1.0 (soft linear fade, `fog_sky_affect=0`). New flying profile: 4.17 ms
+  / 7.5 ms worst / 0 spikes>16ms.
+- **`SplitFactor` kept 2.5, `PredictLookahead` kept 0** (WG16-proven). 3.5/4.0 push detail ~40% further
+  but trip `--snapdiff` (a split threshold landing on a fixed test point — LOD-boundary sensitivity, not
+  a snap seam); lookahead gave no measurable help. The detail-frontier crawl is inherent CDLOD; the
+  deeper "imperceptible far detail" work is the dedicated view-distance arc, not this slice.
+- **Bake-queue leak fixed:** `ChunkFieldCache.Cancel(key)` on chunk retire drops un-pumped bakes for
+  dead chunks (was unbounded — 4664+ under a birth storm; now peaks ~148).
+- **CLI A/B surface expanded:** `--split/--maxdepth/--gridn/--chunkops/--farops/--loadring/--lookahead/
+  --hyst/--activering/--fogbegin/--fogend/--nocoloc/--shadow/--cast/--streamdbg`, `--fly[--flyspeed=N]`.
+- **Debugging-method lesson (cost hours):** background-launched Godot windows often DON'T grab keyboard
+  focus → camera frozen → invalid "not re-centering / despawn / edge pop-in" diagnostics. A self-drive
+  test that sets `GlobalPosition` ABSOLUTELY also fights the floating-origin co-location. VALID
+  reproduction = incremental self-drive (`Position += dir·speed·delta`, the same path FlyCamera uses).
+  With a genuinely moving camera the window re-centers + streams correctly (center follows cam,
+  renderOrigin snaps, active stable ~1185, capped=0) — there was no streaming bug.
+
+All 6 self-checks still PASS, 0 errors. `ActiveRing` is declared-but-unused (LOD reach is purely
+`SplitFactor`); noted for the future view-distance arc.
+
 ---
 
 *Generated from a deep multi-agent audit pass. Companion source-of-truth for the new-repo migration effort.*
