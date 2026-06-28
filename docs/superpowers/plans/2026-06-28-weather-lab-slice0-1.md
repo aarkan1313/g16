@@ -173,7 +173,7 @@ public partial class Main : Node3D
 }
 ```
 
-`Main.tscn` (root Node3D with a FlyCamera + a Sun + a WorldEnvironment; the Camera uses the copied `FlyCamera.cs`):
+`Main.tscn` — **⚠ the root node MUST be named `TerrainLabRoot`** (the copied `LightingComposer` resolves nodes via the hardcoded absolute paths `/root/TerrainLabRoot/Env` and `/root/TerrainLabRoot/Sun`; naming the scene root `TerrainLabRoot` makes those resolve, fixing a runtime `GetNode` crash the compiler can't see). Children `Camera` (FlyCamera) / `Sun` / `Env` sit directly under it:
 ```
 [gd_scene load_steps=4 format=3]
 
@@ -185,7 +185,7 @@ background_mode = 1
 ambient_light_source = 2
 ambient_light_energy = 0.4
 
-[node name="Main" type="Node3D"]
+[node name="TerrainLabRoot" type="Node3D"]
 script = ExtResource("1")
 
 [node name="Camera" type="Camera3D" parent="."]
@@ -200,6 +200,7 @@ shadow_enabled = true
 [node name="Env" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
 ```
+> The `project.godot` `run/main_scene` is still `res://Main.tscn`; only the root *node name* changes. `Main.cs` (the script) is attached to `TerrainLabRoot`, so `GetNode<Camera3D>("Camera")` still resolves (relative child), and the scene instances at `/root/TerrainLabRoot` so the composer's absolute paths resolve too.
 
 - [ ] **Step 6: `git init` + build all three projects**
 
@@ -222,17 +223,20 @@ Expected: a window opens, the `_Ready` print appears, WASD+mouse flies the camer
 ### Task 0.2: Copy the terrain cluster → fly the infinite world
 
 **Files:**
-- Copy (verbatim, keep namespaces) into `weather-lab/WeatherLab/scripts/lab/`: `CdlodTerrain.cs`, `CdlodQuadtree.cs`, `CdlodMesh.cs`, `ChunkFieldCache.cs`, `ChunkAabbProvider.cs`, `Std430.cs`, `TerrainLab.cs` *(plus `ChunkSlot.cs` only if it exists as a separate file — it is a nested class in `CdlodTerrain.cs`, so likely no separate file)*.
+- Copy (verbatim, keep namespaces) into `weather-lab/WeatherLab/scripts/lab/`: `CdlodTerrain.cs`, `CdlodQuadtree.cs`, `CdlodMesh.cs`, `ChunkFieldCache.cs`, `ChunkAabbProvider.cs`, `Std430.cs`, `TerrainTestPaths.cs`, `TerrainLab.cs`. *(`ChunkSlot` and `CdlodChunk` are nested classes — no separate files.)*
 - Copy into `weather-lab/WeatherLab/scripts/field/`: `FieldParams.cs`, `FieldCompute.cs`.
-- Copy into `weather-lab/WeatherLab/shaders/`: `ground.gdshader`, `field_height.glsl`, `field_math.gdshaderinc`, `field_bake.glsl` (+ any `.gdshaderinc`/`.glsl` they `#include` — resolve by build error).
+- Copy into `weather-lab/WeatherLab/shaders/`: `ground.gdshader`, `field_height.glsl`, `field_math.gdshaderinc`, `field_bake.glsl` (+ any `.gdshaderinc`/`.glsl` they `#include` — resolve by build/load error).
 - Copy into `weather-lab/WeatherLab/data/`: `field_params.json`.
+- **Trim in the copied `TerrainLab.cs`:** delete the `BindWaterRegion(WG16.Hydrology.WorldWaterRegion, WG16.Hydrology.WaterParams)` method — it is dead in the weather lab and is the *only* thing that pulls the ~10-file `WG16.Hydrology` cluster (audit-confirmed). Leave everything else.
 - Modify: `weather-lab/WeatherLab/Main.cs`.
 
 **Interfaces:**
-- Consumes: `WG16.Lab.TerrainLab` (a `MeshInstance3D` node that builds the field + ground material and exposes the CDLOD drive). `WG16.Field.FieldParams.Load()`.
-- Produces: `Main` instantiates + drives the terrain. Confirm `TerrainLab`'s exact public API by reading the copied file (it owns `CdlodTerrain` and exposes a `Build`-style setup + a per-frame CDLOD tick wrapper: `CdlodTick(Vector3 camPos, Vector3 velXZ)`, `CdlodRenderOrigin`, `CdlodActive`). `CdlodTerrain` public surface (verified): `Setup(ShaderMaterial, FieldParams, float minH, float maxH, float[] heights)`, `Tick(Vector3 camPos, Vector3 velXZ = default)`, `Vector3 RenderOrigin`, `SetEnabled(bool)`.
+- Consumes (verified against the real files):
+  - `WG16.Field.FieldParams.Load()` (reads `res://data/field_params.json`); `WG16.Field.FieldCompute` (`IDisposable`, owns a local `RenderingDevice` — **windowed only**).
+  - `WG16.Lab.TerrainLab` (a `MeshInstance3D` presenter that owns the `CdlodTerrain`): build entry `void Build(FieldCompute fc, FieldParams p)` (does **not** self-build on `_Ready`); `void SetCdlod(bool)` (enables the quadtree — `CdlodActive` is false until this); `void SetCameraWorld(Vector3)` (pushes `cam_world` to the ground shader); `void CdlodTick(Vector3 camPos, Vector3 velXZ)`; `Vector3 CdlodRenderOrigin`; `bool CdlodActive`; `void SetTexturesOn(bool)`.
+- Produces: `Main` builds + drives the terrain. *(`CdlodTerrain.Setup(...)` is **internal** — `TerrainLab.Build` orchestrates it; never call it from the harness or you double-init the quadtree.)*
 
-- [ ] **Step 1: Copy the terrain cluster files** (the file lists above). Keep the original `namespace WG16.Lab;` / `namespace WG16.Field;`.
+- [ ] **Step 1: Copy the terrain cluster files** (the file lists above), keeping `namespace WG16.Lab;` / `namespace WG16.Field;`. Then delete the `BindWaterRegion` method from the copied `TerrainLab.cs`.
 
 - [ ] **Step 2: Confirm no god-class dependency, then build to find the closure**
 
@@ -240,15 +244,16 @@ Run: `grep -rl "TerrainLabUI" weather-lab/WeatherLab/scripts` → expected: no h
 ```bash
 dotnet build weather-lab/WeatherLab/WeatherLab.csproj
 ```
-Resolve each `CS0246 (type not found)` by copying the one missing file it names from `wg-16-project` (same relative folder), then rebuild. Repeat until `Build succeeded`. **Do not stub terrain types — copy them.** (Expected closure is the listed cluster; `Std430` is the only shared util.)
+Resolve each `CS0246 (type not found)` by copying the one missing file it names from `wg-16-project` (same relative folder), then rebuild. Repeat until `Build succeeded`. **Expected residual closure (audit-confirmed):** `TerrainTestPaths.cs` (referenced unconditionally by `TerrainLab.Build`) and its own small closure; `Std430` (shared util). If a `WG16.Hydrology.*` type is still named, you missed deleting `BindWaterRegion` — delete it (don't copy hydrology). Copy real terrain types; only trim the two dead surfaces named above.
 
 - [ ] **Step 3: Wire the terrain into `Main.cs`**
 
-Replace `Main.cs` body with (read the copied `TerrainLab.cs` first to confirm the exact `Build`/tick method names; the wiring below assumes `TerrainLab` builds itself on `_Ready` when added to the tree, then is driven each frame — adapt names to the copied source):
+Replace `Main.cs` body with the wiring below. **Key (audit): `TerrainLab` does not self-build — you must construct a `FieldCompute`, call `Build(fc, params)`, then `SetCdlod(true)`; and push `SetCameraWorld` *before* `CdlodTick` each frame. `SetTexturesOn(false)` uses the height/slope colour ramp so the ground isn't black (the textured path needs `assets/materials/`, deferred to a later slice).**
 
 ```csharp
 using Godot;
 using WG16.Lab;
+using WG16.Field;
 
 public partial class Main : Node3D
 {
@@ -263,12 +268,15 @@ public partial class Main : Node3D
         _cam = GetNode<Camera3D>("Camera");
         _cam.Far = 90000f;
 
-        // TerrainLab is the MeshInstance3D node that loads FieldParams, bakes the
-        // central page, builds the ground material, and owns the CdlodTerrain.
+        // TerrainLab is the MeshInstance3D presenter that owns the CdlodTerrain.
+        // It does NOT self-build: construct a windowed FieldCompute + load params, then Build.
         _terrain = new TerrainLab { Name = "TerrainLab" };
         AddChild(_terrain);
-        // If TerrainLab does not self-build in _Ready, call its build entry point here
-        // (read the copied file: e.g. _terrain.Build();). Confirm the exact name.
+        var fp = FieldParams.Load();
+        using (var fc = new FieldCompute())   // local RenderingDevice; windowed only; IDisposable
+            _terrain.Build(fc, fp);
+        _terrain.SetTexturesOn(false);        // height/slope colour ramp (no assets/materials/ yet)
+        _terrain.SetCdlod(true);              // enable the infinite quadtree streaming
 
         GD.Print("WeatherLab: terrain up. Fly with WASD+QE, mouse to look.");
     }
@@ -289,6 +297,7 @@ public partial class Main : Node3D
         _lastCamVelPos = camPos;
         _camVelInit = true;
 
+        _terrain.SetCameraWorld(camPos);              // push cam_world BEFORE the tick (anti-repeat LOD)
         _terrain.CdlodTick(camPos, _camVelSmoothed);
 
         if (_terrain.CdlodActive)
@@ -304,7 +313,7 @@ Run: `dotnet build weather-lab/WeatherLab/WeatherLab.csproj` → Expected: `Buil
 - [ ] **Step 5: Eye-gate (windowed — compute bakes need a real RenderingDevice)**
 
 Run: `<godot4.6> --path <abs>/weather-lab/WeatherLab`
-Expected: the infinite CDLOD terrain renders; flying forward streams new chunks; no crash on the renderOrigin snap (cross ~8192 m and watch for a pop — there should be none, or note it for later).
+Expected: the infinite CDLOD terrain renders **in the height/slope colour ramp** (placeholder ground — textures are a deliberately deferred slice; `SetTexturesOn(false)`); flying forward streams new chunks; no crash on the renderOrigin snap (cross ~8192 m and watch for a pop — there should be none, or note it for later). *The "look-complete" part is the SKY (Task 0.3); the ground is intentionally placeholder until a texture slice copies `assets/materials/`.*
 
 - [ ] **Step 6: Commit**
 
@@ -317,9 +326,10 @@ cd weather-lab && git add -A && git commit -m "weather-lab: copy terrain cluster
 ### Task 0.3: Copy the sky cluster + thin `ILightingHost` → look-complete sky
 
 **Files:**
-- Copy into `weather-lab/WeatherLab/scripts/lab/`: `CloudVolume.cs`, `AtmosphereCompute.cs`, `LightingComposer.cs`, `LightingState.cs`, `CloudParams.cs`, `CloudLayers.cs`, `CloudWeather.cs`, `CloudNoiseCompute.cs`, `SkyPresets.cs` (+ whatever the closure pulls: e.g. a `Luminary` type, `LabControl`/`ILabControls` if `SkyPresets` needs them — resolve by build error).
-- Copy into `weather-lab/WeatherLab/shaders/`: `cloud_sky.gdshader` + the cloud compute/includes (`cloud_raymarch.glsl`, `cloud_density.gdshaderinc`, `cloud_noise_3d.glsl`) + atmosphere shaders (`atmosphere_transmittance.glsl`, `atmosphere_multiscatter.glsl`, `atmosphere_skyview.glsl`, `atmosphere_cloudlight.glsl`) — resolve exact names by build/load error.
-- Copy into `weather-lab/WeatherLab/data/`: `cloud_params.json`, `cloud_layers.json`, `lighting_moods.json`, `sun_presets.json`.
+- Copy into `weather-lab/WeatherLab/scripts/lab/`: `CloudVolume.cs`, `AtmosphereCompute.cs`, `LightingComposer.cs`, `LightingState.cs`, `Luminary.cs`, `CloudParams.cs`, `CloudLayers.cs`, `CloudWeather.cs`, `CloudNoiseCompute.cs`. *(`Std430.cs` already copied in Task 0.2.)*
+  - **Do NOT copy `SkyPresets.cs` / `CloudPresets.cs`** (audit): they are registry-coupled orchestration (`SkyPresets` ctor needs `ILabControls`) and would drag the `ILabControls`/`LabControl`/registry-loader UI web back in — the exact god-class glue this lab leaves behind. `Main` never uses them; the fixed sun angle in `ThinLightingHost.OrientSun` replaces them. `LightingState.cs` holds all 7 state classes (`TimeState`/`SunDiscState`/`WeatherState`/`GradeState`/`MoonState`/`StarsState` + `LightingPresets`); `Luminary.cs` holds `Luminary`/`LuminaryKind`/`LuminaryCaps`/`LuminaryAllocation`/`LuminaryBudget`.
+- Copy into `weather-lab/WeatherLab/shaders/`: `cloud_sky.gdshader` + the cloud compute/includes (`cloud_raymarch.glsl`, `cloud_density.gdshaderinc`, `cloud_noise_3d.glsl`) + atmosphere shaders `atmosphere_transmittance.glsl`, `atmosphere_multiscatter.glsl`, `atmosphere_skyview.glsl`, `atmosphere_cloudlight.glsl`, **`atmosphere_aerial_v2.glsl`** *(audit: `AtmosphereCompute.Attach` compiles all five — a missing aerial shader throws on the render thread and atmosphere never goes `Ready`)*. Resolve any further names by build/load error.
+- Copy into `weather-lab/WeatherLab/data/`: `cloud_params.json`, `cloud_layers.json`, `time_presets.json`, `grade_presets.json`, `weather_presets.json` *(audit: `LightingState.LightingPresets.Load()` reads these three; `lighting_moods.json`/`sun_presets.json` are read only by the UI/SkyPresets path we drop, so omit them)*.
 - Create: `weather-lab/WeatherLab/ThinLightingHost.cs`
 - Modify: `weather-lab/WeatherLab/Main.cs`
 
@@ -327,9 +337,9 @@ cd weather-lab && git add -A && git commit -m "weather-lab: copy terrain cluster
 - Consumes (verified signatures):
   - `WG16.Lab.ILightingHost` (in `LightingComposer.cs`) — members: `Node SceneOwner {get;}`, `CloudVolume? Cloud {get;}`, `float Overcast {get;}`, `bool AtmosphereOn {get;}`, `bool VolumetricFogOn {get;}`, `float CdlodViewDistance {get;}`, `float FogViewScale {get;}`, `AtmosphereCompute? Atmosphere {get;}`, `TerrainLab? Terrain {get;}`, `void OrientSun(DirectionalLight3D sun)`, `void SyncLightControlsToScene()`.
   - `new LightingComposer(ILightingHost host)`; `.Time` (`TimeState`), `.Weather` (`WG16.Lab.WeatherState`), `.Compose()`, `.MoodToStates(Godot.Collections.Dictionary)`, `.DriveTime(float hour)`, `.ApplyOvercastScaling()`, `.LoadLuminaries(List<Luminary>)`.
-  - `CloudVolume`: `Attach(Godot.Environment env, Camera3D cam, float regionSizeM)`, `SetCameraWorld(Vector3)`, `SetKnob(string,float)` (incl. `"coverage"`, `"density"`, `"cloud_type"`), `Overcast()`, `SetSun(Vector3 dir, Color color, float energy)`, `_Process(double)`.
-  - `AtmosphereCompute`: `Attach()`, `SetEnabled(bool)`, `SetSun(Vector3 toSun)`, `Texture2Drd? SkyViewTexture {get;}`, `bool Ready {get;}`, `_Process(double)`.
-- Produces: `Main` renders the look-complete sky over the terrain via a thin host (no `TerrainLabUI`).
+  - `CloudVolume` (a `Node` — Godot auto-calls its `_Process`; **do not call `_Process` manually**): `Attach(Godot.Environment env, Camera3D cam, float regionSizeM)`, `SetCameraWorld(Vector3)`, `SetKnob(string,float)` (incl. `"coverage"`, `"density"`, `"cloud_type"`), `Overcast()`, `SetSun(Vector3 dir, Color color, float energy)`.
+  - `AtmosphereCompute` (a `Node` — auto-processes): `Attach()`, `SetEnabled(bool)`, `SetSun(Vector3 toSun)`, `Texture2Drd? SkyViewTexture {get;}`, `bool Ready {get;}`.
+- Produces: `Main` renders the look-complete sky over the terrain via a thin host (no `TerrainLabUI`). **Runtime de-glue note:** `LightingComposer` resolves `/root/TerrainLabRoot/{Env,Sun}` by absolute path — handled by naming the scene root `TerrainLabRoot` in Task 0.1 (no per-frame crash).
 
 - [ ] **Step 1: Copy the core sky files** (the list above), keeping `namespace WG16.Lab;`.
 
@@ -386,7 +396,7 @@ public sealed class ThinLightingHost : ILightingHost
 ```bash
 dotnet build weather-lab/WeatherLab/WeatherLab.csproj
 ```
-Resolve each `CS0246` by copying the one missing file it names (e.g. a `Luminary` record, `LabControl`, `ILabControls`). If a missing type is only a UI-registry concern that drags in many files, prefer a **minimal local stub** for that one type over copying the registry — but copy real data/render types. Rebuild until `Build succeeded`. Record which files you copied vs stubbed (for the audit).
+Resolve each `CS0246` by copying the one missing **render/data** file it names. With `SkyPresets`/`CloudPresets` excluded, the closure should be small and should NOT name `ILabControls`/`LabControl` — **if it does, something you copied still references `SkyPresets`; remove that reference rather than copying the registry.** Rebuild until `Build succeeded`. Record which files you copied (for the audit).
 
 - [ ] **Step 4: Wire the sky into `Main.cs`** (add to the existing terrain `Main`)
 
@@ -395,11 +405,12 @@ Add fields and extend `_Ready`/`_Process`. (`LightingComposer.Weather` is `WG16.
 ```csharp
 // add fields:
 private CloudVolume _cloud = null!;
-private AtmosphereCompute _atmosphere = null!;
+private AtmosphereCompute? _atmosphere;
 private LightingComposer _lighting = null!;
 private ThinLightingHost _host = null!;
+private bool _atmosphereOn = false;   // clouds-only by default (audit: clouds carry the sky look; atmosphere is opt-in A/B)
 
-// in _Ready(), AFTER the terrain is added:
+// in _Ready(), AFTER the terrain is built:
 var sun = GetNode<DirectionalLight3D>("Sun");
 var env = GetNode<WorldEnvironment>("Env");
 
@@ -407,32 +418,34 @@ _host = new ThinLightingHost(this, sun) { TerrainRef = _terrain };
 _lighting = new LightingComposer(_host);
 
 _cloud = new CloudVolume { Name = "CloudVolume" };
-AddChild(_cloud);
+AddChild(_cloud);                       // engine drives _cloud._Process — do NOT call it manually
 _cloud.Attach(env.Environment, _cam, 8192f);
 _host.CloudRef = _cloud;
 
-_atmosphere = new AtmosphereCompute { Name = "AtmosphereCompute" };
-AddChild(_atmosphere);
-_atmosphere.Attach();
-_atmosphere.SetEnabled(true);
-_host.AtmosphereRef = _atmosphere;
+if (_atmosphereOn)
+{
+    _atmosphere = new AtmosphereCompute { Name = "AtmosphereCompute" };
+    AddChild(_atmosphere);              // also auto-processes
+    _atmosphere.Attach();              // compiles 5 atmosphere shaders incl. atmosphere_aerial_v2.glsl
+    _atmosphere.SetEnabled(true);
+    _host.AtmosphereRef = _atmosphere;
+}
 
 // fixed look: mid-afternoon, light cloud
 _lighting.Time.TimeOfDay = 14.5f;
 _host.OrientSun(sun);
 _cloud.SetKnob("coverage", 0.3f);
-_lighting.Compose();
+_lighting.Compose();                    // resolves /root/TerrainLabRoot/{Env,Sun} (root renamed in Task 0.1)
 
-// in _Process(delta), AFTER the terrain tick:
+// in _Process(delta), AFTER the terrain tick — push only the inputs the harness owns.
+// CloudVolume/AtmosphereCompute self-process as child nodes; calling their _Process here
+// would DOUBLE-tick them (drift + wasted GPU). Just feed the camera + overcast coupling.
 _cloud.SetCameraWorld(camPos);
-_cloud._Process(delta);
-if (_atmosphere.SkyViewTexture != null) { /* CloudVolume samples it internally once Ready */ }
-_atmosphere._Process(delta);
 _host.OvercastValue = _cloud.Overcast();
 _lighting.ApplyOvercastScaling();
 ```
 
-> If `AtmosphereCompute` proves fiddly to stand up (LUT RID timing), ship Task 0.3 with **clouds + sky only** (skip `_atmosphere` and `SetEnabled(true)`) — the cloud sky still renders a strong look. Re-enable atmosphere as a follow-up step. Keep it behind a local `bool _atmosphereOn` so it's a clean A/B.
+> **Atmosphere is OFF by default** (`_atmosphereOn = false`) — the audit confirmed the volumetric clouds + `cloud_sky.gdshader` gradient carry a strong sky look on their own, and full AT-3 physical cloud lighting needs `CloudVolume.SetCloudAtmoColors(...)` fed from the LUT readback (not wired in this slice). To A/B atmosphere later: flip `_atmosphereOn = true`, ensure `atmosphere_aerial_v2.glsl` is copied, and verify `_atmosphere.Ready` goes true in the windowed run (it bakes via `CallOnRenderThread`; a render-thread shader-load failure leaves it never-`Ready`).
 
 - [ ] **Step 5: Build, then eye-gate (windowed)**
 
@@ -440,7 +453,7 @@ _lighting.ApplyOvercastScaling();
 dotnet build weather-lab/WeatherLab/WeatherLab.csproj
 ```
 Run: `<godot4.6> --path <abs>/weather-lab/WeatherLab`
-Expected: the infinite world now renders **under the look-complete sky** (volumetric clouds, sun disc, atmospheric horizon). Fly around; the sky is camera-anchored and the terrain streams.
+Expected: the infinite world now renders **under the look-complete cloud sky** (volumetric clouds + sun disc + sky gradient; atmosphere LUTs are the opt-in A/B). Fly around; the sky is camera-anchored (note: `cloud_params.json` `CameraParallax≈0.4` decouples cloud XZ from the camera by design — the clouds are not 1:1 world-locked to terrain, and snap-seamlessness comes from `CloudVolume`'s own visual-origin guard) and the terrain streams. No per-frame `GetNode` crash (confirms the `TerrainLabRoot` rename).
 
 - [ ] **Step 6: Commit**
 
@@ -888,7 +901,10 @@ public sealed class WeatherSim
     public WeatherState State => _s;
 
     // per-field easing rates (1/sec): clouds build slowly, fog/wind faster.
-    private const float RCoverage = 0.25f, RType = 0.3f, RWind = 0.5f, RTemp = 0.15f,
+    // RCoverage=0.30 (NOT 0.25) so coverage eases 0.05->0.95 past 0.80 within the
+    // test's 10 s window (0.95+(0.05-0.95)*2^(-0.30*10)=0.8375); first-frame step
+    // stays 0.0031 (<0.05, no pop). Audit ran the suite: 0.25 fails, 0.30 = 15/15 green.
+    private const float RCoverage = 0.30f, RType = 0.3f, RWind = 0.5f, RTemp = 0.15f,
                         RHumidity = 0.3f, RFog = 0.4f, RVis = 0.3f;
 
     public WeatherSim(uint seed, WeatherState initial) { _seed = seed; _s = initial; }
@@ -1016,6 +1032,23 @@ foreach (var a in OS.GetCmdlineUserArgs())
     if (a == "--weathercheck") _weatherCheck = true;
 
 // in _Process(delta), AFTER the sky tick:
+// --weathercheck: isolate the transition — tick ONCE toward Rain for 10 s, then
+// assert + exit. Early-return so the normal clock path does NOT also tick the sim
+// (double-tick would muddy the measurement). 10 s, not 4 s: at RCoverage=0.30 the
+// brain reaches 0.84 in 10 s but only ~0.46 in 4 s, so a >0.7 gate needs the 10 s window.
+if (_weatherCheck)
+{
+    _sim.Tick((float)delta, Weather.Core.WeatherState.Rain);
+    _sky.Apply(_sim.State);
+    if (++_checkFrames > 600)   // ~10 s @ 60 fps
+    {
+        bool ok = _sim.State.CloudCoverage > 0.7f && _sim.State.PrecipType == Weather.Core.PrecipType.Rain;
+        GD.Print($"[weathercheck] coverage={_sim.State.CloudCoverage:F2} precip={_sim.State.PrecipType} -> {(ok ? "PASS" : "FAIL")}");
+        GetTree().Quit(ok ? 0 : 1);
+    }
+    return;
+}
+
 _weatherClock += (float)delta;
 // cycle target: Clear (0-13s) -> Overcast (13-26s) -> Rain (26-40s) -> repeat
 float phase = _weatherClock % 40f;
@@ -1025,19 +1058,8 @@ Weather.Core.WeatherState target =
                   Weather.Core.WeatherState.Rain;
 _sim.Tick((float)delta, target);
 _sky.Apply(_sim.State);
-
-if (_weatherCheck)
-{
-    // drive straight at Rain for 4s, assert coverage climbed past 0.7, then exit.
-    _sim.Tick((float)delta, Weather.Core.WeatherState.Rain);
-    if (++_checkFrames > 240)
-    {
-        bool ok = _sim.State.CloudCoverage > 0.7f;
-        GD.Print($"[weathercheck] coverage={_sim.State.CloudCoverage:F2} precip={_sim.State.PrecipType} -> {(ok ? "PASS" : "FAIL")}");
-        GetTree().Quit(ok ? 0 : 1);
-    }
-}
 ```
+> **Determinism demonstration (optional, spec §3.3):** the demo clock above uses fixed presets so the eye-gate is unambiguous. To actually *fly the deterministic world-anchored field*, swap the target line for `var target = _sim.Reconstruct(_weatherClock / 3600f, camPos.X, camPos.Z);` — weather then varies by world position + time from `(seed, time, worldXZ)`, demonstrating the keyframe-reconstructable property the spec requires. Keep the preset cycle as the default first eye-gate; add `Reconstruct` driving behind a `--worldweather` flag.
 
 - [ ] **Step 3: Build**
 
@@ -1073,4 +1095,11 @@ cd weather-lab && git add WeatherLab/SkyCoupling.cs WeatherLab/Main.cs && git co
 
 **Type consistency:** `Weather.Core.WeatherState` fields are referenced identically across Tasks 1.1/1.4/1.5. `WeatherMath` method names match their call sites in `WeatherSim`. `ILightingHost`'s 11 members in `ThinLightingHost` (Task 0.3) match the verified interface. `CloudVolume.SetKnob`, `CdlodTerrain.Tick/RenderOrigin`, `LightingComposer(ILightingHost)` are the verified signatures.
 
-**Known residual unknowns (audit these at execution):** (1) `TerrainLab`'s exact public build/tick method names (`Build` / `CdlodTick` / `CdlodRenderOrigin` / `CdlodActive`) — confirm by reading the copied file in Task 0.2. (2) The exact sky shader filenames + dependency closure — resolved by build/load errors in Task 0.3. (3) Whether `AtmosphereCompute` stands up cleanly standalone — mitigated by the clouds-only fallback in Task 0.3 Step 4.
+**Audit applied (2026-06-28, 4-auditor workflow incl. a run that *compiled + ran* the Core suite):**
+- **Core tests PROVEN:** the `Weather.Core` solution was materialized and `dotnet test`-run → 14/15, the one failure being `Eases_from_clear_toward_rain` (coverage reached 0.7909 < 0.8 at `RCoverage=0.25`). Fixed to `0.30` → re-run **15/15 green**. (The earlier "all green" self-claim was false; it is now verified.)
+- **Slice-0 blockers fixed:** `TerrainLab.Build(FieldCompute, FieldParams)` + `SetCdlod(true)` + `SetCameraWorld` are now explicit (it does not self-build); the scene root is `TerrainLabRoot` so the copied `LightingComposer`'s hardcoded `/root/TerrainLabRoot/{Env,Sun}` paths resolve (was a per-frame crash); `BindWaterRegion` is deleted to cut the `WG16.Hydrology` cluster; `TerrainTestPaths.cs` added to the copy-set; `SkyPresets`/`CloudPresets` dropped (registry glue); `atmosphere_aerial_v2.glsl` added; data list corrected to `time/grade/weather_presets.json`; the double `_Process` manual calls removed; ground uses `SetTexturesOn(false)` placeholder.
+- **Atmosphere is opt-in** (`_atmosphereOn=false`): clouds-only is the verified-sufficient Slice-0 sky; atmosphere LUT physical cloud-lighting is a follow-up.
+
+**Residual unknowns to verify at execution (compile/load-driven, can't be seen statically):** (1) `TerrainTestPaths.cs`'s own small closure; (2) the exact cloud/atmosphere shader include filenames; (3) whether `AtmosphereCompute.Ready` goes true once enabled (render-thread shader-load) — gated behind the opt-in flag.
+
+**Forward-pointers (carried into follow-on plans, not Slice 0/1 tasks):** spec §4.3 Toksvig-order wetness rule + §8 `--snapdiff` straddle-shot belong to the wetness/precip slices; spec §3.3 keyframe-reconciliation is *demonstrated* (not just unit-tested) via the optional `Reconstruct`-driven `--worldweather` path in Task 1.5.

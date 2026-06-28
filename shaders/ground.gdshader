@@ -170,6 +170,13 @@ uniform sampler2D mat1_ao : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D mat2_ao : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D mat3_ao : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D mat4_ao : filter_linear_mipmap_anisotropic, repeat_enable;
+// TERRAIN LIGHTING SOFTENING (2026-06-28): the "ground shading swings hard as you turn" was isolated to the
+// diffuse directional sun (I-key removes it; SSAO/shadow toggles don't). A custom light() with a wrap/
+// half-Lambert diffuse lifts the shadowed faces + gentles the terminator, so turning is no longer a harsh
+// dark swing — AO + normal maps still carry micro-detail. Terrain-LOCAL (this shader only); the global
+// Sun/sky/mood are untouched. ground_wrap: 0 = hard true-Lambert, 1 = fully soft. Key C toggles it live.
+uniform bool  ground_soft_light = true;
+uniform float ground_wrap = 0.6;
 // Erosion-lab debug overlay: false-colour a scalar field (water/sediment/flow) by region UV. 0 = off.
 // Zero-impact on the terrain (default off); only the erosion lab sets it.
 uniform float debug_field = 0.0;
@@ -600,7 +607,7 @@ void fragment() {
         int dm = int(diag_mode + 0.5);
         if (dm == 0) {
             // LIVE render (the shipping look): faded albedo + Toksvig roughness + tangent normal rolled off far.
-            ALBEDO = water_debug_tint(alb, v_surf_xz); ROUGHNESS = rgh_aa; NORMAL = normalize(nrm_pert); AO = ao_blend; AO_LIGHT_AFFECT = 1.0;
+            ALBEDO = water_debug_tint(alb, v_surf_xz); ROUGHNESS = rgh_aa; NORMAL = normalize(nrm_pert); AO = ao_blend; AO_LIGHT_AFFECT = 0.0;
         } else if (dm == 1) {
             ALBEDO = vec3(0.40, 0.12, 0.12); ROUGHNESS = 1.0; NORMAL = normalize(v_normal);    // RED: clean base (no textures)
         } else if (dm == 2) {
@@ -644,4 +651,22 @@ void fragment() {
         ROUGHNESS = 1.0;
         SPECULAR = 0.0;
     }
+}
+
+// Custom per-light diffuse for the TERRAIN ONLY. The harsh "shading swings as you turn" is the directional
+// sun's N·L self-shading (lit faces bright, shadowed faces near-black). A wrap/half-Lambert term lifts the
+// shadowed side and softens the terminator so the swing is gentle, while AO + normal maps keep micro-detail.
+// Runs per directional light (sun/moon/extra suns), respects ATTENUATION (cast shadows) + LIGHT_COLOR. The
+// engine's ambient/IBL pass still fills separately. Diffuse-only on purpose: ground is matte, and dropping
+// the GGX lobe also removes the view-dependent specular sheen. ALBEDO=0 in dbg_unlit → contributes nothing.
+void light() {
+    vec3 N = normalize(NORMAL);
+    vec3 L = normalize(LIGHT);
+    float ndl = dot(N, L);
+    float lambert = max(ndl, 0.0);
+    float half_l = ndl * 0.5 + 0.5;
+    half_l *= half_l;                       // squared half-Lambert: soft, never fully black
+    float w = ground_soft_light ? clamp(ground_wrap, 0.0, 1.0) : 0.0;
+    float diff = mix(lambert, half_l, w);
+    DIFFUSE_LIGHT += ALBEDO * LIGHT_COLOR * ATTENUATION * diff;
 }

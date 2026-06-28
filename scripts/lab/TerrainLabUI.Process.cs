@@ -49,6 +49,8 @@ public partial class TerrainLabUI : Control
     private bool _fullroughLive;    // mirror of dbg_fullrough (default OFF)
     private bool _lastDetailKey;    // X toggles the procedural surfacing-detail PROOF (relief so the sun reveals definition)
     private bool _detailDemoLive;   // mirror of detail_demo (default OFF)
+    private bool _lastSoftKey;      // C toggles terrain wrap/half-Lambert lighting softening (the turn-swing fix)
+    private bool _softLightLive = true;  // mirror of ground_soft_light (default ON)
     private bool _lastJ;        // J steps the ring-hunt diag_mode (surfacing AA eye-gate)
     private bool _lastLiveProfileDump; // B dumps the last rolling profile window to console + artifacts/
     private bool _lastShadowN;  // N toggles the Sun CSM shadow live (isolate "shadows crawl when I turn")
@@ -400,6 +402,12 @@ public partial class TerrainLabUI : Control
                 bool kX = Input.IsKeyPressed(Key.X);
                 if (kX && !_lastDetailKey) { _detailDemoLive = !_detailDemoLive; _terrain.SetBool("detail_demo", _detailDemoLive); GD.Print($"[proof] (X) procedural surfacing detail = {_detailDemoLive}"); }
                 _lastDetailKey = kX;
+                // C: A/B the terrain lighting SOFTENING (wrap/half-Lambert). OFF = the harsh directional swing
+                // you've been fighting; ON = shadowed faces lifted, gentle terminator → turning is no longer a
+                // dark swing. This is the actual fix for "shading changes as I turn".
+                bool kC = Input.IsKeyPressed(Key.C);
+                if (kC && !_lastSoftKey) { _softLightLive = !_softLightLive; _terrain.SetBool("ground_soft_light", _softLightLive); GD.Print($"[fix] (C) terrain soft (wrap) lighting = {_softLightLive}"); }
+                _lastSoftKey = kC;
                 // H: live WATER debug overlay — paint wet pixels cyan / carve band blue so the rivers/lakes
                 // + the carve are visible right on the terrain (the carve groove alone is subtle from altitude).
                 bool kH = Input.IsKeyPressed(Key.H);
