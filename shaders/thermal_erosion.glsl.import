@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://ejht6qbx7vtw"
+path="res://.godot/imported/thermal_erosion.glsl-8bfb8d1f9deea6368b4ca2d15c472af8.res"
+
+[deps]
+
+source_file="res://shaders/thermal_erosion.glsl"
+dest_files=["res://.godot/imported/thermal_erosion.glsl-8bfb8d1f9deea6368b4ca2d15c472af8.res"]
+
+[params]
+

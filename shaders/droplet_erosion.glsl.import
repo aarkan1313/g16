@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://b06w7kejp56fl"
+path="res://.godot/imported/droplet_erosion.glsl-65daf2121baaa98895ec6bf4060bb026.res"
+
+[deps]
+
+source_file="res://shaders/droplet_erosion.glsl"
+dest_files=["res://.godot/imported/droplet_erosion.glsl-65daf2121baaa98895ec6bf4060bb026.res"]
+
+[params]
+

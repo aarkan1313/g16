@@ -21,7 +21,11 @@ public sealed class RegionWaterSolver
     public RegionWaterSolver(FieldCompute fc, FieldParams fp, WaterParams wp, IEroder eroder, ErosionParams ep)
     {
         _fc = fc; _fp = fp; _wp = wp; _eroder = eroder; _ep = ep;
-        _regionM = fp.RegionSizeM; _spacing = fp.Spacing;
+        _regionM = fp.RegionSizeM;
+        // 2A: solve at 2× the field spacing (≈8 m) so n/64 stays under the 65535 compute-group
+        // dispatch limit (the 4 m grid hits ~102k groups). Finer res needs GpuErosion's 1D dispatch
+        // reworked to 2D — deferred to 2B/2E.
+        _spacing = fp.Spacing * 2f;
         _interior = (int)System.MathF.Round(_regionM / _spacing);
     }
 
