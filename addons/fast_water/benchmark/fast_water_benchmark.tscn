@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/benchmark/fast_water_benchmark.gd" id="1_benchmark"]
+
+[node name="FastWaterBenchmark" type="Node3D"]
+script = ExtResource("1_benchmark")

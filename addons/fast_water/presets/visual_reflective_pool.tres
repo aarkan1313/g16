@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="FastWaterVisualProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_visual_profile.gd" id="1_mhvjy"]
+
+[resource]
+resource_name = "visual_reflective_pool"
+script = ExtResource("1_mhvjy")

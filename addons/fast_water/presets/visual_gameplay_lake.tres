@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="FastWaterVisualProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_visual_profile.gd" id="1_ukpj8"]
+
+[resource]
+resource_name = "visual_gameplay_lake"
+script = ExtResource("1_ukpj8")
+shallow_color = Color(0.005, 0.24, 0.31, 1)
+deep_color = Color(0, 0.03, 0.085, 1)
+foam_color = Color(0.88, 0.96, 1, 1)
+alpha = 0.985
+wave_height = 0.1
+normal_strength = 1.85
+micro_normal_strength = 0.78
+detail_normal_strength = 0.5
+detail_normal_scale = 42.0
+reflection_color = Color(0.13, 0.31, 0.42, 1)
+reflection_strength = 0.16
+grazing_reflection_strength = 0.34
+planar_reflection_strength = 0.14
+planar_reflection_softness = 0.0035
+fresnel_strength = 0.56
+surface_gloss = 0.72
+sun_glint_strength = 0.48
+sun_glint_sharpness = 14.0
+planar_reflection_grazing_power = 3.2
+planar_reflection_max_mix = 0.24
+final_color_gain = 1.04
+foam_depth_m = 0.46
+deep_depth_m = 6.5
+wake_highlight_strength = 0.98
+wake_map_strength = 0.56
+foam_intensity = 0.92
+shoreline_foam_strength = 1.08
+wake_foam_strength = 0.82
+foam_breakup_strength = 0.84
+foam_noise_scale = 5.0
+depth_absorption_strength = 0.84
+absorption_density = 0.3
+mesh_subdivisions = 128
+wake_map_resolution = 256
+wake_map_world_size_m = 48.0
+wake_map_update_hz = 30.0
+refraction_strength = 0.01
+refracted_scene_strength = 0.08
+use_gpu_wake_map = true
+stamp_center_trail_strength = 0.34
+stamp_bow_band_strength = 0.45

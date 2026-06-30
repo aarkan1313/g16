@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="FastWaterBodyProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_body_profile.gd" id="1_08hku"]
+
+[resource]
+resource_name = "body_ocean"
+script = ExtResource("1_08hku")
+display_name = "Ocean"
+body_kind = 6
+query_priority = -20
+default_depth_m = 24.0
+tags = PackedStringArray()

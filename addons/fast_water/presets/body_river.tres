@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="FastWaterBodyProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_body_profile.gd" id="1_8sk7l"]
+
+[resource]
+resource_name = "body_river"
+script = ExtResource("1_8sk7l")
+display_name = "River"
+body_kind = 3
+query_priority = 10
+containment_margin_m = 0.18
+default_depth_m = 1.2
+tags = PackedStringArray()

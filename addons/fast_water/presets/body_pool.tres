@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="FastWaterBodyProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_body_profile.gd" id="1_t4ism"]
+
+[resource]
+resource_name = "body_pool"
+script = ExtResource("1_t4ism")
+display_name = "Pool"
+body_kind = 2
+default_depth_m = 2.2
+tags = PackedStringArray()

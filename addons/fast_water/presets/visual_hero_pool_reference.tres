@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="FastWaterVisualProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_visual_profile.gd" id="1_cuv6h"]
+
+[resource]
+resource_name = "visual_hero_pool_reference"
+script = ExtResource("1_cuv6h")
+shallow_color = Color(0, 0.205, 0.3, 1)
+deep_color = Color(0, 0.02, 0.075, 1)
+foam_color = Color(0.72, 0.9, 0.98, 1)
+alpha = 0.985
+wave_height = 0.085
+normal_strength = 1.95
+micro_normal_strength = 0.78
+detail_normal_strength = 0.6
+reflection_color = Color(0.055, 0.2, 0.3, 1)
+reflection_strength = 0.13
+grazing_reflection_strength = 0.28
+planar_reflection_strength = 0.08
+planar_reflection_distortion = 0.0018
+planar_reflection_softness = 0.002
+fresnel_strength = 0.58
+surface_gloss = 0.86
+sun_glint_strength = 0.55
+sun_glint_sharpness = 8.0
+planar_reflection_grazing_power = 4.65
+planar_reflection_max_mix = 0.16
+final_color_gain = 1.02
+foam_depth_m = 0.28
+deep_depth_m = 7.2
+wake_highlight_strength = 0.38
+wake_map_strength = 0.42
+foam_intensity = 0.46
+shoreline_foam_strength = 0.74
+wake_foam_strength = 0.42
+foam_breakup_strength = 0.78
+foam_noise_scale = 5.4
+depth_absorption_strength = 0.88
+absorption_density = 0.36
+mesh_subdivisions = 192
+refraction_strength = 0.009
+refracted_scene_strength = 0.055
+use_gpu_wake_map = true
+stamp_center_trail_strength = 0.24
+stamp_bow_band_strength = 0.26
+stamp_foam_gain = 0.3

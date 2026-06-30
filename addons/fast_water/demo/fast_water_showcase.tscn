@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8fastwatershowcase01"]
+
+[ext_resource type="Script" path="res://addons/fast_water/demo/fast_water_showcase.gd" id="1_showcase"]
+
+[node name="FastWaterShowcase" type="Node3D"]
+script = ExtResource("1_showcase")

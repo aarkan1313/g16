@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="FastWaterOceanProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_ocean_profile.gd" id="1_edjyx"]
+
+[resource]
+resource_name = "ocean_world_lod"
+script = ExtResource("1_edjyx")
+near_mesh_size_m = 240.0
+near_mesh_subdivisions = 128
+far_mesh_size_m = 2400.0
+far_mesh_subdivisions = 40
+far_follow_snap_m = 128.0
+local_wake_resolution = 320
+local_wake_world_size_m = 104.0
+local_wake_update_hz = 30.0
+horizon_fade_end_m = 1150.0

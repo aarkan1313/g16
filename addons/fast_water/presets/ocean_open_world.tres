@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="FastWaterOceanProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_ocean_profile.gd" id="1_m28ks"]
+
+[resource]
+resource_name = "ocean_open_world"
+script = ExtResource("1_m28ks")

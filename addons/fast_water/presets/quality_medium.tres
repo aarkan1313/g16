@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="FastWaterQuality" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_quality.gd" id="1_e7brw"]
+
+[resource]
+resource_name = "quality_medium"
+script = ExtResource("1_e7brw")
+hero_ripples = 8
+bubble_cap = 640
+mesh_subdivisions = 80
+caustics_intensity = 0.28

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="FastWaterOceanProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_ocean_profile.gd" id="1_noam5"]
+
+[resource]
+resource_name = "ocean_performance"
+script = ExtResource("1_noam5")
+near_mesh_subdivisions = 88
+far_mesh_subdivisions = 36
+local_wake_resolution = 256
+local_wake_update_hz = 24.0
+swell_height_m = 0.16
+micro_chop_strength = 0.46
+detail_chop_strength = 0.0
+whitecap_strength = 0.08
+far_horizon_fade_strength = 0.62
+distant_reflection_strength = 0.16

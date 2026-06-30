@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="FastWaterVisualProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_visual_profile.gd" id="1_rnvtb"]
+
+[resource]
+resource_name = "visual_cheap_ocean"
+script = ExtResource("1_rnvtb")
+wave_height = 0.18
+wave_frequency = 0.08
+wave_speed = 0.72
+normal_strength = 0.85
+micro_normal_strength = 0.55
+detail_normal_strength = 0.0
+reflection_strength = 0.22
+grazing_reflection_strength = 0.18
+planar_reflection_strength = 0.0
+sun_glint_strength = 0.0
+final_color_gain = 1.0
+foam_breakup_strength = 0.0
+whitecap_strength = 0.1
+whitecap_scale = 0.18
+depth_absorption_strength = 0.0
+absorption_density = 0.0
+horizon_color = Color(0.28, 0.52, 0.64, 1)
+horizon_fade_strength = 0.36
+horizon_fade_start_m = 340.0
+horizon_fade_end_m = 1180.0
+mesh_subdivisions = 80
+wake_map_resolution = 256
+wake_map_update_hz = 30.0
+refraction_strength = 0.0
+refracted_scene_strength = 0.05

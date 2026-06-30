@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="FastWaterQuality" format=3]
+
+[ext_resource type="Script" path="res://addons/fast_water/scripts/fast_water_quality.gd" id="1_61qru"]
+
+[resource]
+resource_name = "quality_high"
+script = ExtResource("1_61qru")
+wake_map_resolution = 512
+bubble_cap = 1200
+mesh_subdivisions = 128
+refraction_strength = 0.018
+caustics_intensity = 0.45
